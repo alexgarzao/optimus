@@ -146,6 +146,7 @@ For each failed command:
 ## Rules
 
 - Do NOT fix anything — this skill only reports
+- Do NOT use `-short` flag in any test command — all tests must run completely
 - Do NOT skip commands that are slow — run everything
 - If a Makefile target does not exist, SKIP it and note in the summary (do not fail)
 - If `goimports` or `gofmt` are not installed, report as SKIP with note
