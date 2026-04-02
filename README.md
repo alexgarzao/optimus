@@ -9,6 +9,10 @@ Colecao de prompts organizados por categoria.
 - `prompts/analysis/` - Prompts para analise de dados e pesquisa
 - `prompts/system/` - System prompts para assistentes
 
+## Plugins
+
+- `plugins/` - Plugins instalaveis via marketplace do Droid (Factory) e Claude Code
+
 ## Como usar
 
 Cada prompt esta em um arquivo `.md` com a seguinte estrutura:
