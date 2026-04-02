@@ -10,10 +10,10 @@ Nenhuma — detecta automaticamente os targets do Makefile.
 
 ## Skill
 
-Veja a versao completa e instalavel como plugin em [`verify/skills/optimus-verify/SKILL.md`](../../verify/skills/optimus-verify/SKILL.md).
+Veja a versao completa e instalavel como plugin em [`verify/skills/optimus-verify-code/SKILL.md`](../../verify/skills/optimus-verify-code/SKILL.md).
 
 ## Exemplo
 
 ```
-/optimus-verify — roda todas as verificacoes e apresenta sumario com veredicto.
+/optimus-verify-code — roda todas as verificacoes e apresenta sumario com veredicto.
 ```

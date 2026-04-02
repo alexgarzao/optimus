@@ -1,5 +1,5 @@
 ---
-name: optimus-verify
+name: optimus-verify-code
 description: >
   Two-phase code verification for Go projects. Phase 1 runs static analysis
   in parallel (lint, vet, imports, format, docs, unit tests). Phase 2 runs
@@ -21,7 +21,7 @@ NOT_skip_when: >
   - "CI will catch it" → Catching locally is faster and cheaper.
 examples:
   - name: Full verification before merge
-    invocation: "/optimus-verify"
+    invocation: "/optimus-verify-code"
     expected_flow: >
       1. Run Phase 1 (6 commands in parallel)
       2. If all pass, run Phase 2 (integration then E2E)
