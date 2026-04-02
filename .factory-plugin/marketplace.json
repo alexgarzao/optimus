@@ -9,6 +9,11 @@
       "name": "task-executor",
       "description": "End-to-end task execution with phased verification gates, interactive code review, and commit approval",
       "source": "./task-executor"
+    },
+    {
+      "name": "post-task-validator",
+      "description": "Validates completed tasks against spec, coding standards, and best practices using parallel specialist agents",
+      "source": "./post-task-validator"
     }
   ]
 }

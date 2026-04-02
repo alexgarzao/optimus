@@ -1,0 +1,423 @@
+---
+name: post-task-validator
+description: >
+  Validates that a completed task was executed correctly: spec compliance,
+  coding standards adherence, engineering best practices, test coverage,
+  and production readiness. Uses parallel specialist agents for deep analysis,
+  then presents findings interactively. Runs AFTER task-executor finishes
+  and BEFORE the final commit.
+trigger: >
+  - After task-executor completes all phases and verification gates pass
+  - When user requests validation of a completed task (e.g., "validate T-012")
+  - Before the final commit of a task execution
+skip_when: >
+  - Task is pure research or documentation (no code to validate)
+  - Already inside a code review skill execution
+  - Changes have already been committed (validation must happen before commit)
+prerequisite: >
+  - Task execution is complete (all phases passed verification gates)
+  - Changed files are uncommitted (validation happens before commit)
+  - Reference docs exist (task spec, coding standards)
+  - Project has lint and test commands configured
+NOT_skip_when: >
+  - "Task was simple" → Simple tasks still need spec compliance checks.
+  - "Tests already pass" → Passing tests do not guarantee spec compliance or code quality.
+  - "task-executor already ran verification gates" → Gates check pass/fail; this validates correctness.
+  - "Time pressure" → Validation prevents rework, saving time overall.
+examples:
+  - name: Validate a full-stack task
+    invocation: "Validate task T-012"
+    expected_flow: >
+      1. Load task spec and reference docs
+      2. Identify changed files
+      3. Dispatch 8 parallel agents (code, business logic, security, QA, frontend, backend, cross-file, spec compliance)
+      4. Consolidate and deduplicate findings
+      5. Present overview table
+      6. Interactive finding-by-finding resolution
+      7. Batch apply approved fixes
+      8. Run verification gate
+      9. Present validation summary
+  - name: Validate a frontend-only task
+    invocation: "Validate task T-015"
+    expected_flow: >
+      1. Load context, classify as frontend-only
+      2. Dispatch 7 agents (skip backend specialist)
+      3. Consolidate, present, resolve findings
+      4. Apply fixes, verify
+related:
+  complementary:
+    - task-executor
+    - requesting-code-review
+    - dev-validation
+  differentiation:
+    - name: requesting-code-review
+      difference: >
+        requesting-code-review dispatches reviewers during the dev-cycle.
+        post-task-validator is a standalone validation that also checks
+        spec compliance, test ID coverage, and cross-file consistency.
+  sequence:
+    after:
+      - task-executor
+    before:
+      - dev-feedback-loop
+verification:
+  automated:
+    - command: "git diff --name-only 2>/dev/null | wc -l"
+      description: Changed files exist (uncommitted changes to validate)
+      success_pattern: '[1-9]'
+  manual:
+    - All findings resolved (fixed or explicitly skipped by user)
+    - Verification gate passed after fixes applied
+    - Validation summary presented to user
+---
+
+# Post-Task Validator
+
+Validates that a completed task was executed correctly: spec compliance, coding standards adherence, engineering best practices, test coverage, and production readiness. Uses parallel specialist agents for deep analysis, then presents findings interactively.
+
+Runs AFTER task-executor finishes and BEFORE the final commit.
+
+---
+
+## Phase 0: Load Context
+
+### Step 0.1: Discover Project Structure
+
+Before loading docs, discover the project's structure and tooling (reuse discoveries from task-executor if available):
+
+1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
+2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, test, integration test, and E2E test commands.
+3. **Identify reference docs:** Look for task specs, coding standards, API design, data model, and architecture docs.
+
+Store discovered commands for use in verification gates:
+```
+LINT_CMD=<discovered lint command>
+TEST_CMD=<discovered test command>
+TEST_INTEGRATION_CMD=<discovered integration test command>
+TEST_E2E_CMD=<discovered E2E test command>
+```
+
+### Step 0.2: Load Reference Documents
+
+Read the discovered reference docs to understand what was expected:
+- Task spec — the task being validated (find by ID): scope, acceptance criteria, testing strategy, DoD
+- API contracts (if backend task)
+- DB schema / data model (if backend task)
+- Technical architecture
+- Business requirements and user stories
+- Coding standards (source of truth)
+- Dependency relationships
+
+### Step 0.3: Identify Changed Files
+
+Identify all files created/modified by the task. Use the appropriate method:
+- If changes are uncommitted: `git diff --name-only` and `git diff --name-only --cached`
+- If committed: `git diff --name-only <base>..HEAD`
+
+Read ALL changed files — the full content of every changed file is required for agent prompts.
+
+### Step 0.4: Determine Task Scope
+
+Classify the task based on the file extensions of changed files:
+- **Backend-only** — only backend source files, migrations, backend tests changed
+- **Frontend-only** — only frontend source files, styles, frontend tests, E2E tests changed
+- **Full-stack** — both backend and frontend files changed
+
+This determines which specialist agents to dispatch in Phase 1.
+
+---
+
+## Phase 1: Parallel Agent Dispatch
+
+Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives the full content of every changed file plus the task spec excerpt.
+
+### Agent Roster
+
+Dispatch available specialist agents covering these validation domains. Use whatever review droids are available in the environment. If a specialized droid does not exist, use a `worker` agent with domain-specific instructions.
+
+| Validation Domain | When to Dispatch |
+|-------------------|------------------|
+| **Code Quality** — architecture, patterns, SOLID, DRY, maintainability, algorithmic flow | Always |
+| **Business Logic** — domain correctness, edge cases, business rules, mental execution | Always |
+| **Security** — vulnerabilities, OWASP, input validation, secrets, auth | Always |
+| **Test Quality** — test coverage gaps, test quality, missing scenarios, flaky patterns | Always |
+| **Frontend Patterns** — framework patterns, accessibility, responsive, component library, performance | Frontend or full-stack tasks |
+| **Backend Patterns** — language patterns, error handling, context propagation, framework conventions | Backend or full-stack tasks |
+| **Cross-File Consistency** — duplication between files, shared constants, import consistency, pattern drift | Always |
+| **Spec Compliance** — acceptance criteria checklist, test ID coverage, API contract verification | Always |
+
+### Agent Prompt Template
+
+Each agent dispatch MUST include this information:
+
+```
+Goal: Post-task validation of T-XXX — [your validation domain]
+
+Context:
+  - Task ID: T-XXX
+  - Task spec excerpt: [paste the full task section from the tasks file]
+  - Coding standards: [paste relevant sections for this agent's domain]
+  - Changed files (full content follows):
+    [paste full content of each changed file with filename header]
+
+Your job:
+  Validate the implementation against the spec, coding standards, and engineering
+  best practices. Report issues ONLY — do NOT fix anything.
+
+Required output format:
+  For each issue found, provide:
+  - Severity: CRITICAL / HIGH / MEDIUM / LOW
+  - File: exact file path
+  - Line: line number or range
+  - Rule violated: exact reference (coding standards section, spec criterion, or named best practice)
+  - Summary: one-line description
+  - Detail: what is wrong, why it matters, what should be done
+
+  If no issues found, state "PASS — no issues in [domain]"
+  Always include a "What Was Done Well" section acknowledging good practices.
+```
+
+### Special Instructions per Agent
+
+**Spec Compliance agent** must additionally:
+1. List every acceptance criterion from the task spec and mark PASS/FAIL/PARTIAL
+2. List every test ID and verify a corresponding test exists
+3. If the task has API endpoints, verify request/response format matches API contracts
+4. If the task has DB changes, verify column types/constraints match the data model
+
+**Cross-File Consistency agent** must additionally:
+1. Check for values duplicated between files that should be a shared constant
+2. Verify imports follow the project's layer architecture (no circular deps, no backwards imports)
+3. Check that new code follows the same patterns as existing code in the same domain
+4. Look for dead code (unused imports, unreachable branches, commented-out code)
+
+---
+
+## Phase 2: Consolidate and Deduplicate
+
+After ALL agents return:
+
+1. **Merge** all findings into a single list
+2. **Deduplicate** — if multiple agents flag the same issue (same file + same concern), keep one entry and note which agents agreed
+3. **Enrich** — for each finding, add:
+   - Which validation phase it belongs to (Spec Compliance, Coding Standards, Security, Test Coverage, etc.)
+   - Cross-references to the exact rule/spec it violates
+4. **Sort** by severity: CRITICAL > HIGH > MEDIUM > LOW
+5. **Assign** sequential IDs (F1, F2, F3...)
+
+### Severity Classification
+
+| Severity | Criteria | Examples |
+|----------|----------|---------|
+| **CRITICAL** | Spec violation, security vulnerability, data loss risk, auth bypass | Missing acceptance criterion, injection vulnerability, hardcoded secret, broken business rule |
+| **HIGH** | Missing test from spec, coding standards violation, broken accessibility, missing validation | Test ID not implemented, standards violation, no error handling, missing ARIA labels |
+| **MEDIUM** | Code quality concern, pattern inconsistency, maintainability issue, missing edge case test | Duplication between files, inconsistent naming, missing boundary test, no loading state |
+| **LOW** | Polish, minor style issue, optional improvement | Redundant style rule, verbose comment, slightly suboptimal approach |
+
+---
+
+## Phase 3: Present Overview Table
+
+Show the user the full picture before diving into individual findings:
+
+```markdown
+## Post-Task Validation: T-XXX — X findings across Y agents
+
+| # | Severity | Category | File | Summary | Agents |
+|---|----------|----------|------|---------|--------|
+| F1 | CRITICAL | Security | auth.go | ... | Security |
+| F2 | HIGH | Spec Compliance | page.tsx | ... | Spec, Frontend |
+| F3 | MEDIUM | Code Quality | layout.tsx | ... | Code, Cross-file |
+
+### Agent Verdicts
+| Agent | Verdict | Issues |
+|-------|---------|--------|
+| Code Quality | PASS/FAIL | 0C 2H 3M 1L |
+| Business Logic | PASS/FAIL | ... |
+| Security | PASS/FAIL | ... |
+| QA Analyst | PASS/FAIL | ... |
+| Frontend/Backend | PASS/FAIL | ... |
+| Cross-File | PASS/FAIL | ... |
+| Spec Compliance | PASS/FAIL | ... |
+
+Spec compliance: X/Y acceptance criteria verified
+Test coverage: X/Y test IDs implemented
+Security verdict: PASS / FAIL
+```
+
+---
+
+## Phase 4: Interactive Finding-by-Finding Resolution (collect decisions only)
+
+Process ONE finding at a time, starting from highest severity. Present ALL findings sequentially, collecting the user's decision for each. Do NOT apply any fix during this phase — only collect decisions.
+
+For EACH finding, present:
+
+### Problem Description
+- What is wrong (file, line, code snippet if relevant)
+- Which rule/spec it violates (exact reference to coding standards section, task spec line, or named best practice)
+- Which agent(s) flagged it
+- Why it matters — what breaks, what risk it creates, what the user would experience
+
+### Impact Analysis (four lenses)
+
+Evaluate the finding through all four perspectives:
+
+- **User (UX):** How does this affect the end user? Usability degradation, confusion, broken workflow, accessibility issue? Would the user notice? Would it block their work?
+- **Task focus:** Does this finding relate to what the task was supposed to deliver? Is it within the task's scope, or is it a tangential concern that should be a separate task?
+- **Project focus:** Is this MVP-critical, or gold-plating? Does ignoring it now create rework later? Does it conflict with the project's priorities?
+- **Engineering quality:** Does this hurt maintainability, testability, reliability, or codebase consistency? What is the technical debt cost of skipping it?
+
+### Proposed Solutions (2-3 options)
+
+For each option, evaluate all four lenses:
+
+```
+**Option A: [name]**
+[What to do — concrete steps, files to change]
+- UX: [impact on the end user's experience]
+- Task focus: [within task scope / tangential]
+- Project focus: [MVP-aligned / nice-to-have / out-of-scope]
+- Engineering: [pros and cons — complexity, maintainability, test coverage, consistency]
+- Effort: [trivial (< 5 min) / small (5-15 min) / moderate (15-60 min) / large (> 1h)]
+
+**Option B: [name]**
+[What to do]
+- UX: [impact]
+- Task focus: [alignment]
+- Project focus: [alignment]
+- Engineering: [pros/cons]
+- Effort: [estimate]
+```
+
+Include a recommendation when one option is clearly better, with brief justification.
+
+### Ask for Decision
+
+Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
+
+Internally record every decision: finding ID, chosen option (or "skip"), and rationale if provided.
+
+---
+
+## Phase 5: Batch Apply All Approved Fixes
+
+**IMPORTANT:** This phase starts ONLY after ALL findings have been presented and ALL decisions collected. No fix is applied during Phase 4.
+
+### Step 5.1: Present Pre-Apply Summary
+
+Before touching any code, show the user a summary of everything that will be changed:
+
+```markdown
+## Fixes to Apply (X of Y findings)
+
+| # | Finding | Decision | Files Affected |
+|---|---------|----------|---------------|
+| F1 | [summary] | Option A: [name] | file1.tsx, file2.ts |
+| F3 | [summary] | Option B: [name] | layout.tsx |
+
+### Skipped (Z findings)
+| # | Finding | Reason |
+|---|---------|--------|
+| F2 | [summary] | User: skip |
+| F5 | [summary] | User: out of scope |
+```
+
+### Step 5.2: Apply All Fixes
+
+Apply ALL approved fixes in a single pass:
+
+1. Group fixes by file to minimize file I/O
+2. Apply all changes
+3. Run lint — if format issues, fix and re-run
+4. Run unit tests — if failures, diagnose and fix (max 3 attempts per failure)
+5. If a fix causes test failures after 3 attempts, revert that specific fix, present the failure to the user, and ask for guidance
+
+### Step 5.3: Verification Gate
+
+After all fixes applied, run the full gate using discovered commands:
+- Always run lint and unit tests
+- If backend files were changed: also run integration tests
+- If frontend files were changed: also run E2E tests (if available)
+
+---
+
+## Phase 6: Validation Summary
+
+```markdown
+## Post-Task Validation Summary: T-XXX
+
+### Verdict: APPROVED / APPROVED WITH CAVEATS / NEEDS REWORK
+
+### Agent Results
+| Agent | Verdict | Issues Found | Fixed | Skipped |
+|-------|---------|-------------|-------|---------|
+| Code Quality | PASS | 3 | 2 | 1 |
+| Business Logic | PASS | 1 | 1 | 0 |
+| Security | PASS | 0 | 0 | 0 |
+| QA Analyst | PASS | 4 | 3 | 1 |
+
+### Spec Compliance: X/Y acceptance criteria PASS
+| Criterion | Status | Notes |
+|-----------|--------|-------|
+| AC-1 | PASS | |
+| AC-2 | PASS | |
+
+### Test Coverage: X/Y test IDs implemented
+| Test ID | Status | File |
+|---------|--------|------|
+| U1 | PASS | ... |
+| E1 | PASS | ... |
+
+### Fixed (X findings)
+| # | Finding | Agent(s) | Solution Applied |
+|---|---------|----------|-----------------|
+| F1 | ... | Security | Option A: ... |
+
+### Skipped (X findings)
+| # | Finding | Agent(s) | Reason |
+|---|---------|----------|--------|
+| F5 | ... | QA | User decision: out of scope |
+
+### Verification
+- Lint: PASS
+- Unit tests: PASS (X tests)
+- Integration tests: PASS / SKIPPED
+- E2E tests: PASS / SKIPPED
+```
+
+---
+
+## Rules
+
+### Agent Dispatch
+- ALWAYS dispatch agents for: Code Quality, Business Logic, Security, QA, Cross-File Consistency, Spec Compliance
+- Dispatch Frontend/Backend specialists based on task scope (Step 0.4)
+- Each agent receives the FULL content of ALL changed files — never partial content
+- Agents run in PARALLEL — do not wait for one before dispatching another
+- Use whatever review droids are available; fall back to `worker` with domain instructions
+
+### Scope
+- Validate ONLY the files changed by this task — do not audit the entire codebase
+- Do not suggest refactoring of pre-existing code unless the task introduced a regression
+- Flag pre-existing issues as "pre-existing, not from this task" and do not count them as findings
+
+### Objectivity
+- Every finding must reference a specific rule (coding standards section, task spec line, or named best practice)
+- "I would do it differently" is NOT a valid finding — it must violate a documented standard or create a measurable risk
+- Subjective style preferences are LOW severity at most
+
+### Prioritization
+- Security vulnerabilities and spec violations are always CRITICAL/HIGH regardless of effort to fix
+- Code style issues that don't affect correctness are LOW
+- Missing tests for happy paths are HIGH; missing tests for extreme edge cases are MEDIUM
+
+### No False Positives
+- If you're unsure whether something is a violation, check the existing codebase for precedent
+- If the codebase already does the same thing elsewhere without issue, it's not a finding
+- If the spec is ambiguous and the implementation is reasonable, flag as LOW (not HIGH)
+
+### Communication
+- Be specific: "line 42 of file.tsx uses X, but coding standards section Y requires Z"
+- Be constructive: always provide a concrete fix, not just criticism
+- Be honest about effort: don't say "trivial" for something that requires refactoring multiple files

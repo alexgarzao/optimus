@@ -1,0 +1,8 @@
+{
+  "name": "post-task-validator",
+  "description": "Validates completed tasks against spec, coding standards, and engineering best practices using parallel specialist agents with interactive finding resolution",
+  "version": "1.0.0",
+  "author": {
+    "name": "Alex Garzao"
+  }
+}

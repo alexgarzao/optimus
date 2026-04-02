@@ -11,7 +11,8 @@ Colecao de prompts organizados por categoria.
 
 ## Plugins
 
-- `task-executor/` - Plugin instalavel via marketplace do Droid (Factory) e Claude Code
+- `task-executor/` - Execucao end-to-end de tarefas com gates de verificacao
+- `post-task-validator/` - Validacao pos-execucao com agentes especialistas em paralelo
 
 ## Como usar
 
