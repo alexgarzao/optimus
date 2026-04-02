@@ -19,6 +19,11 @@
       "name": "pre-task-validator",
       "description": "Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes.",
       "source": "./pre-task-validator"
+    },
+    {
+      "name": "deep-doc-review",
+      "description": "Deep review of project documentation. Finds errors, inconsistencies, gaps, and improvements with interactive resolution.",
+      "source": "./deep-doc-review"
     }
   ]
 }

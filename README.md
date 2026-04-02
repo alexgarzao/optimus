@@ -14,6 +14,7 @@ Colecao de prompts organizados por categoria.
 - `pre-task-validator/` - Validacao de specs antes da implementacao (contradicoes, gaps, ambiguidades)
 - `task-executor/` - Execucao end-to-end de tarefas com gates de verificacao
 - `post-task-validator/` - Validacao pos-execucao com agentes especialistas em paralelo
+- `deep-doc-review/` - Revisao profunda de docs com cruzamento e resolucao interativa
 
 ## Como usar
 
