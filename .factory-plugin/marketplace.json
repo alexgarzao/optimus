@@ -14,6 +14,11 @@
       "name": "post-task-validator",
       "description": "Validates completed tasks against spec, coding standards, and best practices using parallel specialist agents",
       "source": "./post-task-validator"
+    },
+    {
+      "name": "pre-task-validator",
+      "description": "Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes.",
+      "source": "./pre-task-validator"
     }
   ]
 }

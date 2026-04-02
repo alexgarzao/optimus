@@ -11,6 +11,7 @@ Colecao de prompts organizados por categoria.
 
 ## Plugins
 
+- `pre-task-validator/` - Validacao de specs antes da implementacao (contradicoes, gaps, ambiguidades)
 - `task-executor/` - Execucao end-to-end de tarefas com gates de verificacao
 - `post-task-validator/` - Validacao pos-execucao com agentes especialistas em paralelo
 

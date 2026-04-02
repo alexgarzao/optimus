@@ -1,0 +1,8 @@
+{
+  "name": "pre-task-validator",
+  "description": "Validates task specifications against project docs before implementation begins. Catches gaps, contradictions, ambiguities, test coverage holes, and observability issues.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Alex Garzao"
+  }
+}
