@@ -1,0 +1,14 @@
+{
+  "name": "prompts",
+  "description": "Collection of prompts and plugins for Droid and Claude Code",
+  "owner": {
+    "name": "Alex Garzao"
+  },
+  "plugins": [
+    {
+      "name": "task-executor",
+      "description": "End-to-end task execution with phased verification gates, interactive code review, and commit approval",
+      "source": "./task-executor"
+    }
+  ]
+}
