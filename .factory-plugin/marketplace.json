@@ -1,6 +1,6 @@
 {
-  "name": "prompts",
-  "description": "Collection of prompts and plugins for Droid and Claude Code",
+  "name": "optimus",
+  "description": "Marketplace de skills para Droid e Claude Code",
   "owner": {
     "name": "Alex Garzao"
   },

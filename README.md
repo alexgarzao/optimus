@@ -1,26 +1,32 @@
-# Prompts
+# Optimus
 
-Colecao de prompts organizados por categoria.
+Marketplace de skills para Droid (Factory) e Claude Code.
 
-## Categorias
+## Skills
 
-- `prompts/coding/` - Prompts para desenvolvimento e code review
-- `prompts/writing/` - Prompts para escrita e documentacao
-- `prompts/analysis/` - Prompts para analise de dados e pesquisa
-- `prompts/system/` - System prompts para assistentes
+| Skill | Descricao | Comando |
+|-------|-----------|---------|
+| `pre-task-validator` | Validacao de specs antes da implementacao | `/pre-task-validator` |
+| `task-executor` | Execucao end-to-end de tarefas com gates de verificacao | `/task-executor` |
+| `post-task-validator` | Validacao pos-execucao com agentes especialistas em paralelo | `/post-task-validator` |
+| `deep-doc-review` | Revisao profunda de docs com cruzamento e resolucao interativa | `/deep-doc-review` |
 
-## Plugins
+## Instalar
 
-- `pre-task-validator/` - Validacao de specs antes da implementacao (contradicoes, gaps, ambiguidades)
-- `task-executor/` - Execucao end-to-end de tarefas com gates de verificacao
-- `post-task-validator/` - Validacao pos-execucao com agentes especialistas em paralelo
-- `deep-doc-review/` - Revisao profunda de docs com cruzamento e resolucao interativa
+```bash
+droid plugin marketplace add https://github.com/alexgarzao/optimus
+droid plugin install <skill-name>@optimus
+```
 
-## Como usar
+## Catalogo
 
-Cada prompt esta em um arquivo `.md` com a seguinte estrutura:
+Fichas de referencia das skills organizadas por categoria:
 
-- **Descricao**: O que o prompt faz
-- **Variaveis**: Parametros que devem ser substituidos (entre `{{chaves}}`)
-- **Prompt**: O texto do prompt
-- **Exemplo**: Exemplo de uso
+- `catalog/system/` - Skills de orquestracao e execucao de tarefas
+- `catalog/analysis/` - Skills de analise e revisao
+
+## Como funciona
+
+Cada skill e um plugin instalavel com:
+- `<skill>/.factory-plugin/plugin.json` — manifesto do plugin
+- `<skill>/skills/<skill>/SKILL.md` — instrucoes completas com frontmatter (trigger, prerequisite, etc.)

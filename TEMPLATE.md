@@ -1,19 +1,17 @@
-# Titulo do Prompt
+# Titulo da Skill
 
 ## Descricao
 
-Breve descricao do que este prompt faz.
+Breve descricao do que esta skill faz.
 
 ## Variaveis
 
 - `{{variavel_1}}`: Descricao da variavel
 - `{{variavel_2}}`: Descricao da variavel
 
-## Prompt
+## Skill
 
-```
-Seu prompt aqui, usando {{variavel_1}} e {{variavel_2}} onde necessario.
-```
+Veja a versao completa e instalavel como plugin em [`<skill>/skills/<skill>/SKILL.md`](./<skill>/skills/<skill>/SKILL.md).
 
 ## Exemplo
 
