@@ -1,13 +1,13 @@
 ---
-name: post-task-validator
+name: optimus-post-task-validator
 description: >
   Validates that a completed task was executed correctly: spec compliance,
   coding standards adherence, engineering best practices, test coverage,
   and production readiness. Uses parallel specialist agents for deep analysis,
-  then presents findings interactively. Runs AFTER task-executor finishes
+  then presents findings interactively. Runs AFTER optimus-task-executor finishes
   and BEFORE the final commit.
 trigger: >
-  - After task-executor completes all phases and verification gates pass
+  - After optimus-task-executor completes all phases and verification gates pass
   - When user requests validation of a completed task (e.g., "validate T-012")
   - Before the final commit of a task execution
 skip_when: >
@@ -22,7 +22,7 @@ prerequisite: >
 NOT_skip_when: >
   - "Task was simple" → Simple tasks still need spec compliance checks.
   - "Tests already pass" → Passing tests do not guarantee spec compliance or code quality.
-  - "task-executor already ran verification gates" → Gates check pass/fail; this validates correctness.
+  - "optimus-task-executor already ran verification gates" → Gates check pass/fail; this validates correctness.
   - "Time pressure" → Validation prevents rework, saving time overall.
 examples:
   - name: Validate a full-stack task
@@ -46,18 +46,18 @@ examples:
       4. Apply fixes, verify
 related:
   complementary:
-    - task-executor
+    - optimus-task-executor
     - requesting-code-review
     - dev-validation
   differentiation:
     - name: requesting-code-review
       difference: >
         requesting-code-review dispatches reviewers during the dev-cycle.
-        post-task-validator is a standalone validation that also checks
+        optimus-post-task-validator is a standalone validation that also checks
         spec compliance, test ID coverage, and cross-file consistency.
   sequence:
     after:
-      - task-executor
+      - optimus-task-executor
     before:
       - dev-feedback-loop
 verification:
@@ -75,7 +75,7 @@ verification:
 
 Validates that a completed task was executed correctly: spec compliance, coding standards adherence, engineering best practices, test coverage, and production readiness. Uses parallel specialist agents for deep analysis, then presents findings interactively.
 
-Runs AFTER task-executor finishes and BEFORE the final commit.
+Runs AFTER optimus-task-executor finishes and BEFORE the final commit.
 
 ---
 
@@ -83,7 +83,7 @@ Runs AFTER task-executor finishes and BEFORE the final commit.
 
 ### Step 0.1: Discover Project Structure
 
-Before loading docs, discover the project's structure and tooling (reuse discoveries from task-executor if available):
+Before loading docs, discover the project's structure and tooling (reuse discoveries from optimus-task-executor if available):
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
 2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, test, integration test, and E2E test commands.

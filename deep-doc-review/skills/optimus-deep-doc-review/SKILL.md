@@ -1,5 +1,5 @@
 ---
-name: deep-doc-review
+name: optimus-deep-doc-review
 description: >
   Revisao profunda de documentacao de projeto. Encontra erros, inconsistencias,
   gaps, dados faltantes e melhorias. Apresenta findings em tabela compacta e
@@ -9,7 +9,7 @@ trigger: >
   - Antes de iniciar implementacao baseada em docs (validar qualidade dos docs)
   - Apos mudancas significativas em docs de referencia (PRD, TRD, API design, etc.)
 skip_when: >
-  - Revisao de codigo (usar code-reviewer ou post-task-validator)
+  - Revisao de codigo (usar code-reviewer ou optimus-post-task-validator)
   - Docs ainda nao existem (criar primeiro)
   - Revisao de um unico arquivo simples (fazer diretamente sem skill)
 prerequisite: >
@@ -37,13 +37,13 @@ examples:
       3. Gerar tabela e resolver findings
 related:
   complementary:
-    - pre-task-validator
-    - post-task-validator
+    - optimus-pre-task-validator
+    - optimus-post-task-validator
   differentiation:
-    - name: pre-task-validator
+    - name: optimus-pre-task-validator
       difference: >
-        pre-task-validator valida uma task spec contra docs de referencia.
-        deep-doc-review revisa os proprios docs entre si, independente de tasks.
+        optimus-pre-task-validator valida uma task spec contra docs de referencia.
+        optimus-deep-doc-review revisa os proprios docs entre si, independente de tasks.
 verification:
   manual:
     - Todos os findings apresentados ao usuario

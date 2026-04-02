@@ -1,12 +1,12 @@
 ---
-name: task-executor
+name: optimus-task-executor
 description: >
   Executes a validated task specification end-to-end: plans phases, questions
   ambiguities upfront, dispatches parallel agents, runs verification gates
   between phases, conducts interactive code review, and commits only after
   user approval.
 trigger: >
-  - After pre-task-validator has PASSED for a task
+  - After optimus-pre-task-validator has PASSED for a task
   - When user requests full task execution with a task ID (e.g., "execute T-012")
   - When starting implementation of a validated task from a tasks file
 skip_when: >
@@ -46,7 +46,7 @@ examples:
   - name: Resume interrupted execution
     invocation: "Resume task T-012"
     expected_flow: >
-      1. Load state from task-executor-state.json
+      1. Load state from optimus-task-executor-state.json
       2. Identify last completed phase
       3. Resume from next phase
 related:
@@ -59,7 +59,7 @@ related:
     - name: dev-cycle
       difference: >
         dev-cycle is a 6-gate orchestrator (implementation, devops, SRE, testing,
-        review, validation) designed for Ring's gate system. task-executor is a
+        review, validation) designed for Ring's gate system. optimus-task-executor is a
         standalone skill with its own phased execution, verification gates, and
         interactive code review — suited for projects that don't use the Ring
         gate system.
@@ -71,7 +71,7 @@ related:
       - dev-feedback-loop
 verification:
   automated:
-    - command: "cat docs/dev-cycle/task-executor-state.json 2>/dev/null | jq '.status'"
+    - command: "cat docs/dev-cycle/optimus-task-executor-state.json 2>/dev/null | jq '.status'"
       description: State file tracks execution progress
       success_pattern: completed
   manual:
@@ -206,7 +206,7 @@ For each phase:
 
 ### State Persistence
 
-After each phase completes, save state to `docs/dev-cycle/task-executor-state.json`:
+After each phase completes, save state to `docs/dev-cycle/optimus-task-executor-state.json`:
 ```json
 {
   "task_id": "T-XXX",

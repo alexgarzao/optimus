@@ -1,5 +1,5 @@
 ---
-name: pre-task-validator
+name: optimus-pre-task-validator
 description: >
   Validates a task specification against project docs BEFORE code generation begins.
   Catches gaps, contradictions, ambiguities, test coverage holes, and observability
@@ -7,9 +7,9 @@ description: >
 trigger: >
   - Before starting any task implementation
   - When user requests spec validation (e.g., "validate spec for T-006")
-  - Before invoking task-executor for a task
+  - Before invoking optimus-task-executor for a task
 skip_when: >
-  - Task is already implemented (use post-task-validator instead)
+  - Task is already implemented (use optimus-post-task-validator instead)
   - No task spec exists yet (use pre-dev workflow to create it first)
   - Task is pure research with no implementation deliverables
 prerequisite: >
@@ -40,17 +40,17 @@ examples:
       3. Present and resolve findings
 related:
   complementary:
-    - task-executor
-    - post-task-validator
+    - optimus-task-executor
+    - optimus-post-task-validator
   differentiation:
-    - name: post-task-validator
+    - name: optimus-post-task-validator
       difference: >
-        post-task-validator validates AFTER implementation (code correctness,
-        test quality, code review). pre-task-validator validates BEFORE
+        optimus-post-task-validator validates AFTER implementation (code correctness,
+        test quality, code review). optimus-pre-task-validator validates BEFORE
         implementation (spec correctness, doc consistency, test design).
   sequence:
     before:
-      - task-executor
+      - optimus-task-executor
 verification:
   manual:
     - All contradictions between docs resolved

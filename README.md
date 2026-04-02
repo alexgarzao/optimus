@@ -6,16 +6,16 @@ Marketplace de skills para Droid (Factory) e Claude Code.
 
 | Skill | Descricao | Comando |
 |-------|-----------|---------|
-| `pre-task-validator` | Validacao de specs antes da implementacao | `/pre-task-validator` |
-| `task-executor` | Execucao end-to-end de tarefas com gates de verificacao | `/task-executor` |
-| `post-task-validator` | Validacao pos-execucao com agentes especialistas em paralelo | `/post-task-validator` |
-| `deep-doc-review` | Revisao profunda de docs com cruzamento e resolucao interativa | `/deep-doc-review` |
+| `pre-task-validator` | Validacao de specs antes da implementacao | `/optimus-pre-task-validator` |
+| `task-executor` | Execucao end-to-end de tarefas com gates de verificacao | `/optimus-task-executor` |
+| `post-task-validator` | Validacao pos-execucao com agentes especialistas em paralelo | `/optimus-post-task-validator` |
+| `deep-doc-review` | Revisao profunda de docs com cruzamento e resolucao interativa | `/optimus-deep-doc-review` |
 
 ## Instalar
 
 ```bash
 droid plugin marketplace add https://github.com/alexgarzao/optimus
-droid plugin install <skill-name>@optimus
+droid plugin install <plugin-name>@optimus
 ```
 
 ## Catalogo
@@ -28,5 +28,5 @@ Fichas de referencia das skills organizadas por categoria:
 ## Como funciona
 
 Cada skill e um plugin instalavel com:
-- `<skill>/.factory-plugin/plugin.json` — manifesto do plugin
-- `<skill>/skills/<skill>/SKILL.md` — instrucoes completas com frontmatter (trigger, prerequisite, etc.)
+- `<plugin>/.factory-plugin/plugin.json` — manifesto do plugin
+- `<plugin>/skills/optimus-<skill>/SKILL.md` — instrucoes completas com frontmatter (trigger, prerequisite, etc.)
