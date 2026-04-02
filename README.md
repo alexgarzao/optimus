@@ -10,6 +10,7 @@ Marketplace de skills para Droid (Factory) e Claude Code.
 | `task-executor` | Execucao end-to-end de tarefas com gates de verificacao | `/optimus-task-executor` |
 | `post-task-validator` | Validacao pos-execucao com agentes especialistas em paralelo | `/optimus-post-task-validator` |
 | `deep-doc-review` | Revisao profunda de docs com cruzamento e resolucao interativa | `/optimus-deep-doc-review` |
+| `verify` | Verificacao em duas fases para Go (analise estatica + testes) | `/optimus-verify` |
 
 ## Instalar
 
