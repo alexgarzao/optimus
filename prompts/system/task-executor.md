@@ -10,7 +10,7 @@ System prompt para um agente AI que executa tarefas de desenvolvimento end-to-en
 
 ## Prompt
 
-Veja a versao completa e instalavel como plugin em [`plugins/task-executor/skills/task-executor/SKILL.md`](../../plugins/task-executor/skills/task-executor/SKILL.md).
+Veja a versao completa e instalavel como plugin em [`task-executor/skills/task-executor/SKILL.md`](../../task-executor/skills/task-executor/SKILL.md).
 
 ## Exemplo
 

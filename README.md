@@ -11,7 +11,7 @@ Colecao de prompts organizados por categoria.
 
 ## Plugins
 
-- `plugins/` - Plugins instalaveis via marketplace do Droid (Factory) e Claude Code
+- `task-executor/` - Plugin instalavel via marketplace do Droid (Factory) e Claude Code
 
 ## Como usar
 
