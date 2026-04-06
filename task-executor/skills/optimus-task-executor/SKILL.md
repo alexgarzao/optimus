@@ -65,6 +65,7 @@ related:
         gate system.
   sequence:
     after:
+      - optimus-pre-task-validator
       - pre-dev-task-breakdown
       - pre-dev-subtask-creation
     before:

@@ -11,11 +11,11 @@ trigger: >
   - When user wants TDD-driven fix cycle for code review findings
 skip_when: >
   - CodeRabbit CLI is not installed or configured
-  - No coderabbit config file exists (dot_coderabbit.yaml or .coderabbit.yaml)
+  - No coderabbit config file exists (.coderabbit.yaml)
   - User wants agent-only review without external tool (use optimus-deep-review instead)
 prerequisite: >
   - CodeRabbit CLI installed and accessible
-  - CodeRabbit config file exists (dot_coderabbit.yaml or .coderabbit.yaml)
+  - CodeRabbit config file exists (.coderabbit.yaml)
   - Git repository with a base branch to compare against
 NOT_skip_when: >
   - "CodeRabbit already ran in CI" → Local review catches issues before push, saving CI cycles.
@@ -73,7 +73,7 @@ CodeRabbit-driven code review with TDD fix cycle, secondary agent validation for
 
 ### Step 0.1: Discover Configuration
 
-1. **Find config file:** Look for `dot_coderabbit.yaml`, `.coderabbit.yaml`, or equivalent
+1. **Find config file:** Look for `.coderabbit.yaml` in the project root
 2. **Determine base branch:** Default to `origin/main`, or use user-specified branch
 3. **Verify CLI:** Confirm `coderabbit` command is available
 

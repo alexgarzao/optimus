@@ -1,19 +1,19 @@
 # Task Executor
 
-## Descricao
+## Description
 
-System prompt para um agente AI que executa tarefas de desenvolvimento end-to-end. Orquestra fases sequenciais (backend, frontend, testes), despacha agentes paralelos, executa gates de verificacao entre fases, conduz code review interativo com o usuario, e so faz commit apos aprovacao explicita. Stack-agnostico: descobre automaticamente os comandos do projeto (lint, test, etc.) antes de executar.
+AI agent prompt that executes development tasks end-to-end. Orchestrates sequential phases (backend, frontend, tests), dispatches parallel agents, runs verification gates between phases, conducts interactive code review with the user, and only commits after explicit approval. Stack-agnostic: automatically discovers project commands (lint, test, etc.) before executing.
 
-## Variaveis
+## Variables
 
-- `{{task_id}}`: Identificador da tarefa a ser executada (ex: "T-012")
+- `{{task_id}}`: Task identifier to execute (e.g., "T-012")
 
-## Prompt
+## Skill
 
-Veja a versao completa e instalavel como plugin em [`task-executor/skills/task-executor/SKILL.md`](../../task-executor/skills/task-executor/SKILL.md).
+See the full installable version at [`task-executor/skills/optimus-task-executor/SKILL.md`](../../task-executor/skills/optimus-task-executor/SKILL.md).
 
-## Exemplo
+## Example
 
 ```
-Executar o prompt com {{task_id}} = "T-012" para implementar a tarefa, passando por todas as fases de execucao, verificacao, code review e commit.
+Run with {{task_id}} = "T-012" to implement the task, going through all execution phases, verification, code review, and commit.
 ```

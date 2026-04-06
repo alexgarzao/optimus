@@ -1,19 +1,19 @@
 # Pre-Task Validator
 
-## Descricao
+## Description
 
-System prompt para um agente AI que valida especificacoes de tarefas ANTES da implementacao comecar. Cruza a spec com docs de referencia (API, data model, TRD, PRD), detecta contradicoes, gaps de cobertura de testes, problemas de observabilidade, e ambiguidades. Apresenta findings interativamente com opcoes de resolucao. Somente analise — nao gera codigo. Stack-agnostico.
+AI agent prompt that validates task specifications BEFORE implementation begins. Cross-references the spec with reference docs (API, data model, TRD, PRD), detects contradictions, test coverage gaps, observability issues, and ambiguities. Presents findings interactively with resolution options. Analysis only — does not generate code. Stack-agnostic.
 
-## Variaveis
+## Variables
 
-- `{{task_id}}`: Identificador da tarefa a ser validada (ex: "T-006")
+- `{{task_id}}`: Task identifier to validate (e.g., "T-006")
 
-## Prompt
+## Skill
 
-Veja a versao completa e instalavel como plugin em [`pre-task-validator/skills/pre-task-validator/SKILL.md`](../../pre-task-validator/skills/pre-task-validator/SKILL.md).
+See the full installable version at [`pre-task-validator/skills/optimus-pre-task-validator/SKILL.md`](../../pre-task-validator/skills/optimus-pre-task-validator/SKILL.md).
 
-## Exemplo
+## Example
 
 ```
-Executar o prompt com {{task_id}} = "T-006" para validar a especificacao da tarefa antes de iniciar a implementacao, cruzando com api-design, data-model, trd e prd.
+Run with {{task_id}} = "T-006" to validate the task specification before starting implementation, cross-referencing with api-design, data-model, trd, and prd.
 ```

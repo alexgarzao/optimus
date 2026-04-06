@@ -1,20 +1,20 @@
-# Titulo da Skill
+# Skill Title
 
-## Descricao
+## Description
 
-Breve descricao do que esta skill faz.
+Brief description of what this skill does.
 
-## Variaveis
+## Variables
 
-- `{{variavel_1}}`: Descricao da variavel
-- `{{variavel_2}}`: Descricao da variavel
+- `{{variable_1}}`: Variable description
+- `{{variable_2}}`: Variable description
 
 ## Skill
 
-Veja a versao completa e instalavel como plugin em [`<skill>/skills/<skill>/SKILL.md`](./<skill>/skills/<skill>/SKILL.md).
+See the full installable version at [`<plugin>/skills/optimus-<skill>/SKILL.md`](../../<plugin>/skills/optimus-<skill>/SKILL.md).
 
-## Exemplo
+## Example
 
 ```
-Exemplo de uso com variaveis preenchidas.
+Usage example with filled variables.
 ```

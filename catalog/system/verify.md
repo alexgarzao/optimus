@@ -1,19 +1,19 @@
-# Verify
+# Verify Code
 
-## Descricao
+## Description
 
-Verificacao de codigo em duas fases para projetos Go. Fase 1 roda analise estatica e unit tests em paralelo. Fase 2 roda integration e E2E tests sequencialmente. Apresenta sumario executivo com veredicto MERGE_READY ou NEEDS_FIX.
+Two-phase code verification for Go projects. Phase 1 runs static analysis and unit tests in parallel. Phase 2 runs integration and E2E tests sequentially. Presents an executive summary with a MERGE_READY or NEEDS_FIX verdict.
 
-## Variaveis
+## Variables
 
-Nenhuma — detecta automaticamente os targets do Makefile.
+None — automatically detects Makefile targets.
 
 ## Skill
 
-Veja a versao completa e instalavel como plugin em [`verify/skills/optimus-verify-code/SKILL.md`](../../verify/skills/optimus-verify-code/SKILL.md).
+See the full installable version at [`verify/skills/optimus-verify-code/SKILL.md`](../../verify/skills/optimus-verify-code/SKILL.md).
 
-## Exemplo
+## Example
 
 ```
-/optimus-verify-code — roda todas as verificacoes e apresenta sumario com veredicto.
+/optimus-verify-code — runs all checks and presents a summary with verdict.
 ```

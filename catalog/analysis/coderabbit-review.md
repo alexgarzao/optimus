@@ -1,19 +1,19 @@
 # CodeRabbit Review
 
-## Descricao
+## Description
 
-Code review usando CodeRabbit CLI como fonte de findings. Cada finding e resolvido com ciclo TDD obrigatorio (RED-GREEN-REFACTOR) e validacao secundaria via agents paralelos para mudancas de logica. Resolucao interativa um por vez com aprovacao do usuario.
+Code review using CodeRabbit CLI as the source of findings. Each finding is resolved with a mandatory TDD cycle (RED-GREEN-REFACTOR) and secondary validation via parallel agents for logic changes. Interactive one-by-one resolution with user approval.
 
-## Variaveis
+## Variables
 
-Nenhuma — detecta automaticamente o config do CodeRabbit e comandos de teste do projeto.
+None — automatically detects the CodeRabbit config and project test commands.
 
 ## Skill
 
-Veja a versao completa e instalavel como plugin em [`coderabbit-review/skills/optimus-coderabbit-review/SKILL.md`](../../coderabbit-review/skills/optimus-coderabbit-review/SKILL.md).
+See the full installable version at [`coderabbit-review/skills/optimus-coderabbit-review/SKILL.md`](../../coderabbit-review/skills/optimus-coderabbit-review/SKILL.md).
 
-## Exemplo
+## Example
 
 ```
-/optimus-coderabbit-review — executa CodeRabbit e processa findings com TDD.
+/optimus-coderabbit-review — runs CodeRabbit and processes findings with TDD.
 ```

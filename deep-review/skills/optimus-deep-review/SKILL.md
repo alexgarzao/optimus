@@ -121,6 +121,8 @@ Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receiv
 
 ### Final Review (7 agents — includes the 5 above plus)
 
+| # | Agent | Focus |
+|---|-------|-------|
 | 6 | **Backend specialist** | Language idiomaticity, performance, concurrency, ecosystem patterns |
 | 7 | **Frontend specialist** | Framework patterns, hooks, components, accessibility, responsive design, performance |
 

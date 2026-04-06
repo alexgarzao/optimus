@@ -1,35 +1,35 @@
 # Optimus
 
-Marketplace de skills para Droid (Factory) e Claude Code.
+Skills marketplace for Droid (Factory) and Claude Code.
 
 ## Skills
 
-| Skill | Descricao | Comando |
-|-------|-----------|---------|
-| `pre-task-validator` | Validacao de specs antes da implementacao | `/optimus-pre-task-validator` |
-| `task-executor` | Execucao end-to-end de tarefas com gates de verificacao | `/optimus-task-executor` |
-| `post-task-validator` | Validacao pos-execucao com agentes especialistas em paralelo | `/optimus-post-task-validator` |
-| `deep-doc-review` | Revisao profunda de docs com cruzamento e resolucao interativa | `/optimus-deep-doc-review` |
-| `deep-review` | Code review paralelo com agents especialistas e resolucao interativa | `/optimus-deep-review` |
-| `coderabbit-review` | Code review com CodeRabbit CLI + ciclo TDD + validacao por agents | `/optimus-coderabbit-review` |
-| `verify` | Verificacao em duas fases para Go (analise estatica + testes) | `/optimus-verify-code` |
+| Skill | Description | Command |
+|-------|-------------|---------|
+| `pre-task-validator` | Validates task specs against project docs before implementation | `/optimus-pre-task-validator` |
+| `task-executor` | End-to-end task execution with verification gates | `/optimus-task-executor` |
+| `post-task-validator` | Post-execution validation with parallel specialist agents | `/optimus-post-task-validator` |
+| `deep-doc-review` | Deep doc review with cross-referencing and interactive resolution | `/optimus-deep-doc-review` |
+| `deep-review` | Parallel code review with specialist agents and interactive resolution | `/optimus-deep-review` |
+| `coderabbit-review` | Code review with CodeRabbit CLI + TDD cycle + agent validation | `/optimus-coderabbit-review` |
+| `verify` | Two-phase code verification for Go (static analysis + tests) | `/optimus-verify-code` |
 
-## Instalar
+## Install
 
 ```bash
 droid plugin marketplace add https://github.com/alexgarzao/optimus
 droid plugin install <plugin-name>@optimus
 ```
 
-## Catalogo
+## Catalog
 
-Fichas de referencia das skills organizadas por categoria:
+Skill reference cards organized by category:
 
-- `catalog/system/` - Skills de orquestracao e execucao de tarefas
-- `catalog/analysis/` - Skills de analise e revisao
+- `catalog/system/` — Orchestration and task execution skills
+- `catalog/analysis/` — Analysis and review skills
 
-## Como funciona
+## How it works
 
-Cada skill e um plugin instalavel com:
-- `<plugin>/.factory-plugin/plugin.json` — manifesto do plugin
-- `<plugin>/skills/optimus-<skill>/SKILL.md` — instrucoes completas com frontmatter (trigger, prerequisite, etc.)
+Each skill is an installable plugin with:
+- `<plugin>/.factory-plugin/plugin.json` — plugin manifest
+- `<plugin>/skills/optimus-<skill>/SKILL.md` — full instructions with frontmatter (trigger, prerequisite, etc.)

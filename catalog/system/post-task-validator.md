@@ -1,19 +1,19 @@
 # Post-Task Validator
 
-## Descricao
+## Description
 
-System prompt para um agente AI que valida tarefas de desenvolvimento apos execucao. Verifica conformidade com a spec, aderencia ao coding standards, boas praticas de engenharia, cobertura de testes e prontidao para producao. Despacha agentes especialistas em paralelo e apresenta findings interativamente com analise de quatro lentes (UX, task focus, project focus, engineering). Stack-agnostico.
+AI agent prompt that validates development tasks after execution. Checks spec compliance, coding standards adherence, engineering best practices, test coverage, and production readiness. Dispatches specialist agents in parallel and presents findings interactively with four-lens analysis (UX, task focus, project focus, engineering). Stack-agnostic.
 
-## Variaveis
+## Variables
 
-- `{{task_id}}`: Identificador da tarefa a ser validada (ex: "T-012")
+- `{{task_id}}`: Task identifier to validate (e.g., "T-012")
 
-## Prompt
+## Skill
 
-Veja a versao completa e instalavel como plugin em [`post-task-validator/skills/post-task-validator/SKILL.md`](../../post-task-validator/skills/post-task-validator/SKILL.md).
+See the full installable version at [`post-task-validator/skills/optimus-post-task-validator/SKILL.md`](../../post-task-validator/skills/optimus-post-task-validator/SKILL.md).
 
-## Exemplo
+## Example
 
 ```
-Executar o prompt com {{task_id}} = "T-012" para validar a tarefa apos execucao pelo task-executor, despachando agentes de revisao em paralelo e resolvendo findings interativamente.
+Run with {{task_id}} = "T-012" to validate the task after execution by task-executor, dispatching review agents in parallel and resolving findings interactively.
 ```

@@ -1,20 +1,20 @@
 # Deep Doc Review
 
-## Descricao
+## Description
 
-Prompt para revisao profunda de documentacao de projeto. Cruza informacoes entre docs para encontrar erros, inconsistencias, gaps, dados faltantes e melhorias. Apresenta findings em tabela compacta e resolve um por vez com aprovacao do usuario. Nao faz alteracoes automaticas.
+Deep review of project documentation. Cross-references information between docs to find errors, inconsistencies, gaps, missing data, and improvements. Presents findings in a compact table and resolves one by one with user approval. Does not make automatic changes.
 
-## Variaveis
+## Variables
 
-Nenhuma — descobre automaticamente os docs do projeto, ou o usuario especifica quais revisar.
+None — automatically discovers project docs, or the user specifies which ones to review.
 
-## Prompt
+## Skill
 
-Veja a versao completa e instalavel como plugin em [`deep-doc-review/skills/deep-doc-review/SKILL.md`](../../deep-doc-review/skills/deep-doc-review/SKILL.md).
+See the full installable version at [`deep-doc-review/skills/optimus-deep-doc-review/SKILL.md`](../../deep-doc-review/skills/optimus-deep-doc-review/SKILL.md).
 
-## Exemplo
+## Example
 
 ```
-"Revise os docs do projeto" — descobre e analisa todos os docs automaticamente.
-"Revise docs/pre-dev/api-design.md e docs/pre-dev/data-model.md" — analisa docs especificos.
+"Review the project docs" — discovers and analyzes all docs automatically.
+"Review docs/pre-dev/api-design.md and docs/pre-dev/data-model.md" — analyzes specific docs.
 ```

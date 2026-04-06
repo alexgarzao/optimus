@@ -256,7 +256,7 @@ For EACH new component:
    - **Why it matters:** Impact through UX and engineering best practices lenses
    - **Options:** 2-3 concrete resolution options with pros/cons/effort
    - **Recommendation:** Preferred option with justification
-4. **Wait for user's decision** before advancing to the next finding
+4. Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides
 5. **Track all decisions** internally
 
 ### Step 5: Phase 2 — Apply ALL Approved Corrections

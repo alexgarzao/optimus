@@ -35,14 +35,29 @@ related:
   complementary:
     - optimus-task-executor
     - optimus-post-task-validator
+  differentiation:
+    - name: optimus-deep-review
+      difference: >
+        optimus-deep-review dispatches specialist agents for deep analysis of
+        code quality, business logic, and security. optimus-verify-code runs
+        automated checks (lint, vet, tests) and reports pass/fail verdicts.
+    - name: optimus-coderabbit-review
+      difference: >
+        optimus-coderabbit-review uses CodeRabbit CLI to generate findings and
+        adds a TDD fix cycle. optimus-verify-code only runs automated checks
+        without fixing anything.
 verification:
   automated:
     - command: "test -f go.mod"
       description: Go project detected
       success_pattern: exit 0
+  manual:
+    - Executive summary presented with correct verdict
+    - All command outputs captured and displayed
+    - Duration measured for each command individually
 ---
 
-# Optimus Verify
+# Verify Code
 
 Two-phase code verification for Go projects.
 

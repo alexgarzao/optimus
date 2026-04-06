@@ -1,19 +1,19 @@
 # Deep Review
 
-## Descricao
+## Description
 
-Code review paralelo com agentes especialistas. Suporta revisao inicial (5 agents, corretude e gaps criticos) e final (7 agents, cobertura completa incluindo idiomaticidade de stack). Consolida, deduplica e apresenta findings um por vez com aprovacao do usuario.
+Parallel code review with specialist agents. Supports initial review (5 agents, correctness and critical gaps) and final review (7 agents, full coverage including stack idiomaticity). Consolidates, deduplicates, and presents findings one by one with user approval.
 
-## Variaveis
+## Variables
 
-Nenhuma — descobre automaticamente o stack e coding standards do projeto.
+None — automatically discovers the project stack and coding standards.
 
 ## Skill
 
-Veja a versao completa e instalavel como plugin em [`deep-review/skills/optimus-deep-review/SKILL.md`](../../deep-review/skills/optimus-deep-review/SKILL.md).
+See the full installable version at [`deep-review/skills/optimus-deep-review/SKILL.md`](../../deep-review/skills/optimus-deep-review/SKILL.md).
 
-## Exemplo
+## Example
 
 ```
-/optimus-deep-review — revisao de codigo com agents paralelos e resolucao interativa.
+/optimus-deep-review — code review with parallel agents and interactive resolution.
 ```

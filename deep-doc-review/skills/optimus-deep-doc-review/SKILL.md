@@ -1,40 +1,40 @@
 ---
 name: optimus-deep-doc-review
 description: >
-  Revisao profunda de documentacao de projeto. Encontra erros, inconsistencias,
-  gaps, dados faltantes e melhorias. Apresenta findings em tabela compacta e
-  resolve um por vez com aprovacao do usuario. Nao faz alteracoes automaticas.
+  Deep review of project documentation. Finds errors, inconsistencies,
+  gaps, missing data, and improvements. Presents findings in a compact table
+  and resolves one by one with user approval. Does not make automatic changes.
 trigger: >
-  - Quando o usuario pede revisao de documentacao do projeto
-  - Antes de iniciar implementacao baseada em docs (validar qualidade dos docs)
-  - Apos mudancas significativas em docs de referencia (PRD, TRD, API design, etc.)
+  - When user requests project documentation review
+  - Before starting implementation based on docs (validate doc quality)
+  - After significant changes to reference docs (PRD, TRD, API design, etc.)
 skip_when: >
-  - Revisao de codigo (usar code-reviewer ou optimus-post-task-validator)
-  - Docs ainda nao existem (criar primeiro)
-  - Revisao de um unico arquivo simples (fazer diretamente sem skill)
+  - Code review (use optimus-deep-review or optimus-post-task-validator instead)
+  - Docs do not exist yet (create them first)
+  - Reviewing a single simple file (do it directly without the skill)
 prerequisite: >
-  - Projeto tem documentacao para revisar
-  - Docs estao acessiveis no repositorio
+  - Project has documentation to review
+  - Docs are accessible in the repository
 NOT_skip_when: >
-  - "Docs ja foram revisados" → Docs evoluem e acumulam inconsistencias.
-  - "Sao poucos docs" → Poucos docs ainda podem ter contradicoes entre si.
-  - "So mudou um doc" → Mudanca em um doc pode criar inconsistencia com outros.
+  - "Docs were already reviewed" → Docs evolve and accumulate inconsistencies over time.
+  - "There are only a few docs" → Even a few docs can have contradictions between them.
+  - "Only one doc changed" → A change in one doc can create inconsistencies with others.
 examples:
-  - name: Revisar todos os docs do projeto
-    invocation: "Revise os docs do projeto"
+  - name: Review all project docs
+    invocation: "Review the project docs"
     expected_flow: >
-      1. Descobrir docs existentes
-      2. Ler todos os docs
-      3. Cruzar informacoes entre docs
-      4. Gerar tabela de findings
-      5. Apresentar um por vez, aplicar correcoes aprovadas
-      6. Resumo final
-  - name: Revisar docs especificos
-    invocation: "Revise docs/pre-dev/api-design.md e docs/pre-dev/data-model.md"
+      1. Discover existing docs
+      2. Read all docs
+      3. Cross-reference information between docs
+      4. Generate findings table
+      5. Present one by one, apply approved corrections
+      6. Final summary
+  - name: Review specific docs
+    invocation: "Review docs/pre-dev/api-design.md and docs/pre-dev/data-model.md"
     expected_flow: >
-      1. Ler os docs especificados
-      2. Cruzar informacoes entre eles
-      3. Gerar tabela e resolver findings
+      1. Read the specified docs
+      2. Cross-reference information between them
+      3. Generate table and resolve findings
 related:
   complementary:
     - optimus-pre-task-validator
@@ -42,166 +42,167 @@ related:
   differentiation:
     - name: optimus-pre-task-validator
       difference: >
-        optimus-pre-task-validator valida uma task spec contra docs de referencia.
-        optimus-deep-doc-review revisa os proprios docs entre si, independente de tasks.
+        optimus-pre-task-validator validates a task spec against reference docs.
+        optimus-deep-doc-review reviews the docs themselves against each other,
+        independent of any task.
 verification:
   manual:
-    - Todos os findings apresentados ao usuario
-    - Correcoes aprovadas aplicadas corretamente
-    - Resumo final apresentado
+    - All findings presented to user
+    - Approved corrections applied correctly
+    - Final summary presented
 ---
 
 # Deep Doc Review
 
-Revisao profunda de documentacao de projeto. Encontra erros, inconsistencias, gaps, dados faltantes e melhorias.
+Deep review of project documentation. Finds errors, inconsistencies, gaps, missing data, and improvements.
 
 ---
 
-## Phase 0: Descobrir e Carregar Docs
+## Phase 0: Discover and Load Docs
 
-### Step 0.1: Identificar Docs para Revisar
+### Step 0.1: Identify Docs to Review
 
-Se o usuario especificou arquivos, usar esses. Caso contrario, descobrir automaticamente:
+If the user specified files, use those. Otherwise, discover automatically:
 
-1. Procurar por docs de referencia do projeto: `docs/`, `docs/pre-dev/`, ou equivalente
-2. Incluir: PRD, TRD, API design, data model, task specs, coding standards, dependency map, README, CHANGELOG
-3. Excluir: arquivos gerados, node_modules, build artifacts, arquivos binarios
+1. Search for project reference docs: `docs/`, `docs/pre-dev/`, or equivalent
+2. Include: PRD, TRD, API design, data model, task specs, coding standards, dependency map, README, CHANGELOG
+3. Exclude: generated files, node_modules, build artifacts, binary files
 
-Apresentar a lista de docs encontrados ao usuario antes de prosseguir. Se forem muitos (>15), perguntar se quer revisar todos ou selecionar um subconjunto.
+Present the list of discovered docs to the user before proceeding. If there are many (>15), ask whether to review all or select a subset.
 
-### Step 0.2: Ler Todos os Docs
+### Step 0.2: Read All Docs
 
-Ler o conteudo completo de cada doc identificado. Construir um mapa mental de:
-- Entidades e campos definidos em cada doc
-- Endpoints e contratos de API
-- Regras de negocio
-- Decisoes tecnicas
-- Dependencias entre docs
-
----
-
-## Phase 1: Analise e Cruzamento
-
-### Tipos de Problemas
-
-| Tipo | Descricao |
-|------|-----------|
-| ERRO | Informacao factualmente incorreta |
-| INCONSISTENCIA | Contradicao entre dois ou mais docs |
-| GAP | Informacao esperada mas ausente |
-| FALTANDO | Dado referenciado que nao existe em nenhum doc |
-| MELHORIA | Oportunidade de clareza, organizacao ou completude |
-
-### Severidade
-
-| Severidade | Criterio |
-|------------|----------|
-| CRITICA | Bloqueia implementacao — dev nao consegue prosseguir sem resolver |
-| ALTA | Causa bug ou confusao significativa durante implementacao |
-| MEDIA | Afeta qualidade dos docs mas nao bloqueia implementacao |
-| BAIXA | Cosmetico — formatacao, typos, organizacao |
-
-### O que Analisar
-
-Para cada doc, verificar:
-1. **Consistencia interna** — o doc contradiz a si mesmo?
-2. **Consistencia cruzada** — o doc contradiz outros docs?
-3. **Completude** — faltam secoes esperadas?
-4. **Referencia valida** — entidades, campos, endpoints referenciados existem nos docs correspondentes?
-5. **Clareza** — um dev consegue implementar sem precisar perguntar?
-6. **Atualizacao** — informacoes estao desatualizadas vs o codigo existente?
+Read the full content of each identified doc. Build a mental map of:
+- Entities and fields defined in each doc
+- Endpoints and API contracts
+- Business rules
+- Technical decisions
+- Dependencies between docs
 
 ---
 
-## Phase 2: Apresentar Overview
+## Phase 1: Analysis and Cross-Referencing
 
-Apresentar a tabela completa de findings para dar visao geral:
+### Issue Types
+
+| Type | Description |
+|------|-------------|
+| ERROR | Factually incorrect information |
+| INCONSISTENCY | Contradiction between two or more docs |
+| GAP | Expected information that is absent |
+| MISSING | Referenced data that does not exist in any doc |
+| IMPROVEMENT | Opportunity for clarity, organization, or completeness |
+
+### Severity
+
+| Severity | Criteria |
+|----------|----------|
+| CRITICAL | Blocks implementation — developer cannot proceed without resolving |
+| HIGH | Causes bugs or significant confusion during implementation |
+| MEDIUM | Affects doc quality but does not block implementation |
+| LOW | Cosmetic — formatting, typos, organization |
+
+### What to Analyze
+
+For each doc, verify:
+1. **Internal consistency** — does the doc contradict itself?
+2. **Cross-doc consistency** — does the doc contradict other docs?
+3. **Completeness** — are expected sections missing?
+4. **Valid references** — do referenced entities, fields, and endpoints exist in the corresponding docs?
+5. **Clarity** — can a developer implement without needing to ask questions?
+6. **Currency** — is the information outdated compared to the existing code?
+
+---
+
+## Phase 2: Present Overview
+
+Present the full findings table for a bird's-eye view:
 
 ```markdown
-## Deep Doc Review — X findings em Y docs
+## Deep Doc Review — X findings across Y docs
 
-| # | Tipo | Severidade | Arquivo(s) | Problema | Correcao sugerida | Tradeoff | Recomendacao |
-|---|------|------------|------------|----------|-------------------|----------|--------------|
-| 1 | INCONSISTENCIA | CRITICA | api-design.md, data-model.md | Campo X definido como VARCHAR(50) no data-model mas string sem limite no API design | Alinhar para VARCHAR(100) em ambos | Mudar limite pode afetar validacao | Corrigir ambos os docs |
-| 2 | GAP | ALTA | tasks.md | Task T-008 nao define Testing Strategy | Adicionar secao com unit + integration tests | Esfoco adicional de escrita | Adicionar antes de implementar |
+| # | Type | Severity | File(s) | Problem | Suggested Fix | Tradeoff | Recommendation |
+|---|------|----------|---------|---------|---------------|----------|----------------|
+| 1 | INCONSISTENCY | CRITICAL | api-design.md, data-model.md | Field X defined as VARCHAR(50) in data-model but string with no limit in API design | Align to VARCHAR(100) in both | Changing limit may affect validation | Fix both docs |
+| 2 | GAP | HIGH | tasks.md | Task T-008 does not define Testing Strategy | Add section with unit + integration tests | Additional writing effort | Add before implementation |
 | ... | ... | ... | ... | ... | ... | ... | ... |
 
-### Resumo por Severidade
-- CRITICA: X
-- ALTA: X
-- MEDIA: X
-- BAIXA: X
+### Summary by Severity
+- CRITICAL: X
+- HIGH: X
+- MEDIUM: X
+- LOW: X
 ```
 
 ---
 
-## Phase 3: Resolucao Interativa (um por vez)
+## Phase 3: Interactive Resolution (one by one)
 
-Apresentar cada finding individualmente, em ordem de severidade (CRITICA primeiro).
+Present each finding individually, in severity order (CRITICAL first).
 
-Para CADA finding:
+For EACH finding:
 
-### 1. Mostrar o Item
+### 1. Show the Item
 
-Exibir o numero, tipo, severidade, arquivo(s) afetado(s), descricao do problema, correcao sugerida e tradeoff.
+Display the number, type, severity, affected file(s), problem description, suggested fix, and tradeoff.
 
-### 2. Perguntar ao Usuario
+### 2. Ask the User
 
-Usar `AskUser` com opcoes contextuais:
-- Corrigir conforme sugerido
-- Corrigir com ajuste (usuario especifica)
-- Pular este item
+Use `AskUser` with contextual options:
+- Fix as suggested
+- Fix with adjustment (user specifies)
+- Skip this item
 
-**BLOCKING**: NAO avancar para o proximo item ate o usuario decidir.
+**BLOCKING**: Do NOT advance to the next item until the user decides.
 
-### 3. Aplicar (se aprovado)
+### 3. Apply (if approved)
 
-Se o usuario escolheu corrigir:
-1. Aplicar a correcao imediatamente
-2. Confirmar que foi aplicada
-3. Somente entao avancar para o proximo item
+If the user chose to fix:
+1. Apply the correction immediately
+2. Confirm it was applied
+3. Only then advance to the next item
 
-### Regras
-- Nunca apresentar mais de um item por vez
-- Nunca aplicar correcoes sem aprovacao explicita
-- Registrar internamente cada decisao (corrigido, pulado, ajustado)
+### Rules
+- Never present more than one item at a time
+- Never apply corrections without explicit approval
+- Internally record each decision (fixed, skipped, adjusted)
 
 ---
 
-## Phase 4: Resumo Final
+## Phase 4: Final Summary
 
-Apos processar todos os findings:
+After processing all findings:
 
 ```markdown
-## Deep Doc Review — Resumo
+## Deep Doc Review — Summary
 
-### Corrigidos (X findings)
-| # | Tipo | Arquivo(s) | Correcao Aplicada |
-|---|------|------------|-------------------|
-| 1 | INCONSISTENCIA | api-design.md, data-model.md | Alinhado VARCHAR(100) |
+### Fixed (X findings)
+| # | Type | File(s) | Fix Applied |
+|---|------|---------|-------------|
+| 1 | INCONSISTENCY | api-design.md, data-model.md | Aligned to VARCHAR(100) |
 
-### Pulados (X findings)
-| # | Tipo | Arquivo(s) | Motivo |
-|---|------|------------|--------|
-| 5 | MELHORIA | trd.md | Usuario: cosmetico, nao prioritario |
+### Skipped (X findings)
+| # | Type | File(s) | Reason |
+|---|------|---------|--------|
+| 5 | IMPROVEMENT | trd.md | User: cosmetic, not a priority |
 
-### Estatisticas
-- Total de findings: X
-- Corrigidos: X
-- Pulados: X
-- Docs modificados: [lista]
+### Statistics
+- Total findings: X
+- Fixed: X
+- Skipped: X
+- Docs modified: [list]
 ```
 
-**Do NOT commit automaticamente.** Apresentar o resumo e aguardar o usuario decidir se quer commitar.
+**Do NOT commit automatically.** Present the summary and wait for the user to decide whether to commit.
 
 ---
 
 ## Rules
 
-- NAO gerar codigo — esta skill e somente para documentacao
-- NAO assumir — se algo e ambiguo, classificar como GAP ou FALTANDO
-- SEMPRE cruzar informacoes entre docs — findings intra-doc sao uteis, mas inter-doc sao mais valiosos
-- Priorizar: CRITICA > ALTA > MEDIA > BAIXA
-- Referenciar localizacao exata (arquivo, secao, linha quando possivel)
-- Tradeoffs devem ser honestos — nao minimizar o custo de uma correcao
-- Se o doc referencia codigo existente, verificar se o codigo condiz com o doc
+- Do NOT generate code — this skill is for documentation only
+- Do NOT assume — if something is ambiguous, classify it as GAP or MISSING
+- ALWAYS cross-reference information between docs — intra-doc findings are useful, but inter-doc findings are more valuable
+- Prioritize: CRITICAL > HIGH > MEDIUM > LOW
+- Reference exact locations (file, section, line when possible)
+- Tradeoffs must be honest — do not minimize the cost of a correction
+- If a doc references existing code, verify that the code matches the doc
