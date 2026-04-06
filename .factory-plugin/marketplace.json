@@ -31,6 +31,11 @@
       "source": "./deep-review"
     },
     {
+      "name": "coderabbit-review",
+      "description": "CodeRabbit-driven code review with TDD fix cycle and secondary agent validation.",
+      "source": "./coderabbit-review"
+    },
+    {
       "name": "verify",
       "description": "Two-phase code verification for Go projects: parallel static analysis + sequential tests with MERGE_READY/NEEDS_FIX verdict.",
       "source": "./verify"

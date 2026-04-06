@@ -1,0 +1,8 @@
+{
+  "name": "coderabbit-review",
+  "description": "CodeRabbit-driven code review with TDD fix cycle, secondary validation via review agents, and interactive finding resolution.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Alex Garzao"
+  }
+}
