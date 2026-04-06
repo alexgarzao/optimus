@@ -48,6 +48,7 @@ examples:
 related:
   complementary:
     - optimus-task-executor
+    - optimus-pr-review
     - optimus-verify-code
   differentiation:
     - name: optimus-post-task-validator

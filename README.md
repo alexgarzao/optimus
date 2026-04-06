@@ -11,6 +11,7 @@ Skills marketplace for Droid (Factory) and Claude Code.
 | `post-task-validator` | Post-execution validation with parallel specialist agents | `/optimus-post-task-validator` |
 | `deep-doc-review` | Deep doc review with cross-referencing and interactive resolution | `/optimus-deep-doc-review` |
 | `deep-review` | Parallel code review with specialist agents and interactive resolution | `/optimus-deep-review` |
+| `pr-review` | PR-aware review orchestrator that delegates to optimus-deep-review | `/optimus-pr-review` |
 | `coderabbit-review` | Code review with CodeRabbit CLI + TDD cycle + agent validation | `/optimus-coderabbit-review` |
 | `verify` | Two-phase code verification for Go (static analysis + tests) | `/optimus-verify-code` |
 

@@ -1,6 +1,6 @@
 {
   "name": "optimus",
-  "description": "Marketplace de skills para Droid e Claude Code",
+  "description": "Skills marketplace for Droid (Factory) and Claude Code",
   "owner": {
     "name": "Alex Garzao"
   },
@@ -29,6 +29,11 @@
       "name": "deep-review",
       "description": "Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution.",
       "source": "./deep-review"
+    },
+    {
+      "name": "pr-review",
+      "description": "PR-aware code review orchestrator. Fetches PR metadata and delegates to optimus-deep-review.",
+      "source": "./pr-review"
     },
     {
       "name": "coderabbit-review",
