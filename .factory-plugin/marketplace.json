@@ -26,6 +26,11 @@
       "source": "./deep-doc-review"
     },
     {
+      "name": "deep-review",
+      "description": "Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution.",
+      "source": "./deep-review"
+    },
+    {
       "name": "verify",
       "description": "Two-phase code verification for Go projects: parallel static analysis + sequential tests with MERGE_READY/NEEDS_FIX verdict.",
       "source": "./verify"
