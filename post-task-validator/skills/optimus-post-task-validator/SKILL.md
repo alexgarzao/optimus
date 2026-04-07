@@ -15,7 +15,7 @@ skip_when: >
   - Already inside a code review skill execution
   - Changes have already been committed (validation must happen before commit)
 prerequisite: >
-  - Task execution is complete (all phases passed verification gates)
+  - Task execution is complete (user provides ID or skill auto-detects last executed task)
   - Changed files are uncommitted (validation happens before commit)
   - Reference docs exist (task spec, coding standards)
   - Project has lint and test commands configured
@@ -28,22 +28,31 @@ examples:
   - name: Validate a full-stack task
     invocation: "Validate task T-012"
     expected_flow: >
-      1. Load task spec and reference docs
-      2. Identify changed files
-      3. Dispatch 8 parallel agents (code, business logic, security, QA, frontend, backend, cross-file, spec compliance)
-      4. Consolidate and deduplicate findings
-      5. Present overview table
-      6. Interactive finding-by-finding resolution
-      7. Batch apply approved fixes
-      8. Run verification gate
-      9. Present validation summary
+      1. User specified task ID — confirm with user
+      2. Load task spec and reference docs
+      3. Identify changed files
+      4. Dispatch 8 parallel agents (code, business logic, security, QA, frontend, backend, cross-file, spec compliance)
+      5. Consolidate and deduplicate findings
+      6. Present overview table
+      7. Interactive finding-by-finding resolution
+      8. Batch apply approved fixes
+      9. Run verification gate
+      10. Present validation summary
+  - name: Validate last executed task (auto-detect)
+    invocation: "Validate the last task"
+    expected_flow: >
+      1. Check optimus-task-executor-state.json or git diff for context
+      2. Identify the task that was just executed
+      3. Suggest to user and confirm via AskUser
+      4. Standard validation flow
   - name: Validate a frontend-only task
     invocation: "Validate task T-015"
     expected_flow: >
-      1. Load context, classify as frontend-only
-      2. Dispatch 7 agents (skip backend specialist)
-      3. Consolidate, present, resolve findings
-      4. Apply fixes, verify
+      1. User specified task ID — confirm with user
+      2. Load context, classify as frontend-only
+      3. Dispatch 7 agents (skip backend specialist)
+      4. Consolidate, present, resolve findings
+      5. Apply fixes, verify
 related:
   complementary:
     - optimus-task-executor
@@ -80,6 +89,23 @@ Runs AFTER optimus-task-executor finishes and BEFORE the final commit.
 ---
 
 ## Phase 0: Load Context
+
+### Step 0.0: Identify Task to Validate
+
+Determine which task to validate:
+
+**If the user specified a task ID** (e.g., "validate T-012"):
+- Use the provided task ID
+- Confirm with the user using `AskUser`: "I'll validate task T-012: [task title]. Correct?"
+
+**If the user did NOT specify a task ID** (e.g., "validate the last task", or just invoked the skill):
+1. **Check for execution state:** Look for `docs/dev-cycle/optimus-task-executor-state.json` — if it exists and has a recent task, use that task ID
+2. **Check git diff:** If no state file, examine uncommitted changes to infer which task was just implemented (look for task ID references in changed files, commit messages, or branch name)
+3. **Fall back to tasks file:** Scan the tasks file for the most recently completed task (status "in_progress" or last "completed")
+4. **Suggest to the user** using `AskUser`: "I identified the task to validate: T-XXX — [task title]. Is this correct, or would you like to validate a different task?"
+5. **If no task can be identified**, ask the user to provide a task ID
+
+**BLOCKING**: Do NOT proceed until the user confirms which task to validate.
 
 ### Step 0.1: Discover Project Structure
 

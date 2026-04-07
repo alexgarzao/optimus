@@ -13,7 +13,7 @@ skip_when: >
   - No task spec exists yet (use pre-dev workflow to create it first)
   - Task is pure research with no implementation deliverables
 prerequisite: >
-  - Task spec exists with a valid ID
+  - Task spec exists (user provides ID or skill auto-detects next pending task)
   - Reference docs exist (PRD, TRD, API design, data model)
   - Coding standards / project rules file exists
 NOT_skip_when: >
@@ -25,19 +25,27 @@ examples:
   - name: Validate a full-stack task
     invocation: "Validate spec for T-006"
     expected_flow: >
-      1. Discover project structure and reference docs
-      2. Load task spec and all reference docs
-      3. Cross-reference across all docs
-      4. Analyze test coverage gaps
-      5. Analyze observability gaps
-      6. Present summary table, then walk through findings one at a time
-      7. Batch apply all approved corrections
+      1. User specified task ID — confirm with user
+      2. Discover project structure and reference docs
+      3. Load task spec and all reference docs
+      4. Cross-reference across all docs
+      5. Analyze test coverage gaps
+      6. Analyze observability gaps
+      7. Present summary table, then walk through findings one at a time
+      8. Batch apply all approved corrections
+  - name: Validate next task (auto-detect)
+    invocation: "Validate the next task"
+    expected_flow: >
+      1. Discover tasks file, identify next pending task
+      2. Suggest to user and confirm via AskUser
+      3. Standard validation flow
   - name: Validate a backend-only task
     invocation: "Validate spec for T-010"
     expected_flow: >
-      1. Load context, skip frontend-related checks
-      2. Focus on API contracts, data model, integration tests
-      3. Present and resolve findings
+      1. User specified task ID — confirm with user
+      2. Load context, skip frontend-related checks
+      3. Focus on API contracts, data model, integration tests
+      4. Present and resolve findings
 related:
   complementary:
     - optimus-task-executor
@@ -66,6 +74,26 @@ Catches gaps, contradictions, and ambiguities that would cause rework.
 ---
 
 ## Phase 0: Discover and Load Context
+
+### Step 0.0: Identify Task to Validate
+
+Determine which task to validate:
+
+**If the user specified a task ID** (e.g., "validate T-006"):
+- Use the provided task ID
+- Confirm with the user using `AskUser`: "I'll validate task T-006: [task title]. Correct?"
+
+**If the user did NOT specify a task ID** (e.g., "validate the next task", or just invoked the skill):
+1. **Find the tasks file:** Look for task specs in `docs/`, `docs/pre-dev/`, or equivalent (files named `tasks.md`, `tasks/*.md`, or similar)
+2. **Identify the next pending task:** Scan the tasks file for the first task that:
+   - Has status "pending", "todo", "not started", or no status marker
+   - Has all dependencies (required tasks) marked as "completed" or "done"
+   - Is not blocked by other tasks
+3. **If multiple candidates exist**, pick the one with the lowest ID (or earliest in the file)
+4. **Suggest to the user** using `AskUser`: "I identified the next task to validate: T-XXX — [task title]. Is this correct, or would you like to validate a different task?"
+5. **If no tasks file is found or no pending tasks exist**, ask the user to provide a task ID
+
+**BLOCKING**: Do NOT proceed until the user confirms which task to validate.
 
 ### Step 0.1: Discover Project Structure
 

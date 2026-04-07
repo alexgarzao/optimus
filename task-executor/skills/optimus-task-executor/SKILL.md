@@ -14,7 +14,7 @@ skip_when: >
   - Task is pure research or documentation (no code to verify)
   - No tasks file exists yet (use pre-dev workflow first)
 prerequisite: >
-  - Task exists in a tasks file with a valid ID
+  - Task exists in a tasks file (user provides ID or skill auto-detects next pending task)
   - Pre-task validation has passed
   - Reference docs exist (PRD, TRD, API design, data model)
   - Project rules file exists with coding standards
@@ -28,21 +28,29 @@ examples:
   - name: Execute a full-stack task
     invocation: "Execute task T-012"
     expected_flow: >
-      1. Load context from reference docs
-      2. Explore existing codebase patterns
-      3. Ask all questions upfront
-      4. Plan phases and present to user
-      5. Execute each phase with verification gates
-      6. Run interactive code review
-      7. Present summary and wait for commit approval
+      1. User specified task ID — confirm with user
+      2. Load context from reference docs
+      3. Explore existing codebase patterns
+      4. Ask all questions upfront
+      5. Plan phases and present to user
+      6. Execute each phase with verification gates
+      7. Run interactive code review
+      8. Present summary and wait for commit approval
+  - name: Execute next task (auto-detect)
+    invocation: "Execute the next task"
+    expected_flow: >
+      1. Discover tasks file, identify next pending task
+      2. Suggest to user and confirm via AskUser
+      3. Standard execution flow
   - name: Execute a frontend-only task
     invocation: "Execute task T-015 (frontend only)"
     expected_flow: >
-      1. Load context, skip backend reference docs
-      2. Explore frontend patterns
-      3. Plan frontend-only phases (types, components, pages, tests, E2E)
-      4. Execute with verification gates (skip integration tests)
-      5. Code review and commit
+      1. User specified task ID — confirm with user
+      2. Load context, skip backend reference docs
+      3. Explore frontend patterns
+      4. Plan frontend-only phases (types, components, pages, tests, E2E)
+      5. Execute with verification gates (skip integration tests)
+      6. Code review and commit
   - name: Resume interrupted execution
     invocation: "Resume task T-012"
     expected_flow: >
@@ -88,6 +96,26 @@ Executes a validated task specification end-to-end: plans phases, questions ambi
 ---
 
 ## Phase 0: Load Context & Question Everything
+
+### Step 0.0: Identify Task to Execute
+
+Determine which task to execute:
+
+**If the user specified a task ID** (e.g., "execute T-012"):
+- Use the provided task ID
+- Confirm with the user using `AskUser`: "I'll execute task T-012: [task title]. Correct?"
+
+**If the user did NOT specify a task ID** (e.g., "execute the next task", or just invoked the skill):
+1. **Find the tasks file:** Look for task specs in `docs/`, `docs/pre-dev/`, or equivalent (files named `tasks.md`, `tasks/*.md`, or similar)
+2. **Identify the next pending task:** Scan the tasks file for the first task that:
+   - Has status "pending", "todo", "not started", or no status marker
+   - Has all dependencies (required tasks) marked as "completed" or "done"
+   - Is not blocked by other tasks
+3. **If multiple candidates exist**, pick the one with the lowest ID (or earliest in the file)
+4. **Suggest to the user** using `AskUser`: "I identified the next task to execute: T-XXX — [task title]. Is this correct, or would you like to execute a different task?"
+5. **If no tasks file is found or no pending tasks exist**, ask the user to provide a task ID
+
+**BLOCKING**: Do NOT proceed until the user confirms which task to execute.
 
 ### Step 0.1: Discover Project Structure
 
