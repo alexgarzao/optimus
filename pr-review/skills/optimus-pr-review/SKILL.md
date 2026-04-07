@@ -71,6 +71,7 @@ verification:
     - All findings presented interactively
     - Approved fixes applied in batch
     - PR readiness verdict presented
+    - PR comment threads replied with resolution status
 ---
 
 # PR Review
@@ -469,6 +470,81 @@ All commands MUST pass before proceeding to Phase 8.
 
 ---
 
+## Phase 9: Respond to PR Comments
+
+After the user commits (or explicitly skips commit), respond to each existing PR comment thread that was evaluated during the review.
+
+### Step 9.1: Identify Comment Threads to Respond
+
+For each existing PR comment that was evaluated by agents, determine the appropriate response based on the user's decision:
+
+| Decision | Action |
+|----------|--------|
+| **Fixed** | Reply with the commit SHA and mark as resolved |
+| **Skipped/Discarded** | Reply explaining why it won't be fixed |
+| **Deferred** | Reply explaining it was deferred and where it was tracked |
+| **Contested** | Reply explaining why the comment was contested |
+| **Already fixed** | Reply noting it was already addressed |
+
+### Step 9.2: Post Replies
+
+For each comment thread, use `gh` CLI to post the reply:
+
+**For inline review comments (most common):**
+```bash
+gh api repos/{owner}/{repo}/pulls/{number}/comments \
+  --method POST \
+  -f body="<reply>" \
+  -F in_reply_to=<comment_id>
+```
+
+**For general PR comments:**
+```bash
+gh pr comment <PR_NUMBER_OR_URL> --body "<reply>"
+```
+
+### Step 9.3: Reply Templates
+
+**Fixed:**
+```
+Fixed in <commit_sha>.
+```
+
+**Skipped/Discarded:**
+```
+Won't fix: <user's reason or rationale>.
+```
+
+**Deferred:**
+```
+Deferred to <destination> (e.g., backlog, future PR): <brief reason>.
+```
+
+**Contested:**
+```
+Contested: <agent's reasoning for why the comment is incorrect or unnecessary>.
+```
+
+**Already fixed:**
+```
+Already addressed in a previous commit.
+```
+
+### Step 9.4: Present Reply Summary
+
+After posting all replies, present a summary:
+
+```markdown
+### PR Comment Replies Posted
+| # | Thread | Source | Reply | Status |
+|---|--------|--------|-------|--------|
+| 1 | file.go:42 | CodeRabbit | Fixed in abc1234 | Resolved |
+| 2 | file.go:88 | @reviewer | Won't fix: out of scope | Closed |
+| 3 | general | CodeRabbit | Deferred to backlog | Closed |
+```
+
+---
+
 ## Rules
 
 - Always fetch PR metadata AND existing comments before starting the review
@@ -481,4 +557,5 @@ All commands MUST pass before proceeding to Phase 8.
 - Fixes are collected during Phase 6 and applied in batch during Phase 7
 - Do NOT merge the PR — only review and present findings
 - Do NOT commit fixes without explicit user approval
+- After commit, reply to every existing PR comment thread with the resolution (fixed + commit SHA, won't fix + reason, deferred, contested, or already fixed)
 - If `gh` CLI is not installed, inform the user and suggest installation (e.g., `brew install gh` on macOS). If installed but not authenticated, ask the user to run `gh auth login`
