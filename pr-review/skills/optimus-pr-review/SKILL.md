@@ -2,9 +2,10 @@
 name: optimus-pr-review
 description: >
   PR-aware code review orchestrator. Receives a pull request URL, fetches
-  PR metadata (description, branch, changed files, linked issues), enriches
-  the review context, and delegates to optimus-deep-review for the actual
-  code review with parallel specialist agents.
+  PR metadata (description, branch, changed files, linked issues), collects
+  existing review comments (CodeRabbit, human reviewers, CI), dispatches
+  parallel agents to evaluate both code and comments, and presents findings
+  interactively with source attribution. Batch applies approved fixes at the end.
 trigger: >
   - When user provides a PR URL for review (e.g., "review this PR: https://github.com/org/repo/pull/123")
   - When user asks to review a pull request
@@ -15,25 +16,29 @@ skip_when: >
 prerequisite: >
   - PR URL is provided or can be inferred (current branch has an open PR)
   - gh CLI is installed and authenticated
-  - optimus-deep-review skill is available
 NOT_skip_when: >
   - "The PR is small" → Small PRs still benefit from structured review with PR context.
   - "I already looked at the diff" → Specialist agents catch issues human review misses.
   - "CI passed" → CI checks automated rules; agents review logic, security, and quality.
+  - "CodeRabbit already reviewed" → Agents validate/contest CodeRabbit findings and catch what it misses.
 examples:
   - name: Review a PR by URL
     invocation: "Review this PR: https://github.com/org/repo/pull/42"
     expected_flow: >
-      1. Fetch PR metadata (title, description, branch, changed files)
+      1. Fetch PR metadata and existing comments
       2. Checkout PR branch
-      3. Present PR summary to user
+      3. Present PR summary (including comment sources)
       4. Ask review type (initial/final)
-      5. Delegate to optimus-deep-review with PR-scoped changed files and enriched context
+      5. Dispatch agents to review code AND evaluate existing comments
+      6. Consolidate with source attribution
+      7. Interactive finding-by-finding resolution
+      8. Batch apply approved fixes
+      9. PR readiness verdict
   - name: Review current branch PR
     invocation: "Review the PR for this branch"
     expected_flow: >
       1. Detect current branch, find associated open PR via gh CLI
-      2. Fetch PR metadata
+      2. Fetch PR metadata and comments
       3. Standard flow
 related:
   complementary:
@@ -43,14 +48,15 @@ related:
     - name: optimus-deep-review
       difference: >
         optimus-deep-review is a generic code review that works with any scope
-        (all files, git diff, directory). optimus-pr-review adds a PR context
-        layer (description, linked issues, PR metadata) and delegates to
-        optimus-deep-review for the actual review.
+        (all files, git diff, directory). optimus-pr-review adds PR context
+        (description, linked issues, existing comments) and evaluates feedback
+        from multiple sources (CodeRabbit, human reviewers, agents).
     - name: optimus-coderabbit-review
       difference: >
-        optimus-coderabbit-review uses CodeRabbit CLI as the source of findings
-        with a TDD fix cycle. optimus-pr-review uses specialist agents (via
-        optimus-deep-review) and enriches context with PR metadata.
+        optimus-coderabbit-review runs CodeRabbit CLI locally as the source of
+        findings with a TDD fix cycle. optimus-pr-review collects comments
+        already posted on the PR (including CodeRabbit's) and has agents
+        validate/contest them.
   sequence:
     before:
       - optimus-verify-code
@@ -60,14 +66,16 @@ verification:
       description: gh CLI is installed
       success_pattern: available
   manual:
-    - PR metadata fetched and presented correctly
-    - Review delegated to optimus-deep-review with correct scope
-    - PR context (description, linked issues) included in agent prompts
+    - PR metadata and comments fetched correctly
+    - Source attribution present in all findings
+    - All findings presented interactively
+    - Approved fixes applied in batch
+    - PR readiness verdict presented
 ---
 
 # PR Review
 
-PR-aware code review orchestrator. Fetches PR metadata, enriches the review context, and delegates to optimus-deep-review for parallel specialist agent review.
+PR-aware code review orchestrator. Fetches PR metadata, collects existing review comments, dispatches agents to evaluate both code and comments, and presents findings with source attribution.
 
 ---
 
@@ -105,17 +113,37 @@ Extract and store:
 - **Changed files count** — scope indicator
 - **Labels and milestone** — categorization context
 - **Linked issues** — from PR description (look for "Fixes #", "Closes #", "Resolves #" patterns)
-- **Existing review comments** — to avoid re-flagging already-discussed issues
 
-### Step 0.3: Fetch Changed Files
+### Step 0.3: Collect Existing PR Comments
 
-Get the list of files changed in the PR:
+Collect ALL comments from ALL sources on the PR:
 
+**General PR comments:**
 ```bash
-gh pr diff <PR_NUMBER_OR_URL> --name-only
+gh pr view <PR_NUMBER_OR_URL> --comments
 ```
 
-Read the full content of each changed file for the review agents.
+**Review comments (inline code comments and review summaries):**
+```bash
+gh api repos/{owner}/{repo}/pulls/{number}/reviews
+gh api repos/{owner}/{repo}/pulls/{number}/comments
+```
+
+For each comment, extract and categorize:
+- **Source:** Identify the author — CodeRabbit (bot), human reviewer (by username), CI/CD bot, or other automated tool
+- **Type:** General comment, inline code comment, review summary, or approval/request-changes
+- **File and line** (for inline comments) — map to the changed files
+- **Content** — the actual feedback
+- **Status:** Resolved/unresolved (if the platform tracks it)
+
+Group comments by source:
+```
+PR Comments:
+  - CodeRabbit: X comments (Y inline, Z summary)
+  - Human reviewers: X comments from [usernames]
+  - CI/CD: X comments
+  - Unresolved threads: X
+```
 
 ### Step 0.4: Checkout PR Branch
 
@@ -126,6 +154,16 @@ gh pr checkout <PR_NUMBER_OR_URL>
 ```
 
 If already on the correct branch, skip this step. If checkout fails due to uncommitted changes, inform the user and ask them to stash or commit their changes first.
+
+### Step 0.5: Fetch Changed Files
+
+Get the list of files changed in the PR:
+
+```bash
+gh pr diff <PR_NUMBER_OR_URL> --name-only
+```
+
+Read the full content of each changed file for the review agents.
 
 ---
 
@@ -144,6 +182,11 @@ Present a summary of the PR to the user before starting the review:
 ### PR Description
 <PR body/description>
 
+### Existing Review Comments
+- **CodeRabbit:** X comments (Y unresolved)
+- **Human reviewers:** X comments from [usernames] (Y unresolved)
+- **CI/CD:** X comments
+
 ### Changed Files
 - file1.go
 - file2.go
@@ -161,44 +204,258 @@ Ask the user which type of review to run. Use `AskUser` tool.
 
 ---
 
-## Phase 3: Delegate to optimus-deep-review
+## Phase 3: Parallel Agent Dispatch
 
-Invoke the `optimus-deep-review` skill with the following enriched context:
+### Step 3.1: Discover Project Context
 
-### Context Enrichment
+1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
+2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, unit test, integration test, and E2E test commands
+3. **Identify coding standards:** Look for `PROJECT_RULES.md`, linter configs, or equivalent
+4. **Identify reference docs:** Look for PRD, TRD, API design, data model
 
-When optimus-deep-review dispatches its agents, each agent prompt MUST include the PR context in addition to the standard review instructions:
+Store discovered commands for use in the verification gate (Phase 7):
+```
+LINT_CMD=<discovered lint command>
+TEST_UNIT_CMD=<discovered unit test command>
+TEST_INTEGRATION_CMD=<discovered integration test command>
+TEST_E2E_CMD=<discovered E2E test command>
+```
+
+### Step 3.2: Dispatch Agents
+
+Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives:
+- The full content of every changed file
+- The PR context (description, linked issues)
+- ALL existing PR comments (so agents can validate/contest them)
+- Coding standards and reference docs
+
+**Agent prompt MUST include:**
 
 ```
 PR Context:
   - PR #<number>: <title>
   - Purpose: <PR description summary>
-  - Linked issues: <list of linked issues with their titles if available>
+  - Linked issues: <list>
   - Base branch: <base>
-  - Existing review comments: <summary of already-discussed topics to avoid re-flagging>
 
-Review scope: Only the files changed in this PR (listed below).
-Review type: Initial / Final (as chosen by user).
+Existing PR Comments (evaluate these — validate or contest each one):
+  [paste all comments grouped by source]
+
+Review scope: Only the files changed in this PR.
+Review type: Initial / Final.
+
+Your job:
+  1. Review the CODE for issues in your domain
+  2. EVALUATE each existing PR comment in your domain:
+     - AGREE: The comment is valid and should be addressed
+     - CONTEST: The comment is incorrect or unnecessary (explain why)
+     - ALREADY FIXED: The comment was addressed in a subsequent commit
+  3. Report NEW findings not covered by existing comments
+
+Required output format:
+  ## New Findings
+  For each: severity, file, line, description, recommendation
+
+  ## Comment Evaluation
+  For each existing comment in your domain:
+  - Comment source and summary
+  - Your verdict: AGREE / CONTEST / ALREADY FIXED
+  - Justification
 ```
 
-### Scope Override
+### Initial Review (5 agents)
 
-Pass the scope to optimus-deep-review as "changed files only" with the exact file list from `gh pr diff --name-only`.
+| # | Agent | Focus |
+|---|-------|-------|
+| 1 | **Code quality reviewer** | Architecture, design patterns, SOLID, DRY, maintainability |
+| 2 | **Business logic reviewer** | Domain correctness, business rules, edge cases |
+| 3 | **Security reviewer** | Vulnerabilities, authentication, input validation, OWASP |
+| 4 | **Test quality analyst** | Test coverage gaps, error scenarios, flaky patterns |
+| 5 | **Cross-file consistency** (worker) | Interfaces vs implementations, imports, shared constants, dead code |
 
-### Execution
+### Final Review (7 agents — includes the 5 above plus)
 
-Invoke optimus-deep-review using the `Skill` tool. Since this skill replaces Phase 0 (scope/type selection), execution resumes at Phase 1 of optimus-deep-review with the scope and review type already determined:
-- Phase 1: Parallel agent dispatch (with PR-enriched prompts)
-- Phase 2: Consolidation and triage
-- Phase 3: Overview table
-- Phase 4: Interactive finding-by-finding resolution
-- Phase 5: Final summary
+| # | Agent | Focus |
+|---|-------|-------|
+| 6 | **Backend specialist** | Language idiomaticity, performance, concurrency, ecosystem patterns |
+| 7 | **Frontend specialist** | Framework patterns, hooks, components, accessibility, performance |
 
-### Additional Post-Review Step
+Use whatever specialist droids are available in the environment. If a specialized droid does not exist for a domain, use a `worker` agent with domain-specific instructions.
 
-After optimus-deep-review completes its summary, add a PR-specific section:
+---
+
+## Phase 4: Consolidation
+
+After ALL agents return:
+
+1. **Merge** all new findings into a single list
+2. **Merge** all comment evaluations into a single list
+3. **Deduplicate** — if multiple agents flag the same issue, keep one entry and note which agents agreed
+4. **Cross-reference** — for existing comments, note agreement/disagreement between agents and between agents and the original commenter
+5. **Sort** by severity: CRITICAL > HIGH > MEDIUM > LOW
+6. **Assign** sequential IDs (F1, F2, F3...)
+
+### Source Attribution
+
+Each finding MUST include its source(s):
+
+| Source Type | Label |
+|-------------|-------|
+| New finding from agent review | `[Agent: <agent-name>]` |
+| Existing CodeRabbit comment validated by agent | `[CodeRabbit + Agent: <agent-name>]` |
+| Existing human review comment validated by agent | `[Reviewer: <username> + Agent: <agent-name>]` |
+| Existing comment contested by agent | `[Contested: <source> vs Agent: <agent-name>]` |
+
+---
+
+## Phase 5: Present Overview
 
 ```markdown
+## PR Review: #<number> — X findings
+
+### New Findings (from agents)
+| # | Severity | File | Summary | Agent(s) |
+|---|----------|------|---------|----------|
+
+### Validated Existing Comments
+| # | Severity | File | Original Source | Summary | Validating Agent(s) |
+|---|----------|------|----------------|---------|---------------------|
+
+### Contested Comments
+| # | Original Source | Comment Summary | Contesting Agent | Reason |
+|---|----------------|----------------|-----------------|--------|
+
+### Summary
+- New findings: X (C critical, H high, M medium, L low)
+- Validated comments: X
+- Contested comments: X
+- Already fixed: X
+```
+
+---
+
+## Phase 6: Interactive Finding-by-Finding Resolution (collect decisions only)
+
+Process ONE finding at a time, in severity order (CRITICAL first, LOW last). Include both new findings and validated existing comments. Present contested comments for user decision.
+
+For EACH finding, present:
+
+### 1. Finding Header
+
+`## [SEVERITY] F# | [Category]`
+- Source(s): which agent(s) and/or external reviewer(s) flagged this
+- Agreement: which sources agree/disagree
+
+### 2. Problem Description
+
+- Clear description of the issue with code snippet if applicable
+- For validated existing comments: show the original comment and the agent's validation
+- For contested comments: show both the original comment and the agent's contestation
+- Why it matters — what breaks, what risk it creates
+
+### 3. Proposed Solutions
+
+One or more approaches, each with:
+- What changes
+- Tradeoffs (complexity, performance, breaking changes)
+- If it's a straightforward fix with no tradeoffs, state: "Direct fix, no tradeoffs."
+
+Include a recommendation when one option is clearly better.
+
+### 4. Wait for User Decision
+
+Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
+
+The user may:
+- Approve an option (e.g., "A", "B")
+- Request more context
+- Discard the finding
+- Defer to a future version
+- Group with the next finding if related
+
+### 5. Record Decision
+
+Internally record every decision: finding ID, source(s), chosen option (or "skip"/"defer"), and rationale if provided. Do NOT apply any fix yet — fixes are batched in Phase 7.
+
+---
+
+## Phase 7: Batch Apply All Approved Fixes
+
+**IMPORTANT:** This phase starts ONLY after ALL findings have been presented and ALL decisions collected. No fix is applied during Phase 6.
+
+### Step 7.1: Present Pre-Apply Summary
+
+Before touching any code, show the user a summary of everything that will be changed:
+
+```markdown
+## Fixes to Apply (X of Y findings)
+
+| # | Finding | Source | Decision | Files Affected |
+|---|---------|--------|----------|---------------|
+| F1 | [summary] | [Agent + CodeRabbit] | Option A | file1.go |
+| F3 | [summary] | [Agent: Security] | Option B | auth.go |
+
+### Skipped (Z findings)
+| # | Finding | Source | Reason |
+|---|---------|--------|--------|
+| F2 | [summary] | [Reviewer: john] | User: out of scope |
+
+### Deferred (W findings)
+| # | Finding | Source | Destination |
+|---|---------|--------|-------------|
+| F5 | [summary] | [Agent: QA] | Backlog |
+```
+
+### Step 7.2: Apply All Fixes
+
+Apply ALL approved fixes in a single pass:
+
+1. Group fixes by file to minimize file I/O
+2. Apply all changes
+3. Run lint — if format issues, fix and re-run
+4. Run unit tests — if failures, diagnose and fix (max 3 attempts per failure)
+5. If a fix causes test failures after 3 attempts, revert that specific fix, present the failure to the user, and ask for guidance
+
+### Step 7.3: Verification Gate
+
+After all fixes applied, run the full gate using discovered project commands:
+- Always run lint and unit tests
+- If backend files were changed: also run integration tests
+- If frontend files were changed: also run E2E tests (if available)
+
+All commands MUST pass before proceeding to Phase 8.
+
+---
+
+## Phase 8: Final Summary
+
+```markdown
+## PR Review Summary: #<number> — <title>
+
+### Sources Analyzed
+- CodeRabbit comments: X evaluated (Y validated, Z contested)
+- Human reviewer comments: X evaluated (Y validated, Z contested)
+- New agent findings: X
+- Already fixed: X
+
+### Fixed (X findings)
+| # | Source | File(s) | Fix Applied |
+|---|--------|---------|-------------|
+
+### Skipped (X findings)
+| # | Source | File(s) | Reason |
+|---|--------|---------|--------|
+
+### Deferred (X findings)
+| # | Source | File(s) | Destination |
+|---|--------|---------|-------------|
+
+### Verification
+- Lint: PASS
+- Unit tests: PASS (X tests)
+- Integration tests: PASS / SKIPPED
+- E2E tests: PASS / SKIPPED
+
 ### PR Readiness
 - [ ] All CRITICAL/HIGH findings resolved
 - [ ] Changes align with PR description and linked issues
@@ -208,14 +465,20 @@ After optimus-deep-review completes its summary, add a PR-specific section:
 **Verdict:** READY FOR MERGE / NEEDS CHANGES
 ```
 
+**Do NOT commit automatically.** Present the summary and ask the user if they want to commit.
+
 ---
 
 ## Rules
 
-- Always fetch PR metadata before starting the review — the PR description provides essential context for agents
-- Never review files outside the PR scope — only files changed in the PR are reviewed
-- Include PR description and linked issues in every agent prompt — this helps agents evaluate whether the code matches the stated purpose
-- If the PR has existing review comments, summarize them and instruct agents to skip already-discussed topics
+- Always fetch PR metadata AND existing comments before starting the review
+- Agents MUST evaluate existing comments — validate, contest, or mark as already fixed
+- Every finding must include source attribution (agent, CodeRabbit, human reviewer)
+- Never review files outside the PR scope — only files changed in the PR
+- Include PR description, linked issues, and existing comments in every agent prompt
+- One finding at a time, severity order (CRITICAL > HIGH > MEDIUM > LOW)
+- No changes without prior user approval — the user ALWAYS decides the approach
+- Fixes are collected during Phase 6 and applied in batch during Phase 7
 - Do NOT merge the PR — only review and present findings
-- Do NOT commit fixes to the PR branch without explicit user approval
+- Do NOT commit fixes without explicit user approval
 - If `gh` CLI is not installed, inform the user and suggest installation (e.g., `brew install gh` on macOS). If installed but not authenticated, ask the user to run `gh auth login`
