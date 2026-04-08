@@ -137,10 +137,16 @@ For each comment, extract and categorize:
 - **Content** — the actual feedback
 - **Status:** Resolved/unresolved (if the platform tracks it)
 
+**Duplicated comments sections:**
+Some review tools (e.g., CodeRabbit) group repeated or similar comments under sections titled "Duplicated Comments", "Duplicate Comments", or similar headings within their review summaries. These sections contain valid feedback that was flagged on multiple files or locations. You MUST:
+1. Parse these sections and extract each individual comment
+2. Treat them as regular review comments — do NOT skip them because they are labeled as "duplicated"
+3. Map each duplicated comment to the affected files/lines listed in the section
+
 Group comments by source:
 ```
 PR Comments:
-  - CodeRabbit: X comments (Y inline, Z summary)
+  - CodeRabbit: X comments (Y inline, Z summary, W from duplicated sections)
   - Human reviewers: X comments from [usernames]
   - CI/CD: X comments
   - Unresolved threads: X
@@ -240,7 +246,7 @@ PR Context:
   - Base branch: <base>
 
 Existing PR Comments (evaluate these — validate or contest each one):
-  [paste all comments grouped by source]
+  [paste all comments grouped by source, including comments from "Duplicated Comments" sections]
 
 Review scope: Only the files changed in this PR.
 Review type: Initial / Final.
