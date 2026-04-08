@@ -229,9 +229,25 @@ Wait for user approval of the plan before proceeding.
 For each phase:
 
 1. **Update todo list** — mark the current phase as `in_progress`
-2. **Dispatch parallel agents when applicable** — use the most appropriate specialized droids available in the environment. If no specialized droid exists for a task, execute directly.
+2. **Dispatch parallel agents when applicable** — follow the agent selection priority below
 3. **Write code following existing patterns** — match the codebase's style, not theoretical best practices
 4. **Do NOT commit anything** — all changes stay uncommitted until the very end
+
+### Agent Selection Priority (for implementation phases)
+
+When dispatching agents for implementation work, use this priority order:
+
+1. **Ring specialist droids (preferred when available):** Check if Ring droids are available in the environment. If so, prefer them for implementation:
+   - `ring-dev-team-backend-engineer-golang` — for Go backend implementation
+   - `ring-dev-team-backend-engineer-typescript` — for TypeScript backend implementation
+   - `ring-dev-team-frontend-engineer` — for React/Next.js frontend implementation
+   - `ring-dev-team-frontend-bff-engineer-typescript` — for BFF layer implementation
+   - `ring-dev-team-devops-engineer` — for Docker, IaC, and infrastructure
+   - `ring-dev-team-qa-analyst` — for test implementation
+   - `ring-dev-team-sre` — for observability validation
+2. **Other available specialist droids:** If Ring droids are not available, use any other specialist droids present in the environment
+3. **Worker droid with domain instructions:** If no specialist exists for the task, use a `worker` droid with detailed instructions
+4. **Direct execution:** If no droids are available at all, execute the work directly
 
 ### State Persistence
 
@@ -306,8 +322,22 @@ After all implementation phases pass verification, dispatch review agents and pr
 
 ### Step R.1: Dispatch Review Agents in Parallel
 
-Dispatch available review agents simultaneously via `Task` tool, scoped ONLY to files changed by this task. Use whatever review droids are available in the environment. At minimum, cover:
+Dispatch review agents simultaneously via `Task` tool, scoped ONLY to files changed by this task. At minimum, cover the 4 domains below.
 
+**Agent selection priority for code review:**
+
+1. **Ring review droids (preferred when available):**
+   - `ring-default-code-reviewer` — code quality, architecture, patterns, maintainability
+   - `ring-default-business-logic-reviewer` — domain correctness, edge cases, business rules
+   - `ring-default-security-reviewer` — vulnerabilities, input validation, OWASP
+   - `ring-default-ring-test-reviewer` — test coverage, test quality, anti-patterns
+   - `ring-default-ring-nil-safety-reviewer` — nil/null pointer risks, unsafe dereferences
+   - `ring-default-ring-consequences-reviewer` — ripple effects beyond changed files
+   - `ring-default-ring-dead-code-reviewer` — orphaned code from changes
+2. **Other available review droids:** If Ring droids are not available, use any other review droids
+3. **Worker droid with review instructions:** Fall back to `worker` with domain-specific instructions
+
+At minimum, cover:
 - **Code quality** — architecture, patterns, maintainability
 - **Business logic** — domain correctness, edge cases
 - **Security** — vulnerabilities, input validation

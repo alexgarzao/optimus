@@ -299,6 +299,42 @@ For EACH new component:
 2. Verify new components follow them
 3. Flag missing logs and missing structured fields for metrics
 
+### Step 3.1: Dispatch Validation Agents (when available)
+
+If specialist review droids are available in the environment, dispatch them in parallel to enrich the validation with expert analysis. Each agent receives the task spec, reference docs, and the gaps/findings identified so far.
+
+**Agent selection priority:**
+
+1. **Ring review droids (preferred when available):**
+   - `ring-default-business-logic-reviewer` — validate business rules completeness, edge cases, and domain correctness in the task spec
+   - `ring-default-security-reviewer` — identify security gaps in the spec (missing auth, input validation, data exposure risks)
+   - `ring-dev-team-qa-analyst` — validate testing strategy completeness, identify untested scenarios
+   - `ring-default-code-reviewer` — assess architectural feasibility, identify patterns that may conflict with the codebase
+2. **Other available review droids:** If Ring droids are not available, use any other review droids
+3. **Worker droid with validation instructions:** Fall back to `worker` with domain-specific instructions
+4. **Skip:** If no droids are available, proceed with the findings from Steps 1-3 (the skill still works without agents)
+
+**Agent prompt MUST include:**
+```
+Goal: Pre-implementation validation of task T-XXX — [your domain]
+
+Context:
+  - Task spec: [full task content]
+  - Reference docs: [relevant sections]
+  - Gaps already identified: [list from Steps 1-3]
+
+Your job:
+  Validate the task spec from your domain perspective BEFORE implementation.
+  Identify risks, gaps, contradictions, or missing requirements.
+  Report findings ONLY — do NOT generate code.
+
+Required output:
+  For each finding: severity, category, description, recommendation
+  If no issues: "PASS — [domain] validation clean"
+```
+
+Merge agent findings with the findings from Steps 1-3. Deduplicate and sort by severity before presenting.
+
 ### Step 4: Phase 1 — Present Summary, then Walk Through Each Finding
 
 1. **Present the summary report** (tables from Output Format) for bird's-eye view

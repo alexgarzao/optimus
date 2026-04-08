@@ -159,18 +159,37 @@ Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receiv
 
 ### Agent Roster
 
-Dispatch available specialist agents covering these validation domains. Use whatever review droids are available in the environment. If a specialized droid does not exist, use a `worker` agent with domain-specific instructions.
+Dispatch specialist agents covering the validation domains below. Use the agent selection priority to pick the best available droid for each domain.
 
-| Validation Domain | When to Dispatch |
-|-------------------|------------------|
-| **Code Quality** — architecture, patterns, SOLID, DRY, maintainability, algorithmic flow | Always |
-| **Business Logic** — domain correctness, edge cases, business rules, mental execution | Always |
-| **Security** — vulnerabilities, OWASP, input validation, secrets, auth | Always |
-| **Test Quality** — test coverage gaps, test quality, missing scenarios, flaky patterns | Always |
-| **Frontend Patterns** — framework patterns, accessibility, responsive, component library, performance | Frontend or full-stack tasks |
-| **Backend Patterns** — language patterns, error handling, context propagation, framework conventions | Backend or full-stack tasks |
-| **Cross-File Consistency** — duplication between files, shared constants, import consistency, pattern drift | Always |
-| **Spec Compliance** — acceptance criteria checklist, test ID coverage, API contract verification | Always |
+**Agent selection priority:**
+
+1. **Ring review droids (preferred when available):**
+   - `ring-default-code-reviewer` → Code Quality
+   - `ring-default-business-logic-reviewer` → Business Logic
+   - `ring-default-security-reviewer` → Security
+   - `ring-default-ring-test-reviewer` → Test Quality
+   - `ring-default-ring-nil-safety-reviewer` → Nil/Null Safety (always dispatch if available)
+   - `ring-default-ring-consequences-reviewer` → Ripple Effects (always dispatch if available)
+   - `ring-default-ring-dead-code-reviewer` → Dead Code (always dispatch if available)
+   - `ring-dev-team-qa-analyst` → QA / Spec Compliance
+   - `ring-dev-team-backend-engineer-golang` → Backend Patterns (Go projects)
+   - `ring-dev-team-frontend-engineer` → Frontend Patterns (React/Next.js projects)
+2. **Other available specialist droids:** If Ring droids are not available, use any other review droids
+3. **Worker droid with domain instructions:** Fall back to `worker` with domain-specific instructions
+
+| Validation Domain | When to Dispatch | Preferred Ring Droid |
+|-------------------|------------------|---------------------|
+| **Code Quality** — architecture, patterns, SOLID, DRY, maintainability | Always | `ring-default-code-reviewer` |
+| **Business Logic** — domain correctness, edge cases, business rules | Always | `ring-default-business-logic-reviewer` |
+| **Security** — vulnerabilities, OWASP, input validation, secrets | Always | `ring-default-security-reviewer` |
+| **Test Quality** — coverage gaps, test quality, missing scenarios | Always | `ring-default-ring-test-reviewer` |
+| **Nil/Null Safety** — nil pointer risks, unsafe dereferences | Always (if droid available) | `ring-default-ring-nil-safety-reviewer` |
+| **Ripple Effects** — how changes propagate beyond changed files | Always (if droid available) | `ring-default-ring-consequences-reviewer` |
+| **Dead Code** — orphaned code from changes | Always (if droid available) | `ring-default-ring-dead-code-reviewer` |
+| **Frontend Patterns** — framework patterns, accessibility, performance | Frontend or full-stack tasks | `ring-dev-team-frontend-engineer` |
+| **Backend Patterns** — language patterns, error handling, conventions | Backend or full-stack tasks | `ring-dev-team-backend-engineer-golang` |
+| **Cross-File Consistency** — duplication, shared constants, imports | Always | `worker` with cross-file instructions |
+| **Spec Compliance** — acceptance criteria, test IDs, API contracts | Always | `ring-dev-team-qa-analyst` |
 
 ### Agent Prompt Template
 
