@@ -492,12 +492,13 @@ For each existing PR comment that was evaluated by agents, determine the appropr
 | **Contested** | Reply explaining why the comment was contested |
 | **Already fixed** | Reply noting it was already addressed |
 
-### Step 9.2: Post Replies
+### Step 9.2: Post Replies and Resolve Threads
 
-For each comment thread, use `gh` CLI to post the reply:
+For each comment thread, post the reply AND resolve the conversation on GitHub:
 
 **For inline review comments (most common):**
 ```bash
+# Post the reply
 gh api repos/{owner}/{repo}/pulls/{number}/comments \
   --method POST \
   -f body="<reply>" \
@@ -508,6 +509,40 @@ gh api repos/{owner}/{repo}/pulls/{number}/comments \
 ```bash
 gh pr comment <PR_NUMBER_OR_URL> --body "<reply>"
 ```
+
+**Resolve the conversation thread** (for review comment threads):
+```bash
+gh api graphql -f query='
+  mutation {
+    resolveReviewThread(input: {threadId: "<thread_node_id>"}) {
+      thread { isResolved }
+    }
+  }
+'
+```
+
+To get the thread node ID, query the PR's review threads:
+```bash
+gh api graphql -f query='
+  query {
+    repository(owner: "<owner>", name: "<repo>") {
+      pullRequest(number: <number>) {
+        reviewThreads(first: 100) {
+          nodes {
+            id
+            isResolved
+            comments(first: 1) {
+              nodes { body databaseId }
+            }
+          }
+        }
+      }
+    }
+  }
+'
+```
+
+Match each thread by its first comment's `databaseId` to the `comment_id` collected in Step 0.3, then resolve using the thread's `id`.
 
 ### Step 9.3: Reply Templates
 
