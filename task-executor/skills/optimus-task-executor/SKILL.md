@@ -436,6 +436,17 @@ Only after explicit user approval:
 - Follow existing test patterns in the codebase
 - E2E tests must use explicit waits (selectors, URLs, visibility), not timeouts
 
+### Test Gap Cross-Reference
+When a verification gate or code review identifies a missing test:
+1. **Search future tasks** in the tasks file to check if the test is planned for a later task
+2. **If planned in a future task (T-XXX):**
+   - Inform the user: "Test for [scenario] is planned in T-XXX: [task title]"
+   - Provide your opinion on timing: should it be created now or deferred? Consider whether the current task introduces the code path being tested, and whether deferring creates a risk window
+   - Ask via `AskUser`: "Do you want to anticipate this test in the current task, or keep it for T-XXX?"
+3. **If NOT planned in any future task:**
+   - Flag as a gap and recommend adding the test to the current task
+4. Do NOT silently skip test gaps because they might be covered later — always verify and ask
+
 ### Communication
 - Update the todo list at EVERY phase transition
 - Report verification gate results after each phase

@@ -438,6 +438,17 @@ After all fixes applied, run the full gate using discovered commands:
 - Code style issues that don't affect correctness are LOW
 - Missing tests for happy paths are HIGH; missing tests for extreme edge cases are MEDIUM
 
+### Test Gap Cross-Reference
+When agents identify a missing test (from QA analyst, spec compliance, or any other agent):
+1. **Search future tasks** in the tasks file to check if the test is planned for a later task
+2. **If planned in a future task (T-XXX):**
+   - Include in the finding: "This test is planned in T-XXX: [task title]"
+   - Provide your opinion on timing: should it be created now or deferred? Consider whether the current task introduced the code path being tested, and whether deferring creates a risk window (untested code in production between tasks)
+   - During interactive resolution (Phase 4), ask via `AskUser`: "Test for [scenario] is planned for T-XXX. I recommend [creating now / deferring] because [reason]. Do you want to anticipate this test?"
+3. **If NOT planned in any future task:**
+   - Flag as a standard finding — recommend adding the test now
+4. Do NOT silently downgrade test gap severity because a future task covers it — the user decides whether to anticipate or defer
+
 ### No False Positives
 - If you're unsure whether something is a violation, check the existing codebase for precedent
 - If the codebase already does the same thing elsewhere without issue, it's not a finding

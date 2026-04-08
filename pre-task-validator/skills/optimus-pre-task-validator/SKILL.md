@@ -269,6 +269,30 @@ For EACH test type (unit, integration, E2E):
 
 You MUST produce output for all 4 sub-sections (5a, 5b, 5c, 5d).
 
+### Step 2.1: Cross-Reference Test Gaps with Future Tasks (MANDATORY)
+For EACH test gap identified in Step 2:
+1. **Search future tasks:** Scan the tasks file for any task that explicitly covers the missing test scenario (look for test-related acceptance criteria, testing strategy sections, or test IDs that match the gap)
+2. **Classify each gap:**
+   - **NOT PLANNED** — no future task covers this test. Flag as a gap in the current task.
+   - **PLANNED IN T-XXX** — a future task explicitly includes this test. Note which task and what it covers.
+3. **For gaps planned in future tasks**, evaluate and present to the user:
+   - **Which future task** covers it (task ID and title)
+   - **Opinion on timing:** Should the test be created now or is it reasonable to defer? Consider:
+     - Does the current task introduce the code path that needs testing? If yes, recommend testing now.
+     - Is the future task a dedicated testing task? If yes, deferring may be acceptable.
+     - Does the gap create a risk window (untested code in production between tasks)?
+   - **Ask the user** via `AskUser`: "Test gap [description] is planned for T-XXX. I recommend [now/deferring] because [reason]. Do you want to add this test to the current task?"
+
+Add a column to the Test Coverage Gaps table:
+
+```
+| # | Type | Scenario Missing | Priority | Future Task | Recommendation |
+|---|------|------------------|----------|-------------|----------------|
+| 1 | Unit | Error path for X  | HIGH     | NOT PLANNED | Add to current task |
+| 2 | Integration | Pagination edge case | MEDIUM | T-015 | Defer — dedicated test task |
+| 3 | E2E | Empty state flow | HIGH | T-018 | Anticipate — current task creates this flow |
+```
+
 ### Step 3: Analyze Observability Gaps (MANDATORY — do NOT skip)
 For EACH new component:
 1. Check existing logging patterns in the codebase
