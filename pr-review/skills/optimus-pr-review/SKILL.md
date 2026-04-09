@@ -486,11 +486,13 @@ For each existing PR comment that was evaluated by agents, determine the appropr
 
 | Decision | Action |
 |----------|--------|
-| **Fixed** | Reply with the commit SHA and mark as resolved |
-| **Skipped/Discarded** | Reply explaining why it won't be fixed |
-| **Deferred** | Reply explaining it was deferred and where it was tracked |
-| **Contested** | Reply explaining why the comment was contested |
-| **Already fixed** | Reply noting it was already addressed |
+| **Fixed** | Reply with the commit SHA, then resolve the thread |
+| **Skipped/Discarded** | Reply explaining why it won't be fixed, then resolve the thread |
+| **Deferred** | Reply explaining it was deferred and where it was tracked, then resolve the thread |
+| **Contested** | Reply explaining why the comment was contested, then resolve the thread |
+| **Already fixed** | Reply noting it was already addressed, then resolve the thread |
+
+**IMPORTANT:** Every thread MUST be resolved after posting the reply, regardless of the decision. A replied thread with a clear resolution (fixed, won't fix, deferred, contested) is a closed conversation.
 
 ### Step 9.2: Post Replies and Resolve Threads
 
@@ -543,6 +545,8 @@ gh api graphql -f query='
 ```
 
 Match each thread by its first comment's `databaseId` to the `comment_id` collected in Step 0.3, then resolve using the thread's `id`.
+
+**Resolve ALL replied threads** — not just "Fixed" ones. Skipped, deferred, contested, and already-fixed threads must also be resolved after posting the reply.
 
 ### Step 9.3: Reply Templates
 
