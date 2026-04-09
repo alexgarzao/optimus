@@ -354,7 +354,16 @@ After the user has responded to ALL findings:
 2. Apply ALL approved changes to the docs in a single pass
 3. Present a final summary of what was changed vs skipped/rejected
 
-**Do NOT commit automatically.** Present the changes and wait for the user to decide whether to commit.
+### Step 6: Commit Changes (if any modifications were made)
+
+If any corrections were applied in Step 5:
+1. Run `git status` and `git diff` to review all changes
+2. Check for sensitive data (secrets, keys, tokens) — if found, STOP and warn the user
+3. Present the summary of changes and ask the user for commit approval via `AskUser`
+4. If approved, stage all modified files and commit with a descriptive message (e.g., "fix task T-XXX spec: [brief summary of corrections]")
+5. Run `git status` to confirm the commit succeeded
+
+If no corrections were applied (all findings skipped), skip this step.
 
 ---
 
@@ -439,5 +448,5 @@ Components verified: [list each component checked]
 - Test Coverage Gaps (Dimension 5) is MANDATORY and MUST enumerate gaps for ALL three test types plus cross-cutting scenarios
 - Observability Gaps (Dimension 7) is MANDATORY. Check existing codebase logging patterns and verify new components follow them
 - ALWAYS use the two-phase flow: Phase 1 presents summary then walks through each finding one at a time. Phase 2 applies all approved corrections at once
-- Do NOT commit automatically — present changes and wait for user approval
+- If corrections were applied, ask the user for commit approval — do NOT commit without explicit approval
 - Every finding must reference a specific doc section or standard — "I would do it differently" is not a valid finding
