@@ -478,7 +478,7 @@ All commands MUST pass before proceeding to Phase 8.
 
 ## Phase 9: Respond to PR Comments
 
-After the user commits (or explicitly skips commit), respond to each existing PR comment thread that was evaluated during the review.
+Respond to ALL existing PR comment threads that were evaluated during the review. This phase is MANDATORY regardless of whether any fixes were applied. Even if the user chose to skip/discard every finding and no commit was made, every comment thread MUST receive a reply and be resolved.
 
 ### Step 9.1: Identify Comment Threads to Respond
 
@@ -602,5 +602,5 @@ After posting all replies, present a summary:
 - Fixes are collected during Phase 6 and applied in batch during Phase 7
 - Do NOT merge the PR — only review and present findings
 - Do NOT commit fixes without explicit user approval
-- After commit, reply to every existing PR comment thread with the resolution (fixed + commit SHA, won't fix + reason, deferred, contested, or already fixed)
+- ALWAYS reply to every existing PR comment thread with the resolution (fixed + commit SHA, won't fix + reason, deferred, contested, or already fixed) — even if no fixes were applied and no commit was made
 - If `gh` CLI is not installed, inform the user and suggest installation (e.g., `brew install gh` on macOS). If installed but not authenticated, ask the user to run `gh auth login`
