@@ -476,13 +476,17 @@ All commands MUST pass before proceeding to Phase 8.
 
 ---
 
-## Phase 9: Respond to PR Comments
+## Phase 9: Respond to PR Comments (MANDATORY — runs AFTER commits)
 
-Respond to ALL existing PR comment threads that were evaluated during the review. This phase is MANDATORY regardless of whether any fixes were applied. Even if the user chose to skip/discard every finding and no commit was made, every comment thread MUST receive a reply and be resolved.
+This phase runs AFTER the user commits or explicitly skips the commit in Phase 8. It is MANDATORY regardless of whether any fixes were applied. Even if every finding was skipped and no commit was made, every comment thread MUST receive a reply and be resolved.
 
-### Step 9.1: Identify Comment Threads to Respond
+**Scope:** ALL existing PR comment threads — not just findings/suggestions, but also questions, clarification requests, and discussion threads. Every unanswered comment on the PR must be addressed.
 
-For each existing PR comment that was evaluated by agents, determine the appropriate response based on the user's decision:
+### Step 9.1: Identify ALL Comment Threads to Respond
+
+Scan ALL existing PR comments collected in Step 0.3. For each thread, determine the response:
+
+**For findings/suggestions evaluated by agents:**
 
 | Decision | Action |
 |----------|--------|
@@ -492,7 +496,15 @@ For each existing PR comment that was evaluated by agents, determine the appropr
 | **Contested** | Reply explaining why the comment was contested, then resolve the thread |
 | **Already fixed** | Reply noting it was already addressed, then resolve the thread |
 
-**IMPORTANT:** Every thread MUST be resolved after posting the reply, regardless of the decision. A replied thread with a clear resolution (fixed, won't fix, deferred, contested) is a closed conversation.
+**For questions and clarification requests:**
+
+| Type | Action |
+|------|--------|
+| **Question about implementation** | Answer the question based on the code context and review analysis, then resolve the thread |
+| **Clarification request** | Provide the clarification based on the codebase and task context, then resolve the thread |
+| **Discussion/opinion** | Provide a clear response with the decision taken, then resolve the thread |
+
+**IMPORTANT:** Every thread MUST be resolved after posting the reply, regardless of the type or decision. No comment thread should remain open and unanswered after this phase completes.
 
 ### Step 9.2: Post Replies and Resolve Threads
 
@@ -575,6 +587,11 @@ Contested: <agent's reasoning for why the comment is incorrect or unnecessary>.
 Already addressed in a previous commit.
 ```
 
+**Question/Clarification (answer based on code context):**
+```
+<direct answer to the question, referencing specific code/files when applicable>.
+```
+
 ### Step 9.4: Present Reply Summary
 
 After posting all replies, present a summary:
@@ -586,6 +603,7 @@ After posting all replies, present a summary:
 | 1 | file.go:42 | CodeRabbit | Fixed in abc1234 | Resolved |
 | 2 | file.go:88 | @reviewer | Won't fix: out of scope | Closed |
 | 3 | general | CodeRabbit | Deferred to backlog | Closed |
+| 4 | file.go:15 | @reviewer | [answer to question] | Resolved |
 ```
 
 ---
@@ -602,5 +620,5 @@ After posting all replies, present a summary:
 - Fixes are collected during Phase 6 and applied in batch during Phase 7
 - Do NOT merge the PR — only review and present findings
 - Do NOT commit fixes without explicit user approval
-- ALWAYS reply to every existing PR comment thread with the resolution (fixed + commit SHA, won't fix + reason, deferred, contested, or already fixed) — even if no fixes were applied and no commit was made
+- ALWAYS reply to every existing PR comment thread — findings, questions, clarifications, discussions — with the resolution or answer, then resolve the thread. This applies even if no fixes were applied and no commit was made
 - If `gh` CLI is not installed, inform the user and suggest installation (e.g., `brew install gh` on macOS). If installed but not authenticated, ask the user to run `gh auth login`
