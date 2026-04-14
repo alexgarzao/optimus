@@ -1,10 +1,10 @@
 ---
 name: optimus-task-executor
 description: >
-  Executes a validated task specification end-to-end: plans phases, questions
-  ambiguities upfront, dispatches parallel agents, runs verification gates
-  between phases, conducts interactive code review, and commits only after
-  user approval.
+  Executes a validated task specification end-to-end: identifies the task,
+  loads context, questions ambiguities upfront, then delegates execution
+  to the dev-cycle skill which handles the 6-gate pipeline (implementation,
+  devops, SRE, testing, review, validation). Commits only after user approval.
 trigger: >
   - After optimus-pre-task-validator has PASSED for a task
   - When user requests full task execution with a task ID (e.g., "execute T-012")
@@ -20,10 +20,10 @@ prerequisite: >
   - Project rules file exists with coding standards
   - Project has lint, test, integration test, and E2E test commands configured
 NOT_skip_when: >
-  - "Task is simple" → Simple tasks still need verification gates.
+  - "Task is simple" → Simple tasks still need the full dev-cycle gates.
   - "I already know the codebase" → Always explore before coding.
-  - "Tests can come later" → Every phase must pass gates.
-  - "Code review is optional" → Review is mandatory before commit.
+  - "Tests can come later" → dev-cycle enforces testing gates.
+  - "Code review is optional" → dev-cycle Gate 4 is mandatory.
 examples:
   - name: Execute a full-stack task
     invocation: "Execute task T-012"
@@ -32,33 +32,22 @@ examples:
       2. Load context from reference docs
       3. Explore existing codebase patterns
       4. Ask all questions upfront
-      5. Plan phases and present to user
-      6. Execute each phase with verification gates
-      7. Run interactive code review
-      8. Present summary and wait for commit approval
+      5. Invoke dev-cycle to execute 6-gate pipeline
+      6. Present summary and wait for commit approval
   - name: Execute next task (auto-detect)
     invocation: "Execute the next task"
     expected_flow: >
       1. Discover tasks file, identify next pending task
       2. Suggest to user and confirm via AskUser
-      3. Standard execution flow
-  - name: Execute a frontend-only task
-    invocation: "Execute task T-015 (frontend only)"
-    expected_flow: >
-      1. User specified task ID — confirm with user
-      2. Load context, skip backend reference docs
-      3. Explore frontend patterns
-      4. Plan frontend-only phases (types, components, pages, tests, E2E)
-      5. Execute with verification gates (skip integration tests)
-      6. Code review and commit
+      3. Standard execution flow via dev-cycle
   - name: Resume interrupted execution
     invocation: "Resume task T-012"
     expected_flow: >
-      1. Load state from optimus-task-executor-state.json
-      2. Identify last completed phase
-      3. Resume from next phase
+      1. Invoke dev-cycle --resume
+      2. dev-cycle resumes from last completed gate
 related:
   complementary:
+    - dev-cycle
     - dev-implementation
     - dev-testing
     - requesting-code-review
@@ -66,11 +55,11 @@ related:
   differentiation:
     - name: dev-cycle
       difference: >
-        dev-cycle is a 6-gate orchestrator (implementation, devops, SRE, testing,
-        review, validation) designed for Ring's gate system. optimus-task-executor is a
-        standalone skill with its own phased execution, verification gates, and
-        interactive code review — suited for projects that don't use the Ring
-        gate system.
+        dev-cycle is the 6-gate execution engine. optimus-task-executor is the
+        preparation layer that handles task identification, context loading,
+        upfront questioning, and codebase exploration BEFORE invoking dev-cycle.
+        Use task-executor when you need the full workflow; use dev-cycle directly
+        when context is already loaded and the task file path is known.
   sequence:
     after:
       - optimus-pre-task-validator
@@ -80,18 +69,18 @@ related:
       - dev-feedback-loop
 verification:
   automated:
-    - command: "cat docs/dev-cycle/optimus-task-executor-state.json 2>/dev/null | jq '.status'"
-      description: State file tracks execution progress
+    - command: "cat docs/dev-cycle/current-cycle.json 2>/dev/null | jq '.status'"
+      description: dev-cycle state file tracks execution progress
       success_pattern: completed
   manual:
-    - All verification gates passed for every phase
+    - All 6 dev-cycle gates passed
     - Code review findings resolved or explicitly skipped
     - User approved final summary before commit
 ---
 
 # Task Executor
 
-Executes a validated task specification end-to-end: plans phases, questions ambiguities upfront, dispatches parallel agents, runs verification gates between phases, and commits only after user approval.
+Executes a validated task specification end-to-end: identifies the task, loads context, questions ambiguities upfront, then delegates execution to the dev-cycle skill for the 6-gate pipeline. Commits only after user approval.
 
 ---
 
@@ -124,16 +113,6 @@ Before loading docs, discover the project's structure and tooling:
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
 2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, test, integration test, and E2E test commands.
 3. **Identify reference docs:** Look for `docs/pre-dev/`, `docs/`, or project-specific locations for tasks, PRD, TRD, API design, data model, and coding standards.
-
-Store discovered commands for use in verification gates:
-```
-LINT_CMD=<discovered lint command>
-TEST_CMD=<discovered test command>
-TEST_INTEGRATION_CMD=<discovered integration test command>
-TEST_E2E_CMD=<discovered E2E test command>
-```
-
-If any command is not found, ask the user before proceeding.
 
 ### Step 0.2: Load All Reference Documents
 
@@ -172,264 +151,74 @@ Use the `AskUser` tool to ask ALL questions at once (max 4 per call, multiple ca
 
 ---
 
-## Phase 1: Plan Execution
+## Phase 1: Execute via dev-cycle
 
-### Step 1.1: Break Task into Phases
+After context is loaded and all questions are answered, delegate execution to the `dev-cycle` skill.
 
-Decompose the task into sequential phases. Each phase is a logical unit of work that can be verified independently. Typical phases for a full-stack task:
+### Step 1.1: Invoke dev-cycle
 
-1. **Backend Domain** — models, errors, enums, validation logic
-2. **Backend Repository** — database queries, SQL, migrations
-3. **Backend Service** — business logic, orchestration
-4. **Backend Handler** — HTTP handlers, request/response mapping, routing
-5. **Backend Unit Tests** — all unit tests for the above
-6. **Backend Integration Tests** — integration tests for repository + service
-7. **Frontend Types & API** — types, API client functions
-8. **Frontend Components** — UI components, forms, modals, tables
-9. **Frontend Pages** — page-level composition, routing, data fetching
-10. **Frontend Unit Tests** — frontend unit tests
-11. **E2E Tests** — end-to-end tests for full user flows
+Use the `Skill` tool to load and execute the dev-cycle:
 
-Not all tasks need all phases. Skip phases that don't apply to the task scope.
+```
+Skill("dev-cycle")
+```
 
-### Step 1.2: Identify Parallelizable Work
+Pass the tasks file path that contains the confirmed task. The dev-cycle handles:
 
-Within each phase, identify independent units that can be dispatched to parallel agents:
+| Gate | Purpose | Sub-Skill |
+|------|---------|-----------|
+| Gate 0 | Implementation (TDD) | dev-implementation |
+| Gate 1 | DevOps (Docker, IaC) | dev-devops |
+| Gate 2 | SRE (observability validation) | dev-sre |
+| Gate 3 | Testing (unit tests, coverage ≥ 85%) | dev-testing |
+| Gate 4 | Code Review (3+ parallel reviewers) | requesting-code-review |
+| Gate 5 | Validation (user approval) | dev-validation |
 
-**Parallelizable (no dependencies between them):**
-- Unit tests for different functions (handler tests vs service tests vs model tests)
-- Component tests for different components
-- Multiple E2E test files covering different flows
-- Independent components
-- Backend model + frontend types (if API contract is stable)
+### Step 1.2: Provide Context to dev-cycle
 
-**NOT parallelizable (sequential dependencies):**
-- Migration must exist before repository
-- Repository must exist before service
-- Service must exist before handler
-- Handler must exist before E2E tests
-- API client must exist before components that use it
+When dev-cycle starts, provide:
+- The tasks file path and confirmed task ID
+- All reference docs discovered in Phase 0
+- Codebase patterns found in Step 0.3
+- Answers to all questions from Step 0.4
+- Any user preferences or constraints mentioned during questioning
 
-### Step 1.3: Present Plan to User
+### Step 1.3: Monitor and Support
 
-Before executing, present the plan as a numbered phase list with:
-- What each phase delivers
-- Which phases will use parallel agents (and which specialized droid)
-- Estimated complexity (trivial / moderate / complex)
-- Verification gate after each phase
-
-Wait for user approval of the plan before proceeding.
+While dev-cycle executes:
+- The dev-cycle manages its own state persistence, gate transitions, and agent dispatch
+- If dev-cycle encounters a blocker or needs user input, it will handle it through its own flow
+- Do NOT interfere with dev-cycle's gate execution — let it run its full pipeline
 
 ---
 
-## Phase 2-N: Execute Each Phase
+## Phase 2: Post-Execution
 
-### Execution Rules
+After dev-cycle completes all 6 gates (Gate 5 passes with user approval):
 
-For each phase:
+### Step 2.1: Test Gap Cross-Reference
 
-1. **Update todo list** — mark the current phase as `in_progress`
-2. **Dispatch parallel agents when applicable** — follow the agent selection priority below
-3. **Write code following existing patterns** — match the codebase's style, not theoretical best practices
-4. **Do NOT commit anything** — all changes stay uncommitted until the very end
+Review any test gaps identified during dev-cycle execution:
 
-### Agent Selection Priority (for implementation phases)
+1. **Search future tasks** in the tasks file to check if the test is planned for a later task
+2. **If planned in a future task (T-XXX):**
+   - Inform the user: "Test for [scenario] is planned in T-XXX: [task title]"
+   - Provide your opinion on timing: should it be created now or deferred?
+   - Ask via `AskUser`: "Do you want to anticipate this test in the current task, or keep it for T-XXX?"
+3. **If NOT planned in any future task:**
+   - Flag as a gap and recommend adding the test to the current task
+4. Do NOT silently skip test gaps because they might be covered later — always verify and ask
 
-When dispatching agents for implementation work, use this priority order:
+### Step 2.2: Present Final Summary
 
-1. **Ring specialist droids (preferred when available):** Check if Ring droids are available in the environment. If so, prefer them for implementation:
-   - `ring-dev-team-backend-engineer-golang` — for Go backend implementation
-   - `ring-dev-team-backend-engineer-typescript` — for TypeScript backend implementation
-   - `ring-dev-team-frontend-engineer` — for React/Next.js frontend implementation
-   - `ring-dev-team-frontend-bff-engineer-typescript` — for BFF layer implementation
-   - `ring-dev-team-devops-engineer` — for Docker, IaC, and infrastructure
-   - `ring-dev-team-qa-analyst` — for test implementation
-   - `ring-dev-team-sre` — for observability validation
-2. **Other available specialist droids:** If Ring droids are not available, use any other specialist droids present in the environment
-3. **Worker droid with domain instructions:** If no specialist exists for the task, use a `worker` droid with detailed instructions
-4. **Direct execution:** If no droids are available at all, execute the work directly
+Present a structured summary including:
+- Task ID and title
+- Files created and modified
+- Tests added
+- dev-cycle gate results (all 6 gates)
+- Decisions made during questioning and review phases
 
-### State Persistence
-
-After each phase completes, save state to `docs/dev-cycle/optimus-task-executor-state.json`:
-```json
-{
-  "task_id": "T-XXX",
-  "status": "in_progress",
-  "current_phase": 3,
-  "phases": [
-    {"name": "Backend Domain", "status": "completed", "gate": "PASS"},
-    {"name": "Backend Repository", "status": "completed", "gate": "PASS"},
-    {"name": "Backend Service", "status": "in_progress", "gate": null}
-  ],
-  "questions_answered": true,
-  "plan_approved": true,
-  "commands": {
-    "lint": "make lint",
-    "test": "make test",
-    "test_integration": "make test-integration",
-    "test_e2e": "make test-e2e"
-  }
-}
-```
-
-This enables resuming interrupted executions.
-
-### Parallel Agent Dispatch
-
-When dispatching agents via the `Task` tool, the prompt MUST include:
-
-```
-Goal: [what to build/test]
-Context:
-  - Task ID: T-XXX
-  - Relevant files: [exact paths]
-  - Existing patterns to follow: [file:line references]
-  - API contract: [request/response format if applicable]
-Constraints:
-  - Follow project coding standards
-  - Match existing code style in [package/directory]
-  - Do NOT create new dependencies without approval
-  - Do NOT modify files outside the scope listed
-Expected output:
-  - Files to create/modify: [list]
-  - Tests to include: [list]
-  - Summary of what was done
-```
-
-### Verification Gate (BLOCKING)
-
-After EACH phase completes, run the verification gate using the discovered commands. ALL applicable commands must pass before advancing to the next phase.
-
-**Gate rules:**
-- If ANY command fails, STOP. Do not advance to the next phase.
-- Diagnose the failure, fix it, and re-run the gate.
-- If the fix requires changes to a previous phase's code, make the fix and re-run the gate for the current phase.
-- Maximum 3 fix attempts per gate. If still failing after 3 attempts, present the failure to the user with diagnosis and ask for guidance.
-
-**Gate optimization (intermediate phases only):**
-- After a backend-only phase (no frontend changes), skip E2E tests
-- After a frontend-only phase (no backend changes), skip integration tests
-- Always run lint and unit tests (fast, catches regressions)
-
-**MANDATORY: Final gate (before presenting summary to user) MUST run ALL commands — no exceptions, no skipping. E2E tests are NON-NEGOTIABLE in the final gate.**
-
----
-
-## Phase R: Code Review (after all execution phases pass)
-
-After all implementation phases pass verification, dispatch review agents and present findings interactively.
-
-### Step R.1: Dispatch Review Agents in Parallel
-
-Dispatch review agents simultaneously via `Task` tool, scoped ONLY to files changed by this task. At minimum, cover the 4 domains below.
-
-**Agent selection priority for code review:**
-
-1. **Ring review droids (preferred when available):**
-   - `ring-default-code-reviewer` — code quality, architecture, patterns, maintainability
-   - `ring-default-business-logic-reviewer` — domain correctness, edge cases, business rules
-   - `ring-default-security-reviewer` — vulnerabilities, input validation, OWASP
-   - `ring-default-ring-test-reviewer` — test coverage, test quality, anti-patterns
-   - `ring-default-ring-nil-safety-reviewer` — nil/null pointer risks, unsafe dereferences
-   - `ring-default-ring-consequences-reviewer` — ripple effects beyond changed files
-   - `ring-default-ring-dead-code-reviewer` — orphaned code from changes
-2. **Other available review droids:** If Ring droids are not available, use any other review droids
-3. **Worker droid with review instructions:** Fall back to `worker` with domain-specific instructions
-
-At minimum, cover:
-- **Code quality** — architecture, patterns, maintainability
-- **Business logic** — domain correctness, edge cases
-- **Security** — vulnerabilities, input validation
-- **Test quality** — coverage gaps, test anti-patterns
-
-Each agent prompt MUST include the full content of every changed file plus the task spec excerpt. Request structured output: severity (Critical/High/Medium/Low), file, line, finding summary, and suggested fix.
-
-### Step R.2: Consolidate and Deduplicate
-
-After all agents return:
-
-1. Merge all findings into a single list
-2. Deduplicate — if multiple agents flag the same issue (same file + same concern), keep one entry and note which agents agreed
-3. Sort by severity: Critical > High > Medium > Low
-4. Assign a sequential ID to each finding (F1, F2, F3...)
-
-### Step R.3: Present Overview Table
-
-Show a summary table so the user sees the full picture before diving in:
-
-```markdown
-## Code Review: X findings across Y agents
-
-| # | Severity | File | Summary (1 line) | Agents |
-|---|----------|------|-------------------|--------|
-| F1 | HIGH | file.tsx | ... | QA, Code |
-| F2 | MEDIUM | file.ts | ... | Frontend |
-
-Security verdict: PASS / FAIL
-```
-
-### Step R.4: Interactive Finding-by-Finding Resolution
-
-Process ONE finding at a time, starting from highest severity. For EACH finding, present:
-
-#### Problem Description
-- What is wrong and where (file, line, code snippet)
-- Why it matters — what breaks, what risk it creates, what spec requirement it violates
-- Impact on the end user if applicable
-
-#### Proposed Solutions (2-3 options)
-
-Each solution must consider:
-- **UX impact** — how does this affect the end user?
-- **Project focus** — does this align with MVP scope, or is it gold-plating?
-- **Engineering quality** — maintainability, testability, consistency with codebase patterns
-- **Effort** — trivial / small / moderate
-
-Include a recommendation when one option is clearly better, with brief justification.
-
-#### Ask User for Decision
-
-Use `AskUser` tool. **BLOCKING**: Do NOT proceed to the next finding until the user decides.
-
-### Step R.5: Apply Approved Fixes
-
-For each finding the user chose to fix (not skipped):
-
-1. Implement the chosen solution
-2. Run lint + unit tests after each fix (or batch independent fixes in the same file)
-3. If tests fail, diagnose and fix (max 3 attempts), then re-run
-4. If fix fails 3 times, present the failure to user and ask for guidance
-
-### Step R.6: Post-Review Verification Gate
-
-After ALL findings are resolved (fixed or skipped), run the full verification gate. E2E tests MUST pass before proceeding.
-
-### Step R.7: Review Summary
-
-Present a final review summary with fixed findings, skipped findings, and verification results.
-
----
-
-## Phase Final: User Validation & Commit
-
-### Step F.1: Run Full Verification Gate (MANDATORY — NO EXCEPTIONS)
-
-Run ALL discovered commands. Every single one MUST pass. Do NOT proceed to Step F.2 until all pass.
-
-### Step F.2: Present Summary to User
-
-Present a structured summary including: files created, files modified, tests added, verification gate results, and notes/decisions made.
-
-### Step F.3: Wait for User Approval
-
-Do NOT commit until the user explicitly says to commit. The user may want to:
-- Review the code manually
-- Run additional tests
-- Request changes
-- Test on a real device (for frontend tasks)
-
-### Step F.4: Commit
+### Step 2.3: Commit
 
 Only after explicit user approval:
 
@@ -442,13 +231,6 @@ Only after explicit user approval:
 
 ## Rules
 
-### Code Quality
-- Follow project coding standards strictly
-- Match existing patterns in the codebase (grep before writing)
-- Never introduce new dependencies without asking the user first
-- Never create README/documentation files unless the task spec explicitly requires it
-- Comments only when the code is non-obvious
-
 ### Scope Discipline
 - Implement EXACTLY what the task spec says — no more, no less
 - Do not refactor existing code unless the task requires it
@@ -456,28 +238,10 @@ Only after explicit user approval:
 - Do not add "nice to have" improvements
 
 ### Error Handling
-- If a phase fails verification gate 3 times, STOP and ask the user
-- If a parallel agent returns incorrect or incomplete work, fix it yourself rather than re-dispatching
-- If you discover a gap in the task spec during implementation, ask the user before proceeding
-
-### Testing
-- Every new function/method MUST have a corresponding test
-- Tests must be deterministic (no random values, no current timestamps)
-- Follow existing test patterns in the codebase
-- E2E tests must use explicit waits (selectors, URLs, visibility), not timeouts
-
-### Test Gap Cross-Reference
-When a verification gate or code review identifies a missing test:
-1. **Search future tasks** in the tasks file to check if the test is planned for a later task
-2. **If planned in a future task (T-XXX):**
-   - Inform the user: "Test for [scenario] is planned in T-XXX: [task title]"
-   - Provide your opinion on timing: should it be created now or deferred? Consider whether the current task introduces the code path being tested, and whether deferring creates a risk window
-   - Ask via `AskUser`: "Do you want to anticipate this test in the current task, or keep it for T-XXX?"
-3. **If NOT planned in any future task:**
-   - Flag as a gap and recommend adding the test to the current task
-4. Do NOT silently skip test gaps because they might be covered later — always verify and ask
+- If dev-cycle reports a blocker, present it to the user with context from Phase 0
+- If you discover a gap in the task spec during Phase 0, ask the user before invoking dev-cycle
 
 ### Communication
-- Update the todo list at EVERY phase transition
-- Report verification gate results after each phase
-- Never go silent for more than one phase without reporting status
+- Update the todo list at Phase 0 completion and after dev-cycle finishes
+- Report dev-cycle gate results as they complete
+- Never go silent — if dev-cycle is running, inform the user of progress
