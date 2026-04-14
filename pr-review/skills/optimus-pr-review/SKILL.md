@@ -28,12 +28,11 @@ examples:
       1. Fetch PR metadata and existing comments
       2. Checkout PR branch
       3. Present PR summary (including comment sources)
-      4. Ask review type (initial/final)
-      5. Dispatch agents to review code AND evaluate existing comments
-      6. Consolidate with source attribution
-      7. Interactive finding-by-finding resolution
-      8. Apply fixes with separate commits per finding
-      9. PR readiness verdict
+      4. Dispatch all agents to review code AND evaluate existing comments
+      5. Consolidate with source attribution
+      6. Interactive finding-by-finding resolution
+      7. Apply fixes with separate commits per finding
+      8. PR readiness verdict
   - name: Review current branch PR
     invocation: "Review the PR for this branch"
     expected_flow: >
@@ -202,16 +201,7 @@ Present a summary of the PR to the user before starting the review:
 
 ---
 
-## Phase 2: Determine Review Type
-
-Ask the user which type of review to run. Use `AskUser` tool.
-
-- **Initial** (5 agents) — correctness and critical gaps, suitable for in-progress PRs
-- **Final** (7 agents) — full coverage including stack idiomaticity, suitable for PRs ready to merge
-
----
-
-## Phase 3: Parallel Agent Dispatch
+## Phase 2: Parallel Agent Dispatch
 
 ### Step 3.1: Discover Project Context
 
@@ -220,7 +210,7 @@ Ask the user which type of review to run. Use `AskUser` tool.
 3. **Identify coding standards:** Look for `PROJECT_RULES.md`, linter configs, or equivalent
 4. **Identify reference docs:** Look for PRD, TRD, API design, data model
 
-Store discovered commands for use in the verification gate (Phase 7):
+Store discovered commands for use in the verification gate (Phase 6):
 ```
 LINT_CMD=<discovered lint command>
 TEST_UNIT_CMD=<discovered unit test command>
@@ -249,7 +239,6 @@ Existing PR Comments (evaluate these — validate or contest each one):
   [paste all comments grouped by source, including comments from "Duplicated Comments" sections]
 
 Review scope: Only the files changed in this PR.
-Review type: Initial / Final.
 
 Your job:
   1. Review the CODE for issues in your domain
@@ -270,7 +259,7 @@ Required output format:
   - Justification
 ```
 
-### Initial Review (5 agents)
+### Agents (always dispatch ALL)
 
 | # | Agent | Focus |
 |---|-------|-------|
@@ -279,19 +268,14 @@ Required output format:
 | 3 | **Security reviewer** | Vulnerabilities, authentication, input validation, OWASP |
 | 4 | **Test quality analyst** | Test coverage gaps, error scenarios, flaky patterns |
 | 5 | **Cross-file consistency** (worker) | Interfaces vs implementations, imports, shared constants, dead code |
-
-### Final Review (7 agents — includes the 5 above plus)
-
-| # | Agent | Focus |
-|---|-------|-------|
 | 6 | **Backend specialist** | Language idiomaticity, performance, concurrency, ecosystem patterns |
 | 7 | **Frontend specialist** | Framework patterns, hooks, components, accessibility, performance |
 
-Use whatever specialist droids are available in the environment. If a specialized droid does not exist for a domain, use a `worker` agent with domain-specific instructions.
+Use whatever specialist droids are available in the environment. If a specialized droid does not exist for a domain, use a `worker` agent with domain-specific instructions. All agents MUST be dispatched in a SINGLE message with parallel Task calls.
 
 ---
 
-## Phase 4: Consolidation
+## Phase 3: Consolidation
 
 After ALL agents return:
 
@@ -315,7 +299,7 @@ Each finding MUST include its source(s):
 
 ---
 
-## Phase 5: Present Overview
+## Phase 4: Present Overview
 
 ```markdown
 ## PR Review: #<number> — X findings
@@ -341,7 +325,7 @@ Each finding MUST include its source(s):
 
 ---
 
-## Phase 6: Interactive Finding-by-Finding Resolution (collect decisions only)
+## Phase 5: Interactive Finding-by-Finding Resolution (collect decisions only)
 
 Process ONE finding at a time, in severity order (CRITICAL first, LOW last). Include both new findings and validated existing comments. Present contested comments for user decision.
 
@@ -382,13 +366,13 @@ The user may:
 
 ### 5. Record Decision
 
-Internally record every decision: finding ID, source(s), chosen option (or "skip"/"defer"), and rationale if provided. Do NOT apply any fix yet — fixes are applied with separate commits in Phase 7.
+Internally record every decision: finding ID, source(s), chosen option (or "skip"/"defer"), and rationale if provided. Do NOT apply any fix yet — fixes are applied with separate commits in Phase 6.
 
 ---
 
-## Phase 7: Apply Fixes with Separate Commits
+## Phase 6: Apply Fixes with Separate Commits
 
-**IMPORTANT:** This phase starts ONLY after ALL findings have been presented and ALL decisions collected. No fix is applied during Phase 6.
+**IMPORTANT:** This phase starts ONLY after ALL findings have been presented and ALL decisions collected. No fix is applied during Phase 5.
 
 ### Step 7.1: Present Pre-Apply Summary
 
@@ -434,7 +418,7 @@ Create **one commit per finding** whenever possible. This makes it easy to trace
    Addresses review finding(s): <F1, F2, ...>"
    ```
 5. Record the commit SHA for this fix: `git rev-parse HEAD`
-6. Store the mapping: `{finding_id} → {commit_sha}` for use in Phase 9
+6. Store the mapping: `{finding_id} → {commit_sha}` for use in Phase 8
 
 **If a fix causes lint failures that cannot be auto-resolved**, stop, present the issue to the user, and ask for guidance before continuing to the next fix.
 
@@ -451,11 +435,11 @@ If tests fail:
 3. If fixed, amend the offending commit or create a follow-up fix commit
 4. If not fixable after 3 attempts, revert that specific commit, present the failure to the user, and ask for guidance
 
-All commands MUST pass before proceeding to Phase 8.
+All commands MUST pass before proceeding to Phase 7.
 
 ---
 
-## Phase 8: Final Summary
+## Phase 7: Final Summary
 
 ```markdown
 ## PR Review Summary: #<number> — <title>
@@ -493,15 +477,15 @@ All commands MUST pass before proceeding to Phase 8.
 **Verdict:** READY FOR MERGE / NEEDS CHANGES
 ```
 
-Commits were already created individually in Phase 7. Ask the user if they want to push.
+Commits were already created individually in Phase 6. Ask the user if they want to push.
 
 ---
 
-## Phase 9: Respond to PR Comments (MANDATORY — runs AFTER commits)
+## Phase 8: Respond to PR Comments (MANDATORY — runs AFTER commits)
 
-This phase runs AFTER the user pushes or explicitly skips the push in Phase 8. It is MANDATORY regardless of whether any fixes were applied. Even if every finding was skipped and no commit was made, every comment thread MUST receive a reply and be resolved.
+This phase runs AFTER the user pushes or explicitly skips the push in Phase 7. It is MANDATORY regardless of whether any fixes were applied. Even if every finding was skipped and no commit was made, every comment thread MUST receive a reply and be resolved.
 
-**IMPORTANT:** Use the `{finding_id} → {commit_sha}` mapping recorded in Phase 7 to reference the exact commit that addresses each comment. This gives reviewers a direct link to the fix.
+**IMPORTANT:** Use the `{finding_id} → {commit_sha}` mapping recorded in Phase 6 to reference the exact commit that addresses each comment. This gives reviewers a direct link to the fix.
 
 **Scope:** ALL existing PR comment threads — not just findings/suggestions, but also questions, clarification requests, and discussion threads. Every unanswered comment on the PR must be addressed.
 
@@ -587,7 +571,7 @@ Match each thread by its first comment's `databaseId` to the `comment_id` collec
 
 **Fixed:**
 ```
-Fixed in <commit_sha> (use the specific SHA from the finding→commit mapping recorded in Phase 7).
+Fixed in <commit_sha> (use the specific SHA from the finding→commit mapping recorded in Phase 6).
 ```
 
 **Skipped/Discarded:**
@@ -640,7 +624,7 @@ After posting all replies, present a summary:
 - Include PR description, linked issues, and existing comments in every agent prompt
 - One finding at a time, severity order (CRITICAL > HIGH > MEDIUM > LOW)
 - No changes without prior user approval — the user ALWAYS decides the approach
-- Fixes are collected during Phase 6 and applied with separate commits in Phase 7
+- Fixes are collected during Phase 5 and applied with separate commits in Phase 6
 - Do NOT merge the PR — only review and present findings
 - Do NOT commit fixes without explicit user approval
 - ALWAYS reply to every existing PR comment thread — findings, questions, clarifications, discussions — with the resolution or answer, then resolve the thread. This applies even if no fixes were applied and no commit was made
