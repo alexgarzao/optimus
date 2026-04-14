@@ -2,7 +2,7 @@
 
 ## Description
 
-PR-aware code review orchestrator. Receives a pull request URL, fetches PR metadata, collects existing review comments from all sources (CodeRabbit, human reviewers, CI), dispatches parallel agents to evaluate both code and comments, and presents findings interactively with source attribution. Agents validate or contest existing feedback. Approved fixes are applied in batch at the end.
+PR-aware code review orchestrator. Receives a pull request URL, fetches PR metadata, collects existing review comments from all sources (CodeRabbit, human reviewers, CI), dispatches parallel agents to evaluate both code and comments, and presents findings interactively with source attribution. Agents validate or contest existing feedback. Approved fixes are applied with separate commits per finding, and PR comment replies reference the exact commit SHA.
 
 ## Variables
 

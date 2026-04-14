@@ -5,7 +5,7 @@ description: >
   PR metadata (description, branch, changed files, linked issues), collects
   existing review comments (CodeRabbit, human reviewers, CI), dispatches
   parallel agents to evaluate both code and comments, and presents findings
-  interactively with source attribution. Batch applies approved fixes at the end.
+  interactively with source attribution. Creates separate commits per finding and references them in PR replies.
 trigger: >
   - When user provides a PR URL for review (e.g., "review this PR: https://github.com/org/repo/pull/123")
   - When user asks to review a pull request
@@ -32,7 +32,7 @@ examples:
       5. Dispatch agents to review code AND evaluate existing comments
       6. Consolidate with source attribution
       7. Interactive finding-by-finding resolution
-      8. Batch apply approved fixes
+      8. Apply fixes with separate commits per finding
       9. PR readiness verdict
   - name: Review current branch PR
     invocation: "Review the PR for this branch"
@@ -69,7 +69,7 @@ verification:
     - PR metadata and comments fetched correctly
     - Source attribution present in all findings
     - All findings presented interactively
-    - Approved fixes applied in batch
+    - Approved fixes applied with separate commits per finding
     - PR readiness verdict presented
     - PR comment threads replied with resolution status
 ---
@@ -382,7 +382,7 @@ The user may:
 
 ### 5. Record Decision
 
-Internally record every decision: finding ID, source(s), chosen option (or "skip"/"defer"), and rationale if provided. Do NOT apply any fix yet — fixes are batched in Phase 7.
+Internally record every decision: finding ID, source(s), chosen option (or "skip"/"defer"), and rationale if provided. Do NOT apply any fix yet — fixes are applied with separate commits in Phase 7.
 
 ---
 
@@ -640,7 +640,7 @@ After posting all replies, present a summary:
 - Include PR description, linked issues, and existing comments in every agent prompt
 - One finding at a time, severity order (CRITICAL > HIGH > MEDIUM > LOW)
 - No changes without prior user approval — the user ALWAYS decides the approach
-- Fixes are collected during Phase 6 and applied in batch during Phase 7
+- Fixes are collected during Phase 6 and applied with separate commits in Phase 7
 - Do NOT merge the PR — only review and present findings
 - Do NOT commit fixes without explicit user approval
 - ALWAYS reply to every existing PR comment thread — findings, questions, clarifications, discussions — with the resolution or answer, then resolve the thread. This applies even if no fixes were applied and no commit was made
