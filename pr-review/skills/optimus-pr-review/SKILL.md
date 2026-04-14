@@ -599,9 +599,67 @@ Already addressed in a previous commit.
 <direct answer to the question, referencing specific code/files when applicable>.
 ```
 
-### Step 9.4: Present Reply Summary
+### Step 8.4: Hide Fully-Resolved Review Sections
 
-After posting all replies, present a summary:
+After all replies are posted and threads resolved, check each PR review section (e.g., CodeRabbit's "Changes requested" reviews, human reviewer summaries) to determine if ALL its comment threads have been resolved.
+
+**Step 1: Query all PR reviews with their threads:**
+```bash
+gh api graphql -f query='
+  query {
+    repository(owner: "<owner>", name: "<repo>") {
+      pullRequest(number: <number>) {
+        reviews(first: 100) {
+          nodes {
+            id
+            body
+            author { login }
+            state
+          }
+        }
+        reviewThreads(first: 100) {
+          nodes {
+            id
+            isResolved
+            comments(first: 1) {
+              nodes {
+                pullRequestReview { id }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+'
+```
+
+**Step 2: For each review, check if ALL its threads are resolved:**
+- Group `reviewThreads` by `comments.nodes[0].pullRequestReview.id`
+- For a given review, if every associated thread has `isResolved: true`, the review is fully resolved
+
+**Step 3: Hide fully-resolved reviews using `minimizeComment`:**
+```bash
+gh api graphql -f query='
+  mutation {
+    minimizeComment(input: {subjectId: "<review_node_id>", classifier: RESOLVED}) {
+      minimizedComment {
+        isMinimized
+        minimizedReason
+      }
+    }
+  }
+'
+```
+
+**Rules:**
+- Only hide reviews where ALL threads are resolved — if even one thread remains unresolved, leave the review visible
+- This applies to any review source (CodeRabbit, human reviewers, other bots)
+- Reviews with no associated threads (e.g., approvals with no inline comments) should NOT be hidden
+
+### Step 8.5: Present Reply Summary
+
+After posting all replies and hiding resolved reviews, present a summary:
 
 ```markdown
 ### PR Comment Replies Posted
@@ -611,6 +669,11 @@ After posting all replies, present a summary:
 | 2 | file.go:88 | @reviewer | Won't fix: out of scope | — | Closed |
 | 3 | general | CodeRabbit | Deferred to backlog | — | Closed |
 | 4 | file.go:15 | @reviewer | [answer to question] | — | Resolved |
+
+### Fully-Resolved Reviews Hidden
+| # | Review Author | Review State | Threads | Action |
+|---|---------------|-------------|---------|--------|
+| 1 | coderabbitai | CHANGES_REQUESTED | 5/5 resolved | Hidden (RESOLVED) |
 ```
 
 ---
