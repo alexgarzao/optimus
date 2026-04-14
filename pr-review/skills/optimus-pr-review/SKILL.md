@@ -386,7 +386,7 @@ Internally record every decision: finding ID, source(s), chosen option (or "skip
 
 ---
 
-## Phase 7: Batch Apply All Approved Fixes
+## Phase 7: Apply Fixes with Separate Commits
 
 **IMPORTANT:** This phase starts ONLY after ALL findings have been presented and ALL decisions collected. No fix is applied during Phase 6.
 
@@ -413,22 +413,43 @@ Before touching any code, show the user a summary of everything that will be cha
 | F5 | [summary] | [Agent: QA] | Backlog |
 ```
 
-### Step 7.2: Apply All Fixes
+### Step 7.2: Apply and Commit Each Fix Individually
 
-Apply ALL approved fixes in a single pass:
+Create **one commit per finding** whenever possible. This makes it easy to trace which commit addresses which review comment.
 
-1. Group fixes by file to minimize file I/O
-2. Apply all changes
-3. Run lint — if format issues, fix and re-run
-4. Run unit tests — if failures, diagnose and fix (max 3 attempts per failure)
-5. If a fix causes test failures after 3 attempts, revert that specific fix, present the failure to the user, and ask for guidance
+**Grouping rules:**
+- **Independent fixes** (touching different logical concerns) → one commit each
+- **Related fixes** (e.g., F1 and F3 both fix the same validation logic in the same function) → group into a single commit, referencing all finding IDs
+- When in doubt, prefer separate commits — smaller commits are easier to review and revert
+
+**For each approved fix (or group of related fixes):**
+
+1. Apply the code changes for this specific fix
+2. Run lint — if format issues, fix them (only for the affected files)
+3. Stage ONLY the files changed by this fix: `git add <affected_files>`
+4. Commit with a descriptive message that references the finding ID(s):
+   ```bash
+   git commit -m "fix: <concise description of what was fixed>
+
+   Addresses review finding(s): <F1, F2, ...>"
+   ```
+5. Record the commit SHA for this fix: `git rev-parse HEAD`
+6. Store the mapping: `{finding_id} → {commit_sha}` for use in Phase 9
+
+**If a fix causes lint failures that cannot be auto-resolved**, stop, present the issue to the user, and ask for guidance before continuing to the next fix.
 
 ### Step 7.3: Verification Gate
 
-After all fixes applied, run the full gate using discovered project commands:
+After ALL individual commits are created, run the full test suite:
 - Always run lint and unit tests
 - If backend files were changed: also run integration tests
 - If frontend files were changed: also run E2E tests (if available)
+
+If tests fail:
+1. Identify which commit introduced the failure (use `git bisect` or reason from the test output)
+2. Attempt to fix (max 3 attempts)
+3. If fixed, amend the offending commit or create a follow-up fix commit
+4. If not fixable after 3 attempts, revert that specific commit, present the failure to the user, and ask for guidance
 
 All commands MUST pass before proceeding to Phase 8.
 
@@ -446,8 +467,8 @@ All commands MUST pass before proceeding to Phase 8.
 - Already fixed: X
 
 ### Fixed (X findings)
-| # | Source | File(s) | Fix Applied |
-|---|--------|---------|-------------|
+| # | Source | File(s) | Commit | Fix Applied |
+|---|--------|---------|--------|-------------|
 
 ### Skipped (X findings)
 | # | Source | File(s) | Reason |
@@ -472,13 +493,15 @@ All commands MUST pass before proceeding to Phase 8.
 **Verdict:** READY FOR MERGE / NEEDS CHANGES
 ```
 
-**Do NOT commit automatically.** Present the summary and ask the user if they want to commit.
+Commits were already created individually in Phase 7. Ask the user if they want to push.
 
 ---
 
 ## Phase 9: Respond to PR Comments (MANDATORY — runs AFTER commits)
 
-This phase runs AFTER the user commits or explicitly skips the commit in Phase 8. It is MANDATORY regardless of whether any fixes were applied. Even if every finding was skipped and no commit was made, every comment thread MUST receive a reply and be resolved.
+This phase runs AFTER the user pushes or explicitly skips the push in Phase 8. It is MANDATORY regardless of whether any fixes were applied. Even if every finding was skipped and no commit was made, every comment thread MUST receive a reply and be resolved.
+
+**IMPORTANT:** Use the `{finding_id} → {commit_sha}` mapping recorded in Phase 7 to reference the exact commit that addresses each comment. This gives reviewers a direct link to the fix.
 
 **Scope:** ALL existing PR comment threads — not just findings/suggestions, but also questions, clarification requests, and discussion threads. Every unanswered comment on the PR must be addressed.
 
@@ -564,7 +587,7 @@ Match each thread by its first comment's `databaseId` to the `comment_id` collec
 
 **Fixed:**
 ```
-Fixed in <commit_sha>.
+Fixed in <commit_sha> (use the specific SHA from the finding→commit mapping recorded in Phase 7).
 ```
 
 **Skipped/Discarded:**
@@ -598,12 +621,12 @@ After posting all replies, present a summary:
 
 ```markdown
 ### PR Comment Replies Posted
-| # | Thread | Source | Reply | Status |
-|---|--------|--------|-------|--------|
-| 1 | file.go:42 | CodeRabbit | Fixed in abc1234 | Resolved |
-| 2 | file.go:88 | @reviewer | Won't fix: out of scope | Closed |
-| 3 | general | CodeRabbit | Deferred to backlog | Closed |
-| 4 | file.go:15 | @reviewer | [answer to question] | Resolved |
+| # | Thread | Source | Reply | Commit | Status |
+|---|--------|--------|-------|--------|--------|
+| 1 | file.go:42 | CodeRabbit | Fixed | abc1234 | Resolved |
+| 2 | file.go:88 | @reviewer | Won't fix: out of scope | — | Closed |
+| 3 | general | CodeRabbit | Deferred to backlog | — | Closed |
+| 4 | file.go:15 | @reviewer | [answer to question] | — | Resolved |
 ```
 
 ---
