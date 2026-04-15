@@ -106,6 +106,32 @@ Determine which task to execute:
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to execute.
 
+### Step 0.0.1: Create Workspace
+
+After the user confirms the task, ask how to isolate the work using `AskUser`:
+
+"How should I create the workspace for task T-XXX?"
+
+Options:
+- **(a) Git worktree (default)** — creates a worktree in a sibling directory, keeps the current branch untouched
+- **(b) New branch** — creates and checks out a new branch in the current repository
+
+**If worktree (default):**
+```bash
+# Create worktree in sibling directory
+git worktree add ../$(basename $(pwd))-T-XXX feature/T-XXX
+```
+Then change working directory to the new worktree path for all subsequent steps.
+
+**If new branch:**
+```bash
+git checkout -b feature/T-XXX
+```
+
+The branch name follows the pattern `feature/<task-id>` (e.g., `feature/T-012`). If the user provides a custom name, use that instead.
+
+**BLOCKING**: Do NOT proceed until the workspace is created.
+
 ### Step 0.1: Discover Project Structure
 
 Before loading docs, discover the project's structure and tooling:
