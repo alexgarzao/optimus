@@ -116,19 +116,26 @@ Options:
 - **(a) Git worktree (default)** — creates a worktree in a sibling directory, keeps the current branch untouched
 - **(b) New branch** — creates and checks out a new branch in the current repository
 
+**Branch naming:** Generate a descriptive name from the task ID and title:
+- Pattern: `feature/<task-id>-<keywords>` where keywords are 2-4 lowercase words extracted from the task title, separated by hyphens
+- Examples:
+  - Task "T-016 — Add boleto cancellation endpoint" → `feature/t-016-boleto-cancellation`
+  - Task "T-003 — Implement user authentication with JWT" → `feature/t-003-user-auth-jwt`
+  - Task without ID "Fix payment timeout handling" → `feature/fix-payment-timeout`
+- Strip articles (a, an, the), prepositions (of, in, for, with), and generic words (implement, add, create, update) when possible, keeping only words that identify the task
+
 **If worktree (default):**
 ```bash
-# Create worktree in sibling directory
-git worktree add ../$(basename $(pwd))-T-XXX feature/T-XXX
+git worktree add ../<repo>-<task-id>-<keywords> feature/<task-id>-<keywords>
+# Example: git worktree add ../plugin-br-payments-t-016-boleto-cancellation feature/t-016-boleto-cancellation
 ```
 Then change working directory to the new worktree path for all subsequent steps.
 
 **If new branch:**
 ```bash
-git checkout -b feature/T-XXX
+git checkout -b feature/<task-id>-<keywords>
+# Example: git checkout -b feature/t-016-boleto-cancellation
 ```
-
-The branch name follows the pattern `feature/<task-id>` (e.g., `feature/T-012`). If the user provides a custom name, use that instead.
 
 **BLOCKING**: Do NOT proceed until the workspace is created.
 
