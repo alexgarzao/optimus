@@ -406,10 +406,51 @@ Create **one commit per finding** whenever possible. This makes it easy to trace
 - **Related fixes** (e.g., F1 and F3 both fix the same validation logic in the same function) → group into a single commit, referencing all finding IDs
 - When in doubt, prefer separate commits — smaller commits are easier to review and revert
 
-**For each approved fix (or group of related fixes):**
+**For each approved fix (or group of related fixes), dispatch a specialist droid:**
 
-1. Apply the code changes for this specific fix
-2. Run lint — if format issues, fix them (only for the affected files)
+Use the `Task` tool to dispatch the appropriate droid for each fix. Do NOT apply fixes directly — always delegate to a specialist.
+
+**Droid selection priority:**
+1. **Ring specialist droids (preferred):**
+   - `ring-dev-team-backend-engineer-golang` — for Go source fixes
+   - `ring-dev-team-backend-engineer-typescript` — for TypeScript backend fixes
+   - `ring-dev-team-frontend-engineer` — for React/Next.js frontend fixes
+   - `ring-dev-team-qa-analyst` — for test-related fixes
+2. **Other available specialist droids**
+3. **`worker` with domain instructions** — as fallback
+
+**Droid prompt for each fix:**
+
+```
+Goal: Apply fix for review finding F<N>.
+
+Finding:
+  - ID: F<N>
+  - Severity: <severity>
+  - File(s): <affected files>
+  - Problem: <finding description>
+  - Chosen solution: <user's chosen option from Phase 5>
+
+Context:
+  - Full content of affected file(s): [paste]
+  - Coding standards: [paste relevant sections]
+  - Existing patterns in the codebase to follow: [file:line references]
+
+Constraints:
+  - Apply ONLY the fix described above — do not refactor or improve other code
+  - Follow existing code style and patterns
+  - Run lint after applying the fix and resolve any formatting issues
+  - If the fix requires updating tests, update them
+
+Expected output:
+  - List of files modified
+  - Summary of changes made
+```
+
+**After the droid completes each fix:**
+
+1. Verify the droid applied changes correctly
+2. Run lint — if format issues remain, fix them
 3. Stage ONLY the files changed by this fix: `git add <affected_files>`
 4. Commit with a descriptive message that references the finding ID(s):
    ```bash
