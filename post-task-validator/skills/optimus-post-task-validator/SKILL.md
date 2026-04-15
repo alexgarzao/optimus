@@ -381,9 +381,96 @@ Apply ALL approved fixes in a single pass:
 ### Step 5.3: Verification Gate
 
 After all fixes applied, run the full gate using discovered commands:
-- Always run lint and unit tests
-- If backend files were changed: also run integration tests
+- Always run lint and unit tests with coverage profiling
+- If backend files were changed: also run integration tests with coverage profiling
 - If frontend files were changed: also run E2E tests (if available)
+
+### Step 5.4: Coverage Verification
+
+After the verification gate passes, measure test coverage:
+
+**Unit test coverage:**
+```bash
+go test -coverprofile=coverage-unit.out ./...
+go tool cover -func=coverage-unit.out | tail -1
+```
+
+**Integration test coverage (if applicable):**
+```bash
+go test -tags=integration -coverprofile=coverage-integration.out ./...
+go tool cover -func=coverage-integration.out | tail -1
+```
+
+**Coverage gap analysis:**
+```bash
+# Untested functions (0% coverage) — potential gaps
+go tool cover -func=coverage-unit.out | grep "0.0%"
+```
+
+**Thresholds:**
+- Unit tests: 85% minimum
+- Integration tests: 70% minimum
+
+If coverage is below threshold, add findings to the results:
+- **HIGH** severity for unit test coverage below 85%
+- **MEDIUM** severity for integration test coverage below 70%
+- List untested business-logic functions as individual **HIGH** findings
+
+**E2E tests:**
+If E2E tests are not configured, ask the user using `AskUser`:
+"E2E tests are not configured for this project. Should E2E tests be implemented for this task?"
+- If yes: flag as a finding (MEDIUM severity) in the validation summary
+- If no: mark as SKIP in the summary
+
+### Step 5.5: Test Scenario Gap Analysis
+
+After coverage measurement, dispatch an agent to cross-reference the task spec's acceptance criteria with implemented tests and identify missing scenarios.
+
+**Dispatch a test gap analyzer** via `Task` tool. Use `ring-default-ring-test-reviewer`, `ring-dev-team-qa-analyst`, or `worker` (in that priority order).
+
+The agent receives:
+1. **Task spec** — acceptance criteria, testing strategy, test IDs
+2. **Source files changed by this task** — full content
+3. **Test files for changed source** — full content
+4. **Coverage profile** — `go tool cover -func` output
+
+```
+Goal: Cross-reference task spec with implemented tests to find scenario gaps.
+
+Context:
+  - Task spec: [paste task section with acceptance criteria and test IDs]
+  - Source files: [full content]
+  - Test files: [full content]
+  - Coverage profile: [go tool cover -func output]
+
+Your job:
+  1. For each acceptance criterion in the task spec, verify:
+     - Is there a test that validates this criterion? (map AC → test)
+     - Does the test cover both success AND failure paths?
+  2. For each public function changed/added by this task, check:
+     - Happy path tested?
+     - Error paths tested (each error return)?
+     - Edge cases (nil, empty, boundary values)?
+     - Validation failures?
+  3. For integration points (DB, external APIs, message queues):
+     - Are failure, timeout, and retry scenarios tested?
+     - Are rollback and constraint violation scenarios tested?
+
+Required output format:
+  ## Acceptance Criteria Coverage
+  | AC | Description | Test Exists | Scenarios Covered | Missing Scenarios |
+  |-----|------------|-------------|-------------------|-------------------|
+
+  ## Unit Test Gaps
+  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
+  |---|------|----------|--------------------|-------------------|----------|
+
+  ## Integration Test Gaps
+  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
+  |---|------|----------|--------------------|-------------------|----------|
+```
+
+**Gap findings become part of Phase 4** (interactive resolution) — each HIGH gap is presented as a finding for user decision (fix now or defer).
 
 ---
 
@@ -429,6 +516,12 @@ After all fixes applied, run the full gate using discovered commands:
 - Unit tests: PASS (X tests)
 - Integration tests: PASS / SKIPPED
 - E2E tests: PASS / SKIPPED
+
+### Test Coverage
+- Unit tests: XX.X% (threshold: 85%) — PASS / FAIL
+- Integration tests: XX.X% (threshold: 70%) — PASS / FAIL
+- Untested functions: X (Y business logic, Z infrastructure)
+- E2E tests: Configured / Not configured (user decision: implement / skip)
 ```
 
 ---

@@ -425,9 +425,73 @@ Create **one commit per finding** whenever possible. This makes it easy to trace
 ### Step 7.3: Verification Gate
 
 After ALL individual commits are created, run the full test suite:
-- Always run lint and unit tests
-- If backend files were changed: also run integration tests
+- Always run lint and unit tests with coverage profiling
+- If backend files were changed: also run integration tests with coverage profiling
 - If frontend files were changed: also run E2E tests (if available)
+
+**Coverage measurement:**
+```bash
+# Unit tests
+go test -coverprofile=coverage-unit.out ./...
+go tool cover -func=coverage-unit.out | tail -1
+
+# Integration tests (if applicable)
+go test -tags=integration -coverprofile=coverage-integration.out ./...
+go tool cover -func=coverage-integration.out | tail -1
+```
+
+**Coverage thresholds:**
+- Unit tests: 85% minimum
+- Integration tests: 70% minimum
+
+If coverage is below threshold, flag as a finding and ask the user whether to address it before proceeding or defer.
+
+**E2E tests:** If not configured, ask the user using `AskUser`:
+"E2E tests are not configured. Should they be implemented, or skip for now?"
+
+### Step 7.4: Test Scenario Gap Analysis
+
+After coverage measurement, dispatch an agent to identify missing test scenarios in the files changed by the PR.
+
+**Dispatch a test gap analyzer** via `Task` tool. Use `ring-default-ring-test-reviewer`, `ring-dev-team-qa-analyst`, or `worker` (in that priority order).
+
+The agent receives:
+1. **PR changed source files** — full content (non-test files only)
+2. **Test files for changed source** — full content
+3. **Coverage profile** — `go tool cover -func` output
+4. **PR context** — description, linked issues
+
+```
+Goal: Identify missing test scenarios in files changed by PR #<number>.
+
+Context:
+  - PR: #<number> — <title>
+  - Source files changed: [full content]
+  - Test files: [full content]
+  - Coverage profile: [go tool cover -func output]
+
+Your job:
+  For each public function changed/added in this PR:
+  1. Unit tests: check for happy path, error paths, edge cases, validation failures
+  2. Integration tests: check for DB failure, timeout, retry, rollback scenarios
+  3. Report what EXISTS and what is MISSING
+
+Required output format:
+  ## Unit Test Gaps
+  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
+  |---|------|----------|--------------------|-------------------|----------|
+
+  ## Integration Test Gaps
+  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
+  |---|------|----------|--------------------|-------------------|----------|
+
+  ## Summary
+  - Functions analyzed: X
+  - Fully covered: X | Partial: X | No tests: X
+  - Missing scenarios: X HIGH, Y MEDIUM, Z LOW
+```
+
+HIGH priority gaps are presented as findings in the summary. The user decides whether to address them before merge or defer.
 
 If tests fail:
 1. Identify which commit introduced the failure (use `git bisect` or reason from the test output)
@@ -435,7 +499,7 @@ If tests fail:
 3. If fixed, amend the offending commit or create a follow-up fix commit
 4. If not fixable after 3 attempts, revert that specific commit, present the failure to the user, and ask for guidance
 
-All commands MUST pass before proceeding to Phase 7.
+All commands MUST pass and coverage MUST meet thresholds before proceeding to Phase 7.
 
 ---
 
@@ -467,6 +531,11 @@ All commands MUST pass before proceeding to Phase 7.
 - Unit tests: PASS (X tests)
 - Integration tests: PASS / SKIPPED
 - E2E tests: PASS / SKIPPED
+
+### Test Coverage
+- Unit tests: XX.X% (threshold: 85%) — PASS / FAIL
+- Integration tests: XX.X% (threshold: 70%) — PASS / FAIL
+- E2E tests: Configured / Not configured
 
 ### PR Readiness
 - [ ] All CRITICAL/HIGH findings resolved
