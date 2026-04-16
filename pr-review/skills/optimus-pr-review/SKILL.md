@@ -337,21 +337,47 @@ For EACH finding, present:
 - Source(s): which agent(s) and/or external reviewer(s) flagged this
 - Agreement: which sources agree/disagree
 
-### 2. Problem Description
+### 2. Deep Technical Analysis
 
-- Clear description of the issue with code snippet if applicable
+For each finding, provide a thorough analysis that goes beyond "what is wrong" — explain the full context so the user can make an informed decision:
+
+**Problem description:**
+- Clear description of the issue with code snippet
 - For validated existing comments: show the original comment and the agent's validation
 - For contested comments: show both the original comment and the agent's contestation
-- Why it matters — what breaks, what risk it creates
+
+**Flow analysis:**
+- Trace the execution flow through the affected code — what calls what, what data flows where
+- Identify which consumers are affected (other services, frontend clients, end users, automated systems)
+- Map the impact chain: if this is not fixed, what downstream behavior changes?
+
+**Why it matters (user experience focus):**
+- **For human users:** How does this affect the end-user experience? (errors they see, data they lose, actions they can't perform)
+- **For system consumers (APIs):** How does this affect other services or integrations? (contract violations, unexpected responses, silent failures)
+- Quantify the impact when possible: "affects X% of requests", "fails silently for Y scenario"
+
+**Engineering analysis (when recommending implementation):**
+- **API best practices:** Does the current implementation follow REST/gRPC conventions? Is the contract clear and consistent? Are error responses informative? Is idempotency handled?
+- **Software engineering principles:** SOLID, DRY, separation of concerns, fail-fast, defensive programming — which principles are violated and why they matter here
+- **Resilience and reliability:** Error handling, retry semantics, timeout behavior, graceful degradation
+- **Observability:** Can the issue be detected in production? Are there logs/metrics/traces that would surface this problem?
+
+**When contesting (recommending NOT to implement):**
+- Explain why the current code is correct or acceptable
+- Reference specific patterns in the codebase that validate the approach
+- Identify the cost of implementing vs the risk of not implementing
+- If the concern is valid but low-priority, suggest where to track it
 
 ### 3. Proposed Solutions
 
 One or more approaches, each with:
-- What changes
-- Tradeoffs (complexity, performance, breaking changes)
+- What changes (specific files, functions, patterns)
+- How the flow changes after the fix — trace the new execution path
+- Tradeoffs (complexity, performance, breaking changes, migration effort)
+- Impact on API consumers (breaking vs non-breaking, backward compatibility)
 - If it's a straightforward fix with no tradeoffs, state: "Direct fix, no tradeoffs."
 
-Include a recommendation when one option is clearly better.
+Include a recommendation when one option is clearly better, with clear justification rooted in user experience and engineering quality.
 
 ### 4. Wait for User Decision
 
