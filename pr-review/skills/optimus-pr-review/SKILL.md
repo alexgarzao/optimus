@@ -248,15 +248,40 @@ Your job:
      - ALREADY FIXED: The comment was addressed in a subsequent commit
   3. Report NEW findings not covered by existing comments
 
+For EACH finding (new or evaluated), provide a deep technical analysis:
+  - Trace the execution flow through the affected code (what calls what, what data flows where)
+  - Identify all consumers affected (other services, frontend clients, end users, automated systems)
+  - Map the impact chain: if not fixed, what downstream behavior changes?
+  - Assess user experience impact:
+    - For human users: errors they see, data they lose, actions they can't perform
+    - For system consumers (APIs): contract violations, unexpected responses, silent failures
+  - Evaluate against software engineering best practices:
+    - API design: REST/gRPC conventions, error responses, idempotency, backward compatibility
+    - SOLID, DRY, separation of concerns, fail-fast, defensive programming
+    - Error handling, retry semantics, timeout behavior, graceful degradation
+    - Observability: can this issue be detected in production via logs/metrics/traces?
+  - When recommending a fix: explain what changes, how the flow changes after,
+    and why it matters for end users and API consumers
+  - When contesting: explain why the current code is acceptable, reference codebase
+    patterns, and weigh cost of implementing vs risk of not implementing
+
 Required output format:
   ## New Findings
-  For each: severity, file, line, description, recommendation
+  For each finding:
+  - Severity: CRITICAL / HIGH / MEDIUM / LOW
+  - File and line
+  - Problem: what is wrong
+  - Flow analysis: trace the execution path and identify affected consumers
+  - Impact: consequences for users (human and system) if not addressed
+  - Engineering analysis: which best practices are violated and why they matter
+  - Recommendation: proposed fix with explanation of how the flow changes
+  - Tradeoffs: complexity, breaking changes, backward compatibility
 
   ## Comment Evaluation
   For each existing comment in your domain:
   - Comment source and summary
   - Your verdict: AGREE / CONTEST / ALREADY FIXED
-  - Justification
+  - Deep justification: flow analysis, impact assessment, and engineering rationale
 ```
 
 ### Agents (always dispatch ALL)
