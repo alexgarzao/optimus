@@ -641,19 +641,44 @@ All commands MUST pass and coverage MUST meet thresholds before proceeding to Ph
 **Verdict:** READY FOR MERGE / NEEDS CHANGES
 ```
 
-Commits were already created individually in Phase 6. Ask the user if they want to push.
+### Step 7.5: Push Commits (MANDATORY step — do NOT skip)
+
+Commits were already created individually in Phase 6. You MUST now push them.
+
+**HARD BLOCK:** Do NOT proceed to Phase 8 without completing this step. Ask the user:
+
+Use `AskUser` tool:
+```
+Fixes have been committed locally. Ready to push to the remote branch?
+- Push now
+- Skip push (I'll push manually later)
+```
+
+If the user approves, push immediately:
+```bash
+git push
+```
+
+If push fails (e.g., upstream conflict), inform the user and help resolve before continuing.
+
+Record the push result (pushed / skipped) for the final summary.
 
 ---
 
-## Phase 8: Respond to PR Comments (MANDATORY — runs AFTER commits)
+## Phase 8: Respond to PR Comments (MANDATORY — runs AFTER Phase 7)
 
-This phase runs AFTER the user pushes or explicitly skips the push in Phase 7. It is MANDATORY regardless of whether any fixes were applied. Even if every finding was skipped and no commit was made, every comment thread MUST receive a reply and be resolved.
+**HARD BLOCK:** This phase is MANDATORY regardless of:
+- Whether any fixes were applied or all findings were skipped
+- Whether the user pushed or skipped the push
+- Whether there were zero findings
+
+Every existing PR comment thread MUST receive a reply and be resolved. Do NOT end the review without completing this phase.
 
 **IMPORTANT:** Use the `{finding_id} → {commit_sha}` mapping recorded in Phase 6 to reference the exact commit that addresses each comment. This gives reviewers a direct link to the fix.
 
 **Scope:** ALL existing PR comment threads — not just findings/suggestions, but also questions, clarification requests, and discussion threads. Every unanswered comment on the PR must be addressed.
 
-### Step 9.1: Identify ALL Comment Threads to Respond
+### Step 8.1: Identify ALL Comment Threads to Respond
 
 Scan ALL existing PR comments collected in Step 0.3. For each thread, determine the response:
 
@@ -677,7 +702,7 @@ Scan ALL existing PR comments collected in Step 0.3. For each thread, determine 
 
 **IMPORTANT:** Every thread MUST be resolved after posting the reply, regardless of the type or decision. No comment thread should remain open and unanswered after this phase completes.
 
-### Step 9.2: Post Replies and Resolve Threads
+### Step 8.2: Post Replies and Resolve Threads
 
 For each comment thread, post the reply AND resolve the conversation on GitHub:
 
@@ -731,7 +756,7 @@ Match each thread by its first comment's `databaseId` to the `comment_id` collec
 
 **Resolve ALL replied threads** — not just "Fixed" ones. Skipped, deferred, contested, and already-fixed threads must also be resolved after posting the reply.
 
-### Step 9.3: Reply Templates
+### Step 8.3: Reply Templates
 
 **Fixed:**
 ```
@@ -763,7 +788,7 @@ Already addressed in a previous commit.
 <direct answer to the question, referencing specific code/files when applicable>.
 ```
 
-### Step 8.4: Hide Fully-Resolved Review Sections
+### Step 8.4: Hide Fully-Resolved Review Sections (MANDATORY)
 
 After all replies are posted and threads resolved, check each PR review section (e.g., CodeRabbit's "Changes requested" reviews, human reviewer summaries) to determine if ALL its comment threads have been resolved.
 
@@ -821,7 +846,7 @@ gh api graphql -f query='
 - This applies to any review source (CodeRabbit, human reviewers, other bots)
 - Reviews with no associated threads (e.g., approvals with no inline comments) should NOT be hidden
 
-### Step 8.5: Present Reply Summary
+### Step 8.5: Present Reply Summary (MANDATORY)
 
 After posting all replies and hiding resolved reviews, present a summary:
 
@@ -839,6 +864,24 @@ After posting all replies and hiding resolved reviews, present a summary:
 |---|---------------|-------------|---------|--------|
 | 1 | coderabbitai | CHANGES_REQUESTED | 5/5 resolved | Hidden (RESOLVED) |
 ```
+
+---
+
+## Completion Checklist (MANDATORY — verify before ending the session)
+
+Before ending the review, verify EVERY item below. If any item is incomplete, go back and complete it.
+
+- [ ] **All findings presented** — every finding was shown to the user (Finding X of N, all N presented)
+- [ ] **All decisions collected** — every finding has a decision (fix / skip / defer)
+- [ ] **All approved fixes committed** — each fix has its own commit with finding ID reference
+- [ ] **Push completed or explicitly skipped** — user was asked and the result was recorded
+- [ ] **All PR comment threads replied** — every existing comment (CodeRabbit, human, CI) has a reply posted via `gh api`
+- [ ] **All PR comment threads resolved** — every replied thread was resolved via GraphQL `resolveReviewThread`
+- [ ] **Fully-resolved reviews hidden** — reviews where all threads are resolved were minimized
+- [ ] **Reply summary presented** — Step 8.5 table was shown to the user
+- [ ] **Final summary presented** — Phase 7 summary with verdict was shown
+
+**STOP CONDITION:** You may ONLY end the review session after ALL items above are checked. If you are running low on context, prioritize: commits > push > comment replies > thread resolution > summary.
 
 ---
 
