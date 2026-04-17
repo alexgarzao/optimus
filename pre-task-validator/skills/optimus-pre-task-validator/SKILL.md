@@ -365,6 +365,34 @@ If any corrections were applied in Step 5:
 
 If no corrections were applied (all findings skipped), skip this step.
 
+### Step 7: Convergence Loop (MANDATORY — automatic re-validation)
+
+After Step 6 completes (whether changes were committed or all findings were skipped), the validator MUST automatically re-run validation on the updated state. This catches new gaps exposed by the corrections just applied.
+
+**Loop rules:**
+- **Maximum rounds:** 5 (the initial run counts as round 1)
+- **Progress indicator:** Show `"=== Re-validation round X of 5 ==="` at the start of each re-run
+- **Scope:** Re-execute Steps 1 through 3 (cross-reference, test gaps, observability). Do NOT re-load context (Phase 0) — use the same task and docs, but re-read any files that were modified
+- **Finding deduplication:** Maintain a ledger of ALL findings from ALL previous rounds (by ID and description). Only present findings that are NEW — not already seen, resolved, or skipped in a prior round. If a finding was skipped/discarded by the user in a prior round, do NOT re-present it
+- **If new findings exist:** Present them using Step 4 (one at a time, collect decisions), apply via Step 5, commit via Step 6, then loop again
+- **Stop conditions (any one triggers exit):**
+  1. Zero new findings in the current round
+  2. Only LOW severity findings remain (ask user: "Only LOW findings remain. Stop validation?")
+  3. Round 5 completed (hard limit)
+  4. User explicitly requests to stop (via AskUser response)
+
+**Round summary (show after each round):**
+
+```markdown
+### Round X of 5 — Summary
+- New findings this round: N (C critical, H high, M medium, L low)
+- Cumulative: X total findings across Y rounds
+- Fixed: A | Skipped: B | Deferred: C
+- Status: CONVERGED / CONTINUING / HARD LIMIT REACHED
+```
+
+**When the loop exits**, proceed to the Output Format section with the cumulative results from ALL rounds.
+
 ---
 
 ## Output Format

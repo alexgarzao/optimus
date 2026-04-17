@@ -474,7 +474,37 @@ Required output format:
 
 ---
 
-## Phase 6: Validation Summary
+## Phase 6: Convergence Loop (MANDATORY — automatic re-validation)
+
+After Phase 5 completes (whether fixes were applied or all findings were skipped), the validator MUST automatically re-run validation on the updated code. This catches new issues exposed by the fixes just applied.
+
+**Loop rules:**
+- **Maximum rounds:** 5 (the initial run counts as round 1)
+- **Progress indicator:** Show `"=== Re-validation round X of 5 ==="` at the start of each re-run
+- **Scope:** Re-execute Phase 1 (dispatch agents) and Phase 2 (consolidate). Do NOT re-load context (Phase 0) — use the same task and docs, but re-read any files that were modified by fixes. Agents receive the UPDATED file contents
+- **Finding deduplication:** Maintain a ledger of ALL findings from ALL previous rounds (by ID and description). Only present findings that are NEW — not already seen, resolved, or skipped in a prior round. If a finding was skipped/discarded by the user in a prior round, do NOT re-present it
+- **If new findings exist:** Present them using Phase 3 (overview) and Phase 4 (interactive resolution), apply via Phase 5 (batch apply), then loop again
+- **Stop conditions (any one triggers exit):**
+  1. Zero new findings in the current round
+  2. Only LOW severity findings remain (ask user: "Only LOW findings remain. Stop validation?")
+  3. Round 5 completed (hard limit)
+  4. User explicitly requests to stop (via AskUser response)
+
+**Round summary (show after each round):**
+
+```markdown
+### Round X of 5 — Summary
+- New findings this round: N (C critical, H high, M medium, L low)
+- Cumulative: X total findings across Y rounds
+- Fixed: A | Skipped: B | Deferred: C
+- Status: CONVERGED / CONTINUING / HARD LIMIT REACHED
+```
+
+**When the loop exits**, proceed to the Validation Summary with the cumulative results from ALL rounds.
+
+---
+
+## Phase 7: Validation Summary
 
 ```markdown
 ## Post-Task Validation Summary: T-XXX
