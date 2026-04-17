@@ -354,11 +354,14 @@ Each finding MUST include its source(s):
 
 Process ONE finding at a time, in severity order (CRITICAL first, LOW last). Include both new findings and validated existing comments. Present contested comments for user decision.
 
+**Progress tracking:** Before processing findings, count the total number of findings (N). When presenting each finding, always show the current position: "Finding X of N" (e.g., "Finding 1 of 12", "Finding 2 of 12"). This helps the user understand how much of the review remains.
+
 For EACH finding, present:
 
 ### 1. Finding Header
 
-`## [SEVERITY] F# | [Category]`
+`## Finding X of N — [SEVERITY] F# | [Category]`
+- Progress indicator: show current position and total (e.g., "Finding 1 of 12", "Finding 2 of 12")
 - Source(s): which agent(s) and/or external reviewer(s) flagged this
 - Agreement: which sources agree/disagree
 
