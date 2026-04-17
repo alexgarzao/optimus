@@ -354,14 +354,26 @@ Each finding MUST include its source(s):
 
 Process ONE finding at a time, in severity order (CRITICAL first, LOW last). Include both new findings and validated existing comments. Present contested comments for user decision.
 
-**Progress tracking:** Before processing findings, count the total number of findings (N). When presenting each finding, always show the current position: "Finding X of N" (e.g., "Finding 1 of 12", "Finding 2 of 12"). This helps the user understand how much of the review remains.
+**MANDATORY — Progress Tracking (do NOT skip):**
+Before presenting ANY finding, you MUST:
+1. Count the TOTAL number of findings (N) — this includes new findings, validated comments, and contested comments
+2. Announce the total to the user: "There are N findings to review."
+3. For EVERY finding presented, ALWAYS prefix the header with the progress indicator: **"Finding X of N"** (e.g., "Finding 1 of 12", "Finding 2 of 12", ..., "Finding 12 of 12")
+4. The progress indicator is MANDATORY in every finding header — never omit it
 
 For EACH finding, present:
 
 ### 1. Finding Header
 
+**Format (MANDATORY — always include "Finding X of N"):**
+
 `## Finding X of N — [SEVERITY] F# | [Category]`
-- Progress indicator: show current position and total (e.g., "Finding 1 of 12", "Finding 2 of 12")
+
+Example: `## Finding 1 of 12 — [HIGH] F1 | Security`
+Example: `## Finding 2 of 12 — [MEDIUM] F2 | Code Quality`
+Example: `## Finding 12 of 12 — [LOW] F12 | Style`
+
+- **Progress indicator (MANDATORY):** "Finding X of N" — current position and total, shown in EVERY finding header without exception
 - Source(s): which agent(s) and/or external reviewer(s) flagged this
 - Agreement: which sources agree/disagree
 
@@ -892,7 +904,7 @@ Before ending the review, verify EVERY item below. If any item is incomplete, go
 - Every finding must include source attribution (agent, CodeRabbit, human reviewer)
 - Never review files outside the PR scope — only files changed in the PR
 - Include PR description, linked issues, and existing comments in every agent prompt
-- One finding at a time, severity order (CRITICAL > HIGH > MEDIUM > LOW)
+- One finding at a time, severity order (CRITICAL > HIGH > MEDIUM > LOW), ALWAYS showing "Finding X of N" progress in the header
 - No changes without prior user approval — the user ALWAYS decides the approach
 - Fixes are collected during Phase 5 and applied with separate commits in Phase 6
 - Do NOT merge the PR — only review and present findings
