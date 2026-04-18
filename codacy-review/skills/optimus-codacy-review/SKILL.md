@@ -28,40 +28,62 @@ Store as `OWNER` and `REPO`.
 
 ---
 
-## Phase 1: Fetch Codacy PR Issues via GitHub Check Runs API
+## Phase 1: Fetch Codacy PR Issues
 
-Codacy reports findings as GitHub Check Run annotations, accessible via the GitHub API with only `GITHUB_TOKEN` (no Codacy API token needed).
+Codacy issues are posted as **structured inline PR review comments** by a GitHub Actions workflow (`codacy-issues.yml`) that reads Codacy check run annotations and posts clean, parseable comments. All data is accessible via GitHub API with only `GITHUB_TOKEN`.
 
-### Step 1.1: Fetch Annotations
+### Step 1.1: Get PR Head SHA and Check Run Status
 
 1. **Get the PR's head commit SHA:**
 ```bash
 gh api repos/${OWNER}/${REPO}/pulls/${PR_NUMBER} --jq '.head.sha'
 ```
 
-2. **Find the Codacy check run ID:**
+2. **Fetch Codacy check run status:**
 ```bash
 gh api repos/${OWNER}/${REPO}/commits/${COMMIT_SHA}/check-runs \
-  --jq '.check_runs[] | select(.app.slug == "codacy-production") | .id'
+  --jq '.check_runs[] | select(.app.slug == "codacy-production") | {id: .id, name: .name, conclusion: .conclusion, status: .status}'
 ```
 
 If no Codacy check run is found, inform the user: "No Codacy check run found for this PR. Codacy may not have analyzed this commit yet." Ask with `AskUser` whether to wait and retry or skip.
 
-3. **Read all annotations (auto-paginated):**
+### Step 1.2: Fetch Inline Review Comments
+
+The `codacy-issues.yml` workflow posts structured comments from `github-actions[bot]` with the prefix `**Codacy**`. Fetch them:
+
+```bash
+gh api repos/${OWNER}/${REPO}/pulls/${PR_NUMBER}/comments --paginate \
+  --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("**Codacy**"))) | {id: .id, path: .path, line: .line, body: .body}'
+```
+
+If no workflow comments are found, fall back to reading annotations directly from the Codacy check run:
 ```bash
 gh api repos/${OWNER}/${REPO}/check-runs/${CHECK_RUN_ID}/annotations --paginate
 ```
 
-### Step 1.2: Parse and Group Issues
+### Step 1.3: Parse Inline Comments
 
-For each annotation, extract:
-- `path` — affected file
-- `start_line` / `end_line` — line range in the file
-- `annotation_level` — severity indicator (`failure`, `warning`, `notice`)
-- `title` — rule identifier (e.g., `ESLint8_es-x_no-arrow-functions`, `Opengrep_sql-injection`)
-- `message` — issue description with details
+**Workflow comments** (from `github-actions[bot]`) have a clean, structured format:
 
-**Severity mapping from annotation_level:**
+```
+**Codacy** | <SEVERITY> | <annotation_level>
+
+<message>
+```
+
+Extract from each comment:
+- **Severity:** From the first line after the first `|` (HIGH, MEDIUM, LOW)
+- **Annotation level:** From the first line after the second `|` (failure, warning, notice)
+- **Message:** Text after the blank line — the issue description
+- **File and line:** From the PR review comment's `path` and `line` fields
+
+**Fallback — direct annotations** have these fields:
+- `path`, `start_line`, `end_line` — file and line range
+- `annotation_level` — severity (failure→HIGH, warning→MEDIUM, notice→LOW)
+- `title` — file location (NOT the rule name for Codacy)
+- `message` — the actual issue description
+
+**Severity mapping:**
 
 | annotation_level | Skill Severity |
 |-----------------|----------------|
@@ -69,14 +91,10 @@ For each annotation, extract:
 | `warning` | MEDIUM |
 | `notice` | LOW |
 
-**Infer tool and pattern from `title`:**
-The `title` field typically contains the tool name as prefix (e.g., `ESLint8_es-x_no-arrow-functions` → tool: ESLint, pattern: `es-x/no-arrow-functions`). Parse accordingly. If the format is ambiguous, use the full `title` as the pattern and mark the tool as "Unknown".
-
-Group issues by `title` to identify patterns:
+Group issues by message similarity to identify patterns:
 
 ```
-Pattern: es-x/no-arrow-functions
-  Tool: ESLint (inferred from title) | Level: warning → MEDIUM
+Pattern: "id attribute should not be a static string literal"
   Count: 12 | Files: [file1.ts, file2.ts]
   Message: "ES2015 arrow function expressions are forbidden."
 ```
@@ -653,7 +671,8 @@ Compare CLI results against the GitHub Check Run annotations to identify any dis
 
 ## Rules
 
-- Use `gh api --paginate` to fetch all annotations (pagination is handled automatically)
+- **Primary source:** Filter comments by `user.login == "github-actions[bot]"` with body starting with `**Codacy**` — these are structured comments posted by the `codacy-issues.yml` workflow
+- **Fallback source:** If no workflow comments found, read annotations directly from the Codacy check run via `gh api --paginate`
 - Read the project's stack files (package.json, tsconfig.json, go.mod) before classifying rules
 - Never blindly accept Codacy's severity — validate against actual code context using the annotation_level mapping (failure→HIGH, warning→MEDIUM, notice→LOW)
 - Present false positives separately from genuine findings
