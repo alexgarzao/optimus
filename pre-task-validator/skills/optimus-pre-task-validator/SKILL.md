@@ -365,18 +365,52 @@ If any corrections were applied in Step 5:
 
 If no corrections were applied (all findings skipped), skip this step.
 
-### Step 7: Convergence Loop (MANDATORY — automatic re-validation)
+### Step 7: Convergence Loop (MANDATORY — automatic re-validation with escalating scrutiny)
 
 After Step 6 completes (whether changes were committed or all findings were skipped), the validator MUST automatically re-run validation on the updated state. This catches new gaps exposed by the corrections just applied.
 
+**CRITICAL — Escalating Scrutiny Per Round:**
+
+The primary failure mode of convergence loops is that re-running the same analysis with the same depth produces the same results (minus already-seen findings), leading to false convergence. To prevent this, EACH round MUST escalate its level of scrutiny:
+
+| Round | Scrutiny Level | Focus |
+|-------|---------------|-------|
+| **1** (initial) | Standard analysis | Normal validation across all dimensions |
+| **2** | Skeptical re-read | For each dimension, ask: "What did I accept as correct in round 1 that I should question?" Re-read specs with the assumption that something was missed. Check field-by-field, line-by-line instead of scanning |
+| **3** | Adversarial analysis | Actively try to break the spec: invent edge cases, look for implicit assumptions, check what happens when optional fields are absent, when lists are empty, when IDs reference deleted entities |
+| **4** | Cross-cutting deep dive | Focus on interactions BETWEEN dimensions: does the test strategy actually cover the contradictions found? Do observability gaps hide the test gaps? Does the DoD match the actual test coverage? |
+| **5** | Final sweep | Review ALL previously skipped/deferred findings with fresh eyes — should any be reconsidered? Check the cumulative changes for internal consistency |
+
+**Re-dispatch agents in rounds 2+:**
+
+If Step 3.1 dispatched specialist agents in round 1, re-dispatch them in subsequent rounds with escalated instructions:
+
+```
+This is re-validation round X of 5. In previous rounds, the following findings
+were already identified and resolved:
+[list of previous findings with resolutions]
+
+Your job NOW is to look DEEPER — not repeat what was already found.
+Specifically:
+- Question assumptions: what did round 1 accept that might be wrong?
+- Check interactions: do the fixes from previous rounds create new gaps?
+- Look for subtle issues: field-level mismatches, implicit type coercions,
+  missing error paths, edge cases in boundary conditions
+- Examine what was NOT flagged: absence of validation, missing constraints,
+  undocumented behavior
+
+Do NOT report findings that match any previously identified finding.
+Only report genuinely NEW issues.
+```
+
 **Loop rules:**
 - **Maximum rounds:** 5 (the initial run counts as round 1)
-- **Progress indicator:** Show `"=== Re-validation round X of 5 ==="` at the start of each re-run
-- **Scope:** Re-execute Steps 1 through 3 (cross-reference, test gaps, observability). Do NOT re-load context (Phase 0) — use the same task and docs, but re-read any files that were modified
+- **Progress indicator:** Show `"=== Re-validation round X of 5 (scrutiny: <level>) ==="` at the start of each re-run (e.g., "=== Re-validation round 2 of 5 (scrutiny: skeptical re-read) ===")
+- **Scope:** Re-execute Steps 1 through 3 AND Step 3.1 (including agent re-dispatch with escalated prompts). Do NOT re-load context (Phase 0) — use the same task and docs, but re-read any files that were modified
 - **Finding deduplication:** Maintain a ledger of ALL findings from ALL previous rounds (by ID and description). Only present findings that are NEW — not already seen, resolved, or skipped in a prior round. If a finding was skipped/discarded by the user in a prior round, do NOT re-present it
 - **If new findings exist:** Present them using Step 4 (one at a time, collect decisions), apply via Step 5, commit via Step 6, then loop again
 - **Stop conditions (any one triggers exit):**
-  1. Zero new findings in the current round
+  1. Zero new findings in the current round (after escalated scrutiny — this is genuine convergence)
   2. Only LOW severity findings remain (ask user: "Only LOW findings remain. Stop validation?")
   3. Round 5 completed (hard limit)
   4. User explicitly requests to stop (via AskUser response)
@@ -384,7 +418,7 @@ After Step 6 completes (whether changes were committed or all findings were skip
 **Round summary (show after each round):**
 
 ```markdown
-### Round X of 5 — Summary
+### Round X of 5 (scrutiny: <level>) — Summary
 - New findings this round: N (C critical, H high, M medium, L low)
 - Cumulative: X total findings across Y rounds
 - Fixed: A | Skipped: B | Deferred: C
