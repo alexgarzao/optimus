@@ -787,7 +787,7 @@ Already addressed in a previous commit.
 <direct answer referencing specific code/files>
 ```
 
-### Step 8.2: Post Replies and Resolve Threads
+### Step 8.2: Post Replies
 
 **For inline review comments:**
 ```bash
@@ -800,18 +800,11 @@ gh api repos/{owner}/{repo}/pulls/{number}/comments \
 gh pr comment <PR_NUMBER_OR_URL> --body "<reply>"
 ```
 
-**Resolve each thread** after replying:
-```bash
-gh api graphql -f query='
-  mutation {
-    resolveReviewThread(input: {threadId: "<thread_node_id>"}) {
-      thread { isResolved }
-    }
-  }
-'
-```
+### Step 8.3: Resolve ALL Threads via GraphQL
 
-To get thread node IDs:
+**HARD BLOCK:** This step is SEPARATE from posting replies. You MUST execute it AFTER all replies are posted. Replying is NOT the same as resolving. A thread is only resolved when the GraphQL mutation below succeeds.
+
+**Step 8.3.1:** Fetch ALL unresolved thread IDs:
 ```bash
 gh api graphql -f query='
   query {
@@ -832,9 +825,22 @@ gh api graphql -f query='
 '
 ```
 
-### Step 8.3: Hide Fully-Resolved Reviews
+**Step 8.3.2:** For EACH unresolved thread, resolve it:
+```bash
+gh api graphql -f query='
+  mutation {
+    resolveReviewThread(input: {threadId: "<thread_node_id>"}) {
+      thread { isResolved }
+    }
+  }
+'
+```
 
-After all replies, check each review section. If ALL threads of a review are resolved, minimize it:
+**Step 8.3.3:** Verify zero unresolved threads remain by re-running the query from Step 8.3.1 and confirming all `isResolved: true`. If any remain unresolved, resolve them. Do NOT proceed to Step 8.4 until ALL threads are resolved.
+
+### Step 8.4: Hide Fully-Resolved Reviews
+
+After all threads are resolved, check each review section. If ALL threads of a review are resolved, minimize it:
 
 ```bash
 gh api graphql -f query='
@@ -846,7 +852,9 @@ gh api graphql -f query='
 '
 ```
 
-### Step 8.4: Reply Summary
+### Step 8.5: Reply Summary
+
+**HARD BLOCK:** The Status column MUST show "Resolved" for every row. If any row shows "Replied" instead of "Resolved", go back to Step 8.3 and resolve it.
 
 ```markdown
 ### PR Comment Replies Posted
@@ -930,12 +938,12 @@ gh api graphql -f query='
 - [ ] Won't-fix Codacy/DeepSource findings suppressed inline
 - [ ] Push completed or explicitly skipped
 - [ ] ALL comment threads replied (Codacy, DeepSource, CodeRabbit, human)
-- [ ] ALL threads resolved via GraphQL
-- [ ] Fully-resolved reviews hidden
-- [ ] Reply summary presented
+- [ ] ALL threads resolved via GraphQL `resolveReviewThread` — replying is NOT resolving. Verify by querying `reviewThreads` and confirming zero `isResolved: false` remain
+- [ ] Fully-resolved reviews hidden via `minimizeComment`
+- [ ] Reply summary presented — every row MUST show "Resolved" status
 - [ ] Final summary with verdict presented
 
-**STOP CONDITION:** You may ONLY end the review session after ALL items are checked.
+**STOP CONDITION:** You may ONLY end the review session after ALL items are checked. If ANY thread is replied but NOT resolved, you MUST go back and resolve it before ending.
 
 ---
 
