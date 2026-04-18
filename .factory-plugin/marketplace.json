@@ -49,6 +49,11 @@
       "name": "codacy-review",
       "description": "Fetches Codacy PR issues via API, categorizes them, identifies false positives from misconfigured rules, and presents findings interactively.",
       "source": "./codacy-review"
+    },
+    {
+      "name": "deepsource-review",
+      "description": "Fetches DeepSource PR issues via GitHub review comments, categorizes them, identifies false positives, and presents findings interactively.",
+      "source": "./deepsource-review"
     }
   ]
 }
