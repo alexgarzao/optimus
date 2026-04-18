@@ -30,7 +30,7 @@ Store as `OWNER` and `REPO`.
 
 ## Phase 1: Fetch DeepSource PR Issues
 
-DeepSource reports findings as **inline PR review comments** (not check run annotations). It also posts a **summary comment** on the PR with grades and analyzer status. All data is accessible via GitHub API with only `GITHUB_TOKEN`.
+DeepSource issues are posted as **structured inline PR review comments** by a GitHub Actions workflow (`deepsource-issues.yml`) that reads the DeepSource GraphQL API and posts clean, parseable comments. All data is accessible via GitHub API with only `GITHUB_TOKEN`.
 
 ### Step 1.1: Get PR Head SHA and Check Run Status
 
@@ -47,66 +47,76 @@ gh api repos/${OWNER}/${REPO}/commits/${COMMIT_SHA}/check-runs \
 
 This returns multiple check runs (e.g., "DeepSource: Go", "DeepSource: JavaScript", "DeepSource: Docker", "DeepSource: Shell"). Store each analyzer's name and conclusion for the overview.
 
-If no DeepSource check runs are found, inform the user: "No DeepSource check runs found for this PR. DeepSource may not be configured for this repository." Ask with `AskUser` whether to skip.
+If no DeepSource check runs are found, inform the user: "No DeepSource check runs found for this PR. DeepSource may not be configured or the workflow hasn't run yet." Ask with `AskUser` whether to trigger the workflow manually or skip.
 
 ### Step 1.2: Fetch Inline Review Comments
 
-DeepSource posts findings as PR review comments from user `deepsource-io[bot]`:
+The `deepsource-issues.yml` workflow posts structured comments from `github-actions[bot]` with the prefix `**DeepSource**`. Fetch them:
 
+```bash
+gh api repos/${OWNER}/${REPO}/pulls/${PR_NUMBER}/comments --paginate \
+  --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("**DeepSource**"))) | {id: .id, path: .path, line: .line, body: .body}'
+```
+
+If no comments are found, fall back to reading native DeepSource comments from `deepsource-io[bot]`:
 ```bash
 gh api repos/${OWNER}/${REPO}/pulls/${PR_NUMBER}/comments --paginate \
   --jq '.[] | select(.user.login == "deepsource-io[bot]") | {id: .id, path: .path, line: .line, body: .body}'
 ```
 
-### Step 1.3: Fetch Summary Comment
+### Step 1.3: Parse Inline Comments
 
-DeepSource posts a summary comment on the PR with grades (Security, Reliability, Complexity, Hygiene) and per-analyzer status:
-
-```bash
-gh api repos/${OWNER}/${REPO}/issues/${PR_NUMBER}/comments \
-  --jq '.[] | select(.user.login == "deepsource-io[bot]") | {id: .id, body: .body}'
-```
-
-Parse the summary to extract:
-- **Overall grade:** A/B/C/D (from SVG filename: `grade_a.svg`, `grade_b.svg`, etc.)
-- **Dimension grades:** Security, Reliability, Complexity, Hygiene (each A/B/C/D)
-- **Analyzer status:** per-analyzer passed/failed (from `status_passed.svg` / `status_failed.svg`)
-
-### Step 1.4: Parse Inline Comments
-
-Each DeepSource inline comment contains structured HTML. Extract:
-
-1. **DeepSource ID:** From the HTML comment marker `<!-- DeepSource: id=<base64_id> -->`
-2. **Severity:** From the SVG filename in the comment body:
-   - `severity_indicator_critical` → CRITICAL
-   - `severity_indicator_major` → HIGH
-   - `severity_indicator_minor` → MEDIUM
-3. **Category:** From the SVG filename:
-   - `category_bug` → Bug Risk
-   - `category_antipattern` → Anti-pattern
-   - `category_security` → Security
-   - `category_performance` → Performance
-   - `category_coverage` → Coverage
-   - `category_style` → Style
-   - `category_typecheck` → Type Check
-   - `category_documentation` → Documentation
-4. **Title:** Text content inside the `<h3>` tag (after the severity SVG), e.g., "Value must be omitted for boolean attribute `aria-invalid`"
-5. **Message:** Text content after the `<br/>` tag — the detailed explanation of the issue
-
-Group issues by title to identify patterns:
+**Workflow comments** (from `github-actions[bot]`) have a clean, structured format:
 
 ```
-Pattern: "Explicitly import the specific method needed"
-  Severity: MEDIUM (minor) | Category: Anti-pattern
+**DeepSource** | `<shortcode>` | <SEVERITY> | <CATEGORY>
+**Analyzer:** <analyzer_name>
+
+**<title>**
+
+<explanation>
+
+---
+<short_description>
+```
+
+Extract from each comment:
+- **Shortcode:** From the first line between backticks (e.g., `JS-W1043`)
+- **Severity:** From the first line after the second `|` (CRITICAL, MAJOR, MINOR)
+- **Category:** From the first line after the third `|` (ANTI_PATTERN, BUG, SECURITY, etc.)
+- **Analyzer:** From the "Analyzer:" line
+- **Title:** Bold text on its own line after "Analyzer:"
+- **Explanation:** Text after the title, before the `---` separator
+- **Short description:** Text after the `---` separator (if present)
+- **File and line:** From the PR review comment's `path` and `line` fields
+
+**Fallback — native DeepSource comments** (from `deepsource-io[bot]`) contain HTML with SVG markers. Extract:
+- **Severity:** From SVG filename (`severity_indicator_critical` → CRITICAL, `severity_indicator_major` → HIGH, `severity_indicator_minor` → MEDIUM)
+- **Category:** From SVG filename (`category_bug`, `category_antipattern`, `category_security`, etc.)
+- **Title:** Text inside the `<h3>` tag
+- **Message:** Text after the `<br/>` tag
+
+**Severity mapping:**
+
+| DeepSource Value | Skill Severity |
+|-----------------|----------------|
+| CRITICAL | CRITICAL |
+| MAJOR | HIGH |
+| MINOR | MEDIUM |
+
+Group issues by shortcode (or title if shortcode unavailable) to identify patterns:
+
+```
+Pattern: JS-W1043 — "Explicitly import the specific method needed"
+  Analyzer: JavaScript | Severity: MEDIUM | Category: Anti-pattern
   Count: 3 | Files: [file1.tsx, file2.tsx]
-  Message: "Wildcard imports are easier to write, but make it harder to pick out..."
 ```
 
 ---
 
 ## Phase 2: Classify Issues
 
-For each unique pattern (grouped by title in Step 1.4), classify it into one of these categories:
+For each unique pattern (grouped by shortcode or title in Step 1.3), classify it into one of these categories:
 
 ### Category 1: False Positive — Misconfigured Rule
 
@@ -673,9 +683,9 @@ git commit --allow-empty -m "chore: trigger DeepSource reanalysis" && git push
 ## Rules
 
 - Use `gh api --paginate` to fetch all PR review comments (pagination is handled automatically)
-- Filter comments by `user.login == "deepsource-io[bot]"` to isolate DeepSource findings
-- Parse severity from SVG filenames in comment HTML (`severity_indicator_critical` → CRITICAL, `severity_indicator_major` → HIGH, `severity_indicator_minor` → MEDIUM)
-- Parse category from SVG filenames (`category_bug`, `category_antipattern`, `category_security`, `category_performance`, `category_style`, `category_typecheck`, `category_documentation`, `category_coverage`)
+- **Primary source:** Filter comments by `user.login == "github-actions[bot]"` with body starting with `**DeepSource**` — these are structured comments posted by the `deepsource-issues.yml` workflow via the DeepSource GraphQL API
+- **Fallback source:** If no workflow comments found, filter by `user.login == "deepsource-io[bot]"` and parse HTML/SVGs from native DeepSource comments
+- Severity mapping: CRITICAL → CRITICAL, MAJOR → HIGH, MINOR → MEDIUM
 - Read the project's stack files (package.json, tsconfig.json, go.mod) before classifying rules
 - Never blindly accept DeepSource's severity — validate against actual code context
 - Present false positives separately from genuine findings
