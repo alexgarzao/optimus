@@ -144,18 +144,30 @@ For EACH finding, present:
 
 - What was found (problem identified)
 - Relevant current code with context
-- Impact/risk if not fixed
+- Severity classification (CRITICAL/HIGH/MEDIUM/LOW) with justification
 
-### 2. Severity
+### 2. Impact Analysis (four lenses)
 
-- Classification (CRITICAL/HIGH/MEDIUM/LOW) with justification
+Evaluate the finding through all four perspectives to help the user make an informed decision:
+
+- **User (UX):** How does this affect the end user? Usability degradation, confusion, broken workflow, accessibility issue? Would the user notice? Would it block their work?
+- **Task focus:** Does this finding relate to the changes being reviewed? Is it within scope, or a tangential concern that should be a separate effort?
+- **Project focus:** Is this MVP-critical, or gold-plating? Does ignoring it now create rework later? Does it conflict with the project's priorities?
+- **Engineering quality:** Does this hurt maintainability, testability, reliability, or codebase consistency? What is the technical debt cost of skipping it?
 
 ### 3. Proposed Solutions (2-3 options)
 
-For each option:
-- **Option A:** [description] — Tradeoffs: [pros and cons]
-- **Option B:** [description] — Tradeoffs: [pros and cons]
-- **Option C** (if applicable): [description] — Tradeoffs: [pros and cons]
+For each option, evaluate all four lenses:
+
+```
+**Option A: [name]**
+[What to do — concrete steps, files to change]
+- UX: [impact on the end user's experience]
+- Task focus: [within scope / tangential]
+- Project focus: [MVP-aligned / nice-to-have / out-of-scope]
+- Engineering: [pros and cons — complexity, maintainability, test coverage, consistency]
+- Effort: [trivial (< 5 min) / small (5-15 min) / moderate (15-60 min) / large (> 1h)]
+```
 
 For straightforward fixes with no ambiguity, state: "Direct fix, no tradeoffs."
 
@@ -178,12 +190,30 @@ For each approved fix (skipped for ignored findings):
 
 For fixes that alter execution flow, conditions, method calls, or observable behavior:
 
-1. **Dispatch review agents in parallel** via `Task` tool. Use whatever review agents are available in the environment covering:
-   - Code quality
-   - Business logic correctness
-   - Security
-   - Test quality
-   - Nil/null safety
+1. **Dispatch review agents in parallel** via `Task` tool. Use the agent selection priority below:
+
+**Agent selection priority:**
+
+1. **Ring review droids (preferred when available):**
+   - `ring-default-code-reviewer` → Code quality, architecture, patterns
+   - `ring-default-business-logic-reviewer` → Domain correctness, edge cases
+   - `ring-default-security-reviewer` → Vulnerabilities, OWASP, input validation
+   - `ring-default-ring-test-reviewer` → Test coverage gaps, test quality
+   - `ring-default-ring-nil-safety-reviewer` → Nil/null pointer risks, unsafe dereferences
+   - `ring-default-ring-consequences-reviewer` → Ripple effects beyond changed files
+   - `ring-default-ring-dead-code-reviewer` → Orphaned code from changes
+2. **Other available specialist droids**
+3. **Worker droid with domain instructions** — as fallback
+
+| Domain | When to Dispatch | Preferred Ring Droid |
+|--------|-----------------|---------------------|
+| **Code Quality** | Always | `ring-default-code-reviewer` |
+| **Business Logic** | Always | `ring-default-business-logic-reviewer` |
+| **Security** | Always | `ring-default-security-reviewer` |
+| **Test Quality** | Always | `ring-default-ring-test-reviewer` |
+| **Nil/Null Safety** | Always (if droid available) | `ring-default-ring-nil-safety-reviewer` |
+| **Ripple Effects** | Always (if droid available) | `ring-default-ring-consequences-reviewer` |
+| **Dead Code** | Always (if droid available) | `ring-default-ring-dead-code-reviewer` |
 
 2. **Skip agent validation** for purely cosmetic fixes (comments, rename, formatting, DRY without logic change)
 
@@ -219,42 +249,186 @@ For PRs with many findings, independent fixes (in different modules/files) may b
 
 ---
 
-## Phase 4: Test Requirements
+## Phase 4: Coverage Verification and Test Gap Analysis
 
-For each fix, ensure:
+After all findings have been processed through the TDD cycle:
 
-- **Unit tests:** Valid AND invalid scenarios covered
-- **Integration tests:** When the fix involves API/DB interactions
-- If opting not to implement a test, justify explicitly
+### Step 4.1: Coverage Measurement
+
+Measure test coverage for the changed files:
+
+**Unit test coverage:**
+```bash
+go test -coverprofile=coverage-unit.out ./...
+go tool cover -func=coverage-unit.out | tail -1
+```
+
+**Integration test coverage (if applicable):**
+```bash
+go test -tags=integration -coverprofile=coverage-integration.out ./...
+go tool cover -func=coverage-integration.out | tail -1
+```
+
+**Untested functions:**
+```bash
+go tool cover -func=coverage-unit.out | grep "0.0%"
+```
+
+**Thresholds:**
+- Unit tests: 85% minimum
+- Integration tests: 70% minimum
+
+If coverage is below threshold, flag as a finding:
+- **HIGH** severity for unit test coverage below 85%
+- **MEDIUM** severity for integration test coverage below 70%
+- List untested business-logic functions as individual **HIGH** findings
+
+**E2E tests:** If not configured, ask the user using `AskUser`:
+"E2E tests are not configured. Should they be implemented, or skip for now?"
+
+### Step 4.2: Test Scenario Gap Analysis
+
+Dispatch an agent to identify missing test scenarios in the changed files.
+
+**Dispatch a test gap analyzer** via `Task` tool. Use `ring-default-ring-test-reviewer`, `ring-dev-team-qa-analyst`, or `worker` (in that priority order).
+
+The agent receives:
+1. **Changed source files** — full content (non-test files only)
+2. **Test files for changed source** — full content
+3. **Coverage profile** — `go tool cover -func` output
+
+```
+Goal: Identify missing test scenarios in files changed during this review.
+
+Context:
+  - Source files changed: [full content]
+  - Test files: [full content]
+  - Coverage profile: [go tool cover -func output]
+
+Your job:
+  For each public function changed/added:
+  1. Unit tests: check for happy path, error paths, edge cases, validation failures
+  2. Integration tests: check for DB failure, timeout, retry, rollback scenarios
+  3. Report what EXISTS and what is MISSING
+
+Required output format:
+  ## Unit Test Gaps
+  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
+  |---|------|----------|--------------------|-------------------|----------|
+
+  ## Integration Test Gaps
+  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
+  |---|------|----------|--------------------|-------------------|----------|
+
+  ## Summary
+  - Functions analyzed: X
+  - Fully covered: X | Partial: X | No tests: X
+  - Missing scenarios: X HIGH, Y MEDIUM, Z LOW
+```
+
+**HIGH priority gaps** are presented as findings for user decision (fix now or defer).
 
 ---
 
-## Phase 5: Final Summary
+## Phase 5: Convergence Loop (MANDATORY — automatic re-validation with escalating scrutiny)
 
-After processing all findings:
+After Phase 4 completes, the reviewer MUST automatically re-run CodeRabbit and agent validation on the updated code. This catches new issues introduced by the fixes just applied.
+
+**CRITICAL — Escalating Scrutiny Per Round:**
+
+The primary failure mode of convergence loops is that re-running the same analysis with the same depth produces the same results (minus already-seen findings), leading to false convergence. To prevent this, EACH round MUST escalate its level of scrutiny:
+
+| Round | Scrutiny Level | Focus |
+|-------|---------------|-------|
+| **1** (initial) | Standard analysis | Normal CodeRabbit + agent validation |
+| **2** | Skeptical re-read | For each domain, ask: "What did I accept as correct in round 1 that I should question?" Re-read code with the assumption that something was missed. Check function-by-function, branch-by-branch instead of scanning |
+| **3** | Adversarial analysis | Actively try to break the code: invent edge cases, look for implicit assumptions, check what happens when inputs are nil/empty/zero, when concurrent requests hit the same path, when external services fail |
+| **4** | Cross-cutting deep dive | Focus on interactions BETWEEN domains: does the test coverage actually exercise the security-sensitive paths? Do the fixes from previous rounds introduce new consistency issues? |
+| **5** | Final sweep | Review ALL previously skipped/deferred findings with fresh eyes — should any be reconsidered? Check the cumulative changes for internal consistency |
+
+**Re-run CodeRabbit and re-dispatch agents with escalated prompts:**
+
+```
+This is re-validation round X of 5. In previous rounds, the following findings
+were already identified and resolved:
+[list of previous findings with resolutions]
+
+Your job NOW is to look DEEPER — not repeat what was already found.
+Specifically:
+- Question assumptions: what did round 1 accept that might be wrong?
+- Check interactions: do the fixes from previous rounds create new issues?
+- Look for subtle issues: off-by-one errors, race conditions, missing error
+  propagation, implicit type coercions, nil dereferences in rare paths
+- Examine what was NOT flagged: absence of validation, missing constraints,
+  undocumented behavior, untested error paths
+
+Do NOT report findings that match any previously identified finding.
+Only report genuinely NEW issues.
+```
+
+**Loop rules:**
+- **Maximum rounds:** 5 (the initial run counts as round 1)
+- **Progress indicator:** Show `"=== Re-validation round X of 5 (scrutiny: <level>) ==="` at the start of each re-run
+- **Scope:** Re-run CodeRabbit CLI, re-dispatch agents with escalated prompts, re-measure coverage. Do NOT re-load project context (Phase 0)
+- **Finding deduplication:** Maintain a ledger of ALL findings from ALL previous rounds (by ID and description). Only present findings that are NEW — not already seen, resolved, or skipped in a prior round. If a finding was skipped/discarded by the user in a prior round, do NOT re-present it
+- **If new findings exist:** Present them using Phase 2 (interactive resolution), fix via Phase 3 (TDD cycle), verify via Phase 4 (coverage), then loop again
+- **Stop conditions (any one triggers exit):**
+  1. Zero new findings in the current round (after escalated scrutiny — this is genuine convergence)
+  2. Only LOW severity findings remain (ask user: "Only LOW findings remain. Stop validation?")
+  3. Round 5 completed (hard limit)
+  4. User explicitly requests to stop (via AskUser response)
+
+**Round summary (show after each round):**
+
+```markdown
+### Round X of 5 (scrutiny: <level>) — Summary
+- New findings this round: N (C critical, H high, M medium, L low)
+- Cumulative: X total findings across Y rounds
+- Fixed: A | Skipped: B | Deferred: C
+- Status: CONVERGED / CONTINUING / HARD LIMIT REACHED
+```
+
+**When the loop exits**, proceed to the Final Summary with the cumulative results from ALL rounds.
+
+---
+
+## Phase 6: Final Summary
+
+After the convergence loop exits:
 
 ```markdown
 ## CodeRabbit Review — Summary
 
+### Convergence
+- Rounds executed: X of 5
+- Status: CONVERGED / HARD LIMIT REACHED
+
 ### Fixed (X findings)
-| # | Severity | File | Fix Applied | Tests Added |
-|---|----------|------|-------------|-------------|
+| # | Severity | File | Fix Applied | Tests Added | Round |
+|---|----------|------|-------------|-------------|-------|
 
 ### Ignored (X findings)
-| # | Severity | File | Reason |
-|---|----------|------|--------|
+| # | Severity | File | Reason | Round |
+|---|----------|------|--------|-------|
 
 ### Pending (X findings)
-| # | Severity | File | Blocker |
-|---|----------|------|---------|
+| # | Severity | File | Blocker | Round |
+|---|----------|------|---------|-------|
+
+### Test Coverage
+- Unit tests: XX.X% (threshold: 85%) — PASS / FAIL
+- Integration tests: XX.X% (threshold: 70%) — PASS / FAIL
+- Untested functions: X (Y business logic, Z infrastructure)
+- E2E tests: Configured / Not configured
 
 ### Test Results
 - Unit tests: PASS (X tests)
 - Integration tests: PASS / SKIPPED
+- E2E tests: PASS / SKIPPED
 - Skipped tests: X (with justification)
 
 ### Statistics
-- Total findings: X
+- Total findings: X (across Y rounds)
 - Fixed: X
 - Ignored: X
 - Pending: X
