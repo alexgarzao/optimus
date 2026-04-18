@@ -161,7 +161,37 @@ gh pr checkout <PR_NUMBER_OR_URL>
 
 If already on the correct branch, skip this step. If checkout fails due to uncommitted changes, inform the user and ask them to stash or commit their changes first.
 
-### Step 0.5: Fetch Changed Files
+### Step 0.5: Fetch CI Check Status
+
+Fetch the status of all CI/CD checks (GitHub Actions, external CI, status checks) on the PR:
+
+```bash
+gh pr checks <PR_NUMBER_OR_URL>
+```
+
+For more detail (conclusion, status, workflow name):
+```bash
+gh pr view <PR_NUMBER_OR_URL> --json statusCheckRollup --jq '.statusCheckRollup[]'
+```
+
+Extract and store for each check:
+- **Name** — the check/workflow name (e.g., "lint", "unit-tests", "build")
+- **Status** — COMPLETED, IN_PROGRESS, QUEUED, PENDING
+- **Conclusion** — SUCCESS, FAILURE, NEUTRAL, CANCELLED, TIMED_OUT, SKIPPED (only when status is COMPLETED)
+- **URL** — link to the check run details
+
+Classify checks:
+```
+CI Status:
+  - Passing: X checks
+  - Failing: X checks [list names]
+  - Pending/Running: X checks [list names]
+  - Skipped: X checks
+```
+
+**If ANY check has conclusion=FAILURE**, flag this prominently — failing CI checks MUST be highlighted in the PR summary and considered in the PR readiness verdict.
+
+### Step 0.6: Fetch Changed Files
 
 Get the list of files changed in the PR:
 
@@ -184,6 +214,12 @@ Present a summary of the PR to the user before starting the review:
 **Changed files:** X files (+Y additions, -Z deletions)
 **Labels:** [label1, label2]
 **Linked issues:** #issue1, #issue2
+
+### CI Status
+- Passing: X checks
+- **FAILING: X checks** ← [list failing check names with links]
+- Pending/Running: X checks
+(If all checks pass, show: "All CI checks passing")
 
 ### PR Description
 <PR body/description>
@@ -633,6 +669,11 @@ All commands MUST pass and coverage MUST meet thresholds before proceeding to Ph
 | # | Source | File(s) | Destination |
 |---|--------|---------|-------------|
 
+### CI Status
+- Passing: X checks
+- Failing: X checks [list names]
+- Pending: X checks
+
 ### Verification
 - Lint: PASS
 - Unit tests: PASS (X tests)
@@ -646,6 +687,7 @@ All commands MUST pass and coverage MUST meet thresholds before proceeding to Ph
 
 ### PR Readiness
 - [ ] All CRITICAL/HIGH findings resolved
+- [ ] All CI checks passing (no failing stages)
 - [ ] Changes align with PR description and linked issues
 - [ ] No unrelated changes included in the PR
 - [ ] Test coverage adequate for the changes
