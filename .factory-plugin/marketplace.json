@@ -44,6 +44,11 @@
       "name": "verify",
       "description": "Two-phase code verification for Go projects: parallel static analysis + sequential tests with MERGE_READY/NEEDS_FIX verdict.",
       "source": "./verify"
+    },
+    {
+      "name": "codacy-review",
+      "description": "Fetches Codacy PR issues via API, categorizes them, identifies false positives from misconfigured rules, and presents findings interactively.",
+      "source": "./codacy-review"
     }
   ]
 }
