@@ -649,7 +649,13 @@ After each successful TDD cycle:
 For each **skipped/discarded** finding from Codacy or DeepSource, add inline suppression:
 
 **Codacy findings:**
-Add `// codacy:ignore` comment on the line above the flagged code.
+Codacy has NO inline suppression syntax of its own. It uses the underlying linter's mechanism. You MUST identify which linter Codacy is running (check the Codacy annotation or `.codacy.yml`) and use that linter's suppression:
+- **Biome** (JS/TS): `// biome-ignore lint/<category>/<rule>: <reason>` on the line BEFORE the flagged code
+- **ESLint** (JS/TS): `// eslint-disable-next-line <rule>` on the line BEFORE
+- **golangci-lint** (Go): `//nolint:<linter>` on the same line
+- **Pylint** (Python): `# pylint: disable=<rule>` on the same line
+
+**IMPORTANT:** `codacy:ignore` does NOT exist. Never use it.
 
 **DeepSource findings:**
 Add `// skipcq: <shortcode>` comment on the line above the flagged code (e.g., `// skipcq: JS-C1003`).
@@ -658,7 +664,7 @@ Commit all suppressions together:
 ```bash
 git commit -m "chore: suppress won't-fix static analysis findings
 
-Codacy: X findings suppressed (codacy:ignore)
+Codacy: X findings suppressed (via <linter> inline suppression)
 DeepSource: Y findings suppressed (skipcq)"
 ```
 
@@ -986,7 +992,7 @@ gh api graphql -f query='
 - If the user responds with a question or disagreement: STOP, research and answer thoroughly RIGHT NOW — do NOT defer to the fix phase or continue to the next finding
 - Dispatch agents using ring droids when available (preferred), falling back to `worker` with domain-specific instructions
 - Fixes use TDD cycle (RED-GREEN-REFACTOR) with separate commits per finding
-- For won't-fix Codacy findings: add `// codacy:ignore` inline and commit
+- For won't-fix Codacy findings: use the underlying linter's suppression syntax (e.g., `biome-ignore` for Biome, `eslint-disable-next-line` for ESLint, `//nolint` for Go). `codacy:ignore` does NOT exist.
 - For won't-fix DeepSource findings: add `// skipcq: <shortcode>` inline and commit
 - Response to ALL comments is uniform: commit SHA for fixes, concrete reason for won't-fix
 - Do NOT merge the PR — only review and apply fixes
