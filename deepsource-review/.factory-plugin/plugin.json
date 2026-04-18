@@ -1,8 +1,0 @@
-{
-  "name": "deepsource-review",
-  "description": "Fetches DeepSource PR issues via GitHub review comments, categorizes them, identifies false positives, evaluates genuine findings with specialist agents, and presents results interactively.",
-  "version": "1.0.0",
-  "author": {
-    "name": "Alex Garzao"
-  }
-}
