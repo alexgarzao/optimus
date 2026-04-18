@@ -1,10 +1,10 @@
 # Codacy Review
 
-Fetches Codacy PR issues via API, categorizes them, identifies false positives from misconfigured rules, evaluates genuine findings against the code, and presents results interactively with recommended actions.
+Fetches Codacy PR issues via GitHub Check Runs API (annotations), categorizes them, identifies false positives from misconfigured rules, evaluates genuine findings against the code, and presents results interactively with recommended actions.
 
 ---
 
-## Phase 0: Obtain PR and Codacy Context
+## Phase 0: Obtain PR and Repository Context
 
 ### Step 0.1: Identify PR
 
@@ -16,20 +16,7 @@ gh pr view --json number,url,headRefName --jq '.number' 2>/dev/null
 
 If no PR is found, ask the user with `AskUser`.
 
-### Step 0.2: Obtain Codacy API Token
-
-The skill needs a Codacy API token. Check for it in this order:
-
-1. Environment variable `CODACY_API_TOKEN`
-2. Ask the user with `AskUser`:
-   ```
-   Codacy API token is needed to fetch PR issues. You can generate one at:
-   app.codacy.com > Account > Access Management > API tokens
-   ```
-
-Store the token for use in subsequent API calls.
-
-### Step 0.3: Identify Repository
+### Step 0.2: Identify Repository
 
 Extract the GitHub owner and repository name:
 
@@ -41,45 +28,55 @@ Store as `OWNER` and `REPO`.
 
 ---
 
-## Phase 1: Fetch Codacy PR Issues
+## Phase 1: Fetch Codacy PR Issues via GitHub Check Runs API
 
-### Step 1.1: Fetch Issues via API
+Codacy reports findings as GitHub Check Run annotations, accessible via the GitHub API with only `GITHUB_TOKEN` (no Codacy API token needed).
 
-Use the Codacy API v3 to fetch all issues for the PR. Paginate if needed (cursor-based).
+### Step 1.1: Fetch Annotations
 
+1. **Get the PR's head commit SHA:**
 ```bash
-curl -s -H "api-token: ${CODACY_API_TOKEN}" \
-  "https://app.codacy.com/api/v3/analysis/organizations/gh/${OWNER}/repositories/${REPO}/pull-requests/${PR_NUMBER}/issues?limit=100"
+gh api repos/${OWNER}/${REPO}/pulls/${PR_NUMBER} --jq '.head.sha'
 ```
 
-If the response includes a `pagination.cursor`, fetch the next page:
-
+2. **Find the Codacy check run ID:**
 ```bash
-curl -s -H "api-token: ${CODACY_API_TOKEN}" \
-  "https://app.codacy.com/api/v3/analysis/organizations/gh/${OWNER}/repositories/${REPO}/pull-requests/${PR_NUMBER}/issues?limit=100&cursor=${CURSOR}"
+gh api repos/${OWNER}/${REPO}/commits/${COMMIT_SHA}/check-runs \
+  --jq '.check_runs[] | select(.app.slug == "codacy-production") | .id'
 ```
 
-Repeat until no cursor is returned.
+If no Codacy check run is found, inform the user: "No Codacy check run found for this PR. Codacy may not have analyzed this commit yet." Ask with `AskUser` whether to wait and retry or skip.
+
+3. **Read all annotations (auto-paginated):**
+```bash
+gh api repos/${OWNER}/${REPO}/check-runs/${CHECK_RUN_ID}/annotations --paginate
+```
 
 ### Step 1.2: Parse and Group Issues
 
-For each issue, extract:
-- `filePath` — affected file
-- `lineNumber` — line in the file
-- `message` — issue description
-- `patternInfo.id` — rule identifier (e.g., `ESLint8_es-x_no-arrow-functions`)
-- `patternInfo.category` — category (ErrorProne, Compatibility, Performance, Security, BestPractice)
-- `patternInfo.level` — severity (High, Medium, Warning, Error)
-- `toolInfo.name` — tool that found it (ESLint, Biome, Opengrep, etc.)
-- `deltaType` — Added or Fixed
+For each annotation, extract:
+- `path` — affected file
+- `start_line` / `end_line` — line range in the file
+- `annotation_level` — severity indicator (`failure`, `warning`, `notice`)
+- `title` — rule identifier (e.g., `ESLint8_es-x_no-arrow-functions`, `Opengrep_sql-injection`)
+- `message` — issue description with details
 
-**Only process issues with `deltaType: "Added"`** (new issues introduced by the PR).
+**Severity mapping from annotation_level:**
 
-Group issues by `patternInfo.id` to identify patterns:
+| annotation_level | Skill Severity |
+|-----------------|----------------|
+| `failure` | HIGH |
+| `warning` | MEDIUM |
+| `notice` | LOW |
+
+**Infer tool and pattern from `title`:**
+The `title` field typically contains the tool name as prefix (e.g., `ESLint8_es-x_no-arrow-functions` → tool: ESLint, pattern: `es-x/no-arrow-functions`). Parse accordingly. If the format is ambiguous, use the full `title` as the pattern and mark the tool as "Unknown".
+
+Group issues by `title` to identify patterns:
 
 ```
-Pattern: ESLint8_es-x_no-arrow-functions
-  Tool: ESLint | Category: Compatibility | Level: High
+Pattern: es-x/no-arrow-functions
+  Tool: ESLint (inferred from title) | Level: warning → MEDIUM
   Count: 12 | Files: [file1.ts, file2.ts]
   Message: "ES2015 arrow function expressions are forbidden."
 ```
@@ -88,7 +85,7 @@ Pattern: ESLint8_es-x_no-arrow-functions
 
 ## Phase 2: Classify Issues
 
-For each unique pattern, classify it into one of these categories:
+For each unique pattern (grouped by `title` in Step 1.2), classify it into one of these categories:
 
 ### Category 1: False Positive — Misconfigured Rule
 
@@ -337,40 +334,36 @@ After reviewing all findings, present recommendations for Codacy configuration:
 
 ### Step 5.1: Rules to Disable
 
-For all false-positive patterns, generate the API calls or UI steps to disable them:
+For all false-positive patterns, present the options to disable them:
 
 ```markdown
 ### Recommended Rule Changes
 
-**Via Codacy API** (if no coding standard conflict):
-| # | Tool | Pattern | Action | API Call |
-|---|------|---------|--------|---------|
-
-**Via Codacy UI** (if coding standard blocks API):
+**Via Codacy UI:**
 1. Go to app.codacy.com > Repository > Code Patterns
 2. Find tool: <tool>
 3. Disable pattern: <pattern>
 
-**Via .codacy.yml** (exclude paths):
+**Via .codacy.yml** (exclude paths or disable tools):
 Add to .codacy.yml:
+  exclude_paths:
+    - "<path>"
   engines:
     <tool>:
-      exclude_paths:
-        - "<path>"
+      enabled: false
 ```
 
-### Step 5.2: Apply Configuration Changes
+### Step 5.2: Apply .codacy.yml Changes
 
-Ask the user whether to apply the recommended changes:
+Ask the user whether to apply the `.codacy.yml` changes:
 
 ```
-Apply recommended Codacy configuration changes?
-- Apply all via API (where possible)
-- Apply only .codacy.yml changes
-- Skip (I'll do it manually)
+Apply recommended .codacy.yml changes?
+- Apply .codacy.yml changes
+- Skip (I'll configure manually via Codacy UI)
 ```
 
-If approved, execute the API calls and/or edit `.codacy.yml`.
+If approved, edit `.codacy.yml` (create it if it doesn't exist).
 
 ---
 
@@ -515,7 +508,7 @@ The primary failure mode of convergence loops is that re-running the same analys
 | **4** | Cross-cutting deep dive | Focus on interactions BETWEEN domains: does test coverage exercise security-sensitive paths? Do fixes from previous rounds introduce new consistency issues? |
 | **5** | Final sweep | Review ALL previously skipped/deferred findings with fresh eyes — should any be reconsidered? Check cumulative changes for internal consistency |
 
-**Re-run Codacy and re-dispatch agents with escalated prompts:**
+**Re-dispatch agents with escalated prompts (Codacy annotations are NOT re-fetched — Codacy only re-analyzes after a new commit is pushed, which happens in Phase 7):**
 
 ```
 This is re-validation round X of 5. In previous rounds, the following findings
@@ -538,7 +531,7 @@ Only report genuinely NEW issues.
 **Loop rules:**
 - **Maximum rounds:** 5 (the initial run counts as round 1)
 - **Progress indicator:** Show `"=== Re-validation round X of 5 (scrutiny: <level>) ==="` at the start of each re-run
-- **Scope:** Re-run Codacy CLI, re-dispatch agents with escalated prompts, re-measure coverage. Do NOT re-load project context (Phase 0)
+- **Scope:** Re-dispatch agents with escalated prompts and re-measure coverage. Do NOT re-fetch Codacy annotations (they won't change until a new commit is pushed) and do NOT re-load project context (Phase 0)
 - **Finding deduplication:** Maintain a ledger of ALL findings from ALL previous rounds. Only present findings that are NEW — not already seen, resolved, or skipped. If a finding was skipped/discarded by the user in a prior round, do NOT re-present it
 - **If new findings exist:** Present via Phase 4 (interactive resolution), fix via Phase 6 (TDD cycle), verify via Phase 6.5 (coverage), then loop again
 - **Stop conditions (any one triggers exit):**
@@ -563,13 +556,16 @@ Only report genuinely NEW issues.
 
 ## Phase 7: Trigger Reanalysis
 
-After all changes are committed and pushed, trigger Codacy reanalysis:
+Codacy automatically re-analyzes when a new commit is pushed to the PR branch. If fixes were applied and committed in Phase 6 but not yet pushed, push now to trigger reanalysis:
 
 ```bash
-curl -s -X POST -H "api-token: ${CODACY_API_TOKEN}" \
-  -H "Content-Type: application/json" \
-  "https://app.codacy.com/api/v3/organizations/gh/${OWNER}/repositories/${REPO}/reanalyzeCommit" \
-  -d "{\"commitUuid\": \"${HEAD_SHA}\"}"
+git push
+```
+
+If no fixes were applied but the user wants to force a reanalysis (e.g., after `.codacy.yml` changes):
+
+```bash
+git commit --allow-empty -m "chore: trigger Codacy reanalysis" && git push
 ```
 
 ---
@@ -641,29 +637,29 @@ brew install codacy/homebrew-codacy-cli-v2/codacy-cli-v2
 
 ### Step 9.2: Initialize and Run
 
+If the Codacy CLI requires authentication, set the `CODACY_API_TOKEN` environment variable externally before running (the main flow does NOT need this token — only the optional local CLI does).
+
 ```bash
-codacy-cli init --provider gh --organization ${OWNER} --repository ${REPO} --api-token ${CODACY_API_TOKEN}
+codacy-cli init --provider gh --organization ${OWNER} --repository ${REPO}
 codacy-cli install
 codacy-cli analyze
 ```
 
 ### Step 9.3: Compare Results
 
-Compare CLI results against the API results to identify any discrepancies.
+Compare CLI results against the GitHub Check Run annotations to identify any discrepancies.
 
 ---
 
 ## Rules
 
-- Always fetch ALL pages of issues (handle pagination cursor)
-- Only process `deltaType: "Added"` issues (new issues, not fixed ones)
+- Use `gh api --paginate` to fetch all annotations (pagination is handled automatically)
 - Read the project's stack files (package.json, tsconfig.json, go.mod) before classifying rules
-- Never blindly accept Codacy's severity — validate against actual code context
+- Never blindly accept Codacy's severity — validate against actual code context using the annotation_level mapping (failure→HIGH, warning→MEDIUM, notice→LOW)
 - Present false positives separately from genuine findings
 - Always recommend configuration fixes for false positives (don't just skip them)
-- One finding at a time for genuine issues, severity order
+- One finding at a time for genuine issues, severity order (CRITICAL > HIGH > MEDIUM > LOW)
 - No changes without user approval
 - Record commit SHAs for all fixes
-- Trigger reanalysis after applying changes
-- If API token is provided, warn user to revoke it after the session (security)
+- Trigger reanalysis by pushing commits (Codacy re-analyzes on new commits)
 - If `gh` CLI is not available, inform user and suggest installation
