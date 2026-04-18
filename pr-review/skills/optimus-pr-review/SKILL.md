@@ -787,24 +787,10 @@ Already addressed in a previous commit.
 <direct answer referencing specific code/files>
 ```
 
-### Step 8.2: Post Replies
+### Step 8.2: Build Thread Map
 
-**For inline review comments:**
-```bash
-gh api repos/{owner}/{repo}/pulls/{number}/comments \
-  --method POST -f body="<reply>" -F in_reply_to=<comment_id>
-```
+Before posting any replies, fetch the mapping of comment `databaseId` to thread `node_id`:
 
-**For general PR comments:**
-```bash
-gh pr comment <PR_NUMBER_OR_URL> --body "<reply>"
-```
-
-### Step 8.3: Resolve ALL Threads via GraphQL
-
-**HARD BLOCK:** This step is SEPARATE from posting replies. You MUST execute it AFTER all replies are posted. Replying is NOT the same as resolving. A thread is only resolved when the GraphQL mutation below succeeds.
-
-**Step 8.3.1:** Fetch ALL unresolved thread IDs:
 ```bash
 gh api graphql -f query='
   query {
@@ -815,7 +801,7 @@ gh api graphql -f query='
             id
             isResolved
             comments(first: 1) {
-              nodes { body databaseId }
+              nodes { databaseId body }
             }
           }
         }
@@ -825,7 +811,40 @@ gh api graphql -f query='
 '
 ```
 
-**Step 8.3.2:** For EACH unresolved thread, resolve it:
+Store the result as a `{databaseId → thread_node_id}` mapping. You will use it in Step 8.3.
+
+### Step 8.3: Reply AND Resolve Each Thread (atomically)
+
+**CRITICAL:** For EACH thread, reply and resolve in the SAME step. Never batch "all replies first, then all resolves". The pattern is: reply → resolve → next thread.
+
+**For each thread:**
+
+**1. Post the reply:**
+
+For inline review comments (have `in_reply_to`):
+```bash
+gh api repos/{owner}/{repo}/pulls/{number}/comments \
+  --method POST -f body="<reply>" -F in_reply_to=<comment_id>
+```
+
+For DeepSource review comments (REST 404 — use GraphQL instead):
+```bash
+gh api graphql -f query='
+  mutation {
+    addPullRequestReviewThreadReply(input: {
+      pullRequestReviewThreadId: "<thread_node_id>",
+      body: "<reply>"
+    }) { comment { id } }
+  }
+'
+```
+
+For general PR comments:
+```bash
+gh pr comment <PR_NUMBER_OR_URL> --body "<reply>"
+```
+
+**2. Immediately resolve the same thread:**
 ```bash
 gh api graphql -f query='
   mutation {
@@ -836,11 +855,15 @@ gh api graphql -f query='
 '
 ```
 
-**Step 8.3.3:** Verify zero unresolved threads remain by re-running the query from Step 8.3.1 and confirming all `isResolved: true`. If any remain unresolved, resolve them. Do NOT proceed to Step 8.4 until ALL threads are resolved.
+**3. Confirm** `isResolved: true` in the response before moving to the next thread.
 
-### Step 8.4: Hide Fully-Resolved Reviews
+### Step 8.4: Verify Zero Unresolved Remain
 
-After all threads are resolved, check each review section. If ALL threads of a review are resolved, minimize it:
+After all threads are processed, re-run the query from Step 8.2 and confirm ALL threads have `isResolved: true`. If any remain unresolved, reply and resolve them now. Do NOT proceed until zero unresolved threads remain.
+
+### Step 8.5: Hide Fully-Resolved Reviews
+
+After all threads are resolved, minimize fully-resolved review sections:
 
 ```bash
 gh api graphql -f query='
@@ -852,9 +875,9 @@ gh api graphql -f query='
 '
 ```
 
-### Step 8.5: Reply Summary
+### Step 8.6: Reply Summary
 
-**HARD BLOCK:** The Status column MUST show "Resolved" for every row. If any row shows "Replied" instead of "Resolved", go back to Step 8.3 and resolve it.
+**HARD BLOCK:** The Status column MUST show "Resolved" for every row. If any row shows "Replied" instead of "Resolved", go back and resolve it.
 
 ```markdown
 ### PR Comment Replies Posted
@@ -937,13 +960,13 @@ gh api graphql -f query='
 - [ ] All approved fixes committed with TDD cycle (applied per batch)
 - [ ] Won't-fix Codacy/DeepSource findings suppressed inline
 - [ ] Push completed or explicitly skipped
-- [ ] ALL comment threads replied (Codacy, DeepSource, CodeRabbit, human)
-- [ ] ALL threads resolved via GraphQL `resolveReviewThread` — replying is NOT resolving. Verify by querying `reviewThreads` and confirming zero `isResolved: false` remain
+- [ ] ALL comment threads replied AND resolved atomically (reply → resolve → next, never batch separately)
+- [ ] Verification query confirms zero `isResolved: false` threads remain
 - [ ] Fully-resolved reviews hidden via `minimizeComment`
 - [ ] Reply summary presented — every row MUST show "Resolved" status
 - [ ] Final summary with verdict presented
 
-**STOP CONDITION:** You may ONLY end the review session after ALL items are checked. If ANY thread is replied but NOT resolved, you MUST go back and resolve it before ending.
+**STOP CONDITION:** You may ONLY end the review session after ALL items are checked.
 
 ---
 
