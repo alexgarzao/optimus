@@ -1,11 +1,12 @@
 ---
 name: optimus-pr-review
 description: >
-  PR-aware code review orchestrator. Receives a pull request URL, fetches
-  PR metadata (description, branch, changed files, linked issues), collects
-  existing review comments (CodeRabbit, human reviewers, CI), dispatches
-  parallel agents to evaluate both code and comments, and presents findings
-  interactively with source attribution. Creates separate commits per finding and references them in PR replies.
+  Unified PR review orchestrator. Fetches PR metadata, collects ALL review
+  comments (Codacy, DeepSource, CodeRabbit, human reviewers), dispatches
+  parallel agents to evaluate code and comments, presents findings interactively,
+  applies fixes with TDD cycle and separate commits per finding, responds to
+  every comment thread with commit reference or justification, and adds inline
+  suppression tags for Codacy/DeepSource when a finding won't be fixed.
 trigger: >
   - When user provides a PR URL for review (e.g., "review this PR: https://github.com/org/repo/pull/123")
   - When user asks to review a pull request
@@ -16,23 +17,28 @@ skip_when: >
 prerequisite: >
   - PR URL is provided or can be inferred (current branch has an open PR)
   - gh CLI is installed and authenticated
+  - For Codacy/DeepSource findings: workflows codacy-issues.yml and deepsource-pr-issues.yml should exist in the repo (if not present, those sources are simply skipped)
 NOT_skip_when: >
   - "The PR is small" → Small PRs still benefit from structured review with PR context.
   - "I already looked at the diff" → Specialist agents catch issues human review misses.
   - "CI passed" → CI checks automated rules; agents review logic, security, and quality.
   - "CodeRabbit already reviewed" → Agents validate/contest CodeRabbit findings and catch what it misses.
+  - "Codacy/DeepSource already analyzed" → Agents validate/contest static analysis findings and catch what they miss.
 examples:
   - name: Review a PR by URL
     invocation: "Review this PR: https://github.com/org/repo/pull/42"
     expected_flow: >
-      1. Fetch PR metadata and existing comments
+      1. Fetch PR metadata and ALL existing comments (Codacy, DeepSource, CodeRabbit, human)
       2. Checkout PR branch
-      3. Present PR summary (including comment sources)
-      4. Dispatch all agents to review code AND evaluate existing comments
-      5. Consolidate with source attribution
+      3. Present PR summary with all comment sources and CI status
+      4. Dispatch agents to review code AND evaluate ALL existing comments
+      5. Consolidate with source attribution and deduplication
       6. Interactive finding-by-finding resolution
-      7. Apply fixes with separate commits per finding
-      8. PR readiness verdict
+      7. Apply fixes with TDD cycle, separate commits per finding
+      8. Coverage verification and convergence loop
+      9. Push commits
+      10. Respond to ALL comment threads (commit SHA or won't-fix with suppression)
+      11. Final summary with verdict
   - name: Review current branch PR
     invocation: "Review the PR for this branch"
     expected_flow: >
@@ -48,14 +54,9 @@ related:
       difference: >
         optimus-deep-review is a generic code review that works with any scope
         (all files, git diff, directory). optimus-pr-review adds PR context
-        (description, linked issues, existing comments) and evaluates feedback
-        from multiple sources (CodeRabbit, human reviewers, agents).
-    - name: optimus-coderabbit-review
-      difference: >
-        optimus-coderabbit-review runs CodeRabbit CLI locally as the source of
-        findings with a TDD fix cycle. optimus-pr-review collects comments
-        already posted on the PR (including CodeRabbit's) and has agents
-        validate/contest them.
+        (description, linked issues, existing comments from ALL sources) and
+        evaluates feedback from multiple sources (Codacy, DeepSource, CodeRabbit,
+        human reviewers, agents).
   sequence:
     before:
       - optimus-verify-code
@@ -65,17 +66,20 @@ verification:
       description: gh CLI is installed
       success_pattern: available
   manual:
-    - PR metadata and comments fetched correctly
+    - PR metadata and comments from ALL sources fetched correctly
     - Source attribution present in all findings
-    - All findings presented interactively
-    - Approved fixes applied with separate commits per finding
+    - All findings presented interactively with progress indicator
+    - Approved fixes applied with TDD cycle and separate commits
+    - Coverage verification passed thresholds
+    - Convergence loop completed
+    - ALL comment threads replied with commit SHA or won't-fix justification
+    - Codacy/DeepSource suppression tags added for won't-fix findings
     - PR readiness verdict presented
-    - PR comment threads replied with resolution status
 ---
 
 # PR Review
 
-PR-aware code review orchestrator. Fetches PR metadata, collects existing review comments, dispatches agents to evaluate both code and comments, and presents findings with source attribution.
+Unified PR review orchestrator. Fetches PR metadata, collects ALL review comments (Codacy, DeepSource, CodeRabbit, human reviewers), dispatches agents to evaluate both code and comments, and presents findings with source attribution. Applies fixes with TDD cycle, responds to every comment with resolution, and adds inline suppression for Codacy/DeepSource won't-fix findings.
 
 ---
 
@@ -95,17 +99,11 @@ If no PR is found, ask the user for the URL using `AskUser`.
 
 ### Step 0.2: Fetch PR Metadata
 
-Use `gh pr view` to extract all relevant metadata:
-
 ```bash
 gh pr view <PR_NUMBER_OR_URL> --json title,body,state,headRefName,baseRefName,changedFiles,additions,deletions,labels,milestone,assignees,reviewRequests,comments,url,number
 ```
 
-Alternatively, if using a GitHub URL, use `FetchUrl` to get the PR page content.
-
-**Guard: Check PR state.** If the PR state is `MERGED` or `CLOSED`, inform the user and stop. Only open PRs should be reviewed.
-
-If the command fails (invalid URL, PR not found, or permission denied), inform the user of the error and ask for a corrected URL using `AskUser`.
+**Guard: Check PR state.** If the PR state is `MERGED` or `CLOSED`, inform the user and stop.
 
 Extract and store:
 - **Title and description** — the PR's purpose and context
@@ -114,38 +112,71 @@ Extract and store:
 - **Labels and milestone** — categorization context
 - **Linked issues** — from PR description (look for "Fixes #", "Closes #", "Resolves #" patterns)
 
-### Step 0.3: Collect Existing PR Comments
+### Step 0.3: Collect ALL Existing PR Comments
 
-Collect ALL comments from ALL sources on the PR:
+Collect comments from ALL sources on the PR in parallel:
 
-**General PR comments:**
+**1. General PR comments:**
 ```bash
 gh pr view <PR_NUMBER_OR_URL> --comments
 ```
 
-**Review comments (inline code comments and review summaries):**
+**2. Review comments (inline code comments and review summaries):**
 ```bash
 gh api repos/{owner}/{repo}/pulls/{number}/reviews
-gh api repos/{owner}/{repo}/pulls/{number}/comments
+gh api repos/{owner}/{repo}/pulls/{number}/comments --paginate
 ```
 
-For each comment, extract and categorize:
-- **Source:** Identify the author — CodeRabbit (bot), human reviewer (by username), CI/CD bot, or other automated tool
-- **Type:** General comment, inline code comment, review summary, or approval/request-changes
-- **File and line** (for inline comments) — map to the changed files
-- **Content** — the actual feedback
-- **Status:** Resolved/unresolved (if the platform tracks it)
+**3. Codacy comments** (posted by `codacy-issues.yml` workflow):
+```bash
+gh api repos/{owner}/{repo}/pulls/{number}/comments --paginate \
+  --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("**Codacy**"))) | {id: .id, path: .path, line: .line, body: .body}'
+```
+
+Parse Codacy comment format:
+```
+**Codacy** | <SEVERITY> | <annotation_level>
+
+<message>
+```
+
+Extract: severity (HIGH/MEDIUM/LOW), annotation_level, message, file, line.
+
+**4. DeepSource comments** (posted by `deepsource-pr-issues.yml` workflow):
+```bash
+gh api repos/{owner}/{repo}/pulls/{number}/comments --paginate \
+  --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("**DeepSource**"))) | {id: .id, path: .path, line: .line, body: .body}'
+```
+
+Parse DeepSource comment format:
+```
+**DeepSource** | `<shortcode>` | <SEVERITY> | <CATEGORY>
+**Analyzer:** <analyzer_name>
+
+**<title>**
+
+<explanation>
+```
+
+Extract: shortcode, severity (CRITICAL/MAJOR→HIGH/MINOR→MEDIUM), category, analyzer, title, explanation, file, line.
+
+**5. CodeRabbit comments:**
+```bash
+gh api repos/{owner}/{repo}/pulls/{number}/comments --paginate \
+  --jq '.[] | select(.user.login == "coderabbitai[bot]") | {id: .id, path: .path, line: .line, body: .body}'
+```
+
+**6. Human reviewer comments:** All remaining comments not from known bots.
 
 **Duplicated comments sections:**
-Some review tools (e.g., CodeRabbit) group repeated or similar comments under sections titled "Duplicated Comments", "Duplicate Comments", or similar headings within their review summaries. These sections contain valid feedback that was flagged on multiple files or locations. You MUST:
-1. Parse these sections and extract each individual comment
-2. Treat them as regular review comments — do NOT skip them because they are labeled as "duplicated"
-3. Map each duplicated comment to the affected files/lines listed in the section
+Some tools (e.g., CodeRabbit) group repeated comments under "Duplicated Comments" headings. Parse these and treat each as a regular comment mapped to its affected files/lines.
 
 Group comments by source:
 ```
 PR Comments:
-  - CodeRabbit: X comments (Y inline, Z summary, W from duplicated sections)
+  - Codacy: X comments (from workflow)
+  - DeepSource: X comments (from workflow)
+  - CodeRabbit: X comments (Y inline, Z summary)
   - Human reviewers: X comments from [usernames]
   - CI/CD: X comments
   - Unresolved threads: X
@@ -153,47 +184,49 @@ PR Comments:
 
 ### Step 0.4: Checkout PR Branch
 
-Ensure the working tree matches the PR state:
-
 ```bash
 gh pr checkout <PR_NUMBER_OR_URL>
 ```
 
-If already on the correct branch, skip this step. If checkout fails due to uncommitted changes, inform the user and ask them to stash or commit their changes first.
+If already on the correct branch, skip. If checkout fails due to uncommitted changes, inform the user.
 
 ### Step 0.5: Fetch CI Check Status
-
-Fetch the status of all CI/CD checks (GitHub Actions, external CI, status checks) on the PR:
 
 ```bash
 gh pr checks <PR_NUMBER_OR_URL>
 ```
 
-For more detail (conclusion, status, workflow name):
+For more detail:
 ```bash
 gh pr view <PR_NUMBER_OR_URL> --json statusCheckRollup --jq '.statusCheckRollup[]'
 ```
 
-Extract and store for each check:
-- **Name** — the check/workflow name (e.g., "lint", "unit-tests", "build")
-- **Status** — COMPLETED, IN_PROGRESS, QUEUED, PENDING
-- **Conclusion** — SUCCESS, FAILURE, NEUTRAL, CANCELLED, TIMED_OUT, SKIPPED (only when status is COMPLETED)
-- **URL** — link to the check run details
+Extract for each check: name, status, conclusion, URL.
+
+Also fetch Codacy and DeepSource check run status specifically:
+```bash
+COMMIT_SHA=$(gh api repos/{owner}/{repo}/pulls/{number} --jq '.head.sha')
+
+# Codacy
+gh api repos/{owner}/{repo}/commits/${COMMIT_SHA}/check-runs \
+  --jq '.check_runs[] | select(.app.slug == "codacy-production") | {name, conclusion, status, annotations_count: .output.annotations_count}'
+
+# DeepSource
+gh api repos/{owner}/{repo}/commits/${COMMIT_SHA}/check-runs \
+  --jq '.check_runs[] | select(.app.slug == "deepsource-io") | {name, conclusion, status}'
+```
 
 Classify checks:
 ```
 CI Status:
   - Passing: X checks
   - Failing: X checks [list names]
-  - Pending/Running: X checks [list names]
-  - Skipped: X checks
+  - Pending/Running: X checks
+  - Codacy: <conclusion> (<N> annotations)
+  - DeepSource: <analyzer1>=<conclusion>, <analyzer2>=<conclusion>
 ```
 
-**If ANY check has conclusion=FAILURE**, flag this prominently — failing CI checks MUST be highlighted in the PR summary and considered in the PR readiness verdict.
-
 ### Step 0.6: Fetch Changed Files
-
-Get the list of files changed in the PR:
 
 ```bash
 gh pr diff <PR_NUMBER_OR_URL> --name-only
@@ -204,8 +237,6 @@ Read the full content of each changed file for the review agents.
 ---
 
 ## Phase 1: Present PR Summary
-
-Present a summary of the PR to the user before starting the review:
 
 ```markdown
 ## PR Review: #<number> — <title>
@@ -218,35 +249,36 @@ Present a summary of the PR to the user before starting the review:
 ### CI Status
 - Passing: X checks
 - **FAILING: X checks** ← [list failing check names with links]
-- Pending/Running: X checks
-(If all checks pass, show: "All CI checks passing")
+- Codacy: <conclusion> (<N> annotations)
+- DeepSource: <analyzer statuses>
+- Pending: X checks
+
+### Existing Review Comments
+- **Codacy:** X issues (via workflow comments)
+- **DeepSource:** X issues (via workflow comments)
+- **CodeRabbit:** X comments (Y unresolved)
+- **Human reviewers:** X comments from [usernames] (Y unresolved)
 
 ### PR Description
 <PR body/description>
 
-### Existing Review Comments
-- **CodeRabbit:** X comments (Y unresolved)
-- **Human reviewers:** X comments from [usernames] (Y unresolved)
-- **CI/CD:** X comments
-
 ### Changed Files
 - file1.go
 - file2.go
-- file3_test.go
 ```
 
 ---
 
 ## Phase 2: Parallel Agent Dispatch
 
-### Step 3.1: Discover Project Context
+### Step 2.1: Discover Project Context
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
-2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, unit test, integration test, and E2E test commands
-3. **Identify coding standards:** Look for `PROJECT_RULES.md`, linter configs, or equivalent
-4. **Identify reference docs:** Look for PRD, TRD, API design, data model
+2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config
+3. **Identify coding standards:** Look for `PROJECT_RULES.md`, linter configs
+4. **Identify reference docs:** Look for PRD, TRD, API design
 
-Store discovered commands for use in the verification gate (Phase 6):
+Store discovered commands:
 ```
 LINT_CMD=<discovered lint command>
 TEST_UNIT_CMD=<discovered unit test command>
@@ -254,12 +286,12 @@ TEST_INTEGRATION_CMD=<discovered integration test command>
 TEST_E2E_CMD=<discovered E2E test command>
 ```
 
-### Step 3.2: Dispatch Agents
+### Step 2.2: Dispatch Agents
 
 Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives:
 - The full content of every changed file
 - The PR context (description, linked issues)
-- ALL existing PR comments (so agents can validate/contest them)
+- ALL existing PR comments from ALL sources (Codacy, DeepSource, CodeRabbit, human)
 - Coding standards and reference docs
 
 **Agent prompt MUST include:**
@@ -271,8 +303,19 @@ PR Context:
   - Linked issues: <list>
   - Base branch: <base>
 
-Existing PR Comments (evaluate these — validate or contest each one):
-  [paste all comments grouped by source, including comments from "Duplicated Comments" sections]
+Existing PR Comments — evaluate ALL of these (validate or contest each one):
+
+  Codacy Issues:
+  [paste all Codacy findings with file, line, severity, message]
+
+  DeepSource Issues:
+  [paste all DeepSource findings with file, line, shortcode, severity, category, title, message]
+
+  CodeRabbit Comments:
+  [paste all CodeRabbit comments, including from "Duplicated Comments" sections]
+
+  Human Reviewer Comments:
+  [paste all human reviewer comments]
 
 Review scope: Only the files changed in this PR.
 
@@ -284,55 +327,32 @@ Your job:
      - ALREADY FIXED: The comment was addressed in a subsequent commit
   3. Report NEW findings not covered by existing comments
 
-For EACH finding (new or evaluated), provide a deep technical analysis:
-  - Trace the execution flow through the affected code (what calls what, what data flows where)
-  - Identify all consumers affected (other services, frontend clients, end users, automated systems)
-  - Map the impact chain: if not fixed, what downstream behavior changes?
-  - Assess user experience impact:
-    - For human users: errors they see, data they lose, actions they can't perform
-    - For system consumers (APIs): contract violations, unexpected responses, silent failures
-  - Evaluate against software engineering best practices:
-    - API design: REST/gRPC conventions, error responses, idempotency, backward compatibility
-    - SOLID, DRY, separation of concerns, fail-fast, defensive programming
-    - Error handling, retry semantics, timeout behavior, graceful degradation
-    - Observability: can this issue be detected in production via logs/metrics/traces?
-  - When recommending a fix: explain what changes, how the flow changes after,
-    and why it matters for end users and API consumers
-  - When contesting: explain why the current code is acceptable, reference codebase
-    patterns, and weigh cost of implementing vs risk of not implementing
-
-Required output format:
-  ## New Findings
-  For each finding:
+For EACH finding (new or evaluated), provide:
   - Severity: CRITICAL / HIGH / MEDIUM / LOW
   - File and line
-  - Problem: what is wrong
-  - Flow analysis: trace the execution path and identify affected consumers
-  - Impact: consequences for users (human and system) if not addressed
-  - Engineering analysis: which best practices are violated and why they matter
-  - Recommendation: proposed fix with explanation of how the flow changes
-  - Tradeoffs: complexity, breaking changes, backward compatibility
-
-  ## Comment Evaluation
-  For each existing comment in your domain:
-  - Comment source and summary
-  - Your verdict: AGREE / CONTEST / ALREADY FIXED
-  - Deep justification: flow analysis, impact assessment, and engineering rationale
+  - Problem description with code context
+  - Flow analysis: trace execution path, identify affected consumers
+  - Impact analysis (four lenses):
+    - UX: How does this affect end users?
+    - Task focus: Is this within PR scope?
+    - Project focus: MVP-critical or gold-plating?
+    - Engineering quality: Maintainability, testability, reliability impact
+  - Recommendation with tradeoffs
 ```
 
 ### Agents (always dispatch ALL)
 
-| # | Agent | Focus |
-|---|-------|-------|
-| 1 | **Code quality reviewer** | Architecture, design patterns, SOLID, DRY, maintainability |
-| 2 | **Business logic reviewer** | Domain correctness, business rules, edge cases |
-| 3 | **Security reviewer** | Vulnerabilities, authentication, input validation, OWASP |
-| 4 | **Test quality analyst** | Test coverage gaps, error scenarios, flaky patterns |
-| 5 | **Cross-file consistency** (worker) | Interfaces vs implementations, imports, shared constants, dead code |
-| 6 | **Backend specialist** | Language idiomaticity, performance, concurrency, ecosystem patterns |
-| 7 | **Frontend specialist** | Framework patterns, hooks, components, accessibility, performance |
+| # | Agent | Focus | Preferred Droid | Fallback |
+|---|-------|-------|-----------------|----------|
+| 1 | Code quality | Architecture, SOLID, DRY, maintainability | `ring-default-code-reviewer` | `worker` |
+| 2 | Business logic | Domain correctness, edge cases | `ring-default-business-logic-reviewer` | `worker` |
+| 3 | Security | Vulnerabilities, OWASP, input validation | `ring-default-security-reviewer` | `worker` |
+| 4 | Test quality | Coverage gaps, error scenarios, flaky patterns | `ring-default-ring-test-reviewer` | `worker` |
+| 5 | Nil/null safety | Nil pointer risks, unsafe dereferences | `ring-default-ring-nil-safety-reviewer` | `worker` |
+| 6 | Ripple effects | Cross-file impacts beyond changed files | `ring-default-ring-consequences-reviewer` | `worker` |
+| 7 | Dead code | Orphaned code from changes | `ring-default-ring-dead-code-reviewer` | `worker` |
 
-Use whatever specialist droids are available in the environment. If a specialized droid does not exist for a domain, use a `worker` agent with domain-specific instructions. All agents MUST be dispatched in a SINGLE message with parallel Task calls.
+Use the preferred ring droid when available in the environment. If a ring droid is not available, fall back to `worker` with domain-specific instructions. All agents MUST be dispatched in a SINGLE message with parallel Task calls.
 
 ---
 
@@ -342,10 +362,11 @@ After ALL agents return:
 
 1. **Merge** all new findings into a single list
 2. **Merge** all comment evaluations into a single list
-3. **Deduplicate** — if multiple agents flag the same issue, keep one entry and note which agents agreed
-4. **Cross-reference** — for existing comments, note agreement/disagreement between agents and between agents and the original commenter
-5. **Sort** by severity: CRITICAL > HIGH > MEDIUM > LOW
-6. **Assign** sequential IDs (F1, F2, F3...)
+3. **Deduplicate** — if multiple agents flag the same issue, keep one entry noting which agents agreed
+4. **Cross-reference** — for existing comments, note agreement/disagreement between agents and the original source
+5. **Classify false positives** — for Codacy/DeepSource findings that agents contest as misconfigured rules (e.g., ES5 rules in modern project, framework-specific rules for wrong framework), separate into "False Positive — Misconfigured Rule" category
+6. **Sort** by severity: CRITICAL > HIGH > MEDIUM > LOW
+7. **Assign** sequential IDs (F1, F2, F3...)
 
 ### Source Attribution
 
@@ -354,8 +375,10 @@ Each finding MUST include its source(s):
 | Source Type | Label |
 |-------------|-------|
 | New finding from agent review | `[Agent: <agent-name>]` |
-| Existing CodeRabbit comment validated by agent | `[CodeRabbit + Agent: <agent-name>]` |
-| Existing human review comment validated by agent | `[Reviewer: <username> + Agent: <agent-name>]` |
+| Codacy finding validated by agent | `[Codacy + Agent: <agent-name>]` |
+| DeepSource finding validated by agent | `[DeepSource + Agent: <agent-name>]` |
+| CodeRabbit comment validated by agent | `[CodeRabbit + Agent: <agent-name>]` |
+| Human review comment validated by agent | `[Reviewer: <username> + Agent: <agent-name>]` |
 | Existing comment contested by agent | `[Contested: <source> vs Agent: <agent-name>]` |
 
 ---
@@ -365,214 +388,290 @@ Each finding MUST include its source(s):
 ```markdown
 ## PR Review: #<number> — X findings
 
-### New Findings (from agents)
-| # | Severity | File | Summary | Agent(s) |
-|---|----------|------|---------|----------|
+### CI Status
+- Codacy: <conclusion> (<N> annotations)
+- DeepSource: <analyzer statuses>
+- Other checks: X passing, Y failing
 
-### Validated Existing Comments
-| # | Severity | File | Original Source | Summary | Validating Agent(s) |
-|---|----------|------|----------------|---------|---------------------|
+### False Positives — Misconfigured Rules (Codacy/DeepSource)
+| # | Source | Pattern/Title | Count | Reason |
+|---|--------|--------------|-------|--------|
+
+### Genuine Findings (validated by agents)
+| # | Severity | File | Summary | Source | Agent(s) |
+|---|----------|------|---------|--------|----------|
 
 ### Contested Comments
-| # | Original Source | Comment Summary | Contesting Agent | Reason |
-|---|----------------|----------------|-----------------|--------|
+| # | Original Source | Summary | Contesting Agent | Reason |
+|---|----------------|---------|-----------------|--------|
+
+### Agent Verdicts
+| Agent | Evaluated | Agree | Contest | New |
+|-------|-----------|-------|---------|-----|
 
 ### Summary
-- New findings: X (C critical, H high, M medium, L low)
-- Validated comments: X
-- Contested comments: X
-- Already fixed: X
+- New findings: X | Validated comments: X | Contested: X | False positives: X
 ```
 
 ---
 
-## Phase 5: Interactive Finding-by-Finding Resolution (collect decisions only)
+## Phase 5: Batched Finding Presentation and Resolution
 
-Process ONE finding at a time, in severity order (CRITICAL first, LOW last). Include both new findings and validated existing comments. Present contested comments for user decision.
+Findings are presented in **batches**, then resolved in **batches**. This prevents context loss on large PRs while keeping the user in control of batch size.
 
-**MANDATORY — Progress Tracking (do NOT skip):**
-Before presenting ANY finding, you MUST:
-1. Count the TOTAL number of findings (N) — this includes new findings, validated comments, and contested comments
-2. Announce the total to the user: "There are N findings to review."
-3. For EVERY finding presented, ALWAYS prefix the header with the progress indicator: **"Finding X of N"** (e.g., "Finding 1 of 12", "Finding 2 of 12", ..., "Finding 12 of 12")
-4. The progress indicator is MANDATORY in every finding header — never omit it
+**=== MANDATORY — Progress Tracking (NEVER SKIP) ===**
 
-For EACH finding, present:
+**BEFORE presenting the first finding, you MUST:**
+1. Count the TOTAL number of findings (N) — sum of genuine findings, validated comments, contested comments, and new agent findings
+2. Display the total prominently: `"### Total findings to review: N"`
+3. This total MUST be visible to the user BEFORE any finding is presented
 
-### 1. Finding Header
+**For EVERY finding presented, you MUST:**
+1. Include `"Finding X of N"` in the header — this is NOT optional
+2. X starts at 1 and increments sequentially across all batches
+3. N is the total announced above and NEVER changes mid-review
+4. If you present a finding WITHOUT "Finding X of N" in the header, you are violating this rule — STOP and correct it
 
-**Format (MANDATORY — always include "Finding X of N"):**
+**The user MUST always know:**
+- How many findings exist in total (N)
+- Which finding they are currently reviewing (X)
+- How many remain (N - X)
 
-`## Finding X of N — [SEVERITY] F# | [Category]`
+### Step 5.0: Determine Batch Size
 
-Example: `## Finding 1 of 12 — [HIGH] F1 | Security`
-Example: `## Finding 2 of 12 — [MEDIUM] F2 | Code Quality`
-Example: `## Finding 12 of 12 — [LOW] F12 | Style`
+Ask the user using `AskUser`:
 
-- **Progress indicator (MANDATORY):** "Finding X of N" — current position and total, shown in EVERY finding header without exception
-- Source(s): which agent(s) and/or external reviewer(s) flagged this
-- Agreement: which sources agree/disagree
+```
+There are N findings to review. How many would you like to review per batch?
+- All at once (present all N, then resolve all)
+- 5 per batch
+- 10 per batch
+- Custom number
+```
 
-### 2. Deep Technical Analysis
+Default to **5 per batch** if the user doesn't choose.
 
-For each finding, provide a thorough analysis that goes beyond "what is wrong" — explain the full context so the user can make an informed decision:
+### Step 5.1: Present Batch (questions phase)
+
+Present all findings in the current batch, one after another, collecting decisions for each. Do NOT apply any fix during this phase.
+
+For EACH finding in the batch:
+
+#### Finding Header
+
+`## Finding X of N — [SEVERITY] F# | [Source] | [Category]`
+
+Example: `## Finding 1 of 12 — [HIGH] F1 | Codacy + Agent | Security`
+Example: `## Finding 5 of 12 — [MEDIUM] F5 | DeepSource + Agent | Anti-pattern`
+Example: `## Finding 12 of 12 — [LOW] F12 | CodeRabbit + Agent | Style`
+
+#### Research Before Presenting (MANDATORY)
+
+**BEFORE presenting any finding to the user, you MUST research:**
+
+1. **Project context:** Read the affected file fully, understand the patterns used, check how similar cases are handled elsewhere in the codebase
+2. **Best practices:** Use `WebSearch` to research the specific issue:
+   - API design: REST conventions, error handling patterns, idempotency, status codes
+   - UI/UX: accessibility standards (WCAG), usability heuristics, component patterns
+   - Engineering: SOLID principles, language-specific idioms, framework best practices
+   - Security: OWASP guidelines, common vulnerability patterns
+3. **Form your recommendation:** Based on the research, decide what Option A (your recommended approach) should be. Option A must be backed by the research, not just a generic suggestion.
+
+This research is done SILENTLY — do not show the research process to the user. Present only the conclusion as part of the finding analysis below.
+
+#### Deep Technical Analysis
 
 **Problem description:**
-- Clear description of the issue with code snippet
-- For validated existing comments: show the original comment and the agent's validation
-- For contested comments: show both the original comment and the agent's contestation
+- Clear description with code snippet
+- For validated comments: show original comment and agent's validation
+- For contested comments: show both the original and agent's contestation
 
-**Flow analysis:**
-- Trace the execution flow through the affected code — what calls what, what data flows where
-- Identify which consumers are affected (other services, frontend clients, end users, automated systems)
-- Map the impact chain: if this is not fixed, what downstream behavior changes?
+**Impact analysis (four lenses):**
+- **UX:** End-user impact — errors, data loss, broken workflows
+- **Task focus:** Within PR scope or tangential?
+- **Project focus:** MVP-critical or gold-plating?
+- **Engineering quality:** Maintainability, testability, reliability, consistency
 
-**Why it matters (user experience focus):**
-- **For human users:** How does this affect the end-user experience? (errors they see, data they lose, actions they can't perform)
-- **For system consumers (APIs):** How does this affect other services or integrations? (contract violations, unexpected responses, silent failures)
-- Quantify the impact when possible: "affects X% of requests", "fails silently for Y scenario"
+#### Proposed Solutions
 
-**Engineering analysis (when recommending implementation):**
-- **API best practices:** Does the current implementation follow REST/gRPC conventions? Is the contract clear and consistent? Are error responses informative? Is idempotency handled?
-- **Software engineering principles:** SOLID, DRY, separation of concerns, fail-fast, defensive programming — which principles are violated and why they matter here
-- **Resilience and reliability:** Error handling, retry semantics, timeout behavior, graceful degradation
-- **Observability:** Can the issue be detected in production? Are there logs/metrics/traces that would surface this problem?
+**Option A MUST be your researched recommendation** — the approach you believe is correct based on best practices research, project context, and engineering principles. State clearly why this is the recommended option.
 
-**When contesting (recommending NOT to implement):**
-- Explain why the current code is correct or acceptable
-- Reference specific patterns in the codebase that validate the approach
-- Identify the cost of implementing vs the risk of not implementing
-- If the concern is valid but low-priority, suggest where to track it
+For each option:
+```
+**Option A: [name] (RECOMMENDED)**
+[Concrete steps]
+- Why recommended: [reference to best practice, standard, or project pattern]
+- UX / Task / Project / Engineering impact
+- Effort: trivial / small / moderate / large
 
-### 3. Proposed Solutions
+**Option B: [name]**
+[Alternative approach]
+- UX / Task / Project / Engineering impact
+- Effort: trivial / small / moderate / large
+```
 
-One or more approaches, each with:
-- What changes (specific files, functions, patterns)
-- How the flow changes after the fix — trace the new execution path
-- Tradeoffs (complexity, performance, breaking changes, migration effort)
-- Impact on API consumers (breaking vs non-breaking, backward compatibility)
-- If it's a straightforward fix with no tradeoffs, state: "Direct fix, no tradeoffs."
+#### Collect Decision
 
-Include a recommendation when one option is clearly better, with clear justification rooted in user experience and engineering quality.
+Use `AskUser`. **BLOCKING** — do not advance until decided.
 
-### 4. Wait for User Decision
+**CRITICAL — If the user responds with a question or disagreement instead of a decision:**
+- STOP immediately — do NOT continue to the next finding
+- Research the user's question/concern RIGHT NOW using `WebSearch`, codebase analysis, or both
+- Provide a thorough answer with evidence (links, code references, best practice citations)
+- Only AFTER the user is satisfied, ask for their decision again
+- This may go back and forth multiple times — that is expected and correct behavior
 
-Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
+Record: finding ID, source(s), decision (fix/skip/defer), chosen option. Do NOT apply any fix yet.
 
-The user may:
-- Approve an option (e.g., "A", "B")
-- Request more context
-- Discard the finding
-- Defer to a future version
-- Group with the next finding if related
+### Step 5.2: Resolve Batch (fixes phase)
 
-### 5. Record Decision
+After ALL findings in the current batch have been presented and decisions collected, apply the fixes for this batch following Phase 6 (TDD cycle, commit per fix, suppressions).
 
-Internally record every decision: finding ID, source(s), chosen option (or "skip"/"defer"), and rationale if provided. Do NOT apply any fix yet — fixes are applied with separate commits in Phase 6.
+### Step 5.3: Batch Summary
+
+After resolving the current batch, show progress:
+
+```markdown
+### Batch X complete — Progress: Y of N findings reviewed
+
+| Status | Count |
+|--------|-------|
+| Fixed (this batch) | A |
+| Skipped (this batch) | B |
+| Deferred (this batch) | C |
+| Remaining | N - Y |
+```
+
+### Step 5.4: Continue or Adjust
+
+If findings remain, ask the user using `AskUser`:
+
+```
+Y of N findings reviewed. Z remaining. Continue with next batch?
+- Continue (same batch size)
+- Change batch size
+- Stop here (skip remaining)
+```
+
+Then present the next batch (Step 5.1) and repeat until all findings are processed or the user stops.
 
 ---
 
-## Phase 6: Apply Fixes with Separate Commits
+## Phase 5.5: Recommend Rule Configuration (Codacy/DeepSource)
 
-**IMPORTANT:** This phase starts ONLY after ALL findings have been presented and ALL decisions collected. No fix is applied during Phase 5.
+If false positives were identified, present configuration recommendations:
 
-### Step 7.1: Present Pre-Apply Summary
+### For Codacy false positives:
 
-Before touching any code, show the user a summary of everything that will be changed:
+```markdown
+**Via .codacy.yml:**
+  exclude_paths:
+    - "<path>"
+
+**Via Codacy UI:** app.codacy.com > Repository > Code Patterns > disable pattern
+```
+
+### For DeepSource false positives:
+
+```markdown
+**Via .deepsource.toml:**
+  exclude_patterns = ["<path>"]
+
+**Via inline suppression:** // skipcq: <issue-code>
+**Via DeepSource Dashboard:** app.deepsource.com > suppress issue
+```
+
+Ask the user whether to apply config changes. If approved, edit the config files.
+
+---
+
+## Phase 6: Apply Fixes with TDD Cycle
+
+**IMPORTANT:** This phase runs after each batch of findings has been presented and decisions collected (Step 5.2). It is called once per batch, NOT once at the end.
+
+### Step 6.1: Pre-Apply Summary
 
 ```markdown
 ## Fixes to Apply (X of Y findings)
 
-| # | Finding | Source | Decision | Files Affected |
-|---|---------|--------|----------|---------------|
-| F1 | [summary] | [Agent + CodeRabbit] | Option A | file1.go |
-| F3 | [summary] | [Agent: Security] | Option B | auth.go |
+| # | Finding | Source | Decision | Files |
+|---|---------|--------|----------|-------|
+| F1 | [summary] | [Codacy + Agent] | Fix (Option A) | file1.go |
+| F3 | [summary] | [Agent: Security] | Fix (Option B) | auth.go |
 
 ### Skipped (Z findings)
 | # | Finding | Source | Reason |
 |---|---------|--------|--------|
-| F2 | [summary] | [Reviewer: john] | User: out of scope |
 
 ### Deferred (W findings)
 | # | Finding | Source | Destination |
 |---|---------|--------|-------------|
-| F5 | [summary] | [Agent: QA] | Backlog |
 ```
 
-### Step 7.2: Apply and Commit Each Fix Individually
+### Step 6.2: TDD Cycle for Each Fix
 
-Create **one commit per finding** whenever possible. This makes it easy to trace which commit addresses which review comment.
+For each approved fix, dispatch a specialist droid via `Task` tool:
 
-**Grouping rules:**
-- **Independent fixes** (touching different logical concerns) → one commit each
-- **Related fixes** (e.g., F1 and F3 both fix the same validation logic in the same function) → group into a single commit, referencing all finding IDs
-- When in doubt, prefer separate commits — smaller commits are easier to review and revert
-
-**For each approved fix (or group of related fixes), dispatch a specialist droid:**
-
-Use the `Task` tool to dispatch the appropriate droid for each fix. Do NOT apply fixes directly — always delegate to a specialist.
+1. **RED:** Write a failing test that exposes the problem
+2. **GREEN:** Implement the minimal fix to make the test pass
+3. **REFACTOR:** Improve without changing behavior
+4. **RUN ALL TESTS:** Execute unit + integration tests
 
 **Droid selection priority:**
-1. **Ring specialist droids (preferred):**
-   - `ring-dev-team-backend-engineer-golang` — for Go source fixes
-   - `ring-dev-team-backend-engineer-typescript` — for TypeScript backend fixes
-   - `ring-dev-team-frontend-engineer` — for React/Next.js frontend fixes
-   - `ring-dev-team-qa-analyst` — for test-related fixes
-2. **Other available specialist droids**
-3. **`worker` with domain instructions** — as fallback
+1. `ring-dev-team-backend-engineer-golang` — Go fixes
+2. `ring-dev-team-backend-engineer-typescript` — TypeScript backend
+3. `ring-dev-team-frontend-engineer` — React/Next.js frontend
+4. `ring-dev-team-qa-analyst` — test fixes
+5. `worker` with domain instructions — fallback
 
-**Droid prompt for each fix:**
+### Step 6.3: Handle Test Failures (max 3 attempts)
 
-```
-Goal: Apply fix for review finding F<N>.
+1. **Logic bug** → Return to RED, adjust test/fix
+2. **Flaky test** → Re-execute 3 times, document, tag with "pending-test-fix"
+3. **External dependency** → Pause and wait
 
-Finding:
-  - ID: F<N>
-  - Severity: <severity>
-  - File(s): <affected files>
-  - Problem: <finding description>
-  - Chosen solution: <user's chosen option from Phase 5>
+### Step 6.4: Commit Each Fix
 
-Context:
-  - Full content of affected file(s): [paste]
-  - Coding standards: [paste relevant sections]
-  - Existing patterns in the codebase to follow: [file:line references]
+After each successful TDD cycle:
 
-Constraints:
-  - Apply ONLY the fix described above — do not refactor or improve other code
-  - Follow existing code style and patterns
-  - Run lint after applying the fix and resolve any formatting issues
-  - If the fix requires updating tests, update them
-
-Expected output:
-  - List of files modified
-  - Summary of changes made
-```
-
-**After the droid completes each fix:**
-
-1. Verify the droid applied changes correctly
-2. Run lint — if format issues remain, fix them
-3. Stage ONLY the files changed by this fix: `git add <affected_files>`
-4. Commit with a descriptive message that references the finding ID(s):
+1. Run lint
+2. Stage ONLY the files changed by this fix
+3. Commit with descriptive message:
    ```bash
-   git commit -m "fix: <concise description of what was fixed>
+   git commit -m "fix: <concise description>
 
-   Addresses review finding(s): <F1, F2, ...>"
+   Addresses review finding F<N> [<source>]"
    ```
-5. Record the commit SHA for this fix: `git rev-parse HEAD`
-6. Store the mapping: `{finding_id} → {commit_sha}` for use in Phase 8
+4. Record `{finding_id} → {commit_sha}` mapping
 
-**If a fix causes lint failures that cannot be auto-resolved**, stop, present the issue to the user, and ask for guidance before continuing to the next fix.
+### Step 6.5: Suppress Won't-Fix Findings (Codacy/DeepSource)
 
-### Step 7.3: Verification Gate
+For each **skipped/discarded** finding from Codacy or DeepSource, add inline suppression:
 
-After ALL individual commits are created, run the full test suite:
-- Always run lint and unit tests with coverage profiling
-- If backend files were changed: also run integration tests with coverage profiling
-- If frontend files were changed: also run E2E tests (if available)
+**Codacy findings:**
+Add `// codacy:ignore` comment on the line above the flagged code.
 
-**Coverage measurement:**
+**DeepSource findings:**
+Add `// skipcq: <shortcode>` comment on the line above the flagged code (e.g., `// skipcq: JS-C1003`).
+
+Commit all suppressions together:
+```bash
+git commit -m "chore: suppress won't-fix static analysis findings
+
+Codacy: X findings suppressed (codacy:ignore)
+DeepSource: Y findings suppressed (skipcq)"
+```
+
+Record the suppression commit SHA for use in Phase 8.
+
+---
+
+## Phase 6.6: Coverage Verification and Test Gap Analysis
+
+**IMPORTANT:** This phase runs ONLY ONCE, after ALL batches have been processed (all findings presented, decided, and fixed). Do NOT run coverage verification between batches.
+
+### Step 6.6.1: Coverage Measurement
+
 ```bash
 # Unit tests
 go test -coverprofile=coverage-unit.out ./...
@@ -580,193 +679,120 @@ go tool cover -func=coverage-unit.out | tail -1
 
 # Integration tests (if applicable)
 go test -tags=integration -coverprofile=coverage-integration.out ./...
-go tool cover -func=coverage-integration.out | tail -1
 ```
 
-**Coverage thresholds:**
+**Thresholds:**
 - Unit tests: 85% minimum
 - Integration tests: 70% minimum
 
-If coverage is below threshold, flag as a finding and ask the user whether to address it before proceeding or defer.
+### Step 6.6.2: Test Gap Analysis
 
-**E2E tests:** If not configured, ask the user using `AskUser`:
-"E2E tests are not configured. Should they be implemented, or skip for now?"
+Dispatch a test gap analyzer via `Task` tool. Use `ring-default-ring-test-reviewer` if available, otherwise `worker` with test analysis instructions.
 
-### Step 7.4: Test Scenario Gap Analysis
-
-After coverage measurement, dispatch an agent to identify missing test scenarios in the files changed by the PR.
-
-**Dispatch a test gap analyzer** via `Task` tool. Use `ring-default-ring-test-reviewer`, `ring-dev-team-qa-analyst`, or `worker` (in that priority order).
-
-The agent receives:
-1. **PR changed source files** — full content (non-test files only)
-2. **Test files for changed source** — full content
-3. **Coverage profile** — `go tool cover -func` output
-4. **PR context** — description, linked issues
-
-```
-Goal: Identify missing test scenarios in files changed by PR #<number>.
-
-Context:
-  - PR: #<number> — <title>
-  - Source files changed: [full content]
-  - Test files: [full content]
-  - Coverage profile: [go tool cover -func output]
-
-Your job:
-  For each public function changed/added in this PR:
-  1. Unit tests: check for happy path, error paths, edge cases, validation failures
-  2. Integration tests: check for DB failure, timeout, retry, rollback scenarios
-  3. Report what EXISTS and what is MISSING
-
-Required output format:
-  ## Unit Test Gaps
-  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
-  |---|------|----------|--------------------|-------------------|----------|
-
-  ## Integration Test Gaps
-  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
-  |---|------|----------|--------------------|-------------------|----------|
-
-  ## Summary
-  - Functions analyzed: X
-  - Fully covered: X | Partial: X | No tests: X
-  - Missing scenarios: X HIGH, Y MEDIUM, Z LOW
-```
-
-HIGH priority gaps are presented as findings in the summary. The user decides whether to address them before merge or defer.
-
-If tests fail:
-1. Identify which commit introduced the failure (use `git bisect` or reason from the test output)
-2. Attempt to fix (max 3 attempts)
-3. If fixed, amend the offending commit or create a follow-up fix commit
-4. If not fixable after 3 attempts, revert that specific commit, present the failure to the user, and ask for guidance
-
-All commands MUST pass and coverage MUST meet thresholds before proceeding to Phase 7.
+HIGH priority gaps are presented as findings for user decision.
 
 ---
 
-## Phase 7: Final Summary
+## Phase 6.7: Convergence Loop (MANDATORY)
 
-```markdown
-## PR Review Summary: #<number> — <title>
+After Phase 6.6, automatically re-validate with escalating scrutiny:
 
-### Sources Analyzed
-- CodeRabbit comments: X evaluated (Y validated, Z contested)
-- Human reviewer comments: X evaluated (Y validated, Z contested)
-- New agent findings: X
-- Already fixed: X
+| Round | Scrutiny Level | Focus |
+|-------|---------------|-------|
+| **1** | Standard | Initial analysis |
+| **2** | Skeptical re-read | Question round 1 assumptions, function-by-function review |
+| **3** | Adversarial | Try to break the code: edge cases, nil/empty/zero, concurrency |
+| **4** | Cross-cutting | Interactions between domains, security + coverage overlap |
+| **5** | Final sweep | Revisit all skipped/deferred, check cumulative consistency |
 
-### Fixed (X findings)
-| # | Source | File(s) | Commit | Fix Applied |
-|---|--------|---------|--------|-------------|
+**Re-dispatch agents with escalated prompts:**
+```
+This is re-validation round X of 5. Previously found and resolved:
+[list of findings with resolutions]
 
-### Skipped (X findings)
-| # | Source | File(s) | Reason |
-|---|--------|---------|--------|
-
-### Deferred (X findings)
-| # | Source | File(s) | Destination |
-|---|--------|---------|-------------|
-
-### CI Status
-- Passing: X checks
-- Failing: X checks [list names]
-- Pending: X checks
-
-### Verification
-- Lint: PASS
-- Unit tests: PASS (X tests)
-- Integration tests: PASS / SKIPPED
-- E2E tests: PASS / SKIPPED
-
-### Test Coverage
-- Unit tests: XX.X% (threshold: 85%) — PASS / FAIL
-- Integration tests: XX.X% (threshold: 70%) — PASS / FAIL
-- E2E tests: Configured / Not configured
-
-### PR Readiness
-- [ ] All CRITICAL/HIGH findings resolved
-- [ ] All CI checks passing (no failing stages)
-- [ ] Changes align with PR description and linked issues
-- [ ] No unrelated changes included in the PR
-- [ ] Test coverage adequate for the changes
-
-**Verdict:** READY FOR MERGE / NEEDS CHANGES
+Look DEEPER — do NOT repeat previous findings.
+Question assumptions, check interactions between fixes, look for subtle issues.
 ```
 
-### Step 7.5: Push Commits (MANDATORY step — do NOT skip)
+**Loop rules:**
+- Max 5 rounds (initial = round 1)
+- Show `"=== Re-validation round X of 5 (scrutiny: <level>) ==="` at start
+- Do NOT re-fetch Codacy/DeepSource comments (they only update after push)
+- Maintain deduplication ledger across all rounds
+- **Stop when:** zero new findings, only LOW remain (ask user), round 5 reached, or user stops
 
-Commits were already created individually in Phase 6. You MUST now push them.
+---
 
-**HARD BLOCK:** Do NOT proceed to Phase 8 without completing this step. Ask the user:
+## Phase 7: Push Commits
 
-Use `AskUser` tool:
+**HARD BLOCK:** Ask the user before pushing:
+
 ```
-Fixes have been committed locally. Ready to push to the remote branch?
+Fixes have been committed locally. Ready to push?
 - Push now
-- Skip push (I'll push manually later)
+- Skip (I'll push manually)
 ```
 
-If the user approves, push immediately:
+If approved:
 ```bash
 git push
 ```
 
-If push fails (e.g., upstream conflict), inform the user and help resolve before continuing.
-
-Record the push result (pushed / skipped) for the final summary.
+This triggers Codacy/DeepSource reanalysis automatically.
 
 ---
 
-## Phase 8: Respond to PR Comments (MANDATORY — runs AFTER Phase 7)
+## Phase 8: Respond to ALL PR Comments (MANDATORY)
 
-**HARD BLOCK:** This phase is MANDATORY regardless of:
-- Whether any fixes were applied or all findings were skipped
-- Whether the user pushed or skipped the push
-- Whether there were zero findings
+**HARD BLOCK:** This phase is MANDATORY regardless of whether any fixes were applied. Every existing PR comment thread MUST receive a reply.
 
-Every existing PR comment thread MUST receive a reply and be resolved. Do NOT end the review without completing this phase.
+### Step 8.1: Response Rules (uniform for ALL sources)
 
-**IMPORTANT:** Use the `{finding_id} → {commit_sha}` mapping recorded in Phase 6 to reference the exact commit that addresses each comment. This gives reviewers a direct link to the fix.
+**IMPORTANT:** Use the `{finding_id} → {commit_sha}` mapping from Phase 6.
 
-**Scope:** ALL existing PR comment threads — not just findings/suggestions, but also questions, clarification requests, and discussion threads. Every unanswered comment on the PR must be addressed.
+**Case 1 — Fix applied (ANY source: Codacy, DeepSource, CodeRabbit, human):**
+```
+Fixed in <commit_sha>.
 
-### Step 8.1: Identify ALL Comment Threads to Respond
+<brief description of what was done>
+```
 
-Scan ALL existing PR comments collected in Step 0.3. For each thread, determine the response:
+**Case 2 — Won't fix (ANY source: Codacy, DeepSource, CodeRabbit, human):**
+```
+Won't fix: <concrete reason why this doesn't apply>
+```
 
-**For findings/suggestions evaluated by agents:**
+**Case 2a — Won't fix + suppression (Codacy/DeepSource only):**
+```
+Won't fix: <reason>. Suppressed in <suppression_commit_sha>.
+```
 
-| Decision | Action |
-|----------|--------|
-| **Fixed** | Reply with the commit SHA, then resolve the thread |
-| **Skipped/Discarded** | Reply explaining why it won't be fixed, then resolve the thread |
-| **Deferred** | Reply explaining it was deferred and where it was tracked, then resolve the thread |
-| **Contested** | Reply explaining why the comment was contested, then resolve the thread |
-| **Already fixed** | Reply noting it was already addressed, then resolve the thread |
+**Case 3 — Deferred:**
+```
+Deferred to <destination>: <brief reason>
+```
 
-**For questions and clarification requests:**
+**Case 4 — Contested:**
+```
+Contested: <agent's reasoning for why the comment is incorrect>
+```
 
-| Type | Action |
-|------|--------|
-| **Question about implementation** | Answer the question based on the code context and review analysis, then resolve the thread |
-| **Clarification request** | Provide the clarification based on the codebase and task context, then resolve the thread |
-| **Discussion/opinion** | Provide a clear response with the decision taken, then resolve the thread |
+**Case 5 — Already fixed:**
+```
+Already addressed in a previous commit.
+```
 
-**IMPORTANT:** Every thread MUST be resolved after posting the reply, regardless of the type or decision. No comment thread should remain open and unanswered after this phase completes.
+**Case 6 — Question/clarification (human reviewers):**
+```
+<direct answer referencing specific code/files>
+```
 
 ### Step 8.2: Post Replies and Resolve Threads
 
-For each comment thread, post the reply AND resolve the conversation on GitHub:
-
-**For inline review comments (most common):**
+**For inline review comments:**
 ```bash
-# Post the reply
 gh api repos/{owner}/{repo}/pulls/{number}/comments \
-  --method POST \
-  -f body="<reply>" \
-  -F in_reply_to=<comment_id>
+  --method POST -f body="<reply>" -F in_reply_to=<comment_id>
 ```
 
 **For general PR comments:**
@@ -774,7 +800,7 @@ gh api repos/{owner}/{repo}/pulls/{number}/comments \
 gh pr comment <PR_NUMBER_OR_URL> --body "<reply>"
 ```
 
-**Resolve the conversation thread** (for review comment threads):
+**Resolve each thread** after replying:
 ```bash
 gh api graphql -f query='
   mutation {
@@ -785,7 +811,7 @@ gh api graphql -f query='
 '
 ```
 
-To get the thread node ID, query the PR's review threads:
+To get thread node IDs:
 ```bash
 gh api graphql -f query='
   query {
@@ -806,150 +832,131 @@ gh api graphql -f query='
 '
 ```
 
-Match each thread by its first comment's `databaseId` to the `comment_id` collected in Step 0.3, then resolve using the thread's `id`.
+### Step 8.3: Hide Fully-Resolved Reviews
 
-**Resolve ALL replied threads** — not just "Fixed" ones. Skipped, deferred, contested, and already-fixed threads must also be resolved after posting the reply.
+After all replies, check each review section. If ALL threads of a review are resolved, minimize it:
 
-### Step 8.3: Reply Templates
-
-**Fixed:**
-```
-Fixed in <commit_sha> (use the specific SHA from the finding→commit mapping recorded in Phase 6).
-```
-
-**Skipped/Discarded:**
-```
-Won't fix: <user's reason or rationale>.
-```
-
-**Deferred:**
-```
-Deferred to <destination> (e.g., backlog, future PR): <brief reason>.
-```
-
-**Contested:**
-```
-Contested: <agent's reasoning for why the comment is incorrect or unnecessary>.
-```
-
-**Already fixed:**
-```
-Already addressed in a previous commit.
-```
-
-**Question/Clarification (answer based on code context):**
-```
-<direct answer to the question, referencing specific code/files when applicable>.
-```
-
-### Step 8.4: Hide Fully-Resolved Review Sections (MANDATORY)
-
-After all replies are posted and threads resolved, check each PR review section (e.g., CodeRabbit's "Changes requested" reviews, human reviewer summaries) to determine if ALL its comment threads have been resolved.
-
-**Step 1: Query all PR reviews with their threads:**
-```bash
-gh api graphql -f query='
-  query {
-    repository(owner: "<owner>", name: "<repo>") {
-      pullRequest(number: <number>) {
-        reviews(first: 100) {
-          nodes {
-            id
-            body
-            author { login }
-            state
-          }
-        }
-        reviewThreads(first: 100) {
-          nodes {
-            id
-            isResolved
-            comments(first: 1) {
-              nodes {
-                pullRequestReview { id }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-'
-```
-
-**Step 2: For each review, check if ALL its threads are resolved:**
-- Group `reviewThreads` by `comments.nodes[0].pullRequestReview.id`
-- For a given review, if every associated thread has `isResolved: true`, the review is fully resolved
-
-**Step 3: Hide fully-resolved reviews using `minimizeComment`:**
 ```bash
 gh api graphql -f query='
   mutation {
     minimizeComment(input: {subjectId: "<review_node_id>", classifier: RESOLVED}) {
-      minimizedComment {
-        isMinimized
-        minimizedReason
-      }
+      minimizedComment { isMinimized }
     }
   }
 '
 ```
 
-**Rules:**
-- Only hide reviews where ALL threads are resolved — if even one thread remains unresolved, leave the review visible
-- This applies to any review source (CodeRabbit, human reviewers, other bots)
-- Reviews with no associated threads (e.g., approvals with no inline comments) should NOT be hidden
-
-### Step 8.5: Present Reply Summary (MANDATORY)
-
-After posting all replies and hiding resolved reviews, present a summary:
+### Step 8.4: Reply Summary
 
 ```markdown
 ### PR Comment Replies Posted
 | # | Thread | Source | Reply | Commit | Status |
 |---|--------|--------|-------|--------|--------|
-| 1 | file.go:42 | CodeRabbit | Fixed | abc1234 | Resolved |
-| 2 | file.go:88 | @reviewer | Won't fix: out of scope | — | Closed |
-| 3 | general | CodeRabbit | Deferred to backlog | — | Closed |
-| 4 | file.go:15 | @reviewer | [answer to question] | — | Resolved |
-
-### Fully-Resolved Reviews Hidden
-| # | Review Author | Review State | Threads | Action |
-|---|---------------|-------------|---------|--------|
-| 1 | coderabbitai | CHANGES_REQUESTED | 5/5 resolved | Hidden (RESOLVED) |
+| 1 | file.go:42 | Codacy | Fixed | abc1234 | Resolved |
+| 2 | file.go:88 | DeepSource | Won't fix: convention. Suppressed | def5678 | Resolved |
+| 3 | file.go:15 | CodeRabbit | Fixed | ghi9012 | Resolved |
+| 4 | file.go:22 | @reviewer | Won't fix: out of scope | — | Resolved |
+| 5 | general | @reviewer | [answer] | — | Resolved |
 ```
 
 ---
 
-## Completion Checklist (MANDATORY — verify before ending the session)
+## Phase 9: Final Summary
 
-Before ending the review, verify EVERY item below. If any item is incomplete, go back and complete it.
+```markdown
+## PR Review Summary: #<number> — <title>
 
-- [ ] **All findings presented** — every finding was shown to the user (Finding X of N, all N presented)
-- [ ] **All decisions collected** — every finding has a decision (fix / skip / defer)
-- [ ] **All approved fixes committed** — each fix has its own commit with finding ID reference
-- [ ] **Push completed or explicitly skipped** — user was asked and the result was recorded
-- [ ] **All PR comment threads replied** — every existing comment (CodeRabbit, human, CI) has a reply posted via `gh api`
-- [ ] **All PR comment threads resolved** — every replied thread was resolved via GraphQL `resolveReviewThread`
-- [ ] **Fully-resolved reviews hidden** — reviews where all threads are resolved were minimized
-- [ ] **Reply summary presented** — Step 8.5 table was shown to the user
-- [ ] **Final summary presented** — Phase 7 summary with verdict was shown
+### Sources Analyzed
+- Codacy: X issues (Y fixed, Z suppressed)
+- DeepSource: X issues (Y fixed, Z suppressed)
+- CodeRabbit: X comments (Y validated, Z contested)
+- Human reviewers: X comments (Y validated, Z contested)
+- New agent findings: X
 
-**STOP CONDITION:** You may ONLY end the review session after ALL items above are checked. If you are running low on context, prioritize: commits > push > comment replies > thread resolution > summary.
+### Convergence
+- Rounds: X of 5
+- Status: CONVERGED / HARD LIMIT REACHED
+
+### Fixed (X findings)
+| # | Source | File(s) | Commit |
+|---|--------|---------|--------|
+
+### Won't Fix — Suppressed (X findings)
+| # | Source | File(s) | Reason | Suppression Commit |
+|---|--------|---------|--------|--------------------|
+
+### Skipped (X findings)
+| # | Source | File(s) | Reason |
+|---|--------|---------|--------|
+
+### Deferred (X findings)
+| # | Source | File(s) | Destination |
+|---|--------|---------|-------------|
+
+### CI Status
+- Codacy: <conclusion> (<N> annotations)
+- DeepSource: <analyzer statuses>
+- Other: X passing, Y failing
+
+### Verification
+- Lint: PASS
+- Unit tests: PASS (X tests) — Coverage: XX.X% (threshold: 85%)
+- Integration tests: PASS/SKIPPED — Coverage: XX.X% (threshold: 70%)
+- E2E tests: PASS/SKIPPED
+
+### Configuration Changes
+| # | Tool | Change | Method |
+|---|------|--------|--------|
+
+### PR Readiness
+- [ ] All CRITICAL/HIGH findings resolved
+- [ ] All CI checks passing
+- [ ] Codacy/DeepSource findings resolved or suppressed
+- [ ] Changes align with PR description and linked issues
+- [ ] Test coverage adequate
+
+**Verdict:** READY FOR MERGE / NEEDS CHANGES
+```
+
+---
+
+## Completion Checklist (MANDATORY — verify before ending)
+
+- [ ] Total findings count (N) was announced before the first finding
+- [ ] Batch size was asked and confirmed with the user
+- [ ] All findings presented with "Finding X of N" in EVERY header (all N presented across all batches)
+- [ ] All decisions collected (fix / skip / defer for every finding)
+- [ ] All approved fixes committed with TDD cycle (applied per batch)
+- [ ] Won't-fix Codacy/DeepSource findings suppressed inline
+- [ ] Push completed or explicitly skipped
+- [ ] ALL comment threads replied (Codacy, DeepSource, CodeRabbit, human)
+- [ ] ALL threads resolved via GraphQL
+- [ ] Fully-resolved reviews hidden
+- [ ] Reply summary presented
+- [ ] Final summary with verdict presented
+
+**STOP CONDITION:** You may ONLY end the review session after ALL items are checked.
 
 ---
 
 ## Rules
 
-- Always fetch PR metadata AND existing comments before starting the review
-- Agents MUST evaluate existing comments — validate, contest, or mark as already fixed
-- Every finding must include source attribution (agent, CodeRabbit, human reviewer)
-- Never review files outside the PR scope — only files changed in the PR
-- Include PR description, linked issues, and existing comments in every agent prompt
-- One finding at a time, severity order (CRITICAL > HIGH > MEDIUM > LOW), ALWAYS showing "Finding X of N" progress in the header
-- No changes without prior user approval — the user ALWAYS decides the approach
-- Fixes are collected during Phase 5 and applied with separate commits in Phase 6
-- Do NOT merge the PR — only review and present findings
-- Do NOT commit fixes without explicit user approval
-- ALWAYS reply to every existing PR comment thread — findings, questions, clarifications, discussions — with the resolution or answer, then resolve the thread. This applies even if no fixes were applied and no commit was made
-- If `gh` CLI is not installed, inform the user and suggest installation (e.g., `brew install gh` on macOS). If installed but not authenticated, ask the user to run `gh auth login`
+- Fetch comments from ALL sources before starting: Codacy (`**Codacy**` prefix from `github-actions[bot]`), DeepSource (`**DeepSource**` prefix from `github-actions[bot]`), CodeRabbit (`coderabbitai[bot]`), and human reviewers
+- Agents MUST evaluate ALL existing comments — validate, contest, or mark as already fixed
+- Every finding must include source attribution
+- Only review files changed in the PR
+- ALWAYS announce total findings count (N) before presenting the first finding: `"### Total findings to review: N"`
+- ALWAYS ask the user for batch size before starting (default: 5 per batch)
+- Present findings in batches: present all in the batch, collect decisions, then apply fixes for the batch before moving to the next
+- One finding at a time within each batch, severity order, ALWAYS showing "Finding X of N" in EVERY finding header — NEVER present a finding without this progress indicator
+- Coverage verification and convergence loop run ONLY after the last batch is complete
+- No changes without user approval
+- BEFORE presenting each finding: research best practices (API design, UI/UX, security, engineering) using WebSearch and codebase analysis. Option A must be your researched recommendation with clear justification
+- If the user responds with a question or disagreement: STOP, research and answer thoroughly RIGHT NOW — do NOT defer to the fix phase or continue to the next finding
+- Dispatch agents using ring droids when available (preferred), falling back to `worker` with domain-specific instructions
+- Fixes use TDD cycle (RED-GREEN-REFACTOR) with separate commits per finding
+- For won't-fix Codacy findings: add `// codacy:ignore` inline and commit
+- For won't-fix DeepSource findings: add `// skipcq: <shortcode>` inline and commit
+- Response to ALL comments is uniform: commit SHA for fixes, concrete reason for won't-fix
+- Do NOT merge the PR — only review and apply fixes
+- Push triggers Codacy/DeepSource reanalysis automatically
