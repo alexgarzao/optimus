@@ -1,0 +1,8 @@
+{
+  "name": "codacy-review",
+  "description": "Fetches Codacy PR issues via API, categorizes them, identifies false positives from misconfigured rules, evaluates genuine findings against the code, and presents results interactively.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Alex Garzao"
+  }
+}
