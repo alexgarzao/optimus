@@ -181,6 +181,8 @@ git checkout -b feature/<task-id>-<keywords>
 
 **BLOCKING**: Do NOT proceed until the workspace is created.
 
+After creating the workspace, update the **Branch** column in `tasks.md` for this task with the branch name (e.g., `feature/t-016-boleto-cancellation`). This allows cycle-close-stage-5 to find the branch during cleanup.
+
 ### Step 0.1: Discover Project Structure
 
 Before loading docs, discover the project's structure and tooling:

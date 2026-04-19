@@ -111,8 +111,18 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
 
 1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`.
 2. **Validate format:** First line must be `<!-- optimus:tasks-v1 -->`. If missing, **STOP** and suggest `/optimus-cycle-migrate`.
-3. **Validate status:** The task MUST be in status `Validando Impl` (set by cycle-impl-review-stage-3) or `Revisando PR` (re-execution). If not, STOP and tell the user which agent to run first.
-3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
+3. **Branch check (HARD BLOCK):** This agent modifies code (applies fixes). It MUST NOT run on the default/main branch.
+   ```bash
+   DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+   CURRENT_BRANCH=$(git branch --show-current)
+   ```
+   - If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`) → **STOP**:
+     ```
+     Cannot run cycle-pr-review-stage-4 on the default branch (<branch>).
+     Switch to the task's feature branch first.
+     ```
+4. **Validate status:** The task MUST be in status `Validando Impl` (set by cycle-impl-review-stage-3) or `Revisando PR` (re-execution). If not, STOP and tell the user which agent to run first.
+5. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:
      - If ALL dependencies have status `**DONE**` → proceed
@@ -120,8 +130,8 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
        ```
        Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
        ```
-4. **Update status:** Change the task status in `tasks.md` to `Revisando PR` (if not already).
-5. Do NOT commit this change separately — it will be committed with the task's work.
+6. **Update status:** Change the task status in `tasks.md` to `Revisando PR` (if not already).
+7. Do NOT commit this change separately — it will be committed with the task's work.
 6. At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes cycle-close-stage-5 next.
 
 ### Standalone Mode (no task)

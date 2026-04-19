@@ -270,14 +270,20 @@ resources and asks the user what to do. The agent NEVER cleans up automatically.
 
 ### Step 3.1: Check for Task Branch
 
-Identify the task's branch from the Branch column in `tasks.md`, or by convention (`feat/T-XXX`, `task/T-XXX`):
+Identify the task's branch from the **Branch column** in `tasks.md` (primary source). If the column is `-` or empty, fall back to convention:
 
 ```bash
+# Primary: read Branch column from tasks.md for this task ID
+TASK_BRANCH=$(grep "T-XXX" tasks.md | ... extract Branch column ...)
+
+# Fallback: search by convention
+git branch --list "feature/*T-XXX*" "feature/*t-xxx*"
+
 # Check if branch exists locally
-git branch --list "feat/T-XXX" "task/T-XXX" "*T-XXX*"
+git branch --list "$TASK_BRANCH"
 
 # Check if branch exists on remote
-git branch -r --list "origin/feat/T-XXX" "origin/task/T-XXX" "origin/*T-XXX*"
+git branch -r --list "origin/$TASK_BRANCH"
 ```
 
 If a branch is found, ask via `AskUser`:
