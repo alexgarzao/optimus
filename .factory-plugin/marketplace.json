@@ -6,6 +6,11 @@
   },
   "plugins": [
     {
+      "name": "stage-0-report",
+      "description": "Stage 0: Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only.",
+      "source": "./stage-0-report"
+    },
+    {
       "name": "stage-1-spec",
       "description": "Stage 1: Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes.",
       "source": "./stage-1-spec"

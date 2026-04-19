@@ -14,6 +14,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 
 | Skill | Stage | Description | Command |
 |-------|-------|-------------|---------|
+| `stage-0-report` | 0 | Task status dashboard with dependency graph and parallelization | `/optimus-stage-0-report` |
 | `stage-1-spec` | 1 | Validates task specs against project docs before implementation | `/optimus-stage-1-spec` |
 | `stage-2-impl` | 2 | End-to-end task implementation with verification gates | `/optimus-stage-2-impl` |
 | `stage-3-impl-review` | 3 | Post-implementation validation with parallel specialist agents | `/optimus-stage-3-impl-review` |

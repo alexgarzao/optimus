@@ -17,6 +17,7 @@ optimus/
 │   ├── coding/                        # Coding skill cards
 │   ├── system/                        # Orchestration skill cards
 │   └── writing/                       # Writing skill cards
+├── stage-0-report/                    # Stage 0: Task status dashboard (read-only)
 ├── stage-1-spec/                      # Stage 1: Spec validation
 ├── stage-2-impl/                      # Stage 2: Task implementation
 ├── stage-3-impl-review/                # Stage 3: Implementation review
@@ -117,6 +118,89 @@ rationalize these away.
 3. Update README.md
 4. Commit, push
 5. Run `droid plugin uninstall <name>@optimus`
+
+## tasks.md Format
+
+Every project using the stage pipeline MUST have a `tasks.md` file. This is the single
+source of truth for task tracking. Format:
+
+```markdown
+# Tasks
+
+| ID | Title | Status | Depends | Priority | Branch |
+|----|-------|--------|---------|----------|--------|
+| T-001 | Setup auth module | **DONE** | - | Alta | - |
+| T-002 | User registration API | Em Andamento | T-001 | Alta | feat/t-002 |
+| T-003 | Login page | Pendente | T-001 | Alta | - |
+| T-004 | Password reset flow | Pendente | T-002, T-003 | Media | - |
+| T-005 | E2E auth tests | Pendente | T-002, T-003 | Media | - |
+
+## T-001: Setup auth module
+
+**Objetivo:** Configurar o módulo de autenticação...
+
+**Critérios de Aceite:**
+- [x] JWT middleware configurado
+- [x] Testes unitários passando
+
+## T-002: User registration API
+
+**Objetivo:** ...
+
+**Critérios de Aceite:**
+- [ ] Endpoint POST /api/users
+- [ ] Validação de email
+```
+
+### Column Specification
+
+| Column | Required | Description |
+|--------|----------|-------------|
+| ID | Yes | Unique identifier. Format: `T-NNN` (e.g., T-001, T-042) |
+| Title | Yes | Short description of the task |
+| Status | Yes | Current stage status (see valid values below) |
+| Depends | Yes | Comma-separated list of task IDs this task depends on. `-` if no dependencies |
+| Priority | Yes | `Alta`, `Media`, or `Baixa` |
+| Branch | No | Git branch name. `-` if not yet created |
+
+### Valid Status Values
+
+| Status | Set by | Meaning |
+|--------|--------|---------|
+| `Pendente` | Initial | Not started |
+| `Validando Spec` | stage-1-spec | Spec being validated |
+| `Em Andamento` | stage-2-impl | Implementation in progress |
+| `Validando Impl` | stage-3-impl-review | Implementation being reviewed |
+| `Revisando PR` | stage-4-pr-review | PR being reviewed (optional stage) |
+| `**DONE**` | stage-5-close | Completed |
+
+### Dependency Rules
+
+1. **A task can only start if ALL its dependencies are `**DONE**`**. If any dependency
+   is not done, the task is BLOCKED.
+2. **Dependencies are by task ID**, not by status. `Depends: T-001, T-003` means
+   both T-001 AND T-003 must be `**DONE**` before this task can start.
+3. **`-` means no dependencies** — the task can start immediately.
+4. **Circular dependencies are invalid** — agents must detect and refuse them.
+5. **The execution order is determined by dependencies + status**, NOT by the order
+   of rows in the table. Agents must compute the dependency graph to find which
+   tasks are ready.
+
+### Task Detail Sections
+
+Below the table, each task has an H2 section (`## T-NNN: Title`) containing:
+- **Objetivo:** What the task achieves
+- **Critérios de Aceite:** Checklist of acceptance criteria (use `- [ ]` / `- [x]`)
+- Any additional context: API specs, data model, references, etc.
+
+Agents read these sections to understand what to implement and validate.
+
+### Parallelization
+
+Tasks with no dependencies or all dependencies satisfied can run in parallel.
+The stage-0-report agent computes and displays parallelization opportunities.
+
+---
 
 ## Task Lifecycle
 
