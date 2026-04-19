@@ -78,6 +78,7 @@ Read `tasks.md` and extract the markdown table. Expected columns:
 |--------|-------------|
 | ID | Task identifier (e.g., T-001) |
 | Title | Short description |
+| Tipo | Task type: Feature, Fix, Refactor, Chore, Docs, or Test |
 | Status | Current status (Pendente, Validando Spec, Em Andamento, Validando Impl, Revisando PR, **DONE**) |
 | Depends | Comma-separated dependency IDs, or `-` for none |
 | Priority | Alta, Media, or Baixa |

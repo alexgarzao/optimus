@@ -109,6 +109,7 @@ For each task found (regardless of format), extract:
 |-------|---------------|------------|
 | **ID** | Explicit ID (T-001), filename (001-task.md), heading number | Generate: T-001, T-002, ... |
 | **Title** | H1/H2 heading, YAML `title:`, filename | Use first line of content |
+| **Tipo** | YAML `type:`, labels, title prefix ("fix:", "feat:"), file naming | Default: `Feature` (see inference rules below) |
 | **Status** | YAML `status:`, column in table, checkbox state | Default: `Pendente` |
 | **Dependencies** | YAML `dependencies:`, "Depends on" text, "After T-XXX" | Default: `-` (none) |
 | **Priority** | YAML `priority:`, explicit mention, position in file | Default: `Media` |
@@ -131,6 +132,26 @@ When no explicit status exists, infer from available signals:
 | YAML `status: done/completed/closed` | `**DONE**` |
 | YAML `status: in_progress/active/started` | `Em Andamento` |
 | YAML `status: pending/todo/backlog` | `Pendente` |
+
+#### Tipo Inference Rules
+
+When no explicit type exists, infer from available signals:
+
+| Signal | Inferred Tipo |
+|--------|--------------|
+| Title starts with "fix:", "bug:", "corrigir" | `Fix` |
+| Title starts with "feat:", "add:", "implement" | `Feature` |
+| Title starts with "refactor:", "refatorar", "melhorar" | `Refactor` |
+| Title starts with "chore:", "config:", "ci:", "infra" | `Chore` |
+| Title starts with "docs:", "documentar", "doc:" | `Docs` |
+| Title starts with "test:", "testes", "e2e:" | `Test` |
+| YAML `type: feature/feat/new` | `Feature` |
+| YAML `type: bug/fix/hotfix` | `Fix` |
+| YAML `type: refactor/improvement` | `Refactor` |
+| YAML `type: chore/infra/ci/config` | `Chore` |
+| YAML `type: docs/documentation` | `Docs` |
+| YAML `type: test/testing` | `Test` |
+| No signal found | `Feature` (default) |
 
 #### Dependency Inference
 
@@ -192,11 +213,11 @@ Present what was found to the user:
 | 3 | ./subtasks/ | Subtask files | 5 files |
 
 ### Tasks Extracted
-| ID | Title | Status (inferred?) | Dependencies | Subtasks |
-|----|-------|-------------------|-------------|----------|
-| T-001 | Setup auth module | **DONE** (inferred from checkboxes) | - | 3 subtasks |
-| T-002 | User registration | Pendente (no status found) | T-001 (explicit) | - |
-| T-003 | Login page | Pendente (no status found) | T-001 (inferred) | 2 subtasks |
+| ID | Title | Tipo (inferred?) | Status (inferred?) | Dependencies | Subtasks |
+|----|-------|-------------------|-------------------|-------------|----------|
+| T-001 | Setup auth module | Feature (default) | **DONE** (inferred from checkboxes) | - | 3 subtasks |
+| T-002 | User registration | Feature (default) | Pendente (no status found) | T-001 (explicit) | - |
+| T-003 | Login page | Feature (default) | Pendente (no status found) | T-001 (inferred) | 2 subtasks |
 | ... | ... | ... | ... | ... |
 
 ### Warnings
@@ -231,11 +252,11 @@ Generate the complete `tasks.md` in optimus format and present it to the user:
 ## Proposed tasks.md
 
 ### Table
-| ID | Title | Status | Depends | Priority | Branch |
-|----|-------|--------|---------|----------|--------|
-| T-001 | Setup auth module | **DONE** | - | Alta | - |
-| T-002 | User registration | Pendente | T-001 | Alta | - |
-| ... | ... | ... | ... | ... | ... |
+| ID | Title | Tipo | Status | Depends | Priority | Branch |
+|----|-------|------|--------|---------|----------|--------|
+| T-001 | Setup auth module | Feature | **DONE** | - | Alta | - |
+| T-002 | User registration | Feature | Pendente | T-001 | Alta | - |
+| ... | ... | ... | ... | ... | ... | ... |
 
 ### Detail Sections (first 2 shown as preview)
 

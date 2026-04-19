@@ -153,13 +153,13 @@ suggests running `/optimus-cycle-migrate`.
 <!-- optimus:tasks-v1 -->
 # Tasks
 
-| ID | Title | Status | Depends | Priority | Branch |
-|----|-------|--------|---------|----------|--------|
-| T-001 | Setup auth module | **DONE** | - | Alta | - |
-| T-002 | User registration API | Em Andamento | T-001 | Alta | feat/t-002-user-registration |
-| T-003 | Login page | Pendente | T-001 | Alta | - |
-| T-004 | Password reset flow | Pendente | T-002, T-003 | Media | - |
-| T-005 | E2E auth tests | Pendente | T-002, T-003 | Media | - |
+| ID | Title | Tipo | Status | Depends | Priority | Branch |
+|----|-------|------|--------|---------|----------|--------|
+| T-001 | Setup auth module | Feature | **DONE** | - | Alta | - |
+| T-002 | User registration API | Feature | Em Andamento | T-001 | Alta | feat/t-002-user-registration |
+| T-003 | Login page | Feature | Pendente | T-001 | Alta | - |
+| T-004 | Password reset flow | Fix | Pendente | T-002, T-003 | Media | - |
+| T-005 | E2E auth tests | Test | Pendente | T-002, T-003 | Media | - |
 
 ## T-001: Setup auth module
 
@@ -184,10 +184,22 @@ suggests running `/optimus-cycle-migrate`.
 |--------|----------|-------------|
 | ID | Yes | Unique identifier. Format: `T-NNN` (e.g., T-001, T-042) |
 | Title | Yes | Short description of the task |
+| Tipo | Yes | Task type: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, or `Test` |
 | Status | Yes | Current stage status (see valid values below) |
 | Depends | Yes | Comma-separated list of task IDs this task depends on. `-` if no dependencies |
 | Priority | Yes | `Alta`, `Media`, or `Baixa` |
 | Branch | No | Git branch name. `-` if not yet created |
+
+### Valid Tipo Values
+
+| Tipo | Meaning | Conventional commit prefix |
+|------|---------|---------------------------|
+| `Feature` | New functionality | `feat` |
+| `Fix` | Bug fix | `fix` |
+| `Refactor` | Internal improvement, no behavior change | `refactor` |
+| `Chore` | Infra, config, CI, dependencies | `chore` |
+| `Docs` | Documentation only | `docs` |
+| `Test` | Add/improve tests without changing production code | `test` |
 
 ### Valid Status Values
 
@@ -225,11 +237,12 @@ Agents read these sections to understand what to implement and validate.
 
 Every stage agent (1-5) MUST validate the tasks.md format before operating:
 1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
-2. A markdown table exists with at least columns: ID, Title, Status, Depends
+2. A markdown table exists with at least columns: ID, Title, Tipo, Status, Depends
 3. All task IDs follow the `T-NNN` pattern
-4. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`
-5. All Depends values are either `-` or comma-separated valid task IDs
-6. No duplicate task IDs
+4. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
+5. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`
+6. All Depends values are either `-` or comma-separated valid task IDs
+7. No duplicate task IDs
 
 If the format marker is missing or validation fails, the agent must **STOP** and suggest
 running `/optimus-cycle-migrate` to fix the format. Do NOT attempt to interpret malformed data.

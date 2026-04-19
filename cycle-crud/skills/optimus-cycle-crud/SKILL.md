@@ -74,16 +74,17 @@ Administrative CRUD operations for tasks in `tasks.md`.
    <!-- optimus:tasks-v1 -->
    # Tasks
 
-   | ID | Title | Status | Depends | Priority | Branch |
-   |----|-------|--------|---------|----------|--------|
+   | ID | Title | Tipo | Status | Depends | Priority | Branch |
+   |----|-------|------|--------|---------|----------|--------|
    ```
    Then commit: `chore(tasks): initialize tasks.md`
 
 2. **Validate format (HARD BLOCK):**
    - **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
-   - A markdown table exists with columns: ID, Title, Status, Depends, Priority, Branch
+   - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Branch
    - All task IDs match `T-NNN` pattern
-   - All Status values are valid
+   - All Tipo values are valid (`Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`)
+   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
    - All Depends values are `-` or comma-separated valid task IDs
    - No duplicate task IDs
 
@@ -115,10 +116,11 @@ If unclear, ask the user via `AskUser`:
 Ask the user for task details using `AskUser` (one question at a time or batch if info provided):
 
 1. **Title** (required): Short description of the task
-2. **Priority** (required): `Alta`, `Media`, or `Baixa`
-3. **Dependencies** (optional): Comma-separated task IDs (e.g., `T-001, T-003`) or `-` for none
-4. **Objective** (required): What the task achieves (for the detail section)
-5. **Acceptance criteria** (required): Checklist items (for the detail section)
+2. **Tipo** (required): `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, or `Test`
+3. **Priority** (required): `Alta`, `Media`, or `Baixa`
+4. **Dependencies** (optional): Comma-separated task IDs (e.g., `T-001, T-003`) or `-` for none
+5. **Objective** (required): What the task achieves (for the detail section)
+6. **Acceptance criteria** (required): Checklist items (for the detail section)
 
 If the user provided some of these in the initial request, use them and ask only for missing fields.
 
@@ -139,7 +141,7 @@ If the user specified dependencies:
 
 1. Add a new row to the table:
    ```
-   | T-NNN | <title> | Pendente | <depends> | <priority> | - |
+   | T-NNN | <title> | <tipo> | Pendente | <depends> | <priority> | - |
    ```
 2. Add a detail section at the end of the file:
    ```markdown
@@ -158,6 +160,7 @@ If the user specified dependencies:
 Show the user the added task:
 ```
 Created task T-NNN: <title>
+  Tipo: <tipo>
   Priority: <priority>
   Depends on: <depends>
   Status: Pendente
@@ -176,6 +179,7 @@ Determine which field(s) to edit. Editable fields:
 | Field | Allowed? | Notes |
 |-------|----------|-------|
 | Title | Yes | Updates both table and H2 section header |
+| Tipo | Yes | Must be `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, or `Test` |
 | Priority | Yes | Must be `Alta`, `Media`, or `Baixa` |
 | Depends | Yes | Must validate references and check circular deps |
 | Status | **No** | Status is managed ONLY by stage agents |
@@ -267,7 +271,7 @@ Options:
 ### Step 4.1: Apply Reorder
 
 1. Rearrange table rows according to the requested order
-2. Do NOT change any cell values (ID, Title, Status, Depends, Priority, Branch stay the same)
+2. Do NOT change any cell values (ID, Title, Tipo, Status, Depends, Priority, Branch stay the same)
 3. Do NOT reorder the detail sections (they follow the original ID order for consistency)
 4. Save the file
 
