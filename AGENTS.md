@@ -122,8 +122,19 @@ rationalize these away.
 
 ## tasks.md Format
 
-Every project using the stage pipeline MUST have a `tasks.md` file. This is the single
-source of truth for task tracking. Format:
+Every project using the cycle pipeline MUST have a `tasks.md` file. This is the single
+source of truth for task tracking.
+
+### File Location
+
+All agents search for `tasks.md` in this order:
+1. `./tasks.md` (project root) — **preferred**
+2. `./docs/tasks.md` — fallback
+
+If not found in either location, the agent must inform the user and suggest running
+`cycle-migrate` to create one. Do NOT look in other locations.
+
+### Format:
 
 ```markdown
 # Tasks
@@ -196,6 +207,18 @@ Below the table, each task has an H2 section (`## T-NNN: Title`) containing:
 
 Agents read these sections to understand what to implement and validate.
 
+### Format Validation
+
+Every stage agent (1-5) MUST validate the tasks.md format before operating. Check:
+1. A markdown table exists with at least columns: ID, Title, Status, Depends
+2. All task IDs follow the `T-NNN` pattern
+3. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`
+4. All Depends values are either `-` or comma-separated valid task IDs
+5. No duplicate task IDs
+
+If validation fails, the agent must **STOP** and suggest running `/optimus-cycle-migrate`
+to fix the format. Do NOT attempt to interpret malformed data.
+
 ### Parallelization
 
 Tasks with no dependencies or all dependencies satisfied can run in parallel.
@@ -229,6 +252,11 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
    the task is already in its own output status. For example, cycle-impl-stage-2 accepts
    `Em Andamento` (its own status) as well as `Validando Spec` (its predecessor).
    This allows the user to re-run a stage without resetting status.
+   **Exception:** cycle-close-stage-5 does NOT support re-execution — once a task is
+   `**DONE**`, it cannot be re-closed.
+6. **Dependency check** — every agent verifies that ALL dependencies (Depends column)
+   have status `**DONE**` before proceeding. If any dependency is not done, the agent
+   refuses with a clear message identifying which dependency is blocking.
 
 ### Transition Table
 

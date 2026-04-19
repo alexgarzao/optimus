@@ -99,15 +99,26 @@ Determine which task to validate:
 - Confirm with the user using `AskUser`: "I'll validate task T-012: [task title]. Correct?"
 
 **If the user did NOT specify a task ID** (e.g., "validate the last task", or just invoked the skill):
-1. **Check for execution state:** Look for `docs/dev-cycle/optimus-cycle-impl-stage-2-state.json` — if it exists and has a recent task, use that task ID
-2. **Check git diff:** If no state file, examine uncommitted changes to infer which task was just implemented (look for task ID references in changed files, commit messages, or branch name)
-3. **Fall back to tasks file:** Scan the tasks file for the most recently completed task (status "in_progress" or last "completed")
+1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`.
+2. **Identify the task to validate:** Scan the table for tasks with status `Em Andamento` (cycle-impl-stage-2 completed). If exactly one, suggest it. If multiple, ask user which one.
+3. **If no tasks with `Em Andamento`:** Check git branch name for task ID references, then ask the user.
 4. **Suggest to the user** using `AskUser`: "I identified the task to validate: T-XXX — [task title]. Is this correct, or would you like to validate a different task?"
 5. **If no task can be identified**, ask the user to provide a task ID
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
 
-### Step 0.0.1: Validate and Update Task Status
+### Step 0.0.1: Validate tasks.md Format
+
+**HARD BLOCK:** Before operating, verify tasks.md is in valid optimus format:
+1. A markdown table exists with columns: ID, Title, Status, Depends, Priority, Branch
+2. All task IDs match `T-NNN` pattern
+3. All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
+4. All Depends values are `-` or comma-separated valid task IDs
+5. No duplicate task IDs
+
+If invalid, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
+
+### Step 0.0.2: Validate and Update Task Status
 
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
@@ -118,8 +129,16 @@ Determine which task to validate:
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run cycle-spec-stage-1 and cycle-impl-stage-2 first."
    - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run cycle-impl-stage-2 first."
    - If status is `Revisando PR` or `**DONE**` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage."
-3. Update the Status column to `Validando Impl` (if not already)
-4. Do NOT commit this change separately — it will be committed with the task's work
+3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
+   - If Depends is `-` → proceed (no dependencies)
+   - For each dependency ID listed, check its Status in the table:
+     - If ALL dependencies have status `**DONE**` → proceed
+     - If ANY dependency is NOT `**DONE**` → **STOP**:
+       ```
+       Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
+       ```
+4. Update the Status column to `Validando Impl` (if not already)
+5. Do NOT commit this change separately — it will be committed with the task's work
 
 ### Step 0.1: Discover Project Structure
 

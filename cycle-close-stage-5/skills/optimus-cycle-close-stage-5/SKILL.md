@@ -64,12 +64,23 @@ Stage 4 of the task lifecycle. Verifies all prerequisites before marking a task 
 - Confirm with the user using `AskUser`: "I'll close task T-012: [task title]. Correct?"
 
 **If the user did NOT specify a task ID:**
-1. Find `tasks.md` and look for tasks with status `Validando Impl` or `Revisando PR`
+1. Find `tasks.md` in `./tasks.md` or `./docs/tasks.md`. Look for tasks with status `Validando Impl` or `Revisando PR`
 2. If exactly one found, suggest it
 3. If multiple found, ask the user which one to close
 4. If none found, inform the user there are no tasks ready to close
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to close.
+
+### Step 0.0.1: Validate tasks.md Format
+
+**HARD BLOCK:** Before operating, verify tasks.md is in valid optimus format:
+1. A markdown table exists with columns: ID, Title, Status, Depends, Priority, Branch
+2. All task IDs match `T-NNN` pattern
+3. All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
+4. All Depends values are `-` or comma-separated valid task IDs
+5. No duplicate task IDs
+
+If invalid, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
 
 ### Step 0.1: Validate Task Status
 
@@ -82,7 +93,15 @@ Stage 4 of the task lifecycle. Verifies all prerequisites before marking a task 
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. It must go through cycle-spec-stage-1, cycle-impl-stage-2, and cycle-impl-review-stage-3 first."
    - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run cycle-impl-stage-2 and cycle-impl-review-stage-3 first."
    - If status is `Em Andamento` → **STOP**: "Task T-XXX is in 'Em Andamento'. Run cycle-impl-review-stage-3 first."
-   - If status is `**DONE**` → **STOP**: "Task T-XXX is already done."
+   - If status is `**DONE**` → **STOP**: "Task T-XXX is already done. Re-execution of cycle-close-stage-5 is not supported."
+3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
+   - If Depends is `-` → proceed (no dependencies)
+   - For each dependency ID listed, check its Status in the table:
+     - If ALL dependencies have status `**DONE**` → proceed
+     - If ANY dependency is NOT `**DONE**` → **STOP**:
+       ```
+       Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
+       ```
 
 ---
 

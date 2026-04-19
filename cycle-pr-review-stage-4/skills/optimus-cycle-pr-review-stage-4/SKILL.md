@@ -109,10 +109,19 @@ This skill operates in TWO modes:
 ### Task Mode (part of the stage pipeline)
 When the user references a task (e.g., "review PR for T-012") or a `tasks.md` exists with a task in status `Validando Impl` or `Revisando PR`:
 
-1. **Validate status:** The task MUST be in status `Validando Impl` (set by cycle-impl-review-stage-3) or `Revisando PR` (re-execution). If not, STOP and tell the user which agent to run first.
-2. **Update status:** Change the task status in `tasks.md` to `Revisando PR` (if not already).
-3. **Commit status change:** `git add tasks.md && git commit -m "chore: T-XXX status → Revisando PR"`
-4. At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes cycle-close-stage-5 next.
+1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`.
+2. **Validate status:** The task MUST be in status `Validando Impl` (set by cycle-impl-review-stage-3) or `Revisando PR` (re-execution). If not, STOP and tell the user which agent to run first.
+3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
+   - If Depends is `-` → proceed (no dependencies)
+   - For each dependency ID listed, check its Status in the table:
+     - If ALL dependencies have status `**DONE**` → proceed
+     - If ANY dependency is NOT `**DONE**` → **STOP**:
+       ```
+       Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
+       ```
+4. **Update status:** Change the task status in `tasks.md` to `Revisando PR` (if not already).
+5. Do NOT commit this change separately — it will be committed with the task's work.
+6. At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes cycle-close-stage-5 next.
 
 ### Standalone Mode (no task)
 When no task is referenced and no `tasks.md` exists, or the user explicitly wants to review a PR without a task context:
@@ -121,7 +130,7 @@ When no task is referenced and no `tasks.md` exists, or the user explicitly want
 
 ### How to detect which mode:
 1. If the user mentions a task ID (T-XXX) → Task Mode
-2. If `tasks.md` exists and has exactly ONE task in `Validando Impl` or `Revisando PR` → Task Mode (confirm with user via `AskUser`)
+2. Find `tasks.md` in `./tasks.md` or `./docs/tasks.md`. If found and has exactly ONE task in `Validando Impl` or `Revisando PR` → Task Mode (confirm with user via `AskUser`)
 3. If `tasks.md` exists but no task is in `Validando Impl` or `Revisando PR` → Standalone Mode
 4. If no `tasks.md` exists → Standalone Mode
 

@@ -84,32 +84,50 @@ Determine which task to validate:
 - Confirm with the user using `AskUser`: "I'll validate task T-006: [task title]. Correct?"
 
 **If the user did NOT specify a task ID** (e.g., "validate the next task", or just invoked the skill):
-1. **Find the tasks file:** Look for task specs in `docs/`, `docs/pre-dev/`, or equivalent (files named `tasks.md`, `tasks/*.md`, or similar)
-2. **Identify the next pending task:** Scan the tasks file for the first task that:
-   - Has status "pending", "todo", "not started", or no status marker
-   - Has all dependencies (required tasks) marked as "completed" or "done"
-   - Is not blocked by other tasks
-3. **If multiple candidates exist**, pick the one with the lowest ID (or earliest in the file)
+1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`.
+2. **Identify the next pending task:** Scan the table for the first task that:
+   - Has status `Pendente`
+   - Has all dependencies (Depends column) with status `**DONE**` (or Depends is `-`)
+3. **If multiple candidates exist**, pick the one with highest Priority (`Alta` > `Media` > `Baixa`), then lowest ID
 4. **Suggest to the user** using `AskUser`: "I identified the next task to validate: T-XXX — [task title]. Is this correct, or would you like to validate a different task?"
-5. **If no tasks file is found or no pending tasks exist**, ask the user to provide a task ID
+5. **If no tasks.md is found or no pending tasks exist**, ask the user to provide a task ID
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
 
-### Step 0.0.1: Validate and Update Task Status
+### Step 0.0.1: Validate tasks.md Format
+
+**HARD BLOCK:** Before operating, verify tasks.md is in valid optimus format:
+1. A markdown table exists with columns: ID, Title, Status, Depends, Priority, Branch
+2. All task IDs match `T-NNN` pattern
+3. All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
+4. All Depends values are `-` or comma-separated valid task IDs
+5. No duplicate task IDs
+
+If invalid, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
+
+### Step 0.0.2: Validate and Update Task Status
 
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
 1. Read `tasks.md` and find the row for the confirmed task ID
 2. Check the **Status** column:
-   - If status is `Pendente` (or equivalent: "A fazer", "Backlog", "Todo") → proceed
+   - If status is `Pendente` → proceed
    - If status is `Validando Spec` → proceed (re-execution of this stage)
    - If status is anything else → **STOP** and tell the user:
      ```
      Task T-XXX is in '<current_status>'. To run cycle-spec-stage-1,
      it must be in 'Pendente' or 'Validando Spec'. This task has already moved past this stage.
      ```
-3. Update the Status column to `Validando Spec` (if not already)
-4. Do NOT commit this change separately — it will be committed with the task's work
+3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
+   - If Depends is `-` → proceed (no dependencies)
+   - For each dependency ID listed, check its Status in the table:
+     - If ALL dependencies have status `**DONE**` → proceed
+     - If ANY dependency is NOT `**DONE**` → **STOP**:
+       ```
+       Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
+       ```
+4. Update the Status column to `Validando Spec` (if not already)
+5. Do NOT commit this change separately — it will be committed with the task's work
 
 **Anti-pulo:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`), refuse to proceed — the task has already passed this stage.
 

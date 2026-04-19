@@ -57,11 +57,10 @@ Read-only agent that parses `tasks.md` and presents a comprehensive project stat
 ### Step 0.1: Locate tasks.md
 
 Search for `tasks.md` in these locations (in order):
-1. Project root: `./tasks.md`
-2. Docs directory: `./docs/tasks.md`
-3. Pre-dev directory: `./docs/pre-dev/tasks.md`
+1. Project root: `./tasks.md` — **preferred**
+2. Docs directory: `./docs/tasks.md` — fallback
 
-If not found, inform the user and stop.
+If not found, inform the user and suggest: "No tasks.md found. Run `/optimus-cycle-migrate` to create one from existing task files, or create it manually following the optimus format."
 
 ### Step 0.2: Parse the Tasks Table
 
@@ -265,5 +264,6 @@ After the dashboard, present any issues found:
 - **NEVER change task status** — only report current state
 - **NEVER invoke other stage agents** — only recommend
 - Present the full dashboard even if there's only 1 task
-- If tasks.md has no table or invalid format, explain the expected format (reference AGENTS.md in optimus)
+- If tasks.md has no table or invalid format, suggest running `/optimus-cycle-migrate` to convert it to the standard format
+- If tasks.md does not exist, suggest running `/optimus-cycle-migrate` to create one from existing task files
 - Always show the dependency graph, even for small projects — it reveals parallelization opportunities
