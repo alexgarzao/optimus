@@ -23,7 +23,7 @@ examples:
     expected_flow: >
       1. Confirm task ID with user
       2. Validate status is "Validando Impl"
-      3. Run close checklist (6 verifications)
+      3. Run close checklist (11 verifications: git state, code quality, tests + coverage)
       4. If all pass, mark as DONE
       5. Commit status change
   - name: Close with failures
@@ -86,7 +86,9 @@ Stage 4 of the task lifecycle. Verifies all prerequisites before marking a task 
 
 Run ALL verifications. Do NOT stop at the first failure — run all of them and report the full picture.
 
-### Check 1: No Uncommitted Changes
+### Group A: Git & PR State
+
+#### Check 1: No Uncommitted Changes
 
 ```bash
 git status --porcelain
@@ -95,7 +97,7 @@ git status --porcelain
 - **PASS:** Output is empty
 - **FAIL:** List the uncommitted files
 
-### Check 2: No Unpushed Commits
+#### Check 2: No Unpushed Commits
 
 ```bash
 git log @{u}..HEAD --oneline
@@ -104,7 +106,7 @@ git log @{u}..HEAD --oneline
 - **PASS:** Output is empty (local is in sync with remote)
 - **FAIL:** List the unpushed commits
 
-### Check 3: PR Merged (if applicable)
+#### Check 3: PR Merged (if applicable)
 
 Check if a PR exists for the current branch or task branch:
 
@@ -117,7 +119,7 @@ gh pr list --head "$(git branch --show-current)" --json number,state,title --jq 
 - **If PR exists and state is OPEN:** FAIL — "PR #X is still open. Merge it first."
 - **If PR exists and state is CLOSED (not merged):** FAIL — "PR #X was closed without merging."
 
-### Check 4: CI Passing (if PR exists)
+#### Check 4: CI Passing (if PR exists)
 
 If a PR was found in Check 3:
 
@@ -130,37 +132,82 @@ gh pr checks <PR_NUMBER>
 
 If no PR exists, skip this check.
 
-### Check 5: Tests Pass Locally
+### Group B: Code Quality (pass/fail only)
 
-Discover the test command from `Makefile`, `package.json`, or project structure, then run it:
-
-```bash
-# Examples (discover the right command for the project):
-make test
-# or
-go test ./...
-# or
-npm test
-```
-
-- **PASS:** Exit code 0
-- **FAIL:** Show first 20 lines of error output
-
-### Check 6: Lint Passes
-
-Discover the lint command and run it:
+#### Check 5: Lint Passes
 
 ```bash
-# Examples:
+# Discover from project: make lint, golangci-lint run, npm run lint
 make lint
-# or
-golangci-lint run
-# or
-npm run lint
 ```
 
 - **PASS:** Exit code 0
 - **FAIL:** Show first 20 lines of error output
+
+#### Check 6: Vet Passes (Go projects)
+
+```bash
+go vet ./...
+```
+
+- **PASS:** Exit code 0
+- **FAIL:** Show error output
+- **SKIP:** Not a Go project
+
+#### Check 7: Format Clean
+
+```bash
+# Go: gofmt -l . (fail if output is non-empty)
+# JS/TS: npx prettier --check . (fail if exit code != 0)
+gofmt -l .
+```
+
+- **PASS:** No files listed (all formatted)
+- **FAIL:** List files that need formatting
+
+#### Check 8: Import Ordering (Go projects)
+
+```bash
+goimports -l .
+```
+
+- **PASS:** No files listed
+- **FAIL:** List files with import issues
+- **SKIP:** goimports not installed or not a Go project
+
+### Group C: Tests & Coverage
+
+#### Check 9: Unit Tests Pass
+
+```bash
+# Discover: make test, go test ./..., npm test
+go test -coverprofile=coverage.out ./...
+```
+
+- **PASS:** Exit code 0
+- **FAIL:** Show first 20 lines of error output
+
+#### Check 10: Integration Tests Pass (if available)
+
+```bash
+# Discover: make test-integration, go test -tags=integration
+go test -tags=integration ./...
+```
+
+- **PASS:** Exit code 0
+- **FAIL:** Show first 20 lines of error output
+- **SKIP:** No integration test target/tag exists
+
+#### Check 11: Coverage Above Threshold
+
+From the coverage profile generated in Check 9:
+
+```bash
+go tool cover -func=coverage.out | tail -1
+```
+
+- **PASS:** Total coverage >= 85% (unit) and >= 70% (integration if available)
+- **FAIL:** Show current percentage and threshold
 
 ---
 
@@ -172,14 +219,21 @@ npm run lint
 ## Task Close: T-XXX — [title]
 
 ### Checklist
-| # | Verification | Result |
-|---|-------------|--------|
-| 1 | No uncommitted changes | PASS |
-| 2 | No unpushed commits | PASS |
-| 3 | PR merged | PASS (PR #X) / PASS (no PR) |
-| 4 | CI passing | PASS / SKIP (no PR) |
-| 5 | Tests pass locally | PASS |
-| 6 | Lint passes | PASS |
+| # | Group | Verification | Result |
+|---|-------|-------------|--------|
+| 1 | Git | No uncommitted changes | PASS |
+| 2 | Git | No unpushed commits | PASS |
+| 3 | Git | PR merged | PASS (PR #X) / PASS (no PR) |
+| 4 | Git | CI passing | PASS / SKIP (no PR) |
+| 5 | Quality | Lint | PASS |
+| 6 | Quality | Vet | PASS / SKIP |
+| 7 | Quality | Format | PASS |
+| 8 | Quality | Import ordering | PASS / SKIP |
+| 9 | Tests | Unit tests | PASS |
+| 10 | Tests | Integration tests | PASS / SKIP |
+| 11 | Tests | Coverage >= threshold | PASS (87.2%) |
+
+**Verdict: READY TO CLOSE**
 
 All prerequisites met. Marking task as **DONE**.
 ```
@@ -195,11 +249,13 @@ Then:
 ## Task Close: T-XXX — [title]
 
 ### Checklist
-| # | Verification | Result | Details |
-|---|-------------|--------|---------|
-| 1 | No uncommitted changes | FAIL | 3 files modified |
-| 2 | No unpushed commits | PASS | |
-| ... | ... | ... | ... |
+| # | Group | Verification | Result | Details |
+|---|-------|-------------|--------|---------|
+| 1 | Git | No uncommitted changes | FAIL | 3 files modified |
+| 2 | Git | No unpushed commits | PASS | |
+| ... | ... | ... | ... | ... |
+
+**Verdict: NOT READY**
 
 ### Action Required
 - [ ] Commit and push the uncommitted changes
@@ -214,8 +270,8 @@ Do NOT change the status. Do NOT offer to fix the issues — just report them.
 
 ## Rules
 
-- Run ALL 6 checks even if the first one fails — the user needs the full picture
-- Do NOT change task status unless ALL checks pass
+- Run ALL 11 checks even if the first one fails — the user needs the full picture
+- Do NOT change task status unless ALL checks pass (SKIP counts as pass)
 - Do NOT fix issues found by the checklist — only report them
 - Do NOT skip checks because "they probably pass"
 - The agent NEVER decides to close a task without running the full checklist

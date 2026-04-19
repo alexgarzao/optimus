@@ -182,6 +182,91 @@ This determines which specialist agents to dispatch in Phase 1.
 
 ---
 
+## Phase 0.5: Static Analysis and Coverage Profiling
+
+**MANDATORY.** Before dispatching review agents, run automated checks to collect concrete data. These results feed into agent prompts and become findings if they fail.
+
+### Step 0.5.1: Run Static Analysis (parallel)
+
+Run ALL applicable checks simultaneously. Capture stdout, stderr, exit code for each.
+
+| # | Check | Command (discover from project) | What it detects |
+|---|-------|---------------------------------|-----------------|
+| 1 | Lint | `make lint` or `golangci-lint run` or `npm run lint` | Linter rule violations |
+| 2 | Vet | `go vet ./...` (Go projects) | Suspicious constructs |
+| 3 | Import ordering | `goimports -l .` (Go projects) | Unordered/missing imports |
+| 4 | Format | `gofmt -l .` (Go) or `npx prettier --check .` (JS/TS) | Formatting violations |
+| 5 | Doc generation | `make generate-docs` (if target exists) | Stale documentation |
+
+For each check that **fails**, create a finding:
+- Severity: **HIGH** for lint/vet, **MEDIUM** for format/imports/docs
+- Source: `[Static Analysis: <check-name>]`
+- Include the first 20 lines of error output
+
+For checks that **pass**, note them for the Phase 3 overview.
+
+Skip checks whose commands don't exist in the project (e.g., skip `go vet` in a pure JS project).
+
+### Step 0.5.2: Run Tests with Coverage Profiling
+
+Run tests to collect coverage data (do NOT just check pass/fail — that's stage-4-close's job):
+
+```bash
+# Unit tests (discover command from Makefile/package.json)
+go test -coverprofile=coverage-unit.out ./...
+# or: npm test -- --coverage
+
+# Integration tests (if available)
+go test -tags=integration -coverprofile=coverage-integration.out ./...
+```
+
+### Step 0.5.3: Analyze Coverage
+
+```bash
+# Overall coverage
+go tool cover -func=coverage-unit.out | tail -1
+
+# Packages with low coverage (sorted)
+go tool cover -func=coverage-unit.out | grep -v "total:" | awk '{print $NF, $1}' | sort -n | head -20
+
+# Untested functions (0% coverage)
+go tool cover -func=coverage-unit.out | grep "0.0%"
+```
+
+Create findings for coverage issues:
+- **HIGH**: Business logic functions with 0% coverage
+- **MEDIUM**: Packages below 70% coverage
+- **LOW**: Packages below 85% coverage
+- Infrastructure/generated code with 0% → skip (not a finding)
+
+### Step 0.5.4: Test Scenario Gap Analysis
+
+Dispatch a test gap analyzer via `Task` tool (use `ring-default-ring-test-reviewer` or `worker`).
+
+The agent receives: source files, test files, and `go tool cover -func` output.
+
+```
+Goal: Cross-reference implemented tests with source code to find missing scenarios.
+
+For each public function changed/added by this task:
+  - Happy path tested?
+  - Error paths tested (each error return)?
+  - Edge cases (nil, empty, boundary values)?
+  - Validation failures?
+  - Integration points (DB failure, timeout, retry)?
+
+Report: function, existing scenarios, missing scenarios, priority (HIGH/MEDIUM/LOW)
+```
+
+HIGH priority gaps become findings in Phase 2 consolidation.
+
+### Step 0.5.5: Collect Results
+
+Merge all static analysis findings and coverage gap findings into the findings list.
+These are presented alongside agent review findings in Phase 3 (overview) and Phase 4 (interactive resolution).
+
+---
+
 ## Phase 1: Parallel Agent Dispatch
 
 Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives the full content of every changed file plus the task spec excerpt.
