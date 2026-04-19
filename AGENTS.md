@@ -17,6 +17,7 @@ optimus/
 │   ├── coding/                        # Coding skill cards
 │   ├── system/                        # Orchestration skill cards
 │   └── writing/                       # Writing skill cards
+├── stage-0-migrate/                   # Stage 0: Task format migrator (one-time)
 ├── stage-0-report/                    # Stage 0: Task status dashboard (read-only)
 ├── stage-1-spec/                      # Stage 1: Spec validation
 ├── stage-2-impl/                      # Stage 2: Task implementation

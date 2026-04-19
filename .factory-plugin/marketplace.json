@@ -6,6 +6,11 @@
   },
   "plugins": [
     {
+      "name": "stage-0-migrate",
+      "description": "Stage 0: Discovers existing task files in any format and converts them to the standard optimus tasks.md format. Runs once per project.",
+      "source": "./stage-0-migrate"
+    },
+    {
       "name": "stage-0-report",
       "description": "Stage 0: Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only.",
       "source": "./stage-0-report"
