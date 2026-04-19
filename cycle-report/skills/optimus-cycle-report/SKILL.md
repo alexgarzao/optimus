@@ -62,6 +62,14 @@ Search for `tasks.md` in these locations (in order):
 
 If not found, inform the user and suggest: "No tasks.md found. Run `/optimus-cycle-migrate` to create one from existing task files, or create it manually following the optimus format."
 
+### Step 0.1.1: Validate Format Marker
+
+Check that the **first line** of `tasks.md` is `<!-- optimus:tasks-v1 -->`.
+
+If missing, warn the user: "tasks.md exists but is not in optimus format (missing `<!-- optimus:tasks-v1 -->` marker). Run `/optimus-cycle-migrate` to convert it."
+
+The report agent still ATTEMPTS to parse and display data even without the marker (best effort), but shows the warning prominently.
+
 ### Step 0.2: Parse the Tasks Table
 
 Read `tasks.md` and extract the markdown table. Expected columns:

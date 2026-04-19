@@ -134,9 +134,22 @@ All agents search for `tasks.md` in this order:
 If not found in either location, the agent must inform the user and suggest running
 `cycle-migrate` to create one. Do NOT look in other locations.
 
+### Format Marker
+
+The **first line** of `tasks.md` MUST be the format marker:
+
+```
+<!-- optimus:tasks-v1 -->
+```
+
+This marker tells agents that the file is in valid optimus format. Agents check this
+line FIRST — if it's missing, the file is treated as non-optimus format and the agent
+suggests running `/optimus-cycle-migrate`.
+
 ### Format:
 
 ```markdown
+<!-- optimus:tasks-v1 -->
 # Tasks
 
 | ID | Title | Status | Depends | Priority | Branch |
@@ -209,15 +222,16 @@ Agents read these sections to understand what to implement and validate.
 
 ### Format Validation
 
-Every stage agent (1-5) MUST validate the tasks.md format before operating. Check:
-1. A markdown table exists with at least columns: ID, Title, Status, Depends
-2. All task IDs follow the `T-NNN` pattern
-3. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`
-4. All Depends values are either `-` or comma-separated valid task IDs
-5. No duplicate task IDs
+Every stage agent (1-5) MUST validate the tasks.md format before operating:
+1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
+2. A markdown table exists with at least columns: ID, Title, Status, Depends
+3. All task IDs follow the `T-NNN` pattern
+4. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`
+5. All Depends values are either `-` or comma-separated valid task IDs
+6. No duplicate task IDs
 
-If validation fails, the agent must **STOP** and suggest running `/optimus-cycle-migrate`
-to fix the format. Do NOT attempt to interpret malformed data.
+If the format marker is missing or validation fails, the agent must **STOP** and suggest
+running `/optimus-cycle-migrate` to fix the format. Do NOT attempt to interpret malformed data.
 
 ### Parallelization
 

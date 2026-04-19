@@ -99,7 +99,7 @@ For each discovered file, determine its type:
 | **Subtask files** | subtasks/ directory with subtask .md files | `subtasks/t-001-subtasks.md` |
 | **YAML frontmatter** | Task files with YAML frontmatter (taskmd format) | `---\nid: "001"\nstatus: pending\n---` |
 | **Checklist** | Simple TODO list with checkboxes | `- [ ] Implement auth\n- [x] Setup DB` |
-| **Optimus format** | Already has the standard table + H2 sections | Valid optimus tasks.md |
+| **Optimus format** | First line is `<!-- optimus:tasks-v1 -->` with standard table + H2 sections | Valid optimus tasks.md |
 
 ### Step 0.3: Extract Task Data
 
@@ -289,10 +289,11 @@ If `tasks.md` exists in non-optimus format:
 ### Step 3.2: Write tasks.md
 
 Create `tasks.md` with:
-1. H1 heading: `# Tasks`
-2. The table (all columns)
-3. Empty line
-4. H2 sections for each task (with extracted content)
+1. Format marker: `<!-- optimus:tasks-v1 -->` (MUST be the first line)
+2. H1 heading: `# Tasks`
+3. The table (all columns)
+4. Empty line
+5. H2 sections for each task (with extracted content)
 
 ### Step 3.3: Commit
 
@@ -330,6 +331,6 @@ Original files preserved."
 - **NEVER assume dependencies from task order** — sequential IDs don't imply dependency
 - If a task has no content (just a title), create the H2 section with empty Objetivo and Critérios de Aceite, and warn the user
 - If status inference is uncertain, mark as `Pendente` and flag as "(inferred)" in the inventory
-- If the project already has a valid optimus tasks.md, inform the user and stop (nothing to migrate)
+- If the project already has a valid optimus tasks.md (first line is `<!-- optimus:tasks-v1 -->`), inform the user and stop (nothing to migrate)
 - Subtasks always become checklist items in the parent task — never separate entries in the table
 - Task IDs must be unique — if duplicates found, warn the user before proceeding

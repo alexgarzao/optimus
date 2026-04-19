@@ -109,13 +109,14 @@ Determine which task to execute:
 ### Step 0.0.1: Validate tasks.md Format
 
 **HARD BLOCK:** Before operating, verify tasks.md is in valid optimus format:
-1. A markdown table exists with columns: ID, Title, Status, Depends, Priority, Branch
-2. All task IDs match `T-NNN` pattern
-3. All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
-4. All Depends values are `-` or comma-separated valid task IDs
-5. No duplicate task IDs
+1. **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
+2. A markdown table exists with columns: ID, Title, Status, Depends, Priority, Branch
+3. All task IDs match `T-NNN` pattern
+4. All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
+5. All Depends values are `-` or comma-separated valid task IDs
+6. No duplicate task IDs
 
-If invalid, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
+If the marker is missing or validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
 
 ### Step 0.0.2: Validate and Update Task Status
 

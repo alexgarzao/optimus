@@ -110,7 +110,8 @@ This skill operates in TWO modes:
 When the user references a task (e.g., "review PR for T-012") or a `tasks.md` exists with a task in status `Validando Impl` or `Revisando PR`:
 
 1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`.
-2. **Validate status:** The task MUST be in status `Validando Impl` (set by cycle-impl-review-stage-3) or `Revisando PR` (re-execution). If not, STOP and tell the user which agent to run first.
+2. **Validate format:** First line must be `<!-- optimus:tasks-v1 -->`. If missing, **STOP** and suggest `/optimus-cycle-migrate`.
+3. **Validate status:** The task MUST be in status `Validando Impl` (set by cycle-impl-review-stage-3) or `Revisando PR` (re-execution). If not, STOP and tell the user which agent to run first.
 3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:
