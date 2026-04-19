@@ -17,13 +17,14 @@ optimus/
 │   ├── coding/                        # Coding skill cards
 │   ├── system/                        # Orchestration skill cards
 │   └── writing/                       # Writing skill cards
-├── cycle-migrate/                   # Stage 0: Task format migrator (one-time)
-├── cycle-report/                    # Stage 0: Task status dashboard (read-only)
-├── cycle-spec-stage-1/                      # Stage 1: Spec validation
-├── cycle-impl-stage-2/                      # Stage 2: Task implementation
-├── cycle-impl-review-stage-3/                # Stage 3: Implementation review
-├── cycle-pr-review-stage-4/                 # Stage 4 (optional): PR review orchestrator
-├── cycle-close-stage-5/                     # Stage 5: Close task (verify & mark done)
+├── cycle-migrate/                   # Admin: Task format migrator (one-time)
+├── cycle-report/                    # Admin: Task status dashboard (read-only)
+├── cycle-crud/                      # Admin: Create, edit, remove, reorder tasks
+├── cycle-spec-stage-1/              # Execution Stage 1: Spec validation + workspace creation
+├── cycle-impl-stage-2/              # Execution Stage 2: Task implementation
+├── cycle-impl-review-stage-3/       # Execution Stage 3: Implementation review
+├── cycle-pr-review-stage-4/         # Execution Stage 4 (optional): PR review orchestrator
+├── cycle-close-stage-5/             # Execution Stage 5: Close task (verify & mark done)
 ├── deep-review/                       # Parallel code review (no PR context)
 ├── deep-doc-review/                   # Documentation review
 ├── coderabbit-review/                 # CodeRabbit CLI + TDD cycle
@@ -275,18 +276,26 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
    to run on the default/main branch. They must be on a feature/task branch.
    Agents that only modify `tasks.md` or are read-only follow different rules:
 
-   | Agent | Allowed on main/default? | Reason |
-   |-------|-------------------------|--------|
-   | cycle-migrate | Yes | Only creates/modifies tasks.md |
-   | cycle-report | Yes | Read-only, no modifications |
-   | cycle-spec-stage-1 | **No** | Modifies task specs and docs |
-   | cycle-impl-stage-2 | **No** | Modifies code |
-   | cycle-impl-review-stage-3 | **No** | Modifies code (applies fixes) |
-   | cycle-pr-review-stage-4 | **No** | Modifies code (applies fixes) |
-   | cycle-close-stage-5 | Yes | Only modifies tasks.md status |
+   **Skills are classified as Administrative or Execution:**
 
-   **Exception:** Committing status changes to `tasks.md` is always allowed on any
-   branch (the status update is part of the task's work commit on the feature branch).
+   | Type | Agent | Allowed on main/default? | Reason |
+   |------|-------|-------------------------|--------|
+   | Admin | cycle-migrate | Yes | Only creates/modifies tasks.md |
+   | Admin | cycle-report | Yes | Read-only, no modifications |
+   | Admin | cycle-crud | Yes | Only creates/edits/removes tasks in tasks.md |
+   | Execution | cycle-spec-stage-1 | Yes (creates workspace) | Creates branch/worktree, then works there |
+   | Execution | cycle-impl-stage-2 | **No** | Modifies code, verifies workspace exists |
+   | Execution | cycle-impl-review-stage-3 | **No** | Modifies code (applies fixes), verifies workspace |
+   | Execution | cycle-pr-review-stage-4 | **No** | Modifies code (applies fixes), verifies workspace |
+   | Execution | cycle-close-stage-5 | **No** | Runs verification on task branch, then cleanup |
+
+   **Administrative skills** manage tasks.md metadata. They never modify project code
+   and can run on any branch.
+
+   **Execution skills** modify code or run verification. They require a feature branch
+   (workspace). Stage-1 is special: it creates the workspace when invoked on the default
+   branch, then switches to it. Stages 2-5 verify the workspace exists and refuse to
+   run on the default branch.
 
    To detect the default branch:
    ```bash

@@ -103,7 +103,7 @@ Runs AFTER optimus-cycle-impl-stage-2 finishes and BEFORE the final commit.
 
 If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
 
-3. **Branch check (HARD BLOCK):** This agent modifies code (applies fixes). It MUST NOT run on the default/main branch.
+3. **Verify workspace (HARD BLOCK):** This agent modifies code. It MUST NOT run on the default/main branch.
    ```bash
    DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
    CURRENT_BRANCH=$(git branch --show-current)

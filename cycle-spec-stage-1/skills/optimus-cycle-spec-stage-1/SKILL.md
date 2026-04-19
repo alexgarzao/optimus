@@ -88,16 +88,7 @@ Catches gaps, contradictions, and ambiguities that would cause rework.
 
 If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
 
-3. **Branch check (HARD BLOCK):** This agent modifies task specs and docs. It MUST NOT run on the default/main branch.
-   ```bash
-   DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-   CURRENT_BRANCH=$(git branch --show-current)
-   ```
-   - If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`) → **STOP**:
-     ```
-     Cannot run cycle-spec-stage-1 on the default branch (<branch>).
-     Create a feature branch first: git checkout -b feat/T-XXX
-     ```
+
 
 ### Step 0.0.1: Identify Task to Validate
 
@@ -140,6 +131,45 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 5. Do NOT commit this change separately — it will be committed with the task's work
 
 **Anti-pulo:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`), refuse to proceed — the task has already passed this stage.
+
+### Step 0.0.3: Create Workspace (if on default branch)
+
+Check if currently on the default/main branch:
+
+```bash
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+CURRENT_BRANCH=$(git branch --show-current)
+```
+
+**If already on a feature branch** (not default/main/master): proceed (re-execution or workspace already exists).
+
+**If on default branch:** Create a workspace for the task. Ask the user via `AskUser`:
+
+"Task T-XXX needs a workspace. How should I create it?"
+
+Options:
+- **(a) Git worktree (recommended)** — creates a worktree in a sibling directory, keeps the current branch untouched
+- **(b) New branch** — creates and checks out a new branch in the current repository
+
+**Branch naming:** Generate a descriptive name from the task ID and title:
+- Pattern: `feature/<task-id>-<keywords>` where keywords are 2-4 lowercase words from the title
+- Examples: `feature/t-016-boleto-cancellation`, `feature/t-003-user-auth-jwt`
+- Strip articles, prepositions, and generic words (implement, add, create, update)
+
+**If worktree (recommended):**
+```bash
+git worktree add ../<repo>-<task-id>-<keywords> -b feature/<task-id>-<keywords>
+```
+Then change working directory to the new worktree path for all subsequent steps.
+
+**If new branch:**
+```bash
+git checkout -b feature/<task-id>-<keywords>
+```
+
+After creating the workspace, update the **Branch** column in `tasks.md` for this task with the branch name.
+
+**BLOCKING**: Do NOT proceed until the workspace is created.
 
 ### Step 0.1: Discover Project Structure
 

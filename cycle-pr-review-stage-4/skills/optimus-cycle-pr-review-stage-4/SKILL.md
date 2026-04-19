@@ -111,7 +111,7 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
 
 1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`.
 2. **Validate format:** First line must be `<!-- optimus:tasks-v1 -->`. If missing, **STOP** and suggest `/optimus-cycle-migrate`.
-3. **Branch check (HARD BLOCK):** This agent modifies code (applies fixes). It MUST NOT run on the default/main branch.
+3. **Verify workspace (HARD BLOCK):** This agent modifies code. It MUST NOT run on the default/main branch.
    ```bash
    DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
    CURRENT_BRANCH=$(git branch --show-current)

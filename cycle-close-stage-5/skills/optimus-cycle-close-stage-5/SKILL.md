@@ -70,6 +70,17 @@ Stage 4 of the task lifecycle. Verifies all prerequisites before marking a task 
 
 If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
 
+3. **Verify workspace (HARD BLOCK):** This agent runs verification checks. It MUST run on the task's feature branch, not the default/main branch.
+   ```bash
+   DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+   CURRENT_BRANCH=$(git branch --show-current)
+   ```
+   - If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`) → **STOP**:
+     ```
+     Cannot run cycle-close-stage-5 on the default branch (<branch>).
+     Switch to the task's feature branch first.
+     ```
+
 ### Step 0.0.1: Identify Task to Close
 
 **If the user specified a task ID** (e.g., "close T-012"):

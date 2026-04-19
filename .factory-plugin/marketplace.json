@@ -16,6 +16,11 @@
       "source": "./cycle-report"
     },
     {
+      "name": "cycle-crud",
+      "description": "Administrative: Create, edit, remove, and reorder tasks in tasks.md. Runs on any branch.",
+      "source": "./cycle-crud"
+    },
+    {
       "name": "cycle-spec-stage-1",
       "description": "Stage 1: Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes.",
       "source": "./cycle-spec-stage-1"
