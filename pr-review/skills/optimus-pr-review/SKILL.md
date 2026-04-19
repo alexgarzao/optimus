@@ -226,7 +226,38 @@ CI Status:
   - DeepSource: <analyzer1>=<conclusion>, <analyzer2>=<conclusion>
 ```
 
-### Step 0.6: Fetch Changed Files
+### Step 0.6: Investigate Failing CI Checks
+
+If ANY CI checks are failing (conclusion != "success" and status == "completed"), you MUST investigate each one:
+
+For each failing check:
+
+1. **Fetch the failed workflow run logs:**
+```bash
+# Get the check run details including the run URL
+gh api repos/{owner}/{repo}/commits/${COMMIT_SHA}/check-runs \
+  --jq '.check_runs[] | select(.conclusion == "failure") | {name, conclusion, details_url, output: {title: .output.title, summary: .output.summary}}'
+```
+
+2. **Fetch workflow run logs if available:**
+```bash
+# Extract run ID from details_url and fetch logs
+RUN_ID=$(echo "<details_url>" | grep -oP 'runs/\K[0-9]+')
+gh run view $RUN_ID --log-failed 2>/dev/null | tail -100
+```
+
+3. **Create a finding for each failing check** with:
+   - Severity: **HIGH** (CI failure blocks merge)
+   - Source: `[CI: <check-name>]`
+   - The error message / log output
+   - Root cause analysis
+   - Proposed fix
+
+These CI failure findings are included in Phase 3 consolidation alongside Codacy/DeepSource/agent findings, assigned sequential IDs (F1, F2...), and presented to the user for resolution in Phase 5 like any other finding.
+
+**IMPORTANT:** CI failures are NOT informational — they are actionable findings that block merge readiness. Treat them with the same rigor as code review findings.
+
+### Step 0.7: Fetch Changed Files
 
 ```bash
 gh pr diff <PR_NUMBER_OR_URL> --name-only
@@ -237,6 +268,8 @@ Read the full content of each changed file for the review agents.
 ---
 
 ## Phase 1: Present PR Summary
+
+**IMPORTANT:** If there are failing CI checks, they MUST be highlighted prominently in the summary. Failing CI is a merge blocker and takes priority.
 
 ```markdown
 ## PR Review: #<number> — <title>
@@ -375,6 +408,7 @@ Each finding MUST include its source(s):
 | Source Type | Label |
 |-------------|-------|
 | New finding from agent review | `[Agent: <agent-name>]` |
+| CI check failure | `[CI: <check-name>]` |
 | Codacy finding validated by agent | `[Codacy + Agent: <agent-name>]` |
 | DeepSource finding validated by agent | `[DeepSource + Agent: <agent-name>]` |
 | CodeRabbit comment validated by agent | `[CodeRabbit + Agent: <agent-name>]` |
@@ -904,6 +938,7 @@ gh api graphql -f query='
 ## PR Review Summary: #<number> — <title>
 
 ### Sources Analyzed
+- CI checks: X failing (Y fixed, Z remaining)
 - Codacy: X issues (Y fixed, Z suppressed)
 - DeepSource: X issues (Y fixed, Z suppressed)
 - CodeRabbit: X comments (Y validated, Z contested)
@@ -946,8 +981,8 @@ gh api graphql -f query='
 |---|------|--------|--------|
 
 ### PR Readiness
-- [ ] All CRITICAL/HIGH findings resolved
-- [ ] All CI checks passing
+- [ ] All CRITICAL/HIGH findings resolved (including CI failures)
+- [ ] All CI checks passing (verified after fixes pushed)
 - [ ] Codacy/DeepSource findings resolved or suppressed
 - [ ] Changes align with PR description and linked issues
 - [ ] Test coverage adequate
