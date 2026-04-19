@@ -83,6 +83,21 @@ Unified PR review orchestrator. Fetches PR metadata, collects ALL review comment
 
 ---
 
+## CRITICAL: Every Invocation Starts From Scratch
+
+**HARD BLOCK:** Every time this skill is invoked, it MUST fetch ALL data fresh from the PR. There is NO state carried over from previous invocations.
+
+- Do NOT assume issues from a previous run are still resolved
+- Do NOT skip fetching comments because "I already saw this PR"
+- Do NOT say "issues were already resolved" without fetching and verifying RIGHT NOW
+- New comments, new commits, new CI results may exist since the last run
+- Always run Phase 0 completely: fetch metadata, fetch ALL threads, fetch CI checks, fetch changed files
+- The PR may have changed entirely since the last time you looked at it
+
+If you find yourself saying "these were already addressed" without having run `gh api` commands in THIS session, you are violating this rule.
+
+---
+
 ## Phase 0: Fetch PR Context
 
 ### Step 0.1: Obtain PR URL
