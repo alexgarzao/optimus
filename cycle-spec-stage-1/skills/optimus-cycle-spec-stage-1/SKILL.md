@@ -96,16 +96,42 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 - Confirm with the user using `AskUser`: "I'll validate task T-006: [task title]. Correct?"
 
 **If the user did NOT specify a task ID** (e.g., "validate the next task", or just invoked the skill):
-1. **Identify the next pending task:** Scan the table for the first task that:
-   - Has status `Pendente`
+1. **Identify the next eligible task:** Scan the table for the first task that:
+   - Has status `Pendente` or `Validando Spec` (re-execution)
    - Has all dependencies (Depends column) with status `**DONE**` (or Depends is `-`)
 2. **If multiple candidates exist**, pick the one with highest Priority (`Alta` > `Media` > `Baixa`), then lowest ID
 3. **Suggest to the user** using `AskUser`: "I identified the next task to validate: T-XXX — [task title]. Is this correct, or would you like to validate a different task?"
-4. **If no pending tasks exist**, ask the user to provide a task ID
+4. **If no eligible tasks exist**, ask the user to provide a task ID
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
 
-### Step 0.0.2: Create Workspace (if on default branch)
+### Step 0.0.2: Validate and Update Task Status
+
+**HARD BLOCK:** This step is mandatory. Do NOT skip it.
+
+1. Read `tasks.md` and find the row for the confirmed task ID
+2. Check the **Status** column:
+   - If status is `Pendente` → proceed
+   - If status is `Validando Spec` → proceed (re-execution of this stage)
+   - If status is anything else → **STOP** and tell the user:
+     ```
+     Task T-XXX is in '<current_status>'. To run cycle-spec-stage-1,
+     it must be in 'Pendente' or 'Validando Spec'. This task has already moved past this stage.
+     ```
+3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
+   - If Depends is `-` → proceed (no dependencies)
+   - For each dependency ID listed, check its Status in the table:
+     - If ALL dependencies have status `**DONE**` → proceed
+     - If ANY dependency is NOT `**DONE**` → **STOP**:
+       ```
+       Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
+       ```
+4. Update the Status column to `Validando Spec` (if not already)
+5. Do NOT commit this change separately — it will be committed with the task's work
+
+**Anti-pulo:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`), refuse to proceed — the task has already passed this stage.
+
+### Step 0.0.3: Create Workspace (if on default branch)
 
 Check if currently on the default/main branch:
 
@@ -143,32 +169,6 @@ git checkout -b feat/<task-id>-<keywords>
 After creating the workspace, update the **Branch** column in `tasks.md` for this task with the branch name.
 
 **BLOCKING**: Do NOT proceed until the workspace is created.
-
-### Step 0.0.3: Validate and Update Task Status
-
-**HARD BLOCK:** This step is mandatory. Do NOT skip it.
-
-1. Read `tasks.md` and find the row for the confirmed task ID
-2. Check the **Status** column:
-   - If status is `Pendente` → proceed
-   - If status is `Validando Spec` → proceed (re-execution of this stage)
-   - If status is anything else → **STOP** and tell the user:
-     ```
-     Task T-XXX is in '<current_status>'. To run cycle-spec-stage-1,
-     it must be in 'Pendente' or 'Validando Spec'. This task has already moved past this stage.
-     ```
-3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
-   - If Depends is `-` → proceed (no dependencies)
-   - For each dependency ID listed, check its Status in the table:
-     - If ALL dependencies have status `**DONE**` → proceed
-     - If ANY dependency is NOT `**DONE**` → **STOP**:
-       ```
-       Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
-       ```
-4. Update the Status column to `Validando Spec` (if not already)
-5. Do NOT commit this change separately — it will be committed with the task's work
-
-**Anti-pulo:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`), refuse to proceed — the task has already passed this stage.
 
 ### Step 0.1: Discover Project Structure
 
@@ -451,7 +451,7 @@ If any corrections were applied in Step 5:
 1. Run `git status` and `git diff` to review all changes
 2. Check for sensitive data (secrets, keys, tokens) — if found, STOP and warn the user
 3. Present the summary of changes and ask the user for commit approval via `AskUser`
-4. If approved, stage all modified files and commit with a descriptive message (e.g., "fix task T-XXX spec: [brief summary of corrections]")
+4. If approved, stage all modified files and commit using the task's Tipo for the conventional commit prefix (Feature→`feat`, Fix→`fix`, Refactor→`refactor`, Chore→`chore`, Docs→`docs`, Test→`test`). Example: `feat(T-003): fix spec — [brief summary of corrections]`
 5. Run `git status` to confirm the commit succeeded
 
 If no corrections were applied (all findings skipped), skip this step.

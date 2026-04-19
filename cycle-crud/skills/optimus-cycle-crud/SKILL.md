@@ -11,7 +11,6 @@ trigger: >
   - When user wants to reorder tasks (e.g., "move T-005 before T-003")
   - When user says "manage tasks" or "edit tasks.md"
 skip_when: >
-  - No tasks.md exists in the project (suggest cycle-migrate first)
   - User wants to execute a task (use cycle-spec-stage-1 instead)
   - User wants to change task status (status is managed by stage agents only)
 prerequisite: >

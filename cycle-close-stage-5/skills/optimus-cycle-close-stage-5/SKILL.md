@@ -246,9 +246,11 @@ All prerequisites met. Marking task as **DONE**.
 
 Then:
 1. Update the Status column in `tasks.md` to `**DONE**` (from either `Validando Impl` or `Revisando PR`)
-2. Commit: `chore: mark T-XXX as done`
-3. Push the commit
-4. Proceed to Phase 3 (cleanup).
+2. Read the **Tipo** column for this task and map to conventional commit prefix:
+   - Feature → `feat`, Fix → `fix`, Refactor → `refactor`, Chore → `chore`, Docs → `docs`, Test → `test`
+3. Commit: `<prefix>: mark T-XXX as done` (e.g., `feat: mark T-003 as done`)
+4. Push the commit
+5. Proceed to Phase 3 (cleanup).
 
 ### If ANY check fails:
 
@@ -303,9 +305,18 @@ If a branch is found, ask via `AskUser`:
 Task T-XXX is done. The branch '<branch>' still exists (local and/or remote). What should I do?
 ```
 Options:
-- **Delete local and remote**: `git branch -d <branch> && git push origin --delete <branch>`
-- **Delete local only**: `git branch -d <branch>`
+- **Delete local and remote**: switch to default branch first, then delete
+- **Delete local only**: switch to default branch first, then delete local
 - **Keep**: Leave the branch as is
+
+**IMPORTANT:** You cannot delete a branch you are currently on. Before deleting, switch to the default branch:
+```bash
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+git checkout "$DEFAULT_BRANCH"
+git branch -d <branch>
+# If also deleting remote:
+git push origin --delete <branch>
+```
 
 ### Step 3.2: Check for Task Worktree
 
