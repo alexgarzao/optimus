@@ -102,15 +102,16 @@ Determine which task to validate:
 1. Read `tasks.md` and find the row for the confirmed task ID
 2. Check the **Status** column:
    - If status is `Pendente` (or equivalent: "A fazer", "Backlog", "Todo") → proceed
+   - If status is `Validando Spec` → proceed (re-execution of this stage)
    - If status is anything else → **STOP** and tell the user:
      ```
      Task T-XXX is in '<current_status>'. To run stage-1-spec,
-     it must be in 'Pendente'. This task has already moved past this stage.
+     it must be in 'Pendente' or 'Validando Spec'. This task has already moved past this stage.
      ```
-3. Update the Status column from `Pendente` to `Validando Spec`
+3. Update the Status column to `Validando Spec` (if not already)
 4. Do NOT commit this change separately — it will be committed with the task's work
 
-**Anti-pulo:** This agent ONLY accepts tasks in `Pendente` status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `**DONE**`), refuse to proceed — the task has already passed this stage.
+**Anti-pulo:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`), refuse to proceed — the task has already passed this stage.
 
 ### Step 0.1: Discover Project Structure
 

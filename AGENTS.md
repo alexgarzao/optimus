@@ -20,7 +20,7 @@ optimus/
 ├── stage-1-spec/                      # Stage 1: Spec validation
 ├── stage-2-impl/                      # Stage 2: Task implementation
 ├── stage-3-impl-review/                # Stage 3: Implementation review
-├── stage-3-pr-review/                 # Stage 3.5 (optional): PR review orchestrator
+├── stage-4-pr-review/                 # Stage 4 (optional): PR review orchestrator
 ├── stage-5-close/                     # Stage 5: Close task (verify & mark done)
 ├── deep-review/                       # Parallel code review (no PR context)
 ├── deep-doc-review/                   # Documentation review
@@ -120,12 +120,12 @@ rationalize these away.
 
 ## Task Lifecycle
 
-Tasks flow through 5 stages (stage-3-pr-review is optional). Status lives in `tasks.md`
+Tasks flow through 5 stages (stage-4-pr-review is optional). Status lives in `tasks.md`
 (the markdown table in the target project). Each stage is a separate skill.
 
 ```
 Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando PR] → **DONE**
-           (stage-1-spec)   (stage-2-impl)  (stage-3-impl-review)  (stage-3-pr-review)  (stage-5-close)
+           (stage-1-spec)   (stage-2-impl)  (stage-3-impl-review)  (stage-4-pr-review)  (stage-5-close)
                                                                [optional]
 ```
 
@@ -140,21 +140,25 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 4. **Anti-pulo** — each agent validates that the task is in the expected predecessor
    status before proceeding. If not, it refuses and tells the user which agent to
    run first.
+5. **Re-execution allowed** — every agent (stages 1-4) accepts being re-run when
+   the task is already in its own output status. For example, stage-2-impl accepts
+   `Em Andamento` (its own status) as well as `Validando Spec` (its predecessor).
+   This allows the user to re-run a stage without resetting status.
 
 ### Transition Table
 
-| Agent | Expects status | Changes to | If wrong status |
-|-------|---------------|------------|-----------------|
-| stage-1-spec | `Pendente` | `Validando Spec` | STOP, tell user |
-| stage-2-impl | `Validando Spec` | `Em Andamento` | STOP, tell user |
-| stage-3-impl-review | `Em Andamento` | `Validando Impl` | STOP, tell user |
-| stage-3-pr-review | `Validando Impl` | `Revisando PR` | STOP, tell user |
-| stage-5-close | `Validando Impl` OR `Revisando PR` | `**DONE**` | STOP, tell user |
+| Agent | Expects status | Changes to | Re-execution? |
+|-------|---------------|------------|---------------|
+| stage-1-spec | `Pendente` or `Validando Spec` | `Validando Spec` | Yes (accepts own status) |
+| stage-2-impl | `Validando Spec` or `Em Andamento` | `Em Andamento` | Yes (accepts own status) |
+| stage-3-impl-review | `Em Andamento` or `Validando Impl` | `Validando Impl` | Yes (accepts own status) |
+| stage-4-pr-review | `Validando Impl` or `Revisando PR` | `Revisando PR` | Yes (accepts own status) |
+| stage-5-close | `Validando Impl` or `Revisando PR` | `**DONE**` | No (final stage) |
 
-**NOTE:** stage-3-pr-review is optional. stage-5-close accepts both `Validando Impl`
+**NOTE:** stage-4-pr-review is optional. stage-5-close accepts both `Validando Impl`
 (if pr-review was skipped) and `Revisando PR` (if pr-review ran).
 
-**NOTE:** stage-3-pr-review also works in standalone mode (without a task). In standalone
+**NOTE:** stage-4-pr-review also works in standalone mode (without a task). In standalone
 mode, it skips all task status logic. See its SKILL.md for detection rules.
 
 **NOTE:** Merge do PR é manual, feito pelo usuário DEPOIS do stage-5-close marcar DONE.

@@ -114,9 +114,10 @@ Determine which task to execute:
 1. Read `tasks.md` and find the row for the confirmed task ID
 2. Check the **Status** column:
    - If status is `Validando Spec` → proceed (stage-1-spec has completed)
+   - If status is `Em Andamento` → proceed (re-execution of this stage)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run stage-1-spec first."
-   - If status is `Em Andamento`, `Validando Impl`, or `**DONE**` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage."
-3. Update the Status column from `Validando Spec` to `Em Andamento`
+   - If status is `Validando Impl`, `Revisando PR`, or `**DONE**` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage."
+3. Update the Status column to `Em Andamento` (if not already)
 4. Do NOT commit this change separately — it will be committed with the task's work
 
 ### Step 0.0.2: Create Workspace

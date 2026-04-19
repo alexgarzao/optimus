@@ -6,14 +6,14 @@ description: >
   (if applicable), CI passing, tests and lint passing locally.
   Does NOT merge the PR — the user merges manually after close.
 trigger: >
-  - After optimus-stage-3-pr-review has completed for a task (optional), or after optimus-stage-3-impl-review
+  - After optimus-stage-4-pr-review has completed for a task (optional), or after optimus-stage-3-impl-review
   - When user requests closing a task (e.g., "close T-012", "mark T-012 as done")
 skip_when: >
   - Task has not been through at least stage-3-impl-review yet
   - Task is already done
 prerequisite: >
   - Task exists in tasks.md with status "Validando Impl" or "Revisando PR"
-  - At least stage-3-impl-review has completed (stage-3-pr-review is optional)
+  - At least stage-3-impl-review has completed (stage-4-pr-review is optional)
 NOT_skip_when: >
   - "Everything is already ready" → Verify it. Do not assume.
   - "Tests passed in CI" → Also run locally to confirm.
@@ -36,12 +36,12 @@ examples:
       4. Report what's missing, do NOT change status
 related:
   complementary:
-    - optimus-stage-3-pr-review
+    - optimus-stage-4-pr-review
     - optimus-stage-3-impl-review
   sequence:
     after:
       - optimus-stage-3-impl-review
-      - optimus-stage-3-pr-review
+      - optimus-stage-4-pr-review
 verification:
   manual:
     - All checklist items passed
@@ -77,8 +77,8 @@ Stage 4 of the task lifecycle. Verifies all prerequisites before marking a task 
 
 1. Read `tasks.md` and find the row for the confirmed task ID
 2. Check the **Status** column:
-   - If status is `Validando Impl` → proceed (stage-3-impl-review has completed, stage-3-pr-review was skipped)
-   - If status is `Revisando PR` → proceed (stage-3-pr-review has completed)
+   - If status is `Validando Impl` → proceed (stage-3-impl-review has completed, stage-4-pr-review was skipped)
+   - If status is `Revisando PR` → proceed (stage-4-pr-review has completed)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. It must go through stage-1-spec, stage-2-impl, and stage-3-impl-review first."
    - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run stage-2-impl and stage-3-impl-review first."
    - If status is `Em Andamento` → **STOP**: "Task T-XXX is in 'Em Andamento'. Run stage-3-impl-review first."

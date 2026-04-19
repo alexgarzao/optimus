@@ -1,5 +1,5 @@
 ---
-name: optimus-stage-3-pr-review
+name: optimus-stage-4-pr-review
 description: >
   Unified PR review orchestrator. Fetches PR metadata, collects ALL review
   comments (Codacy, DeepSource, CodeRabbit, human reviewers), dispatches
@@ -62,6 +62,8 @@ related:
       - optimus-stage-3-impl-review
     before:
       - optimus-stage-5-close
+  re_execution:
+    allowed: true
 verification:
   automated:
     - command: "which gh 2>/dev/null && echo 'available'"
@@ -105,10 +107,10 @@ If you find yourself saying "these were already addressed" without having run `g
 This skill operates in TWO modes:
 
 ### Task Mode (part of the stage pipeline)
-When the user references a task (e.g., "review PR for T-012") or a `tasks.md` exists with a task in status `Validando Impl`:
+When the user references a task (e.g., "review PR for T-012") or a `tasks.md` exists with a task in status `Validando Impl` or `Revisando PR`:
 
-1. **Validate status:** The task MUST be in status `Validando Impl` (set by stage-3-impl-review). If not, STOP and tell the user which agent to run first.
-2. **Update status:** Change the task status in `tasks.md` from `Validando Impl` to `Revisando PR`.
+1. **Validate status:** The task MUST be in status `Validando Impl` (set by stage-3-impl-review) or `Revisando PR` (re-execution). If not, STOP and tell the user which agent to run first.
+2. **Update status:** Change the task status in `tasks.md` to `Revisando PR` (if not already).
 3. **Commit status change:** `git add tasks.md && git commit -m "chore: T-XXX status → Revisando PR"`
 4. At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes stage-5-close next.
 
@@ -119,8 +121,8 @@ When no task is referenced and no `tasks.md` exists, or the user explicitly want
 
 ### How to detect which mode:
 1. If the user mentions a task ID (T-XXX) → Task Mode
-2. If `tasks.md` exists and has exactly ONE task in `Validando Impl` → Task Mode (confirm with user via `AskUser`)
-3. If `tasks.md` exists but no task is in `Validando Impl` → Standalone Mode
+2. If `tasks.md` exists and has exactly ONE task in `Validando Impl` or `Revisando PR` → Task Mode (confirm with user via `AskUser`)
+3. If `tasks.md` exists but no task is in `Validando Impl` or `Revisando PR` → Standalone Mode
 4. If no `tasks.md` exists → Standalone Mode
 
 ---

@@ -8,7 +8,7 @@ Tasks flow through 4 stages. Each stage is a separate skill that validates the t
 
 ```
 Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando PR] → DONE
-           (stage-1-spec)   (stage-2-impl)  (stage-3-impl-review)  (stage-3-pr-review)  (stage-5-close)
+           (stage-1-spec)   (stage-2-impl)  (stage-3-impl-review)  (stage-4-pr-review)  (stage-5-close)
                                                                     [optional]
 ```
 
@@ -17,7 +17,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 | `stage-1-spec` | 1 | Validates task specs against project docs before implementation | `/optimus-stage-1-spec` |
 | `stage-2-impl` | 2 | End-to-end task implementation with verification gates | `/optimus-stage-2-impl` |
 | `stage-3-impl-review` | 3 | Post-implementation validation with parallel specialist agents | `/optimus-stage-3-impl-review` |
-| `stage-3-pr-review` | 3.5 | PR review orchestrator (optional, also works standalone) | `/optimus-stage-3-pr-review` |
+| `stage-4-pr-review` | 4 | PR review orchestrator (optional, also works standalone) | `/optimus-stage-4-pr-review` |
 | `stage-5-close` | 5 | Verifies prerequisites and marks task as done | `/optimus-stage-5-close` |
 
 ## Review & Verification Skills

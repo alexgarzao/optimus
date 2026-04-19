@@ -114,10 +114,11 @@ Determine which task to validate:
 1. Read `tasks.md` and find the row for the confirmed task ID
 2. Check the **Status** column:
    - If status is `Em Andamento` → proceed (stage-2-impl has completed)
+   - If status is `Validando Impl` → proceed (re-execution of this stage)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run stage-1-spec and stage-2-impl first."
    - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run stage-2-impl first."
-   - If status is `Validando Impl` or `Revisando PR` or `**DONE**` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage."
-3. Update the Status column from `Em Andamento` to `Validando Impl`
+   - If status is `Revisando PR` or `**DONE**` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage."
+3. Update the Status column to `Validando Impl` (if not already)
 4. Do NOT commit this change separately — it will be committed with the task's work
 
 ### Step 0.1: Discover Project Structure
