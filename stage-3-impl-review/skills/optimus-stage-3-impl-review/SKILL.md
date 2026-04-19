@@ -1,5 +1,5 @@
 ---
-name: optimus-stage-3-review
+name: optimus-stage-3-impl-review
 description: >
   Stage 3 of the task lifecycle. Validates that a completed task was executed
   correctly: spec compliance, coding standards adherence, engineering best
@@ -62,7 +62,7 @@ related:
     - name: requesting-code-review
       difference: >
         requesting-code-review dispatches reviewers during the dev-cycle.
-        optimus-stage-3-review is a standalone validation that also checks
+        optimus-stage-3-impl-review is a standalone validation that also checks
         spec compliance, test ID coverage, and cross-file consistency.
   sequence:
     after:
@@ -233,7 +233,7 @@ make test-e2e                # E2E tests (SKIP if target does not exist)
 
 **If any test fails:**
 1. Present the failure output (first 30 lines)
-2. Ask the user via `AskUser`: "Tests are failing. Fix before continuing, or skip stage-3-review?"
+2. Ask the user via `AskUser`: "Tests are failing. Fix before continuing, or skip stage-3-impl-review?"
 3. Do NOT proceed to Phase 1 until tests pass or user explicitly chooses to skip
 
 **If all tests pass (or non-existent targets are skipped):** collect coverage data for analysis:

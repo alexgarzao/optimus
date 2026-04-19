@@ -11,7 +11,7 @@ trigger: >
   - After completing a feature and wanting quality validation
 skip_when: >
   - Reviewing documentation only (use optimus-deep-doc-review instead)
-  - Validating a specific task against its spec (use optimus-stage-3-review instead)
+  - Validating a specific task against its spec (use optimus-stage-3-impl-review instead)
   - Running automated checks only (use optimus-verify-code instead)
 prerequisite: >
   - Project has source code to review
@@ -53,7 +53,7 @@ related:
   differentiation:
     - name: optimus-stage-3-review
       difference: >
-        optimus-stage-3-review validates a completed task against its spec
+        optimus-stage-3-impl-review validates a completed task against its spec
         (acceptance criteria, test IDs, spec compliance). optimus-deep-review is
         a generic code review without task/spec context — focused on code quality,
         security, and best practices.
@@ -108,7 +108,7 @@ Ask the user what to review:
    - Linter configs: `.eslintrc*`, `biome.json`, `.golangci.yml`, `.prettierrc*`
 
    These are the **source of truth** for coding standards. Pass relevant sections to every agent dispatched.
-3. **Identify reference docs:** Look for PRD, TRD, API design, data model — these provide context but are not the primary validation target (unlike optimus-stage-3-review)
+3. **Identify reference docs:** Look for PRD, TRD, API design, data model — these provide context but are not the primary validation target (unlike optimus-stage-3-impl-review)
 4. **Read all files in scope:** Load the full content of every file that will be reviewed
 
 ---

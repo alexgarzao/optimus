@@ -48,7 +48,7 @@ related:
         and adds mandatory TDD cycle + secondary agent validation for logic changes.
     - name: optimus-stage-3-review
       difference: >
-        optimus-stage-3-review validates a completed task against its spec.
+        optimus-stage-3-impl-review validates a completed task against its spec.
         optimus-coderabbit-review is a generic review driven by CodeRabbit
         without task/spec context.
 verification:

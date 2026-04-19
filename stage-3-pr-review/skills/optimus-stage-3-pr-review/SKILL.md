@@ -59,7 +59,7 @@ related:
         human reviewers, agents).
   sequence:
     after:
-      - optimus-stage-3-review
+      - optimus-stage-3-impl-review
     before:
       - optimus-stage-5-close
 verification:
@@ -107,10 +107,10 @@ This skill operates in TWO modes:
 ### Task Mode (part of the stage pipeline)
 When the user references a task (e.g., "review PR for T-012") or a `tasks.md` exists with a task in status `Validando Impl`:
 
-1. **Validate status:** The task MUST be in status `Validando Impl` (set by stage-3-review). If not, STOP and tell the user which agent to run first.
+1. **Validate status:** The task MUST be in status `Validando Impl` (set by stage-3-impl-review). If not, STOP and tell the user which agent to run first.
 2. **Update status:** Change the task status in `tasks.md` from `Validando Impl` to `Revisando PR`.
 3. **Commit status change:** `git add tasks.md && git commit -m "chore: T-XXX status → Revisando PR"`
-4. At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes stage-3-review next.
+4. At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes stage-5-close next.
 
 ### Standalone Mode (no task)
 When no task is referenced and no `tasks.md` exists, or the user explicitly wants to review a PR without a task context:

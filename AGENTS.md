@@ -19,7 +19,7 @@ optimus/
 │   └── writing/                       # Writing skill cards
 ├── stage-1-spec/                      # Stage 1: Spec validation
 ├── stage-2-impl/                      # Stage 2: Task implementation
-├── stage-3-review/                    # Stage 3: Implementation review
+├── stage-3-impl-review/                # Stage 3: Implementation review
 ├── stage-3-pr-review/                 # Stage 3.5 (optional): PR review orchestrator
 ├── stage-5-close/                     # Stage 5: Close task (verify & mark done)
 ├── deep-review/                       # Parallel code review (no PR context)
@@ -125,7 +125,7 @@ Tasks flow through 5 stages (stage-3-pr-review is optional). Status lives in `ta
 
 ```
 Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando PR] → **DONE**
-           (stage-1-spec)   (stage-2-impl)  (stage-3-review)  (stage-3-pr-review)  (stage-5-close)
+           (stage-1-spec)   (stage-2-impl)  (stage-3-impl-review)  (stage-3-pr-review)  (stage-5-close)
                                                                [optional]
 ```
 
@@ -147,7 +147,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 |-------|---------------|------------|-----------------|
 | stage-1-spec | `Pendente` | `Validando Spec` | STOP, tell user |
 | stage-2-impl | `Validando Spec` | `Em Andamento` | STOP, tell user |
-| stage-3-review | `Em Andamento` | `Validando Impl` | STOP, tell user |
+| stage-3-impl-review | `Em Andamento` | `Validando Impl` | STOP, tell user |
 | stage-3-pr-review | `Validando Impl` | `Revisando PR` | STOP, tell user |
 | stage-5-close | `Validando Impl` OR `Revisando PR` | `**DONE**` | STOP, tell user |
 

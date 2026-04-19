@@ -9,7 +9,7 @@ trigger: >
   - When user requests spec validation (e.g., "validate spec for T-006")
   - Before invoking optimus-stage-2-impl for a task
 skip_when: >
-  - Task is already implemented (use optimus-stage-3-review instead)
+  - Task is already implemented (use optimus-stage-3-impl-review instead)
   - No task spec exists yet (use pre-dev workflow to create it first)
   - Task is pure research with no implementation deliverables
 prerequisite: >
@@ -53,7 +53,7 @@ related:
   differentiation:
     - name: optimus-stage-3-review
       difference: >
-        optimus-stage-3-review validates AFTER implementation (code correctness,
+        optimus-stage-3-impl-review validates AFTER implementation (code correctness,
         test quality, code review). optimus-stage-1-spec validates BEFORE
         implementation (spec correctness, doc consistency, test design).
   sequence:

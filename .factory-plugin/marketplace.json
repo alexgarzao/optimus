@@ -16,13 +16,13 @@
       "source": "./stage-2-impl"
     },
     {
-      "name": "stage-3-review",
+      "name": "stage-3-impl-review",
       "description": "Stage 3: Validates completed task implementation against spec, coding standards, and best practices using parallel specialist agents.",
-      "source": "./stage-3-review"
+      "source": "./stage-3-impl-review"
     },
     {
       "name": "stage-3-pr-review",
-      "description": "Stage 3.5 (optional): Unified PR review orchestrator. Collects findings from Codacy, DeepSource, CodeRabbit, human reviewers, resolves threads. Runs between stage-3-review and stage-5-close.",
+      "description": "Stage 3.5 (optional): Unified PR review orchestrator. Collects findings from Codacy, DeepSource, CodeRabbit, human reviewers, resolves threads. Runs between stage-3-impl-review and stage-5-close.",
       "source": "./stage-3-pr-review"
     },
     {

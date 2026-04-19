@@ -9,7 +9,7 @@ trigger: >
   - Before starting implementation based on docs (validate doc quality)
   - After significant changes to reference docs (PRD, TRD, API design, etc.)
 skip_when: >
-  - Code review (use optimus-deep-review or optimus-stage-3-review instead)
+  - Code review (use optimus-deep-review or optimus-stage-3-impl-review instead)
   - Docs do not exist yet (create them first)
   - Reviewing a single simple file (do it directly without the skill)
 prerequisite: >
