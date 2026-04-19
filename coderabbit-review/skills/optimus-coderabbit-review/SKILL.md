@@ -91,7 +91,14 @@ Capture the full output for parsing.
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
 2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, unit test, integration test, and E2E test commands
-3. **Identify coding standards:** Look for `PROJECT_RULES.md`, linter configs, or equivalent
+3. **Identify project rules and AI instructions (MANDATORY):** Search for these files and read ALL that exist:
+   - `AGENTS.md`, `CLAUDE.md`, `DROIDS.md`, `.cursorrules` (repo root)
+   - `PROJECT_RULES.md` (repo root or `docs/`)
+   - `.editorconfig`, `docs/coding-standards.md`, `docs/conventions.md`
+   - `.github/CONTRIBUTING.md` or `CONTRIBUTING.md`
+   - Linter configs: `.eslintrc*`, `biome.json`, `.golangci.yml`, `.prettierrc*`
+
+   These are the **source of truth** for coding standards. Pass relevant sections to every agent dispatched.
 
 Store discovered commands:
 ```

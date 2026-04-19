@@ -378,7 +378,14 @@ Read the full content of each changed file for the review agents.
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
 2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config
-3. **Identify coding standards:** Look for `PROJECT_RULES.md`, linter configs
+3. **Identify project rules and AI instructions (MANDATORY):** Search for these files and read ALL that exist:
+   - `AGENTS.md`, `CLAUDE.md`, `DROIDS.md`, `.cursorrules` (repo root)
+   - `PROJECT_RULES.md` (repo root or `docs/`)
+   - `.editorconfig`, `docs/coding-standards.md`, `docs/conventions.md`
+   - `.github/CONTRIBUTING.md` or `CONTRIBUTING.md`
+   - Linter configs: `.eslintrc*`, `biome.json`, `.golangci.yml`, `.prettierrc*`
+
+   These are the **source of truth** for coding standards. Pass relevant sections to every agent dispatched.
 4. **Identify reference docs:** Look for PRD, TRD, API design
 
 Store discovered commands:

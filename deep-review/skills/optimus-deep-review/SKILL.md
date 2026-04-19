@@ -100,7 +100,14 @@ Ask the user what to review:
 ### Step 0.3: Load Context
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
-2. **Identify coding standards:** Look for `PROJECT_RULES.md`, `.editorconfig`, linter configs, or equivalent
+2. **Identify project rules and AI instructions (MANDATORY):** Search for these files and read ALL that exist:
+   - `AGENTS.md`, `CLAUDE.md`, `DROIDS.md`, `.cursorrules` (repo root)
+   - `PROJECT_RULES.md` (repo root or `docs/`)
+   - `.editorconfig`, `docs/coding-standards.md`, `docs/conventions.md`
+   - `.github/CONTRIBUTING.md` or `CONTRIBUTING.md`
+   - Linter configs: `.eslintrc*`, `biome.json`, `.golangci.yml`, `.prettierrc*`
+
+   These are the **source of truth** for coding standards. Pass relevant sections to every agent dispatched.
 3. **Identify reference docs:** Look for PRD, TRD, API design, data model — these provide context but are not the primary validation target (unlike optimus-post-task-validator)
 4. **Read all files in scope:** Load the full content of every file that will be reviewed
 

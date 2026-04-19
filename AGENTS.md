@@ -117,6 +117,32 @@ rationalize these away.
 4. Commit, push
 5. Run `droid plugin uninstall <name>@optimus`
 
+## Project Rules Discovery (all skills)
+
+Every skill that reviews, validates, or generates code MUST search for project rules
+and AI instruction files before starting. The checklist (in priority order):
+
+```
+AGENTS.md                    # Primary agent instructions
+CLAUDE.md                    # Claude-specific rules
+DROIDS.md                    # Droid-specific rules
+.cursorrules                 # Cursor-specific rules
+PROJECT_RULES.md             # Coding standards (root or docs/)
+docs/PROJECT_RULES.md
+.editorconfig                # Editor formatting rules
+docs/coding-standards.md     # Explicit coding conventions
+docs/conventions.md
+.github/CONTRIBUTING.md      # Contribution guidelines
+CONTRIBUTING.md
+.eslintrc*                   # Linter configs (implicit rules)
+biome.json
+.golangci.yml
+.prettierrc*
+```
+
+If NONE exist, the agent must warn the user. If any are found, they become the
+source of truth for coding standards and must be passed to every dispatched sub-agent.
+
 ## Common Patterns Across Skills
 
 ### Finding Presentation

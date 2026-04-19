@@ -145,7 +145,23 @@ Before loading docs, discover the project's structure and tooling:
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
 2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, test, integration test, and E2E test commands.
-3. **Identify reference docs:** Look for `docs/pre-dev/`, `docs/`, or project-specific locations for tasks, PRD, TRD, API design, data model, and coding standards.
+3. **Identify project rules and AI instructions (MANDATORY):** Search for these files in order and read ALL that exist:
+   - `AGENTS.md` (repo root) — primary agent instructions
+   - `CLAUDE.md` (repo root) — Claude-specific rules
+   - `DROIDS.md` (repo root) — Droid-specific rules
+   - `.cursorrules` (repo root) — Cursor-specific rules
+   - `PROJECT_RULES.md` (repo root or `docs/`) — project coding standards
+   - `docs/PROJECT_RULES.md`
+   - `.editorconfig` — editor formatting rules
+   - `docs/coding-standards.md` or `docs/conventions.md`
+   - `.github/CONTRIBUTING.md` or `CONTRIBUTING.md`
+   - Linter configs: `.eslintrc*`, `biome.json`, `.golangci.yml`, `.prettierrc*`
+
+   **If NONE of these files exist**, warn the user: "No project rules or AI instructions found. Implementation will use generic best practices only. Consider creating an AGENTS.md or PROJECT_RULES.md."
+
+   **If any are found**, they become the **source of truth** for coding conventions. All generated code must follow these rules. Pass relevant sections to every agent dispatched.
+
+4. **Identify reference docs:** Look for `docs/pre-dev/`, `docs/`, or project-specific locations for tasks, PRD, TRD, API design, data model.
 
 ### Step 0.2: Load All Reference Documents
 
