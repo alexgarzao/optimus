@@ -132,7 +132,7 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
        ```
 6. **Update status:** Change the task status in `tasks.md` to `Revisando PR` (if not already).
 7. Do NOT commit this change separately — it will be committed with the task's work.
-6. At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes cycle-close-stage-5 next.
+8. At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes cycle-close-stage-5 next.
 
 ### Standalone Mode (no task)
 When no task is referenced and no `tasks.md` exists, or the user explicitly wants to review a PR without a task context:

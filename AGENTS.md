@@ -237,7 +237,7 @@ Agents read these sections to understand what to implement and validate.
 
 Every stage agent (1-5) MUST validate the tasks.md format before operating:
 1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
-2. A markdown table exists with at least columns: ID, Title, Tipo, Status, Depends
+2. A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Branch
 3. All task IDs follow the `T-NNN` pattern
 4. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
 5. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`
@@ -385,7 +385,7 @@ All review/validation skills follow this pattern:
 6. Present final summary
 
 ### Convergence Loop
-Used by: post-task-validator, pre-task-validator, pr-review, coderabbit-review
+Used by: cycle-spec-stage-1, cycle-impl-review-stage-3, cycle-pr-review-stage-4, coderabbit-review
 - 5 rounds maximum (round 1 = initial analysis)
 - Escalating scrutiny: standard → skeptical → adversarial → cross-cutting → final sweep
 - Stop only when: zero new findings, round 5 reached, or user explicitly stops

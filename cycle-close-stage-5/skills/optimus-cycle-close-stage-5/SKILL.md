@@ -282,7 +282,23 @@ Do NOT change the status. Do NOT offer to fix the issues — just report them.
 This phase runs ONLY after the task has been marked as `**DONE**`. It checks for leftover
 resources and asks the user what to do. The agent NEVER cleans up automatically.
 
-### Step 3.1: Check for Task Branch
+### Step 3.1: Check for Task Worktree
+
+**IMPORTANT:** Worktree must be removed BEFORE attempting branch deletion. Git refuses to delete a branch that is checked out in a worktree.
+
+```bash
+git worktree list | grep -i "T-XXX"
+```
+
+If a worktree is found, ask via `AskUser`:
+```
+Task T-XXX is done. A worktree still exists at '<path>'. What should I do?
+```
+Options:
+- **Remove worktree**: `git worktree remove <path>`
+- **Keep**: Leave the worktree as is
+
+### Step 3.2: Check for Task Branch
 
 Identify the task's branch from the **Branch column** in `tasks.md` (primary source). If the column is `-` or empty, fall back to convention:
 
@@ -318,20 +334,6 @@ git branch -d <branch>
 git push origin --delete <branch>
 ```
 
-### Step 3.2: Check for Task Worktree
-
-```bash
-git worktree list | grep -i "T-XXX"
-```
-
-If a worktree is found, ask via `AskUser`:
-```
-Task T-XXX is done. A worktree still exists at '<path>'. What should I do?
-```
-Options:
-- **Remove worktree**: `git worktree remove <path>`
-- **Keep**: Leave the worktree as is
-
 ### Step 3.3: Check for Open PR
 
 ```bash
@@ -356,9 +358,9 @@ Options:
 
 | Resource | Status | Action Taken |
 |----------|--------|-------------|
+| Worktree `/path/to/wt` | Not found | - |
 | Branch `feat/t-xxx-...` (local) | Found | Deleted / Kept |
 | Branch `feat/t-xxx-...` (remote) | Found | Deleted / Kept |
-| Worktree `/path/to/wt` | Not found | - |
 | PR #42 | Open | Merged / Kept / Closed |
 ```
 
