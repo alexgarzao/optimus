@@ -207,17 +207,41 @@ For checks that **pass**, note them for the Phase 3 overview.
 
 Skip checks whose commands don't exist in the project (e.g., skip `go vet` in a pure JS project).
 
-### Step 0.5.2: Run Tests with Coverage Profiling
+### Step 0.5.2: Run Tests (HARD BLOCK)
 
-Run tests to collect coverage data (do NOT just check pass/fail — that's stage-4-close's job):
+**HARD BLOCK:** ALL tests must pass before proceeding to agent dispatch. If any test fails, STOP and present the failures to the user. Do NOT continue to Phase 1 with failing tests.
+
+The project's `Makefile` defines the standard test targets:
 
 ```bash
-# Unit tests (discover command from Makefile/package.json)
+# Preferred: runs all test types (unit + integration + e2e, skipping non-existent)
+make test-all
+
+# If test-all does not exist, run each individually:
+make test                    # Unit tests (MANDATORY — every project must have these)
+make test-integration        # Integration tests (SKIP if target does not exist)
+make test-e2e                # E2E tests (SKIP if target does not exist)
+```
+
+**Results:**
+
+| Test Type | Makefile Target | If target exists | If target missing |
+|-----------|----------------|-----------------|-------------------|
+| Unit | `make test` | **HARD BLOCK** if fails | **HARD BLOCK** — unit tests are mandatory |
+| Integration | `make test-integration` | **HARD BLOCK** if fails | SKIP (not all projects have integration tests) |
+| E2E | `make test-e2e` | **HARD BLOCK** if fails | SKIP (not all projects have E2E tests) |
+
+**If any test fails:**
+1. Present the failure output (first 30 lines)
+2. Ask the user via `AskUser`: "Tests are failing. Fix before continuing, or skip stage-3-review?"
+3. Do NOT proceed to Phase 1 until tests pass or user explicitly chooses to skip
+
+**If all tests pass (or non-existent targets are skipped):** collect coverage data for analysis:
+
+```bash
+# Re-run unit tests with coverage profiling (if not already captured)
 go test -coverprofile=coverage-unit.out ./...
 # or: npm test -- --coverage
-
-# Integration tests (if available)
-go test -tags=integration -coverprofile=coverage-integration.out ./...
 ```
 
 ### Step 0.5.3: Analyze Coverage
@@ -492,12 +516,27 @@ Apply ALL approved fixes in a single pass:
 4. Run unit tests — if failures, diagnose and fix (max 3 attempts per failure)
 5. If a fix causes test failures after 3 attempts, revert that specific fix, present the failure to the user, and ask for guidance
 
-### Step 5.3: Verification Gate
+### Step 5.3: Verification Gate (HARD BLOCK)
 
-After all fixes applied, run the full gate using discovered commands:
-- Always run lint and unit tests with coverage profiling
-- If backend files were changed: also run integration tests with coverage profiling
-- If frontend files were changed: also run E2E tests (if available)
+**HARD BLOCK:** After all fixes applied, ALL tests must pass again. Run:
+
+```bash
+make lint                    # Lint — MANDATORY
+make test-all                # Runs unit + integration + e2e (skips non-existent targets)
+```
+
+If `make test-all` target does not exist, fall back to running each individually:
+
+```bash
+make test                    # Unit tests — MANDATORY
+make test-integration        # Integration — if target exists
+make test-e2e                # E2E — if target exists
+```
+
+If ANY test or lint fails after fixes:
+1. Diagnose the failure (max 3 attempts to fix per failure)
+2. If unfixable after 3 attempts, revert that specific fix and ask the user
+3. Do NOT proceed to Phase 6 (convergence) with failing tests
 
 ### Step 5.4: Coverage Verification
 
@@ -531,10 +570,7 @@ If coverage is below threshold, add findings to the results:
 - List untested business-logic functions as individual **HIGH** findings
 
 **E2E tests:**
-If E2E tests are not configured, ask the user using `AskUser`:
-"E2E tests are not configured for this project. Should E2E tests be implemented for this task?"
-- If yes: flag as a finding (MEDIUM severity) in the validation summary
-- If no: mark as SKIP in the summary
+If `make test-e2e` target does not exist, mark as SKIP in the summary. Do NOT ask the user whether to implement E2E — that's a project-level decision, not a per-task decision.
 
 ### Step 5.5: Test Scenario Gap Analysis
 

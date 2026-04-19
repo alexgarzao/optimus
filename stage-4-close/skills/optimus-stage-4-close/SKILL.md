@@ -180,34 +180,31 @@ goimports -l .
 #### Check 9: Unit Tests Pass
 
 ```bash
-# Discover: make test, go test ./..., npm test
-go test -coverprofile=coverage.out ./...
+make test
 ```
 
 - **PASS:** Exit code 0
 - **FAIL:** Show first 20 lines of error output
 
-#### Check 10: Integration Tests Pass (if available)
+#### Check 10: Integration Tests Pass (if Makefile target exists)
 
 ```bash
-# Discover: make test-integration, go test -tags=integration
-go test -tags=integration ./...
+make test-integration
 ```
 
 - **PASS:** Exit code 0
 - **FAIL:** Show first 20 lines of error output
-- **SKIP:** No integration test target/tag exists
+- **SKIP:** `make test-integration` target does not exist
 
-#### Check 11: Coverage Above Threshold
-
-From the coverage profile generated in Check 9:
+#### Check 11: E2E Tests Pass (if Makefile target exists)
 
 ```bash
-go tool cover -func=coverage.out | tail -1
+make test-e2e
 ```
 
-- **PASS:** Total coverage >= 85% (unit) and >= 70% (integration if available)
-- **FAIL:** Show current percentage and threshold
+- **PASS:** Exit code 0
+- **FAIL:** Show first 20 lines of error output
+- **SKIP:** `make test-e2e` target does not exist
 
 ---
 
@@ -231,7 +228,7 @@ go tool cover -func=coverage.out | tail -1
 | 8 | Quality | Import ordering | PASS / SKIP |
 | 9 | Tests | Unit tests | PASS |
 | 10 | Tests | Integration tests | PASS / SKIP |
-| 11 | Tests | Coverage >= threshold | PASS (87.2%) |
+| 11 | Tests | E2E tests | PASS / SKIP |
 
 **Verdict: READY TO CLOSE**
 
