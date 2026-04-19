@@ -1,8 +1,0 @@
-{
-  "name": "stage-0-report",
-  "description": "Stage 0: Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only — changes nothing.",
-  "version": "1.0.0",
-  "author": {
-    "name": "Alex Garzao"
-  }
-}

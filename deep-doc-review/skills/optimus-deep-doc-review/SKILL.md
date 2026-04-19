@@ -9,7 +9,7 @@ trigger: >
   - Before starting implementation based on docs (validate doc quality)
   - After significant changes to reference docs (PRD, TRD, API design, etc.)
 skip_when: >
-  - Code review (use optimus-deep-review or optimus-stage-3-impl-review instead)
+  - Code review (use optimus-deep-review or optimus-cycle-impl-review-stage-3 instead)
   - Docs do not exist yet (create them first)
   - Reviewing a single simple file (do it directly without the skill)
 prerequisite: >
@@ -37,12 +37,12 @@ examples:
       3. Generate table and resolve findings
 related:
   complementary:
-    - optimus-stage-1-spec
-    - optimus-stage-3-review
+    - optimus-cycle-spec-stage-1
+    - optimus-cycle-impl-review-stage-3
   differentiation:
-    - name: optimus-stage-1-spec
+    - name: optimus-cycle-spec-stage-1
       difference: >
-        optimus-stage-1-spec validates a task spec against reference docs.
+        optimus-cycle-spec-stage-1 validates a task spec against reference docs.
         optimus-deep-doc-review reviews the docs themselves against each other,
         independent of any task.
 verification:

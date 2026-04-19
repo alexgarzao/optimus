@@ -1,8 +1,0 @@
-{
-  "name": "stage-5-close",
-  "description": "Stage 5: Verifies all prerequisites (commits pushed, PR ready, tests passing) and marks the task as done. Does NOT merge the PR.",
-  "version": "1.0.0",
-  "author": {
-    "name": "Alex Garzao"
-  }
-}

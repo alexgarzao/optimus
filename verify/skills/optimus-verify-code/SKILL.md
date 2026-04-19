@@ -33,8 +33,8 @@ examples:
       2. Present summary showing what passed/failed
 related:
   complementary:
-    - optimus-stage-2-impl
-    - optimus-stage-3-review
+    - optimus-cycle-impl-stage-2
+    - optimus-cycle-impl-review-stage-3
   differentiation:
     - name: optimus-deep-review
       difference: >

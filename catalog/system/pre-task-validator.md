@@ -10,7 +10,7 @@ AI agent prompt that validates task specifications BEFORE implementation begins.
 
 ## Skill
 
-See the full installable version at [`stage-1-spec/skills/optimus-stage-1-spec/SKILL.md`](../../stage-1-spec/skills/optimus-stage-1-spec/SKILL.md).
+See the full installable version at [`cycle-spec-stage-1/skills/optimus-cycle-spec-stage-1/SKILL.md`](../../cycle-spec-stage-1/skills/optimus-cycle-spec-stage-1/SKILL.md).
 
 ## Example
 

@@ -10,7 +10,7 @@ AI agent prompt that executes development tasks end-to-end. Orchestrates sequent
 
 ## Skill
 
-See the full installable version at [`stage-2-impl/skills/optimus-stage-2-impl/SKILL.md`](../../stage-2-impl/skills/optimus-stage-2-impl/SKILL.md).
+See the full installable version at [`cycle-impl-stage-2/skills/optimus-cycle-impl-stage-2/SKILL.md`](../../cycle-impl-stage-2/skills/optimus-cycle-impl-stage-2/SKILL.md).
 
 ## Example
 

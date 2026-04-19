@@ -17,13 +17,13 @@ optimus/
 │   ├── coding/                        # Coding skill cards
 │   ├── system/                        # Orchestration skill cards
 │   └── writing/                       # Writing skill cards
-├── stage-0-migrate/                   # Stage 0: Task format migrator (one-time)
-├── stage-0-report/                    # Stage 0: Task status dashboard (read-only)
-├── stage-1-spec/                      # Stage 1: Spec validation
-├── stage-2-impl/                      # Stage 2: Task implementation
-├── stage-3-impl-review/                # Stage 3: Implementation review
-├── stage-4-pr-review/                 # Stage 4 (optional): PR review orchestrator
-├── stage-5-close/                     # Stage 5: Close task (verify & mark done)
+├── cycle-migrate/                   # Stage 0: Task format migrator (one-time)
+├── cycle-report/                    # Stage 0: Task status dashboard (read-only)
+├── cycle-spec-stage-1/                      # Stage 1: Spec validation
+├── cycle-impl-stage-2/                      # Stage 2: Task implementation
+├── cycle-impl-review-stage-3/                # Stage 3: Implementation review
+├── cycle-pr-review-stage-4/                 # Stage 4 (optional): PR review orchestrator
+├── cycle-close-stage-5/                     # Stage 5: Close task (verify & mark done)
 ├── deep-review/                       # Parallel code review (no PR context)
 ├── deep-doc-review/                   # Documentation review
 ├── coderabbit-review/                 # CodeRabbit CLI + TDD cycle
@@ -169,11 +169,11 @@ source of truth for task tracking. Format:
 | Status | Set by | Meaning |
 |--------|--------|---------|
 | `Pendente` | Initial | Not started |
-| `Validando Spec` | stage-1-spec | Spec being validated |
-| `Em Andamento` | stage-2-impl | Implementation in progress |
-| `Validando Impl` | stage-3-impl-review | Implementation being reviewed |
-| `Revisando PR` | stage-4-pr-review | PR being reviewed (optional stage) |
-| `**DONE**` | stage-5-close | Completed |
+| `Validando Spec` | cycle-spec-stage-1 | Spec being validated |
+| `Em Andamento` | cycle-impl-stage-2 | Implementation in progress |
+| `Validando Impl` | cycle-impl-review-stage-3 | Implementation being reviewed |
+| `Revisando PR` | cycle-pr-review-stage-4 | PR being reviewed (optional stage) |
+| `**DONE**` | cycle-close-stage-5 | Completed |
 
 ### Dependency Rules
 
@@ -199,18 +199,18 @@ Agents read these sections to understand what to implement and validate.
 ### Parallelization
 
 Tasks with no dependencies or all dependencies satisfied can run in parallel.
-The stage-0-report agent computes and displays parallelization opportunities.
+The cycle-report agent computes and displays parallelization opportunities.
 
 ---
 
 ## Task Lifecycle
 
-Tasks flow through 5 stages (stage-4-pr-review is optional). Status lives in `tasks.md`
+Tasks flow through 5 stages (cycle-pr-review-stage-4 is optional). Status lives in `tasks.md`
 (the markdown table in the target project). Each stage is a separate skill.
 
 ```
 Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando PR] → **DONE**
-           (stage-1-spec)   (stage-2-impl)  (stage-3-impl-review)  (stage-4-pr-review)  (stage-5-close)
+           (cycle-spec-stage-1)   (cycle-impl-stage-2)  (cycle-impl-review-stage-3)  (cycle-pr-review-stage-4)  (cycle-close-stage-5)
                                                                [optional]
 ```
 
@@ -226,7 +226,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
    status before proceeding. If not, it refuses and tells the user which agent to
    run first.
 5. **Re-execution allowed** — every agent (stages 1-4) accepts being re-run when
-   the task is already in its own output status. For example, stage-2-impl accepts
+   the task is already in its own output status. For example, cycle-impl-stage-2 accepts
    `Em Andamento` (its own status) as well as `Validando Spec` (its predecessor).
    This allows the user to re-run a stage without resetting status.
 
@@ -234,23 +234,23 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 
 | Agent | Expects status | Changes to | Re-execution? |
 |-------|---------------|------------|---------------|
-| stage-1-spec | `Pendente` or `Validando Spec` | `Validando Spec` | Yes (accepts own status) |
-| stage-2-impl | `Validando Spec` or `Em Andamento` | `Em Andamento` | Yes (accepts own status) |
-| stage-3-impl-review | `Em Andamento` or `Validando Impl` | `Validando Impl` | Yes (accepts own status) |
-| stage-4-pr-review | `Validando Impl` or `Revisando PR` | `Revisando PR` | Yes (accepts own status) |
-| stage-5-close | `Validando Impl` or `Revisando PR` | `**DONE**` | No (final stage) |
+| cycle-spec-stage-1 | `Pendente` or `Validando Spec` | `Validando Spec` | Yes (accepts own status) |
+| cycle-impl-stage-2 | `Validando Spec` or `Em Andamento` | `Em Andamento` | Yes (accepts own status) |
+| cycle-impl-review-stage-3 | `Em Andamento` or `Validando Impl` | `Validando Impl` | Yes (accepts own status) |
+| cycle-pr-review-stage-4 | `Validando Impl` or `Revisando PR` | `Revisando PR` | Yes (accepts own status) |
+| cycle-close-stage-5 | `Validando Impl` or `Revisando PR` | `**DONE**` | No (final stage) |
 
-**NOTE:** stage-4-pr-review is optional. stage-5-close accepts both `Validando Impl`
+**NOTE:** cycle-pr-review-stage-4 is optional. cycle-close-stage-5 accepts both `Validando Impl`
 (if pr-review was skipped) and `Revisando PR` (if pr-review ran).
 
-**NOTE:** stage-4-pr-review also works in standalone mode (without a task). In standalone
+**NOTE:** cycle-pr-review-stage-4 also works in standalone mode (without a task). In standalone
 mode, it skips all task status logic. See its SKILL.md for detection rules.
 
-**NOTE:** Merge do PR é manual, feito pelo usuário DEPOIS do stage-5-close marcar DONE.
+**NOTE:** Merge do PR é manual, feito pelo usuário DEPOIS do cycle-close-stage-5 marcar DONE.
 
-### stage-5-close Checklist
+### cycle-close-stage-5 Checklist
 
-Before marking done, stage-5-close verifies:
+Before marking done, cycle-close-stage-5 verifies:
 1. No uncommitted changes (`git status --porcelain` = empty)
 2. No unpushed commits (`git log @{u}..HEAD` = empty)
 3. PR ready to merge (if PR exists) — does NOT merge, user merges manually after

@@ -1,8 +1,0 @@
-{
-  "name": "stage-2-impl",
-  "description": "Stage 2: End-to-end task implementation with verification gates, code review, and commit approval.",
-  "version": "1.0.0",
-  "author": {
-    "name": "Alex Garzao"
-  }
-}

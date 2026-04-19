@@ -8,19 +8,19 @@ Tasks flow through 4 stages. Each stage is a separate skill that validates the t
 
 ```
 Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando PR] → DONE
-           (stage-1-spec)   (stage-2-impl)  (stage-3-impl-review)  (stage-4-pr-review)  (stage-5-close)
+           (cycle-spec-stage-1)   (cycle-impl-stage-2)  (cycle-impl-review-stage-3)  (cycle-pr-review-stage-4)  (cycle-close-stage-5)
                                                                     [optional]
 ```
 
 | Skill | Stage | Description | Command |
 |-------|-------|-------------|---------|
-| `stage-0-migrate` | 0 | Discovers and converts existing task files to optimus format | `/optimus-stage-0-migrate` |
-| `stage-0-report` | 0 | Task status dashboard with dependency graph and parallelization | `/optimus-stage-0-report` |
-| `stage-1-spec` | 1 | Validates task specs against project docs before implementation | `/optimus-stage-1-spec` |
-| `stage-2-impl` | 2 | End-to-end task implementation with verification gates | `/optimus-stage-2-impl` |
-| `stage-3-impl-review` | 3 | Post-implementation validation with parallel specialist agents | `/optimus-stage-3-impl-review` |
-| `stage-4-pr-review` | 4 | PR review orchestrator (optional, also works standalone) | `/optimus-stage-4-pr-review` |
-| `stage-5-close` | 5 | Verifies prerequisites and marks task as done | `/optimus-stage-5-close` |
+| `cycle-migrate` | 0 | Discovers and converts existing task files to optimus format | `/optimus-cycle-migrate` |
+| `cycle-report` | 0 | Task status dashboard with dependency graph and parallelization | `/optimus-cycle-report` |
+| `cycle-spec-stage-1` | 1 | Validates task specs against project docs before implementation | `/optimus-cycle-spec-stage-1` |
+| `cycle-impl-stage-2` | 2 | End-to-end task implementation with verification gates | `/optimus-cycle-impl-stage-2` |
+| `cycle-impl-review-stage-3` | 3 | Post-implementation validation with parallel specialist agents | `/optimus-cycle-impl-review-stage-3` |
+| `cycle-pr-review-stage-4` | 4 | PR review orchestrator (optional, also works standalone) | `/optimus-cycle-pr-review-stage-4` |
+| `cycle-close-stage-5` | 5 | Verifies prerequisites and marks task as done | `/optimus-cycle-close-stage-5` |
 
 ## Review & Verification Skills
 

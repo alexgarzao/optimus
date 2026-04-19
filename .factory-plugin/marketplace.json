@@ -6,39 +6,39 @@
   },
   "plugins": [
     {
-      "name": "stage-0-migrate",
+      "name": "cycle-migrate",
       "description": "Stage 0: Discovers existing task files in any format and converts them to the standard optimus tasks.md format. Runs once per project.",
-      "source": "./stage-0-migrate"
+      "source": "./cycle-migrate"
     },
     {
-      "name": "stage-0-report",
+      "name": "cycle-report",
       "description": "Stage 0: Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only.",
-      "source": "./stage-0-report"
+      "source": "./cycle-report"
     },
     {
-      "name": "stage-1-spec",
+      "name": "cycle-spec-stage-1",
       "description": "Stage 1: Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes.",
-      "source": "./stage-1-spec"
+      "source": "./cycle-spec-stage-1"
     },
     {
-      "name": "stage-2-impl",
+      "name": "cycle-impl-stage-2",
       "description": "Stage 2: End-to-end task implementation with verification gates, code review, and commit approval.",
-      "source": "./stage-2-impl"
+      "source": "./cycle-impl-stage-2"
     },
     {
-      "name": "stage-3-impl-review",
+      "name": "cycle-impl-review-stage-3",
       "description": "Stage 3: Validates completed task implementation against spec, coding standards, and best practices using parallel specialist agents.",
-      "source": "./stage-3-impl-review"
+      "source": "./cycle-impl-review-stage-3"
     },
     {
-      "name": "stage-4-pr-review",
-      "description": "Stage 4 (optional): Unified PR review orchestrator. Collects findings from Codacy, DeepSource, CodeRabbit, human reviewers, resolves threads. Runs between stage-3-impl-review and stage-5-close.",
-      "source": "./stage-4-pr-review"
+      "name": "cycle-pr-review-stage-4",
+      "description": "Stage 4 (optional): Unified PR review orchestrator. Collects findings from Codacy, DeepSource, CodeRabbit, human reviewers, resolves threads. Runs between cycle-impl-review-stage-3 and cycle-close-stage-5.",
+      "source": "./cycle-pr-review-stage-4"
     },
     {
-      "name": "stage-5-close",
+      "name": "cycle-close-stage-5",
       "description": "Stage 5: Verifies all prerequisites (commits pushed, PR ready, tests passing) and marks the task as done. Does NOT merge the PR.",
-      "source": "./stage-5-close"
+      "source": "./cycle-close-stage-5"
     },
     {
       "name": "deep-doc-review",
