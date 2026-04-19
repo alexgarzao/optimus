@@ -1,7 +1,7 @@
 ---
 name: optimus-cycle-close-stage-5
 description: >
-  Stage 4 of the task lifecycle. Verifies all prerequisites before marking
+  Stage 5 of the task lifecycle. Verifies all prerequisites before marking
   a task as done: no uncommitted changes, no unpushed commits, PR ready to merge
   (if applicable), CI passing, tests and lint passing locally.
   Does NOT merge the PR — the user merges manually after close.
@@ -51,7 +51,7 @@ verification:
 
 # Task Closer
 
-Stage 4 of the task lifecycle. Verifies all prerequisites before marking a task as done.
+Stage 5 of the task lifecycle. Verifies all prerequisites before marking a task as done.
 
 ---
 
@@ -288,7 +288,7 @@ Identify the task's branch from the **Branch column** in `tasks.md` (primary sou
 TASK_BRANCH=$(grep "T-XXX" tasks.md | ... extract Branch column ...)
 
 # Fallback: search by convention
-git branch --list "feature/*T-XXX*" "feature/*t-xxx*"
+git branch --list "feat/*T-XXX*" "feat/*t-xxx*"
 
 # Check if branch exists locally
 git branch --list "$TASK_BRANCH"
@@ -331,7 +331,9 @@ If an open PR is found, ask via `AskUser`:
 Task T-XXX is done. PR #N is still open. What should I do?
 ```
 Options:
-- **Merge now**: `gh pr merge <number> --merge`
+- **Merge (merge commit)**: `gh pr merge <number> --merge`
+- **Merge (squash)**: `gh pr merge <number> --squash`
+- **Merge (rebase)**: `gh pr merge <number> --rebase`
 - **Keep open**: Leave the PR for manual merge
 - **Close without merging**: `gh pr close <number>`
 
@@ -342,8 +344,8 @@ Options:
 
 | Resource | Status | Action Taken |
 |----------|--------|-------------|
-| Branch `feat/T-XXX` (local) | Found | Deleted / Kept |
-| Branch `feat/T-XXX` (remote) | Found | Deleted / Kept |
+| Branch `feat/t-xxx-...` (local) | Found | Deleted / Kept |
+| Branch `feat/t-xxx-...` (remote) | Found | Deleted / Kept |
 | Worktree `/path/to/wt` | Not found | - |
 | PR #42 | Open | Merged / Kept / Closed |
 ```

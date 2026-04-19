@@ -156,7 +156,7 @@ suggests running `/optimus-cycle-migrate`.
 | ID | Title | Status | Depends | Priority | Branch |
 |----|-------|--------|---------|----------|--------|
 | T-001 | Setup auth module | **DONE** | - | Alta | - |
-| T-002 | User registration API | Em Andamento | T-001 | Alta | feat/t-002 |
+| T-002 | User registration API | Em Andamento | T-001 | Alta | feat/t-002-user-registration |
 | T-003 | Login page | Pendente | T-001 | Alta | - |
 | T-004 | Password reset flow | Pendente | T-002, T-003 | Media | - |
 | T-005 | E2E auth tests | Pendente | T-002, T-003 | Media | - |
@@ -272,9 +272,8 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 6. **Dependency check** — every agent verifies that ALL dependencies (Depends column)
    have status `**DONE**` before proceeding. If any dependency is not done, the agent
    refuses with a clear message identifying which dependency is blocking.
-7. **Branch protection** — agents that modify code or docs (stages 1-3) MUST refuse
-   to run on the default/main branch. They must be on a feature/task branch.
-   Agents that only modify `tasks.md` or are read-only follow different rules:
+7. **Branch protection** — execution skills (stages 1-5) require a feature branch.
+   Administrative skills can run on any branch. See the classification table below:
 
    **Skills are classified as Administrative or Execution:**
 

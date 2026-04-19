@@ -150,7 +150,7 @@ CURRENT_BRANCH=$(git branch --show-current)
   ```
   Cannot run cycle-impl-stage-2 on the default branch (<branch>).
   The workspace should have been created by cycle-spec-stage-1.
-  Run cycle-spec-stage-1 first, or manually create a feature branch: git checkout -b feature/T-XXX
+  Run cycle-spec-stage-1 first, or manually create a feature branch: git checkout -b feat/T-XXX
   ```
 - If on a feature branch → proceed
 

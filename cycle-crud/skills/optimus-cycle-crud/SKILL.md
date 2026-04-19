@@ -63,7 +63,22 @@ Administrative CRUD operations for tasks in `tasks.md`.
 
 ### Step 0.0: Find and Validate tasks.md
 
-1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either, **STOP** and suggest `/optimus-cycle-migrate`.
+1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either location, ask the user via `AskUser`:
+
+   "No tasks.md found. What should I do?"
+   - **(a) Create a new tasks.md** — creates an empty tasks.md in the project root with the optimus format marker and empty table
+   - **(b) Run cycle-migrate** — use this if you already have task files in another format
+
+   If the user chooses to create, write `./tasks.md` with:
+   ```markdown
+   <!-- optimus:tasks-v1 -->
+   # Tasks
+
+   | ID | Title | Status | Depends | Priority | Branch |
+   |----|-------|--------|---------|----------|--------|
+   ```
+   Then commit: `chore(tasks): initialize tasks.md`
+
 2. **Validate format (HARD BLOCK):**
    - **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
    - A markdown table exists with columns: ID, Title, Status, Depends, Priority, Branch
