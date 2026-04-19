@@ -112,43 +112,101 @@ Extract and store:
 - **Labels and milestone** — categorization context
 - **Linked issues** — from PR description (look for "Fixes #", "Closes #", "Resolves #" patterns)
 
-### Step 0.3: Collect ALL Existing PR Comments
+### Step 0.3: Collect ALL Existing PR Comments and Threads
 
-Collect comments from ALL sources on the PR in parallel:
+**IMPORTANT:** Static analysis tools post comments in TWO different ways:
+1. **Native app comments** — posted directly by the tool's GitHub App (e.g., `deepsource-io`, `codacy-production`). These create review threads that the REST API CANNOT reply to (returns 404). You MUST use GraphQL to reply and resolve these.
+2. **Workflow comments** — posted by `github-actions[bot]` via CI workflows (e.g., `codacy-issues.yml`, `deepsource-pr-issues.yml`). These are standard review comments that the REST API CAN reply to.
 
-**1. General PR comments:**
+You MUST collect BOTH types for each tool.
+
+#### Step 0.3.1: Fetch ALL Review Threads via GraphQL (PRIMARY SOURCE)
+
+This is the **single source of truth** for all review threads. It captures threads from ALL sources (native apps, workflows, humans, bots) in one query:
+
+```bash
+gh api graphql -f query='
+  query {
+    repository(owner: "<owner>", name: "<repo>") {
+      pullRequest(number: <number>) {
+        reviewThreads(first: 100) {
+          nodes {
+            id
+            isResolved
+            isOutdated
+            path
+            line
+            comments(first: 10) {
+              nodes {
+                databaseId
+                author { login }
+                body
+                createdAt
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+'
+```
+
+For each thread, classify by the **first comment's author**:
+
+| Author login | Source | Reply method |
+|-------------|--------|-------------|
+| `deepsource-io` | DeepSource (native app) | GraphQL only (`addPullRequestReviewThreadReply`) |
+| `codacy-production` | Codacy (native app) | GraphQL only (`addPullRequestReviewThreadReply`) |
+| `github-actions[bot]` with body starting `**Codacy**` | Codacy (workflow) | REST API (`in_reply_to`) |
+| `github-actions[bot]` with body starting `**DeepSource**` | DeepSource (workflow) | REST API (`in_reply_to`) |
+| `coderabbitai[bot]` | CodeRabbit | REST API (`in_reply_to`) |
+| `copilot` or `github-advanced-security[bot]` | Copilot / GitHub Security | REST API (`in_reply_to`) |
+| Any other | Human reviewer | REST API (`in_reply_to`) |
+
+Store each thread as:
+```
+{
+  thread_node_id: "<GraphQL node ID>",
+  first_comment_database_id: <integer>,
+  source: "deepsource" | "codacy" | "coderabbit" | "copilot" | "human",
+  reply_method: "graphql" | "rest",
+  is_resolved: true | false,
+  is_outdated: true | false,
+  path: "<file>",
+  line: <number>,
+  body: "<first comment body>"
+}
+```
+
+#### Step 0.3.2: Fetch General PR Comments
+
 ```bash
 gh pr view <PR_NUMBER_OR_URL> --comments
 ```
 
-**2. Review comments (inline code comments and review summaries):**
-```bash
-gh api repos/{owner}/{repo}/pulls/{number}/reviews
-gh api repos/{owner}/{repo}/pulls/{number}/comments --paginate
-```
+These are non-inline comments (discussion, summaries). They don't have threads.
 
-**3. Codacy comments** (posted by `codacy-issues.yml` workflow):
-```bash
-gh api repos/{owner}/{repo}/pulls/{number}/comments --paginate \
-  --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("**Codacy**"))) | {id: .id, path: .path, line: .line, body: .body}'
-```
+#### Step 0.3.3: Parse Comment Content
 
-Parse Codacy comment format:
+**Codacy native comments** (author: `codacy-production`):
+- Body contains HTML with issue details embedded
+- Extract: severity, rule, message, file, line from the thread metadata (path/line) and body
+
+**Codacy workflow comments** (author: `github-actions[bot]`, body starts with `**Codacy**`):
 ```
 **Codacy** | <SEVERITY> | <annotation_level>
 
 <message>
 ```
-
 Extract: severity (HIGH/MEDIUM/LOW), annotation_level, message, file, line.
 
-**4. DeepSource comments** (posted by `deepsource-pr-issues.yml` workflow):
-```bash
-gh api repos/{owner}/{repo}/pulls/{number}/comments --paginate \
-  --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("**DeepSource**"))) | {id: .id, path: .path, line: .line, body: .body}'
-```
+**DeepSource native comments** (author: `deepsource-io`):
+- Body contains HTML with `<!-- DeepSource: id=... -->` marker
+- Contains issue shortcode, title, description, severity in structured HTML
+- Extract: shortcode, severity, category, title, explanation from body content
 
-Parse DeepSource comment format:
+**DeepSource workflow comments** (author: `github-actions[bot]`, body starts with `**DeepSource**`):
 ```
 **DeepSource** | `<shortcode>` | <SEVERITY> | <CATEGORY>
 **Analyzer:** <analyzer_name>
@@ -157,29 +215,25 @@ Parse DeepSource comment format:
 
 <explanation>
 ```
+Extract: shortcode, severity, category, analyzer, title, explanation, file, line.
 
-Extract: shortcode, severity (CRITICAL/MAJOR→HIGH/MINOR→MEDIUM), category, analyzer, title, explanation, file, line.
+**CodeRabbit comments** (author: `coderabbitai[bot]`):
+- Inline review comments with suggestions
+- May include "Duplicated Comments" sections — parse each entry as a separate finding
 
-**5. CodeRabbit comments:**
-```bash
-gh api repos/{owner}/{repo}/pulls/{number}/comments --paginate \
-  --jq '.[] | select(.user.login == "coderabbitai[bot]") | {id: .id, path: .path, line: .line, body: .body}'
+**Human reviewer comments:** All threads where the first comment author is not a known bot.
+
+#### Step 0.3.4: Summary
+
+Group all collected threads by source:
 ```
-
-**6. Human reviewer comments:** All remaining comments not from known bots.
-
-**Duplicated comments sections:**
-Some tools (e.g., CodeRabbit) group repeated comments under "Duplicated Comments" headings. Parse these and treat each as a regular comment mapped to its affected files/lines.
-
-Group comments by source:
-```
-PR Comments:
-  - Codacy: X comments (from workflow)
-  - DeepSource: X comments (from workflow)
-  - CodeRabbit: X comments (Y inline, Z summary)
-  - Human reviewers: X comments from [usernames]
-  - CI/CD: X comments
-  - Unresolved threads: X
+PR Threads:
+  - Codacy: X threads (Y native app, Z workflow) — A unresolved
+  - DeepSource: X threads (Y native app, Z workflow) — A unresolved
+  - CodeRabbit: X threads — A unresolved
+  - Human reviewers: X threads from [usernames] — A unresolved
+  - Other bots: X threads — A unresolved
+  Total: X threads, Y unresolved
 ```
 
 ### Step 0.4: Checkout PR Branch
@@ -827,9 +881,9 @@ Already addressed in a previous commit.
 <direct answer referencing specific code/files>
 ```
 
-### Step 8.2: Build Thread Map
+### Step 8.2: Refresh Thread Map
 
-Before posting any replies, fetch the mapping of comment `databaseId` to thread `node_id`:
+Re-fetch the thread map from Step 0.3.1 to get the latest state (threads may have been resolved by pushes or other activity):
 
 ```bash
 gh api graphql -f query='
@@ -840,8 +894,14 @@ gh api graphql -f query='
           nodes {
             id
             isResolved
-            comments(first: 1) {
-              nodes { databaseId body }
+            path
+            line
+            comments(first: 10) {
+              nodes {
+                databaseId
+                author { login }
+                body
+              }
             }
           }
         }
@@ -851,23 +911,19 @@ gh api graphql -f query='
 '
 ```
 
-Store the result as a `{databaseId → thread_node_id}` mapping. You will use it in Step 8.3.
+Update the thread map with fresh `isResolved` status. Skip threads already resolved.
 
 ### Step 8.3: Reply AND Resolve Each Thread (atomically)
 
-**CRITICAL:** For EACH thread, reply and resolve in the SAME step. Never batch "all replies first, then all resolves". The pattern is: reply → resolve → next thread.
+**CRITICAL:** For EACH thread, reply and resolve in the SAME step. Never batch "all replies first, then all resolves". The pattern is: reply → resolve → confirm → next thread.
 
-**For each thread:**
+**For each unresolved thread, use the correct reply method based on the source:**
 
-**1. Post the reply:**
+#### Case A: Native app threads (DeepSource `deepsource-io`, Codacy `codacy-production`)
 
-For inline review comments (have `in_reply_to`):
-```bash
-gh api repos/{owner}/{repo}/pulls/{number}/comments \
-  --method POST -f body="<reply>" -F in_reply_to=<comment_id>
-```
+The REST API returns 404 for these threads. You MUST use GraphQL for both reply and resolve.
 
-For DeepSource review comments (REST 404 — use GraphQL instead):
+**1. Reply via GraphQL:**
 ```bash
 gh api graphql -f query='
   mutation {
@@ -879,12 +935,7 @@ gh api graphql -f query='
 '
 ```
 
-For general PR comments:
-```bash
-gh pr comment <PR_NUMBER_OR_URL> --body "<reply>"
-```
-
-**2. Immediately resolve the same thread:**
+**2. Resolve via GraphQL:**
 ```bash
 gh api graphql -f query='
   mutation {
@@ -895,7 +946,90 @@ gh api graphql -f query='
 '
 ```
 
-**3. Confirm** `isResolved: true` in the response before moving to the next thread.
+**3. Confirm** `isResolved: true` in the response.
+
+**Example — DeepSource native thread:**
+```bash
+# Thread from deepsource-io at backend/internal/handler/client.go:42
+# thread_node_id = "PRRT_kwDORrzDks579CXg"
+
+# Reply
+gh api graphql -f query='
+  mutation {
+    addPullRequestReviewThreadReply(input: {
+      pullRequestReviewThreadId: "PRRT_kwDORrzDks579CXg",
+      body: "Fixed in abc1234. Replaced exported function returning unexported type."
+    }) { comment { id } }
+  }
+'
+
+# Resolve
+gh api graphql -f query='
+  mutation {
+    resolveReviewThread(input: {threadId: "PRRT_kwDORrzDks579CXg"}) {
+      thread { isResolved }
+    }
+  }
+'
+```
+
+**Example — Codacy native thread:**
+```bash
+# Thread from codacy-production at frontend/src/app/page.tsx:15
+# thread_node_id = "PRRT_kwDORrzDks57_ABC"
+
+# Reply
+gh api graphql -f query='
+  mutation {
+    addPullRequestReviewThreadReply(input: {
+      pullRequestReviewThreadId: "PRRT_kwDORrzDks57_ABC",
+      body: "Won'\''t fix: this is a convention in the project. Suppressed via biome-ignore."
+    }) { comment { id } }
+  }
+'
+
+# Resolve
+gh api graphql -f query='
+  mutation {
+    resolveReviewThread(input: {threadId: "PRRT_kwDORrzDks57_ABC"}) {
+      thread { isResolved }
+    }
+  }
+'
+```
+
+#### Case B: Workflow and bot threads (`github-actions[bot]`, `coderabbitai[bot]`, humans)
+
+Use REST API with `in_reply_to` for the reply, then GraphQL for resolve.
+
+**1. Reply via REST:**
+```bash
+gh api repos/{owner}/{repo}/pulls/{number}/comments \
+  --method POST -f body="<reply>" -F in_reply_to=<first_comment_database_id>
+```
+
+**2. Resolve via GraphQL:**
+```bash
+gh api graphql -f query='
+  mutation {
+    resolveReviewThread(input: {threadId: "<thread_node_id>"}) {
+      thread { isResolved }
+    }
+  }
+'
+```
+
+**3. Confirm** `isResolved: true` in the response.
+
+**If REST returns 404** (can happen for some bot types), fall back to Case A (GraphQL for both reply and resolve).
+
+#### Case C: General PR comments (non-inline)
+
+```bash
+gh pr comment <PR_NUMBER_OR_URL> --body "<reply>"
+```
+
+These don't have threads and cannot be resolved.
 
 ### Step 8.4: Verify Zero Unresolved Remain
 
