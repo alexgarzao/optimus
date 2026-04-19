@@ -58,7 +58,10 @@ related:
         evaluates feedback from multiple sources (Codacy, DeepSource, CodeRabbit,
         human reviewers, agents).
   sequence:
+    after:
+      - optimus-stage-2-impl
     before:
+      - optimus-stage-3-review
       - optimus-verify-code
 verification:
   automated:
@@ -95,6 +98,31 @@ Unified PR review orchestrator. Fetches PR metadata, collects ALL review comment
 - The PR may have changed entirely since the last time you looked at it
 
 If you find yourself saying "these were already addressed" without having run `gh api` commands in THIS session, you are violating this rule.
+
+---
+
+## Task Mode vs Standalone Mode
+
+This skill operates in TWO modes:
+
+### Task Mode (part of the stage pipeline)
+When the user references a task (e.g., "review PR for T-012") or a `tasks.md` exists with a task in status `Em Andamento`:
+
+1. **Validate status:** The task MUST be in status `Em Andamento` (set by stage-2-impl). If not, STOP and tell the user which agent to run first.
+2. **Update status:** Change the task status in `tasks.md` from `Em Andamento` to `Revisando PR`.
+3. **Commit status change:** `git add tasks.md && git commit -m "chore: T-XXX status → Revisando PR"`
+4. At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes stage-3-review next.
+
+### Standalone Mode (no task)
+When no task is referenced and no `tasks.md` exists, or the user explicitly wants to review a PR without a task context:
+- Skip all task status logic
+- Proceed directly to Phase 0
+
+### How to detect which mode:
+1. If the user mentions a task ID (T-XXX) → Task Mode
+2. If `tasks.md` exists and has exactly ONE task in `Em Andamento` → Task Mode (confirm with user via `AskUser`)
+3. If `tasks.md` exists but no task is in `Em Andamento` → Standalone Mode
+4. If no `tasks.md` exists → Standalone Mode
 
 ---
 

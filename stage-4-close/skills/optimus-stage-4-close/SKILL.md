@@ -2,8 +2,9 @@
 name: optimus-stage-4-close
 description: >
   Stage 4 of the task lifecycle. Verifies all prerequisites before marking
-  a task as done: no uncommitted changes, no unpushed commits, PR merged
+  a task as done: no uncommitted changes, no unpushed commits, PR ready to merge
   (if applicable), CI passing, tests and lint passing locally.
+  Does NOT merge the PR — the user merges manually after close.
 trigger: >
   - After optimus-stage-3-review has completed for a task
   - When user requests closing a task (e.g., "close T-012", "mark T-012 as done")
@@ -14,7 +15,7 @@ prerequisite: >
   - Task exists in tasks.md with status "Validando Impl"
   - stage-3-review has completed
 NOT_skip_when: >
-  - "Everything is already merged" → Verify it. Do not assume.
+  - "Everything is already ready" → Verify it. Do not assume.
   - "Tests passed in CI" → Also run locally to confirm.
   - "It's a small task" → All tasks need the same close verification.
 examples:
@@ -106,18 +107,21 @@ git log @{u}..HEAD --oneline
 - **PASS:** Output is empty (local is in sync with remote)
 - **FAIL:** List the unpushed commits
 
-#### Check 3: PR Merged (if applicable)
+#### Check 3: PR Ready to Merge (if applicable)
 
 Check if a PR exists for the current branch or task branch:
 
 ```bash
-gh pr list --head "$(git branch --show-current)" --json number,state,title --jq '.[]'
+gh pr list --head "$(git branch --show-current)" --json number,state,title,reviewDecision --jq '.[]'
 ```
 
 - **If no PR exists:** PASS (task went directly to default branch)
+- **If PR exists and state is OPEN with all checks passing:** PASS — "PR #X is ready to merge."
+- **If PR exists and state is OPEN with failing checks:** FAIL — "PR #X has failing checks."
 - **If PR exists and state is MERGED:** PASS
-- **If PR exists and state is OPEN:** FAIL — "PR #X is still open. Merge it first."
 - **If PR exists and state is CLOSED (not merged):** FAIL — "PR #X was closed without merging."
+
+**NOTE:** This check verifies the PR is READY to merge, but does NOT merge it. The user merges the PR manually after stage-4-close completes.
 
 #### Check 4: CI Passing (if PR exists)
 
@@ -220,7 +224,7 @@ make test-e2e
 |---|-------|-------------|--------|
 | 1 | Git | No uncommitted changes | PASS |
 | 2 | Git | No unpushed commits | PASS |
-| 3 | Git | PR merged | PASS (PR #X) / PASS (no PR) |
+| 3 | Git | PR ready to merge | PASS (PR #X) / PASS (no PR) |
 | 4 | Git | CI passing | PASS / SKIP (no PR) |
 | 5 | Quality | Lint | PASS |
 | 6 | Quality | Vet | PASS / SKIP |

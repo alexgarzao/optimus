@@ -124,8 +124,8 @@ Tasks flow through 4 stages. Status lives in `tasks.md` (the markdown table in t
 target project). Each stage is a separate skill.
 
 ```
-Pendente → Validando Spec → Em Andamento → Validando Impl → **DONE**
-           (stage-1-spec)   (stage-2-impl)  (stage-3-review)  (stage-4-close)
+Pendente → Validando Spec → Em Andamento → Revisando PR → Validando Impl → **DONE**
+           (stage-1-spec)   (stage-2-impl)  (pr-review)    (stage-3-review)  (stage-4-close)
 ```
 
 ### Rules
@@ -146,20 +146,26 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → **DONE**
 |-------|---------------|------------|-----------------|
 | stage-1-spec | `Pendente` | `Validando Spec` | STOP, tell user |
 | stage-2-impl | `Validando Spec` | `Em Andamento` | STOP, tell user |
-| stage-3-review | `Em Andamento` | `Validando Impl` | STOP, tell user |
+| pr-review | `Em Andamento` | `Revisando PR` | STOP, tell user |
+| stage-3-review | `Revisando PR` | `Validando Impl` | STOP, tell user |
 | stage-4-close | `Validando Impl` | `**DONE**` | STOP, tell user |
+
+**NOTE:** pr-review also works in standalone mode (without a task). In standalone mode,
+it skips all task status logic. See pr-review SKILL.md for detection rules.
 
 ### stage-4-close Checklist
 
 Before marking done, stage-4-close verifies:
 1. No uncommitted changes (`git status --porcelain` = empty)
 2. No unpushed commits (`git log @{u}..HEAD` = empty)
-3. PR merged (if PR exists)
+3. PR ready to merge (if PR exists) — does NOT merge, user merges manually after
 4. CI passing (if PR exists)
-5. Tests pass locally
-6. Lint passes
+5. Lint, vet, format, imports pass
+6. `make test` passes (unit tests)
+7. `make test-integration` passes (if target exists)
+8. `make test-e2e` passes (if target exists)
 
-ALL must pass. If any fails, status stays at `Validando Impl`.
+ALL must pass (SKIP counts as pass). If any fails, status stays at `Validando Impl`.
 
 ## Project Rules Discovery (all skills)
 
