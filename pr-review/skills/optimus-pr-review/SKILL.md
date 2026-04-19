@@ -244,72 +244,88 @@ gh pr checkout <PR_NUMBER_OR_URL>
 
 If already on the correct branch, skip. If checkout fails due to uncommitted changes, inform the user.
 
-### Step 0.5: Fetch CI Check Status
+### Step 0.5: Fetch CI Check Status (MANDATORY)
+
+**HARD BLOCK:** You MUST run this command and report the results. Do NOT skip this step.
 
 ```bash
 gh pr checks <PR_NUMBER_OR_URL>
 ```
 
-For more detail:
-```bash
-gh pr view <PR_NUMBER_OR_URL> --json statusCheckRollup --jq '.statusCheckRollup[]'
+This command lists ALL checks: GitHub Actions workflows (Backend, Frontend, Merge Gate), external services (Codacy, DeepSource), and any other integrations. **Every line with "fail" is a problem that MUST be investigated.**
+
+Example output:
+```
+Codacy Static Code Analysis    fail    0       https://app.codacy.com/...
+DeepSource: Go                 fail    2m23s   https://app.deepsource.com/...
+DeepSource: JavaScript         fail    28s     https://app.deepsource.com/...
+Merge Gate                     fail    5s      https://github.com/.../actions/runs/...
+Backend                        pass    3m14s   https://github.com/.../actions/runs/...
+Frontend                       pass    2m35s   https://github.com/.../actions/runs/...
 ```
 
-Extract for each check: name, status, conclusion, URL.
+In this example, there are **4 failing checks**. ALL 4 must become findings.
 
-Also fetch Codacy and DeepSource check run status specifically:
+Count and classify:
+```
+CI Status:
+  - Passing: X checks [list names]
+  - FAILING: X checks [list ALL names — this includes Codacy, DeepSource, Merge Gate, and ANY other failing check]
+  - Pending/Running: X checks
+```
+
+### Step 0.6: Investigate EVERY Failing Check (MANDATORY)
+
+**HARD BLOCK:** If `gh pr checks` showed ANY failing check, you MUST create a finding for EACH one. This applies to ALL types of failing checks:
+- GitHub Actions workflows (Backend, Frontend, Merge Gate, etc.)
+- Codacy Static Code Analysis
+- DeepSource analyzers (Go, JavaScript, Docker, Shell, etc.)
+- Any other external check
+
+**Do NOT rationalize away failing checks.** Common mistakes to avoid:
+- "Codacy/DeepSource failures are already covered by the review threads" — NO. The failing CHECK is a separate problem from individual comments. The check failing means the PR cannot be merged.
+- "Merge Gate failed because of Codacy/DeepSource" — YES, but it's still a failing check that must be reported as a finding with root cause.
+- "These are external tools, not CI" — ALL checks shown by `gh pr checks` are CI checks regardless of their source.
+
+**For each failing check:**
+
+1. **Fetch details:**
 ```bash
 COMMIT_SHA=$(gh api repos/{owner}/{repo}/pulls/{number} --jq '.head.sha')
 
-# Codacy
+# Get ALL failing check runs with their details
 gh api repos/{owner}/{repo}/commits/${COMMIT_SHA}/check-runs \
-  --jq '.check_runs[] | select(.app.slug == "codacy-production") | {name, conclusion, status, annotations_count: .output.annotations_count}'
-
-# DeepSource
-gh api repos/{owner}/{repo}/commits/${COMMIT_SHA}/check-runs \
-  --jq '.check_runs[] | select(.app.slug == "deepsource-io") | {name, conclusion, status}'
+  --jq '.check_runs[] | select(.conclusion == "failure") | {name, conclusion, app_slug: .app.slug, details_url, output: {title: .output.title, summary: .output.summary, annotations_count: .output.annotations_count}}'
 ```
 
-Classify checks:
-```
-CI Status:
-  - Passing: X checks
-  - Failing: X checks [list names]
-  - Pending/Running: X checks
-  - Codacy: <conclusion> (<N> annotations)
-  - DeepSource: <analyzer1>=<conclusion>, <analyzer2>=<conclusion>
-```
-
-### Step 0.6: Investigate Failing CI Checks
-
-If ANY CI checks are failing (conclusion != "success" and status == "completed"), you MUST investigate each one:
-
-For each failing check:
-
-1. **Fetch the failed workflow run logs:**
+2. **For GitHub Actions failures, fetch logs:**
 ```bash
-# Get the check run details including the run URL
-gh api repos/{owner}/{repo}/commits/${COMMIT_SHA}/check-runs \
-  --jq '.check_runs[] | select(.conclusion == "failure") | {name, conclusion, details_url, output: {title: .output.title, summary: .output.summary}}'
-```
-
-2. **Fetch workflow run logs if available:**
-```bash
-# Extract run ID from details_url and fetch logs
 RUN_ID=$(echo "<details_url>" | grep -oP 'runs/\K[0-9]+')
 gh run view $RUN_ID --log-failed 2>/dev/null | tail -100
 ```
 
-3. **Create a finding for each failing check** with:
-   - Severity: **HIGH** (CI failure blocks merge)
+3. **For Codacy failures, check annotation count:**
+```bash
+gh api repos/{owner}/{repo}/commits/${COMMIT_SHA}/check-runs \
+  --jq '.check_runs[] | select(.app.slug == "codacy-production") | {name, conclusion, annotations: .output.annotations_count}'
+```
+
+4. **For DeepSource failures, check each analyzer:**
+```bash
+gh api repos/{owner}/{repo}/commits/${COMMIT_SHA}/check-runs \
+  --jq '.check_runs[] | select(.app.slug == "deepsource-io") | {name, conclusion, title: .output.title}'
+```
+
+5. **Create a finding for EACH failing check** with:
+   - Severity: **HIGH** (any failing check blocks merge)
    - Source: `[CI: <check-name>]`
-   - The error message / log output
-   - Root cause analysis
-   - Proposed fix
+   - The error message / log output / annotation count
+   - Root cause analysis (what is causing the failure)
+   - Proposed fix (what needs to change to make it pass)
 
-These CI failure findings are included in Phase 3 consolidation alongside Codacy/DeepSource/agent findings, assigned sequential IDs (F1, F2...), and presented to the user for resolution in Phase 5 like any other finding.
+These CI failure findings are included in Phase 3 consolidation alongside agent findings, assigned sequential IDs (F1, F2...), and presented to the user for resolution in Phase 5 like any other finding.
 
-**IMPORTANT:** CI failures are NOT informational — they are actionable findings that block merge readiness. Treat them with the same rigor as code review findings.
+**IMPORTANT:** CI failures are NOT informational — they are actionable findings that block merge readiness. If you present a PR summary that says "everything is OK" while `gh pr checks` shows failing checks, you have violated this rule.
 
 ### Step 0.7: Fetch Changed Files
 
@@ -323,7 +339,7 @@ Read the full content of each changed file for the review agents.
 
 ## Phase 1: Present PR Summary
 
-**IMPORTANT:** If there are failing CI checks, they MUST be highlighted prominently in the summary. Failing CI is a merge blocker and takes priority.
+**HARD BLOCK:** If `gh pr checks` showed ANY failing checks, the summary MUST list every failing check name prominently. Do NOT present a summary without the CI Status section. If all checks pass, say so explicitly. If any fail, they MUST appear in bold with the word "FAILING".
 
 ```markdown
 ## PR Review: #<number> — <title>
