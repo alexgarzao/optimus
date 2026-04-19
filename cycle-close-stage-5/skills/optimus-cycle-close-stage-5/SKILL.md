@@ -116,6 +116,27 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
        ```
        Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
        ```
+4. **Expanded confirmation before status change:**
+   - **If the user did NOT specify the task ID explicitly** (auto-detect):
+     - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
+     - Present to the user via `AskUser`:
+       ```
+       I'm about to close task T-XXX and mark it as **DONE** (from '<current>').
+
+       **T-XXX: [title]**
+       **Objetivo:** [objective from detail section]
+       **Critérios de Aceite:**
+       - [ ] [criterion 1]
+       - [ ] [criterion 2]
+       ...
+
+       Confirm close?
+       ```
+     - **BLOCKING:** Do NOT proceed to the close checklist until the user confirms
+   - **If the user specified the task ID explicitly** (e.g., "close T-012"):
+     - Skip expanded confirmation (user already has context)
+
+   **NOTE:** cycle-close-stage-5 does not support re-execution (status always changes to `**DONE**`), so the re-execution skip does not apply here.
 
 ---
 

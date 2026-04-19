@@ -130,9 +130,28 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
        ```
        Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
        ```
-6. **Update status:** Change the task status in `tasks.md` to `Revisando PR` (if not already).
-7. Do NOT commit this change separately — it will be committed with the task's work.
-8. At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes cycle-close-stage-5 next.
+6. **Expanded confirmation before status change:**
+   - **If status will change** (current status is NOT `Revisando PR`):
+     - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
+     - Present to the user via `AskUser`:
+       ```
+       I'm about to change task T-XXX status from '<current>' to 'Revisando PR'.
+
+       **T-XXX: [title]**
+       **Objetivo:** [objective from detail section]
+       **Critérios de Aceite:**
+       - [ ] [criterion 1]
+       - [ ] [criterion 2]
+       ...
+
+       Confirm status change?
+       ```
+     - **BLOCKING:** Do NOT change status until the user confirms
+   - **If re-execution** (status is already `Revisando PR`):
+     - Skip expanded confirmation (user already has context)
+7. **Update status:** Change the task status in `tasks.md` to `Revisando PR` (if not already).
+8. Do NOT commit this change separately — it will be committed with the task's work.
+9. At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes cycle-close-stage-5 next.
 
 ### Standalone Mode (no task)
 When no task is referenced and no `tasks.md` exists, or the user explicitly wants to review a PR without a task context:

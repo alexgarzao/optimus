@@ -126,8 +126,27 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
        ```
        Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
        ```
-4. Update the Status column to `Validando Spec` (if not already)
-5. Do NOT commit this change separately — it will be committed with the task's work
+4. **Expanded confirmation before status change:**
+   - **If status will change** (current status is NOT `Validando Spec`) AND the user did NOT specify the task ID explicitly (auto-detect):
+     - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
+     - Present to the user via `AskUser`:
+       ```
+       I'm about to change task T-XXX status from '<current>' to 'Validando Spec'.
+
+       **T-XXX: [title]**
+       **Objetivo:** [objective from detail section]
+       **Critérios de Aceite:**
+       - [ ] [criterion 1]
+       - [ ] [criterion 2]
+       ...
+
+       Confirm status change?
+       ```
+     - **BLOCKING:** Do NOT change status until the user confirms
+   - **If re-execution** (status is already `Validando Spec`) OR the user specified the task ID explicitly:
+     - Skip expanded confirmation (user already has context)
+5. Update the Status column to `Validando Spec` (if not already)
+6. Do NOT commit this change separately — it will be committed with the task's work
 
 **Anti-pulo:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`), refuse to proceed — the task has already passed this stage.
 

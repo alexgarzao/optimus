@@ -285,7 +285,23 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 6. **Dependency check** — every agent verifies that ALL dependencies (Depends column)
    have status `**DONE**` before proceeding. If any dependency is not done, the agent
    refuses with a clear message identifying which dependency is blocking.
-7. **Branch protection** — execution skills (stages 1-5) require a feature branch.
+7. **Expanded confirmation on status change** — when a stage agent is about to change
+   a task's status, it shows the task description (Objetivo + Critérios de Aceite) and
+   asks for explicit confirmation via `AskUser`. This prevents accidental status changes
+   on the wrong task, especially during auto-detect.
+
+   **Show expanded confirmation when:**
+   - The status will actually change (not re-execution), AND
+   - The user did NOT specify the task ID explicitly (auto-detect picked the task)
+
+   **Skip expanded confirmation when:**
+   - Re-execution (status already equals the stage's output status — user knows the task)
+   - The user specified the task ID explicitly (e.g., "execute T-012" — user has context)
+
+   **Exception:** cycle-close-stage-5 always changes status (no re-execution), so the
+   re-execution skip does not apply. It still skips when the user specified the task ID.
+
+8. **Branch protection** — execution skills (stages 1-5) require a feature branch.
    Administrative skills can run on any branch. See the classification table below:
 
    **Skills are classified as Administrative or Execution:**
