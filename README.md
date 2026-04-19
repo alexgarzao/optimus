@@ -2,13 +2,26 @@
 
 Skills marketplace for Droid (Factory) and Claude Code.
 
-## Skills
+## Task Lifecycle (stages 1-4)
+
+Tasks flow through 4 stages. Each stage is a separate skill that validates the task status before proceeding.
+
+```
+Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
+           (stage-1-spec)   (stage-2-impl)  (stage-3-review)  (stage-4-close)
+```
+
+| Skill | Stage | Description | Command |
+|-------|-------|-------------|---------|
+| `stage-1-spec` | 1 | Validates task specs against project docs before implementation | `/optimus-stage-1-spec` |
+| `stage-2-impl` | 2 | End-to-end task implementation with verification gates | `/optimus-stage-2-impl` |
+| `stage-3-review` | 3 | Post-implementation validation with parallel specialist agents | `/optimus-stage-3-review` |
+| `stage-4-close` | 4 | Verifies prerequisites and marks task as done | `/optimus-stage-4-close` |
+
+## Review & Verification Skills
 
 | Skill | Description | Command |
 |-------|-------------|---------|
-| `pre-task-validator` | Validates task specs against project docs before implementation | `/optimus-pre-task-validator` |
-| `task-executor` | End-to-end task execution with verification gates | `/optimus-task-executor` |
-| `post-task-validator` | Post-execution validation with parallel specialist agents | `/optimus-post-task-validator` |
 | `deep-doc-review` | Deep doc review with cross-referencing and interactive resolution | `/optimus-deep-doc-review` |
 | `deep-review` | Parallel code review with specialist agents and interactive resolution | `/optimus-deep-review` |
 | `pr-review` | PR-aware review with comment collection, agent evaluation, and source attribution | `/optimus-pr-review` |

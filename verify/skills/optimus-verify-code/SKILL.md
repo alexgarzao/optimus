@@ -33,8 +33,8 @@ examples:
       2. Present summary showing what passed/failed
 related:
   complementary:
-    - optimus-task-executor
-    - optimus-post-task-validator
+    - optimus-stage-2-impl
+    - optimus-stage-3-review
   differentiation:
     - name: optimus-deep-review
       difference: >

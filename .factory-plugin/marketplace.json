@@ -6,19 +6,24 @@
   },
   "plugins": [
     {
-      "name": "task-executor",
-      "description": "End-to-end task execution with phased verification gates, interactive code review, and commit approval",
-      "source": "./task-executor"
+      "name": "stage-1-spec",
+      "description": "Stage 1: Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes.",
+      "source": "./stage-1-spec"
     },
     {
-      "name": "post-task-validator",
-      "description": "Validates completed tasks against spec, coding standards, and best practices using parallel specialist agents",
-      "source": "./post-task-validator"
+      "name": "stage-2-impl",
+      "description": "Stage 2: End-to-end task implementation with verification gates, code review, and commit approval.",
+      "source": "./stage-2-impl"
     },
     {
-      "name": "pre-task-validator",
-      "description": "Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes.",
-      "source": "./pre-task-validator"
+      "name": "stage-3-review",
+      "description": "Stage 3: Validates completed task implementation against spec, coding standards, and best practices using parallel specialist agents.",
+      "source": "./stage-3-review"
+    },
+    {
+      "name": "stage-4-close",
+      "description": "Stage 4: Verifies all prerequisites (commits pushed, PR merged, tests passing) and marks the task as done.",
+      "source": "./stage-4-close"
     },
     {
       "name": "deep-doc-review",
@@ -32,7 +37,7 @@
     },
     {
       "name": "pr-review",
-      "description": "Unified PR review orchestrator. Fetches PR metadata, collects ALL review comments (Codacy, DeepSource, CodeRabbit, human reviewers), dispatches parallel agents to evaluate code and comments, presents findings interactively, applies fixes with TDD cycle and separate commits per finding, responds to every comment thread with commit reference or justification, resolves all threads via GraphQL, and adds inline suppression tags for Codacy/DeepSource when a finding won't be fixed.",
+      "description": "Unified PR review orchestrator. Fetches PR metadata, collects ALL review comments (Codacy, DeepSource, CodeRabbit, human reviewers), dispatches parallel agents, presents findings interactively, applies fixes with TDD cycle, responds to every comment thread, and resolves all threads via GraphQL.",
       "source": "./pr-review"
     },
     {

@@ -1,13 +1,13 @@
 ---
-name: optimus-post-task-validator
+name: optimus-stage-3-review
 description: >
-  Validates that a completed task was executed correctly: spec compliance,
-  coding standards adherence, engineering best practices, test coverage,
-  and production readiness. Uses parallel specialist agents for deep analysis,
-  then presents findings interactively. Runs AFTER optimus-task-executor finishes
-  and BEFORE the final commit.
+  Stage 3 of the task lifecycle. Validates that a completed task was executed
+  correctly: spec compliance, coding standards adherence, engineering best
+  practices, test coverage, and production readiness. Uses parallel specialist
+  agents for deep analysis, then presents findings interactively.
+  Runs AFTER optimus-stage-2-impl finishes and BEFORE the final commit.
 trigger: >
-  - After optimus-task-executor completes all phases and verification gates pass
+  - After optimus-stage-2-impl completes all phases and verification gates pass
   - When user requests validation of a completed task (e.g., "validate T-012")
   - Before the final commit of a task execution
 skip_when: >
@@ -22,7 +22,7 @@ prerequisite: >
 NOT_skip_when: >
   - "Task was simple" → Simple tasks still need spec compliance checks.
   - "Tests already pass" → Passing tests do not guarantee spec compliance or code quality.
-  - "optimus-task-executor already ran verification gates" → Gates check pass/fail; this validates correctness.
+  - "optimus-stage-2-impl already ran verification gates" → Gates check pass/fail; this validates correctness.
   - "Time pressure" → Validation prevents rework, saving time overall.
 examples:
   - name: Validate a full-stack task
@@ -41,7 +41,7 @@ examples:
   - name: Validate last executed task (auto-detect)
     invocation: "Validate the last task"
     expected_flow: >
-      1. Check optimus-task-executor-state.json or git diff for context
+      1. Check optimus-stage-2-impl-state.json or git diff for context
       2. Identify the task that was just executed
       3. Suggest to user and confirm via AskUser
       4. Standard validation flow
@@ -55,18 +55,18 @@ examples:
       5. Apply fixes, verify
 related:
   complementary:
-    - optimus-task-executor
+    - optimus-stage-2-impl
     - requesting-code-review
     - dev-validation
   differentiation:
     - name: requesting-code-review
       difference: >
         requesting-code-review dispatches reviewers during the dev-cycle.
-        optimus-post-task-validator is a standalone validation that also checks
+        optimus-stage-3-review is a standalone validation that also checks
         spec compliance, test ID coverage, and cross-file consistency.
   sequence:
     after:
-      - optimus-task-executor
+      - optimus-stage-2-impl
     before:
       - dev-feedback-loop
 verification:
@@ -84,7 +84,7 @@ verification:
 
 Validates that a completed task was executed correctly: spec compliance, coding standards adherence, engineering best practices, test coverage, and production readiness. Uses parallel specialist agents for deep analysis, then presents findings interactively.
 
-Runs AFTER optimus-task-executor finishes and BEFORE the final commit.
+Runs AFTER optimus-stage-2-impl finishes and BEFORE the final commit.
 
 ---
 
@@ -99,7 +99,7 @@ Determine which task to validate:
 - Confirm with the user using `AskUser`: "I'll validate task T-012: [task title]. Correct?"
 
 **If the user did NOT specify a task ID** (e.g., "validate the last task", or just invoked the skill):
-1. **Check for execution state:** Look for `docs/dev-cycle/optimus-task-executor-state.json` — if it exists and has a recent task, use that task ID
+1. **Check for execution state:** Look for `docs/dev-cycle/optimus-stage-2-impl-state.json` — if it exists and has a recent task, use that task ID
 2. **Check git diff:** If no state file, examine uncommitted changes to infer which task was just implemented (look for task ID references in changed files, commit messages, or branch name)
 3. **Fall back to tasks file:** Scan the tasks file for the most recently completed task (status "in_progress" or last "completed")
 4. **Suggest to the user** using `AskUser`: "I identified the task to validate: T-XXX — [task title]. Is this correct, or would you like to validate a different task?"
@@ -107,9 +107,22 @@ Determine which task to validate:
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
 
+### Step 0.0.1: Validate and Update Task Status
+
+**HARD BLOCK:** This step is mandatory. Do NOT skip it.
+
+1. Read `tasks.md` and find the row for the confirmed task ID
+2. Check the **Status** column:
+   - If status is `Em Andamento` → proceed (stage-2-impl has completed)
+   - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run stage-1-spec and stage-2-impl first."
+   - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run stage-2-impl first."
+   - If status is `Validando Impl` or `**DONE**` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage."
+3. Update the Status column from `Em Andamento` to `Validando Impl`
+4. Do NOT commit this change separately — it will be committed with the task's work
+
 ### Step 0.1: Discover Project Structure
 
-Before loading docs, discover the project's structure and tooling (reuse discoveries from optimus-task-executor if available):
+Before loading docs, discover the project's structure and tooling (reuse discoveries from optimus-stage-2-impl if available):
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
 2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, test, integration test, and E2E test commands.

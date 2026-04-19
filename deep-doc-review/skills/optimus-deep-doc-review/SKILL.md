@@ -9,7 +9,7 @@ trigger: >
   - Before starting implementation based on docs (validate doc quality)
   - After significant changes to reference docs (PRD, TRD, API design, etc.)
 skip_when: >
-  - Code review (use optimus-deep-review or optimus-post-task-validator instead)
+  - Code review (use optimus-deep-review or optimus-stage-3-review instead)
   - Docs do not exist yet (create them first)
   - Reviewing a single simple file (do it directly without the skill)
 prerequisite: >
@@ -37,12 +37,12 @@ examples:
       3. Generate table and resolve findings
 related:
   complementary:
-    - optimus-pre-task-validator
-    - optimus-post-task-validator
+    - optimus-stage-1-spec
+    - optimus-stage-3-review
   differentiation:
-    - name: optimus-pre-task-validator
+    - name: optimus-stage-1-spec
       difference: >
-        optimus-pre-task-validator validates a task spec against reference docs.
+        optimus-stage-1-spec validates a task spec against reference docs.
         optimus-deep-doc-review reviews the docs themselves against each other,
         independent of any task.
 verification:

@@ -1,8 +1,0 @@
-{
-  "name": "task-executor",
-  "description": "End-to-end task execution with phased verification gates, interactive code review, and commit approval. Orchestrates context loading, codebase exploration, parallel agent dispatch, and blocking verification gates between phases.",
-  "version": "1.0.0",
-  "author": {
-    "name": "Alex Garzao"
-  }
-}

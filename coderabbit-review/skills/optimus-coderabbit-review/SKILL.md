@@ -46,9 +46,9 @@ related:
         optimus-deep-review uses parallel specialist agents to generate findings.
         optimus-coderabbit-review uses CodeRabbit CLI as the source of findings
         and adds mandatory TDD cycle + secondary agent validation for logic changes.
-    - name: optimus-post-task-validator
+    - name: optimus-stage-3-review
       difference: >
-        optimus-post-task-validator validates a completed task against its spec.
+        optimus-stage-3-review validates a completed task against its spec.
         optimus-coderabbit-review is a generic review driven by CodeRabbit
         without task/spec context.
 verification:

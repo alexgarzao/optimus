@@ -1,12 +1,13 @@
 ---
-name: optimus-task-executor
+name: optimus-stage-2-impl
 description: >
-  Executes a validated task specification end-to-end: identifies the task,
-  loads context, questions ambiguities upfront, then delegates execution
-  to the dev-cycle skill which handles the 6-gate pipeline (implementation,
-  devops, SRE, testing, review, validation). Commits only after user approval.
+  Stage 2 of the task lifecycle. Executes a validated task specification
+  end-to-end: identifies the task, loads context, questions ambiguities upfront,
+  then delegates execution to the dev-cycle skill which handles the 6-gate
+  pipeline (implementation, devops, SRE, testing, review, validation).
+  Commits only after user approval.
 trigger: >
-  - After optimus-pre-task-validator has PASSED for a task
+  - After optimus-stage-1-spec has PASSED for a task
   - When user requests full task execution with a task ID (e.g., "execute T-012")
   - When starting implementation of a validated task from a tasks file
 skip_when: >
@@ -55,14 +56,14 @@ related:
   differentiation:
     - name: dev-cycle
       difference: >
-        dev-cycle is the 6-gate execution engine. optimus-task-executor is the
+        dev-cycle is the 6-gate execution engine. optimus-stage-2-impl is the
         preparation layer that handles task identification, context loading,
         upfront questioning, and codebase exploration BEFORE invoking dev-cycle.
-        Use task-executor when you need the full workflow; use dev-cycle directly
+        Use stage-2-impl when you need the full workflow; use dev-cycle directly
         when context is already loaded and the task file path is known.
   sequence:
     after:
-      - optimus-pre-task-validator
+      - optimus-stage-1-spec
       - pre-dev-task-breakdown
       - pre-dev-subtask-creation
     before:
@@ -106,7 +107,19 @@ Determine which task to execute:
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to execute.
 
-### Step 0.0.1: Create Workspace
+### Step 0.0.1: Validate and Update Task Status
+
+**HARD BLOCK:** This step is mandatory. Do NOT skip it.
+
+1. Read `tasks.md` and find the row for the confirmed task ID
+2. Check the **Status** column:
+   - If status is `Validando Spec` → proceed (stage-1-spec has completed)
+   - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run stage-1-spec first."
+   - If status is `Em Andamento`, `Validando Impl`, or `**DONE**` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage."
+3. Update the Status column from `Validando Spec` to `Em Andamento`
+4. Do NOT commit this change separately — it will be committed with the task's work
+
+### Step 0.0.2: Create Workspace
 
 After the user confirms the task, ask how to isolate the work using `AskUser`:
 

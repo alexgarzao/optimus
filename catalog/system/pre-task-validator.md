@@ -10,7 +10,7 @@ AI agent prompt that validates task specifications BEFORE implementation begins.
 
 ## Skill
 
-See the full installable version at [`pre-task-validator/skills/optimus-pre-task-validator/SKILL.md`](../../pre-task-validator/skills/optimus-pre-task-validator/SKILL.md).
+See the full installable version at [`stage-1-spec/skills/optimus-stage-1-spec/SKILL.md`](../../stage-1-spec/skills/optimus-stage-1-spec/SKILL.md).
 
 ## Example
 

@@ -1,15 +1,15 @@
 ---
-name: optimus-pre-task-validator
+name: optimus-stage-1-spec
 description: >
-  Validates a task specification against project docs BEFORE code generation begins.
-  Catches gaps, contradictions, ambiguities, test coverage holes, and observability
-  issues that would cause rework. Analysis only — does not generate code.
+  Stage 1 of the task lifecycle. Validates a task specification against project
+  docs BEFORE code generation begins. Catches gaps, contradictions, ambiguities,
+  test coverage holes, and observability issues. Analysis only — does not generate code.
 trigger: >
   - Before starting any task implementation
   - When user requests spec validation (e.g., "validate spec for T-006")
-  - Before invoking optimus-task-executor for a task
+  - Before invoking optimus-stage-2-impl for a task
 skip_when: >
-  - Task is already implemented (use optimus-post-task-validator instead)
+  - Task is already implemented (use optimus-stage-3-review instead)
   - No task spec exists yet (use pre-dev workflow to create it first)
   - Task is pure research with no implementation deliverables
 prerequisite: >
@@ -48,17 +48,17 @@ examples:
       4. Present and resolve findings
 related:
   complementary:
-    - optimus-task-executor
-    - optimus-post-task-validator
+    - optimus-stage-2-impl
+    - optimus-stage-3-review
   differentiation:
-    - name: optimus-post-task-validator
+    - name: optimus-stage-3-review
       difference: >
-        optimus-post-task-validator validates AFTER implementation (code correctness,
-        test quality, code review). optimus-pre-task-validator validates BEFORE
+        optimus-stage-3-review validates AFTER implementation (code correctness,
+        test quality, code review). optimus-stage-1-spec validates BEFORE
         implementation (spec correctness, doc consistency, test design).
   sequence:
     before:
-      - optimus-task-executor
+      - optimus-stage-2-impl
 verification:
   manual:
     - All contradictions between docs resolved
@@ -94,6 +94,23 @@ Determine which task to validate:
 5. **If no tasks file is found or no pending tasks exist**, ask the user to provide a task ID
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
+
+### Step 0.0.1: Validate and Update Task Status
+
+**HARD BLOCK:** This step is mandatory. Do NOT skip it.
+
+1. Read `tasks.md` and find the row for the confirmed task ID
+2. Check the **Status** column:
+   - If status is `Pendente` (or equivalent: "A fazer", "Backlog", "Todo") → proceed
+   - If status is anything else → **STOP** and tell the user:
+     ```
+     Task T-XXX is in '<current_status>'. To run stage-1-spec,
+     it must be in 'Pendente'. This task has already moved past this stage.
+     ```
+3. Update the Status column from `Pendente` to `Validando Spec`
+4. Do NOT commit this change separately — it will be committed with the task's work
+
+**Anti-pulo:** This agent ONLY accepts tasks in `Pendente` status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `**DONE**`), refuse to proceed — the task has already passed this stage.
 
 ### Step 0.1: Discover Project Structure
 

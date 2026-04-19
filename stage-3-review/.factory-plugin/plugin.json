@@ -1,0 +1,8 @@
+{
+  "name": "stage-3-review",
+  "description": "Stage 3: Validates completed task implementation against spec, coding standards, and best practices using parallel specialist agents.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Alex Garzao"
+  }
+}

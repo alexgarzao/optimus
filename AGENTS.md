@@ -17,10 +17,11 @@ optimus/
 │   ├── coding/                        # Coding skill cards
 │   ├── system/                        # Orchestration skill cards
 │   └── writing/                       # Writing skill cards
+├── stage-1-spec/                      # Stage 1: Spec validation
+├── stage-2-impl/                      # Stage 2: Task implementation
+├── stage-3-review/                    # Stage 3: Implementation review
+├── stage-4-close/                     # Stage 4: Close task (verify & mark done)
 ├── pr-review/                         # Unified PR review orchestrator
-├── pre-task-validator/                # Pre-implementation spec validator
-├── post-task-validator/               # Post-implementation code validator
-├── task-executor/                     # End-to-end task executor
 ├── deep-review/                       # Parallel code review (no PR context)
 ├── deep-doc-review/                   # Documentation review
 ├── coderabbit-review/                 # CodeRabbit CLI + TDD cycle
@@ -116,6 +117,49 @@ rationalize these away.
 3. Update README.md
 4. Commit, push
 5. Run `droid plugin uninstall <name>@optimus`
+
+## Task Lifecycle
+
+Tasks flow through 4 stages. Status lives in `tasks.md` (the markdown table in the
+target project). Each stage is a separate skill.
+
+```
+Pendente → Validando Spec → Em Andamento → Validando Impl → **DONE**
+           (stage-1-spec)   (stage-2-impl)  (stage-3-review)  (stage-4-close)
+```
+
+### Rules
+
+1. **Each agent changes status ONLY at the start** — when the agent is invoked, it
+   updates the status to its stage. It NEVER advances to the next stage.
+2. **Only the user decides to move to the next stage** — by manually invoking the
+   next agent. Agents may suggest but NEVER auto-invoke the next stage.
+3. **Status never goes backwards** — if a stage fails, the agent keeps working in
+   the current status until it succeeds or the user stops it.
+4. **Anti-pulo** — each agent validates that the task is in the expected predecessor
+   status before proceeding. If not, it refuses and tells the user which agent to
+   run first.
+
+### Transition Table
+
+| Agent | Expects status | Changes to | If wrong status |
+|-------|---------------|------------|-----------------|
+| stage-1-spec | `Pendente` | `Validando Spec` | STOP, tell user |
+| stage-2-impl | `Validando Spec` | `Em Andamento` | STOP, tell user |
+| stage-3-review | `Em Andamento` | `Validando Impl` | STOP, tell user |
+| stage-4-close | `Validando Impl` | `**DONE**` | STOP, tell user |
+
+### stage-4-close Checklist
+
+Before marking done, stage-4-close verifies:
+1. No uncommitted changes (`git status --porcelain` = empty)
+2. No unpushed commits (`git log @{u}..HEAD` = empty)
+3. PR merged (if PR exists)
+4. CI passing (if PR exists)
+5. Tests pass locally
+6. Lint passes
+
+ALL must pass. If any fails, status stays at `Validando Impl`.
 
 ## Project Rules Discovery (all skills)
 

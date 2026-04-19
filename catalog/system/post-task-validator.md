@@ -10,7 +10,7 @@ AI agent prompt that validates development tasks after execution. Checks spec co
 
 ## Skill
 
-See the full installable version at [`post-task-validator/skills/optimus-post-task-validator/SKILL.md`](../../post-task-validator/skills/optimus-post-task-validator/SKILL.md).
+See the full installable version at [`stage-3-review/skills/optimus-stage-3-review/SKILL.md`](../../stage-3-review/skills/optimus-stage-3-review/SKILL.md).
 
 ## Example
 
