@@ -24,7 +24,7 @@ examples:
     expected_flow: >
       1. Confirm task ID with user
       2. Validate status is "Validando Impl" or "Revisando PR"
-      3. Run close checklist (11 verifications: git state, code quality, tests + coverage)
+      3. Run close checklist (8 verifications: git state, lint, tests)
       4. If all pass, mark as DONE
       5. Commit status change
   - name: Close with failures
@@ -57,31 +57,32 @@ Stage 4 of the task lifecycle. Verifies all prerequisites before marking a task 
 
 ## Phase 0: Identify and Validate Task
 
-### Step 0.0: Identify Task to Close
+### Step 0.0: Find and Validate tasks.md
+
+1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either, **STOP** and suggest `/optimus-cycle-migrate`.
+2. **Validate format (HARD BLOCK):**
+   - **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
+   - A markdown table exists with columns: ID, Title, Status, Depends, Priority, Branch
+   - All task IDs match `T-NNN` pattern
+   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
+   - All Depends values are `-` or comma-separated valid task IDs
+   - No duplicate task IDs
+
+If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
+
+### Step 0.0.1: Identify Task to Close
 
 **If the user specified a task ID** (e.g., "close T-012"):
 - Use the provided task ID
 - Confirm with the user using `AskUser`: "I'll close task T-012: [task title]. Correct?"
 
 **If the user did NOT specify a task ID:**
-1. Find `tasks.md` in `./tasks.md` or `./docs/tasks.md`. Look for tasks with status `Validando Impl` or `Revisando PR`
+1. Look for tasks with status `Validando Impl` or `Revisando PR`
 2. If exactly one found, suggest it
 3. If multiple found, ask the user which one to close
 4. If none found, inform the user there are no tasks ready to close
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to close.
-
-### Step 0.0.1: Validate tasks.md Format
-
-**HARD BLOCK:** Before operating, verify tasks.md is in valid optimus format:
-1. **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
-2. A markdown table exists with columns: ID, Title, Status, Depends, Priority, Branch
-3. All task IDs match `T-NNN` pattern
-4. All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
-5. All Depends values are `-` or comma-separated valid task IDs
-6. No duplicate task IDs
-
-If the marker is missing or validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
 
 ### Step 0.1: Validate Task Status
 
@@ -159,52 +160,24 @@ gh pr checks <PR_NUMBER>
 
 If no PR exists, skip this check.
 
-### Group B: Code Quality (pass/fail only)
+### Group B: Code Quality
 
 #### Check 5: Lint Passes
 
 ```bash
-# Discover from project: make lint, golangci-lint run, npm run lint
 make lint
 ```
 
 - **PASS:** Exit code 0
 - **FAIL:** Show first 20 lines of error output
+- **SKIP:** `make lint` target does not exist (warn user)
 
-#### Check 6: Vet Passes (Go projects)
+`make lint` should run ALL quality checks for the project (linter, vet, format, imports).
+The Makefile is responsible for knowing which tools apply to the stack.
 
-```bash
-go vet ./...
-```
+### Group C: Tests
 
-- **PASS:** Exit code 0
-- **FAIL:** Show error output
-- **SKIP:** Not a Go project
-
-#### Check 7: Format Clean
-
-```bash
-# Go: gofmt -l . (fail if output is non-empty)
-# JS/TS: npx prettier --check . (fail if exit code != 0)
-gofmt -l .
-```
-
-- **PASS:** No files listed (all formatted)
-- **FAIL:** List files that need formatting
-
-#### Check 8: Import Ordering (Go projects)
-
-```bash
-goimports -l .
-```
-
-- **PASS:** No files listed
-- **FAIL:** List files with import issues
-- **SKIP:** goimports not installed or not a Go project
-
-### Group C: Tests & Coverage
-
-#### Check 9: Unit Tests Pass
+#### Check 6: Unit Tests Pass
 
 ```bash
 make test
@@ -213,7 +186,7 @@ make test
 - **PASS:** Exit code 0
 - **FAIL:** Show first 20 lines of error output
 
-#### Check 10: Integration Tests Pass (if Makefile target exists)
+#### Check 7: Integration Tests Pass (if Makefile target exists)
 
 ```bash
 make test-integration
@@ -223,7 +196,7 @@ make test-integration
 - **FAIL:** Show first 20 lines of error output
 - **SKIP:** `make test-integration` target does not exist
 
-#### Check 11: E2E Tests Pass (if Makefile target exists)
+#### Check 8: E2E Tests Pass (if Makefile target exists)
 
 ```bash
 make test-e2e
@@ -249,13 +222,10 @@ make test-e2e
 | 2 | Git | No unpushed commits | PASS |
 | 3 | Git | PR ready to merge | PASS (PR #X) / PASS (no PR) |
 | 4 | Git | CI passing | PASS / SKIP (no PR) |
-| 5 | Quality | Lint | PASS |
-| 6 | Quality | Vet | PASS / SKIP |
-| 7 | Quality | Format | PASS |
-| 8 | Quality | Import ordering | PASS / SKIP |
-| 9 | Tests | Unit tests | PASS |
-| 10 | Tests | Integration tests | PASS / SKIP |
-| 11 | Tests | E2E tests | PASS / SKIP |
+| 5 | Quality | Lint (make lint) | PASS / SKIP |
+| 6 | Tests | Unit tests | PASS |
+| 7 | Tests | Integration tests | PASS / SKIP |
+| 8 | Tests | E2E tests | PASS / SKIP |
 
 **Verdict: READY TO CLOSE**
 
@@ -266,6 +236,7 @@ Then:
 1. Update the Status column in `tasks.md` to `**DONE**` (from either `Validando Impl` or `Revisando PR`)
 2. Commit: `chore: mark T-XXX as done`
 3. Push the commit
+4. Proceed to Phase 3 (cleanup).
 
 ### If ANY check fails:
 
@@ -292,9 +263,79 @@ Do NOT change the status. Do NOT offer to fix the issues — just report them.
 
 ---
 
+## Phase 3: Cleanup (after marking DONE)
+
+This phase runs ONLY after the task has been marked as `**DONE**`. It checks for leftover
+resources and asks the user what to do. The agent NEVER cleans up automatically.
+
+### Step 3.1: Check for Task Branch
+
+Identify the task's branch from the Branch column in `tasks.md`, or by convention (`feat/T-XXX`, `task/T-XXX`):
+
+```bash
+# Check if branch exists locally
+git branch --list "feat/T-XXX" "task/T-XXX" "*T-XXX*"
+
+# Check if branch exists on remote
+git branch -r --list "origin/feat/T-XXX" "origin/task/T-XXX" "origin/*T-XXX*"
+```
+
+If a branch is found, ask via `AskUser`:
+```
+Task T-XXX is done. The branch '<branch>' still exists (local and/or remote). What should I do?
+```
+Options:
+- **Delete local and remote**: `git branch -d <branch> && git push origin --delete <branch>`
+- **Delete local only**: `git branch -d <branch>`
+- **Keep**: Leave the branch as is
+
+### Step 3.2: Check for Task Worktree
+
+```bash
+git worktree list | grep -i "T-XXX"
+```
+
+If a worktree is found, ask via `AskUser`:
+```
+Task T-XXX is done. A worktree still exists at '<path>'. What should I do?
+```
+Options:
+- **Remove worktree**: `git worktree remove <path>`
+- **Keep**: Leave the worktree as is
+
+### Step 3.3: Check for Open PR
+
+```bash
+gh pr list --head "<task-branch>" --json number,state,title,url --jq '.[] | select(.state == "OPEN")'
+```
+
+If an open PR is found, ask via `AskUser`:
+```
+Task T-XXX is done. PR #N is still open. What should I do?
+```
+Options:
+- **Merge now**: `gh pr merge <number> --merge`
+- **Keep open**: Leave the PR for manual merge
+- **Close without merging**: `gh pr close <number>`
+
+### Step 3.4: Cleanup Summary
+
+```markdown
+## Cleanup Summary for T-XXX
+
+| Resource | Status | Action Taken |
+|----------|--------|-------------|
+| Branch `feat/T-XXX` (local) | Found | Deleted / Kept |
+| Branch `feat/T-XXX` (remote) | Found | Deleted / Kept |
+| Worktree `/path/to/wt` | Not found | - |
+| PR #42 | Open | Merged / Kept / Closed |
+```
+
+---
+
 ## Rules
 
-- Run ALL 11 checks even if the first one fails — the user needs the full picture
+- Run ALL 8 checks even if the first one fails — the user needs the full picture
 - Do NOT change task status unless ALL checks pass (SKIP counts as pass)
 - Do NOT fix issues found by the checklist — only report them
 - Do NOT skip checks because "they probably pass"

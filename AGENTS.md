@@ -271,6 +271,28 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 6. **Dependency check** — every agent verifies that ALL dependencies (Depends column)
    have status `**DONE**` before proceeding. If any dependency is not done, the agent
    refuses with a clear message identifying which dependency is blocking.
+7. **Branch protection** — agents that modify code or docs (stages 1-3) MUST refuse
+   to run on the default/main branch. They must be on a feature/task branch.
+   Agents that only modify `tasks.md` or are read-only follow different rules:
+
+   | Agent | Allowed on main/default? | Reason |
+   |-------|-------------------------|--------|
+   | cycle-migrate | Yes | Only creates/modifies tasks.md |
+   | cycle-report | Yes | Read-only, no modifications |
+   | cycle-spec-stage-1 | **No** | Modifies task specs and docs |
+   | cycle-impl-stage-2 | **No** | Modifies code |
+   | cycle-impl-review-stage-3 | **No** | Modifies code (applies fixes) |
+   | cycle-pr-review-stage-4 | **No** | Modifies code (applies fixes) |
+   | cycle-close-stage-5 | Yes | Only modifies tasks.md status |
+
+   **Exception:** Committing status changes to `tasks.md` is always allowed on any
+   branch (the status update is part of the task's work commit on the feature branch).
+
+   To detect the default branch:
+   ```bash
+   git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'
+   # fallback: check if current branch is "main" or "master"
+   ```
 
 ### Transition Table
 
@@ -292,12 +314,12 @@ mode, it skips all task status logic. See its SKILL.md for detection rules.
 
 ### cycle-close-stage-5 Checklist
 
-Before marking done, cycle-close-stage-5 verifies:
+Before marking done, cycle-close-stage-5 runs 8 checks:
 1. No uncommitted changes (`git status --porcelain` = empty)
 2. No unpushed commits (`git log @{u}..HEAD` = empty)
 3. PR ready to merge (if PR exists) — does NOT merge, user merges manually after
 4. CI passing (if PR exists)
-5. Lint, vet, format, imports pass
+5. `make lint` passes (all quality checks — linter, vet, format, imports)
 6. `make test` passes (unit tests)
 7. `make test-integration` passes (if target exists)
 8. `make test-e2e` passes (if target exists)

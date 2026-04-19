@@ -90,34 +90,43 @@ Runs AFTER optimus-cycle-impl-stage-2 finishes and BEFORE the final commit.
 
 ## Phase 0: Load Context
 
-### Step 0.0: Identify Task to Validate
+### Step 0.0: Find and Validate tasks.md
 
-Determine which task to validate:
+1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either, **STOP** and suggest `/optimus-cycle-migrate`.
+2. **Validate format (HARD BLOCK):**
+   - **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
+   - A markdown table exists with columns: ID, Title, Status, Depends, Priority, Branch
+   - All task IDs match `T-NNN` pattern
+   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
+   - All Depends values are `-` or comma-separated valid task IDs
+   - No duplicate task IDs
+
+If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
+
+3. **Branch check (HARD BLOCK):** This agent modifies code (applies fixes). It MUST NOT run on the default/main branch.
+   ```bash
+   DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+   CURRENT_BRANCH=$(git branch --show-current)
+   ```
+   - If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`) → **STOP**:
+     ```
+     Cannot run cycle-impl-review-stage-3 on the default branch (<branch>).
+     Switch to the task's feature branch first.
+     ```
+
+### Step 0.0.1: Identify Task to Validate
 
 **If the user specified a task ID** (e.g., "validate T-012"):
 - Use the provided task ID
 - Confirm with the user using `AskUser`: "I'll validate task T-012: [task title]. Correct?"
 
 **If the user did NOT specify a task ID** (e.g., "validate the last task", or just invoked the skill):
-1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`.
-2. **Identify the task to validate:** Scan the table for tasks with status `Em Andamento` (cycle-impl-stage-2 completed). If exactly one, suggest it. If multiple, ask user which one.
-3. **If no tasks with `Em Andamento`:** Check git branch name for task ID references, then ask the user.
-4. **Suggest to the user** using `AskUser`: "I identified the task to validate: T-XXX — [task title]. Is this correct, or would you like to validate a different task?"
-5. **If no task can be identified**, ask the user to provide a task ID
+1. **Identify the task to validate:** Scan the table for tasks with status `Em Andamento` (cycle-impl-stage-2 completed). If exactly one, suggest it. If multiple, ask user which one.
+2. **If no tasks with `Em Andamento`:** Check git branch name for task ID references, then ask the user.
+3. **Suggest to the user** using `AskUser`: "I identified the task to validate: T-XXX — [task title]. Is this correct, or would you like to validate a different task?"
+4. **If no task can be identified**, ask the user to provide a task ID
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
-
-### Step 0.0.1: Validate tasks.md Format
-
-**HARD BLOCK:** Before operating, verify tasks.md is in valid optimus format:
-1. **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
-2. A markdown table exists with columns: ID, Title, Status, Depends, Priority, Branch
-3. All task IDs match `T-NNN` pattern
-4. All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
-5. All Depends values are `-` or comma-separated valid task IDs
-6. No duplicate task IDs
-
-If the marker is missing or validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
 
 ### Step 0.0.2: Validate and Update Task Status
 

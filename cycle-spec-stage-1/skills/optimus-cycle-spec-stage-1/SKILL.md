@@ -75,36 +75,45 @@ Catches gaps, contradictions, and ambiguities that would cause rework.
 
 ## Phase 0: Discover and Load Context
 
-### Step 0.0: Identify Task to Validate
+### Step 0.0: Find and Validate tasks.md
 
-Determine which task to validate:
+1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either, **STOP** and suggest `/optimus-cycle-migrate`.
+2. **Validate format (HARD BLOCK):**
+   - **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
+   - A markdown table exists with columns: ID, Title, Status, Depends, Priority, Branch
+   - All task IDs match `T-NNN` pattern
+   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
+   - All Depends values are `-` or comma-separated valid task IDs
+   - No duplicate task IDs
+
+If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
+
+3. **Branch check (HARD BLOCK):** This agent modifies task specs and docs. It MUST NOT run on the default/main branch.
+   ```bash
+   DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+   CURRENT_BRANCH=$(git branch --show-current)
+   ```
+   - If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`) → **STOP**:
+     ```
+     Cannot run cycle-spec-stage-1 on the default branch (<branch>).
+     Create a feature branch first: git checkout -b feat/T-XXX
+     ```
+
+### Step 0.0.1: Identify Task to Validate
 
 **If the user specified a task ID** (e.g., "validate T-006"):
 - Use the provided task ID
 - Confirm with the user using `AskUser`: "I'll validate task T-006: [task title]. Correct?"
 
 **If the user did NOT specify a task ID** (e.g., "validate the next task", or just invoked the skill):
-1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`.
-2. **Identify the next pending task:** Scan the table for the first task that:
+1. **Identify the next pending task:** Scan the table for the first task that:
    - Has status `Pendente`
    - Has all dependencies (Depends column) with status `**DONE**` (or Depends is `-`)
-3. **If multiple candidates exist**, pick the one with highest Priority (`Alta` > `Media` > `Baixa`), then lowest ID
-4. **Suggest to the user** using `AskUser`: "I identified the next task to validate: T-XXX — [task title]. Is this correct, or would you like to validate a different task?"
-5. **If no tasks.md is found or no pending tasks exist**, ask the user to provide a task ID
+2. **If multiple candidates exist**, pick the one with highest Priority (`Alta` > `Media` > `Baixa`), then lowest ID
+3. **Suggest to the user** using `AskUser`: "I identified the next task to validate: T-XXX — [task title]. Is this correct, or would you like to validate a different task?"
+4. **If no pending tasks exist**, ask the user to provide a task ID
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
-
-### Step 0.0.1: Validate tasks.md Format
-
-**HARD BLOCK:** Before operating, verify tasks.md is in valid optimus format:
-1. **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
-2. A markdown table exists with columns: ID, Title, Status, Depends, Priority, Branch
-3. All task IDs match `T-NNN` pattern
-4. All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
-5. All Depends values are `-` or comma-separated valid task IDs
-6. No duplicate task IDs
-
-If the marker is missing or validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
 
 ### Step 0.0.2: Validate and Update Task Status
 
