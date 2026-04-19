@@ -411,9 +411,10 @@ Only report genuinely NEW issues.
 - **If new findings exist:** Present them using Step 4 (one at a time, collect decisions), apply via Step 5, commit via Step 6, then loop again
 - **Stop conditions (any one triggers exit):**
   1. Zero new findings in the current round (after escalated scrutiny — this is genuine convergence)
-  2. Only LOW severity findings remain (ask user: "Only LOW findings remain. Stop validation?")
-  3. Round 5 completed (hard limit)
-  4. User explicitly requests to stop (via AskUser response)
+  2. Round 5 completed (hard limit)
+  3. User explicitly requests to stop (via AskUser response)
+  
+  **IMPORTANT:** LOW severity findings are NOT a reason to stop. ALL findings regardless of severity MUST be presented to the user for decision. The agent NEVER decides that LOW findings can be skipped.
 
 **Round summary (show after each round):**
 
@@ -512,3 +513,7 @@ Components verified: [list each component checked]
 - ALWAYS use the two-phase flow: Phase 1 presents summary then walks through each finding one at a time. Phase 2 applies all approved corrections at once
 - If corrections were applied, ask the user for commit approval — do NOT commit without explicit approval
 - Every finding must reference a specific doc section or standard — "I would do it differently" is not a valid finding
+- The agent NEVER decides whether a finding should be fixed or skipped — the USER always decides
+- ALL findings (CRITICAL, HIGH, MEDIUM, and LOW) MUST be presented to the user for decision
+- The agent may recommend an option, but MUST wait for user approval via AskUser before proceeding
+- Do NOT auto-skip, auto-dismiss, or auto-resolve any finding regardless of severity

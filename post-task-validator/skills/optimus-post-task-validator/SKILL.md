@@ -522,9 +522,10 @@ Only report genuinely NEW issues.
 - **If new findings exist:** Present them using Phase 3 (overview) and Phase 4 (interactive resolution), apply via Phase 5 (batch apply), then loop again
 - **Stop conditions (any one triggers exit):**
   1. Zero new findings in the current round (after escalated scrutiny — this is genuine convergence)
-  2. Only LOW severity findings remain (ask user: "Only LOW findings remain. Stop validation?")
-  3. Round 5 completed (hard limit)
-  4. User explicitly requests to stop (via AskUser response)
+  2. Round 5 completed (hard limit)
+  3. User explicitly requests to stop (via AskUser response)
+  
+  **IMPORTANT:** LOW severity findings are NOT a reason to stop. ALL findings regardless of severity MUST be presented to the user for decision. The agent NEVER decides that LOW findings can be skipped.
 
 **Round summary (show after each round):**
 
@@ -631,6 +632,14 @@ When agents identify a missing test (from QA analyst, spec compliance, or any ot
 - If you're unsure whether something is a violation, check the existing codebase for precedent
 - If the codebase already does the same thing elsewhere without issue, it's not a finding
 - If the spec is ambiguous and the implementation is reasonable, flag as LOW (not HIGH)
+
+### User Authority Over Decisions
+- The agent NEVER decides whether a finding should be fixed or skipped — the USER always decides
+- ALL findings (CRITICAL, HIGH, MEDIUM, and LOW) MUST be presented to the user for decision
+- The agent may recommend an option, but MUST wait for user approval via AskUser before proceeding
+- Do NOT auto-skip, auto-dismiss, or auto-resolve any finding regardless of severity
+- Do NOT group LOW findings and decide they "don't need attention" — present them individually
+- If the convergence loop finds only LOW findings, still present each one to the user — do NOT stop the loop without user confirmation
 
 ### Communication
 - Be specific: "line 42 of file.tsx uses X, but coding standards section Y requires Z"

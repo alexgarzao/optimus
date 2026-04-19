@@ -374,9 +374,10 @@ Only report genuinely NEW issues.
 - **If new findings exist:** Present them using Phase 2 (interactive resolution), fix via Phase 3 (TDD cycle), verify via Phase 4 (coverage), then loop again
 - **Stop conditions (any one triggers exit):**
   1. Zero new findings in the current round (after escalated scrutiny — this is genuine convergence)
-  2. Only LOW severity findings remain (ask user: "Only LOW findings remain. Stop validation?")
-  3. Round 5 completed (hard limit)
-  4. User explicitly requests to stop (via AskUser response)
+  2. Round 5 completed (hard limit)
+  3. User explicitly requests to stop (via AskUser response)
+  
+  **IMPORTANT:** LOW severity findings are NOT a reason to stop. ALL findings regardless of severity MUST be presented to the user for decision. The agent NEVER decides that LOW findings can be skipped.
 
 **Round summary (show after each round):**
 
@@ -453,3 +454,7 @@ After the convergence loop exits:
 - Do NOT proceed to the next finding until all tests pass or the failure is classified
 - Maximum 3 retry attempts per test failure
 - Maximum 1 skipped test per fix, with documented justification
+- The agent NEVER decides whether a finding should be fixed or skipped — the USER always decides
+- ALL findings (CRITICAL, HIGH, MEDIUM, and LOW) MUST be presented to the user for decision
+- The agent may recommend an option, but MUST wait for user approval via AskUser before proceeding
+- Do NOT auto-skip, auto-dismiss, or auto-resolve any finding regardless of severity

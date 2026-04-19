@@ -301,3 +301,7 @@ After processing all findings:
 - If the codebase already does the same thing elsewhere without issue, it is NOT a finding
 - Use whatever specialist droids are available in the environment; fall back to `worker` with domain instructions
 - Do NOT fix anything during agent dispatch or consolidation — fixes happen only in Phase 4 after user approval
+- The agent NEVER decides whether a finding should be fixed or skipped — the USER always decides
+- ALL findings (CRITICAL, HIGH, MEDIUM, and LOW) MUST be presented to the user for decision
+- The agent may recommend an option, but MUST wait for user approval via AskUser before proceeding
+- Do NOT auto-skip, auto-dismiss, or auto-resolve any finding regardless of severity

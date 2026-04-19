@@ -759,7 +759,7 @@ Question assumptions, check interactions between fixes, look for subtle issues.
 - Show `"=== Re-validation round X of 5 (scrutiny: <level>) ==="` at start
 - Do NOT re-fetch Codacy/DeepSource comments (they only update after push)
 - Maintain deduplication ledger across all rounds
-- **Stop when:** zero new findings, only LOW remain (ask user), round 5 reached, or user stops
+- **Stop when:** zero new findings, round 5 reached, or user stops. **LOW severity findings are NOT a reason to stop — ALL findings regardless of severity MUST be presented to the user for decision.**
 
 ---
 
@@ -1032,3 +1032,7 @@ gh api graphql -f query='
 - Response to ALL comments is uniform: commit SHA for fixes, concrete reason for won't-fix
 - Do NOT merge the PR — only review and apply fixes
 - Push triggers Codacy/DeepSource reanalysis automatically
+- The agent NEVER decides whether a finding should be fixed or skipped — the USER always decides
+- ALL findings (CRITICAL, HIGH, MEDIUM, and LOW) MUST be presented to the user for decision
+- The agent may recommend an option, but MUST wait for user approval via AskUser before proceeding
+- Do NOT auto-skip, auto-dismiss, or auto-resolve any finding regardless of severity
