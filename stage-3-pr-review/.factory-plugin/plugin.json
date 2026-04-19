@@ -1,0 +1,8 @@
+{
+  "name": "stage-3-pr-review",
+  "description": "Stage 3.5: Unified PR review orchestrator. Collects PR metadata and existing comments (Codacy, DeepSource, CodeRabbit, human), dispatches agents, applies fixes, resolves threads. Optional stage between stage-3-review and stage-5-close.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Alex Garzao"
+  }
+}

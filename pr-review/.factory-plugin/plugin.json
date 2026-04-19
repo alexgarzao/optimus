@@ -1,8 +1,0 @@
-{
-  "name": "pr-review",
-  "description": "PR-aware code review orchestrator. Collects PR metadata and existing comments, dispatches agents to evaluate code and review feedback, with source attribution and batch fix application.",
-  "version": "1.0.0",
-  "author": {
-    "name": "Alex Garzao"
-  }
-}

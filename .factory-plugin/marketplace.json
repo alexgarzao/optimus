@@ -21,9 +21,14 @@
       "source": "./stage-3-review"
     },
     {
-      "name": "stage-4-close",
-      "description": "Stage 4: Verifies all prerequisites (commits pushed, PR merged, tests passing) and marks the task as done.",
-      "source": "./stage-4-close"
+      "name": "stage-3-pr-review",
+      "description": "Stage 3.5 (optional): Unified PR review orchestrator. Collects findings from Codacy, DeepSource, CodeRabbit, human reviewers, resolves threads. Runs between stage-3-review and stage-5-close.",
+      "source": "./stage-3-pr-review"
+    },
+    {
+      "name": "stage-5-close",
+      "description": "Stage 5: Verifies all prerequisites (commits pushed, PR ready, tests passing) and marks the task as done. Does NOT merge the PR.",
+      "source": "./stage-5-close"
     },
     {
       "name": "deep-doc-review",
@@ -35,11 +40,7 @@
       "description": "Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution.",
       "source": "./deep-review"
     },
-    {
-      "name": "pr-review",
-      "description": "Unified PR review orchestrator. Fetches PR metadata, collects ALL review comments (Codacy, DeepSource, CodeRabbit, human reviewers), dispatches parallel agents, presents findings interactively, applies fixes with TDD cycle, responds to every comment thread, and resolves all threads via GraphQL.",
-      "source": "./pr-review"
-    },
+
     {
       "name": "coderabbit-review",
       "description": "CodeRabbit-driven code review with TDD fix cycle and secondary agent validation.",

@@ -1,19 +1,19 @@
 ---
-name: optimus-stage-4-close
+name: optimus-stage-5-close
 description: >
   Stage 4 of the task lifecycle. Verifies all prerequisites before marking
   a task as done: no uncommitted changes, no unpushed commits, PR ready to merge
   (if applicable), CI passing, tests and lint passing locally.
   Does NOT merge the PR — the user merges manually after close.
 trigger: >
-  - After optimus-stage-3-review has completed for a task
+  - After optimus-stage-3-pr-review has completed for a task (optional), or after optimus-stage-3-review
   - When user requests closing a task (e.g., "close T-012", "mark T-012 as done")
 skip_when: >
-  - Task has not been through stage-3-review yet
+  - Task has not been through at least stage-3-review yet
   - Task is already done
 prerequisite: >
-  - Task exists in tasks.md with status "Validando Impl"
-  - stage-3-review has completed
+  - Task exists in tasks.md with status "Validando Impl" or "Revisando PR"
+  - At least stage-3-review has completed (stage-3-pr-review is optional)
 NOT_skip_when: >
   - "Everything is already ready" → Verify it. Do not assume.
   - "Tests passed in CI" → Also run locally to confirm.
@@ -23,7 +23,7 @@ examples:
     invocation: "Close task T-012"
     expected_flow: >
       1. Confirm task ID with user
-      2. Validate status is "Validando Impl"
+      2. Validate status is "Validando Impl" or "Revisando PR"
       3. Run close checklist (11 verifications: git state, code quality, tests + coverage)
       4. If all pass, mark as DONE
       5. Commit status change
@@ -36,10 +36,12 @@ examples:
       4. Report what's missing, do NOT change status
 related:
   complementary:
+    - optimus-stage-3-pr-review
     - optimus-stage-3-review
   sequence:
     after:
       - optimus-stage-3-review
+      - optimus-stage-3-pr-review
 verification:
   manual:
     - All checklist items passed
@@ -62,7 +64,7 @@ Stage 4 of the task lifecycle. Verifies all prerequisites before marking a task 
 - Confirm with the user using `AskUser`: "I'll close task T-012: [task title]. Correct?"
 
 **If the user did NOT specify a task ID:**
-1. Find `tasks.md` and look for tasks with status `Validando Impl`
+1. Find `tasks.md` and look for tasks with status `Validando Impl` or `Revisando PR`
 2. If exactly one found, suggest it
 3. If multiple found, ask the user which one to close
 4. If none found, inform the user there are no tasks ready to close
@@ -75,7 +77,8 @@ Stage 4 of the task lifecycle. Verifies all prerequisites before marking a task 
 
 1. Read `tasks.md` and find the row for the confirmed task ID
 2. Check the **Status** column:
-   - If status is `Validando Impl` → proceed (stage-3-review has completed)
+   - If status is `Validando Impl` → proceed (stage-3-review has completed, stage-3-pr-review was skipped)
+   - If status is `Revisando PR` → proceed (stage-3-pr-review has completed)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. It must go through stage-1-spec, stage-2-impl, and stage-3-review first."
    - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run stage-2-impl and stage-3-review first."
    - If status is `Em Andamento` → **STOP**: "Task T-XXX is in 'Em Andamento'. Run stage-3-review first."
@@ -240,7 +243,7 @@ All prerequisites met. Marking task as **DONE**.
 ```
 
 Then:
-1. Update the Status column in `tasks.md` from `Validando Impl` to `**DONE**`
+1. Update the Status column in `tasks.md` to `**DONE**` (from either `Validando Impl` or `Revisando PR`)
 2. Commit: `chore: mark T-XXX as done`
 3. Push the commit
 
@@ -262,7 +265,7 @@ Then:
 - [ ] Commit and push the uncommitted changes
 - [ ] ...
 
-Task status remains **Validando Impl**. Fix the issues above and run stage-4-close again.
+Task status remains unchanged. Fix the issues above and run stage-5-close again.
 ```
 
 Do NOT change the status. Do NOT offer to fix the issues — just report them.
