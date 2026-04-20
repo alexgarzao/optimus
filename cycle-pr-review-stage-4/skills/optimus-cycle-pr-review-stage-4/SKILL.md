@@ -201,6 +201,39 @@ Extract and store:
 - **Labels and milestone** — categorization context
 - **Linked issues** — from PR description (look for "Fixes #", "Closes #", "Resolves #" patterns)
 
+### Step 0.2.1: Validate PR Title (Conventional Commits)
+
+The PR title MUST follow the **Conventional Commits 1.0.0** specification
+(https://www.conventionalcommits.org/en/v1.0.0/).
+
+**Expected format:** `<type>[optional scope]: <description>`
+
+**Validation rules:**
+1. Title starts with a valid type: `feat`, `fix`, `refactor`, `chore`, `docs`, `test`,
+   `build`, `ci`, `style`, `perf`
+2. Optional scope in parentheses after the type (e.g., `feat(auth):`)
+3. Optional `!` before `:` for breaking changes
+4. Colon followed by a single space before the description
+5. Description is present and non-empty
+6. Type is lowercase
+
+**If in Task Mode:** cross-check the type against the task's **Tipo** column:
+- Feature → `feat`, Fix → `fix`, Refactor → `refactor`, Chore → `chore`, Docs → `docs`, Test → `test`
+- If the type does not match the Tipo mapping, flag as a finding
+
+**Regex for validation:**
+```
+^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$
+```
+
+**If validation fails:** add a finding (severity: MEDIUM) to the findings list with:
+- Current title
+- What's wrong (missing type, wrong format, type/Tipo mismatch, etc.)
+- Suggested corrected title
+- Fix command: `gh pr edit <number> --title "<corrected title>"`
+
+**If validation passes:** no action needed, proceed.
+
 ### Step 0.3: Collect ALL Existing PR Comments and Threads
 
 **IMPORTANT:** Static analysis tools post comments in TWO different ways:

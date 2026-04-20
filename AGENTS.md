@@ -202,6 +202,49 @@ suggests running `/optimus-cycle-migrate`.
 | `Docs` | Documentation only | `docs` |
 | `Test` | Add/improve tests without changing production code | `test` |
 
+### Conventional Commits (PR Titles and Commit Messages)
+
+All PR titles and commit messages MUST follow the **Conventional Commits 1.0.0**
+specification (https://www.conventionalcommits.org/en/v1.0.0/).
+
+**Format:**
+```
+<type>[optional scope]: <description>
+```
+
+- **type** (REQUIRED): one of the prefixes from the Tipo table above (`feat`, `fix`,
+  `refactor`, `chore`, `docs`, `test`). Additional types allowed by the spec: `build`,
+  `ci`, `style`, `perf`.
+- **scope** (OPTIONAL): a noun in parentheses describing the section of the codebase,
+  e.g., `feat(auth):`, `fix(parser):`. For task-linked PRs, the task ID is a valid scope:
+  `feat(T-003):`.
+- **description** (REQUIRED): short imperative summary after the colon+space.
+- **`!`** (OPTIONAL): append before `:` to signal a breaking change, e.g., `feat(api)!:`.
+- Types are **lowercase**.
+
+**PR title examples (task-linked):**
+```
+feat(T-003): add user registration API
+fix(T-007): prevent duplicate login sessions
+refactor(T-012): extract auth middleware into shared module
+chore(T-015): upgrade Go to 1.22
+docs(T-020): add API reference for payments endpoint
+test(T-025): add E2E tests for checkout flow
+```
+
+**PR title examples (standalone / no task):**
+```
+feat: add dark mode toggle
+fix: resolve race condition in request handler
+feat(api)!: change authentication response format
+```
+
+**Deriving the type from Tipo:** When a PR is linked to a task, the `type` in the PR
+title MUST match the task's Tipo mapping (Feature→`feat`, Fix→`fix`, etc.). If the PR
+covers multiple tasks, use the type of the primary/largest change.
+
+**Reference:** Conventional Commits 1.0.0 — https://www.conventionalcommits.org/en/v1.0.0/
+
 ### Valid Status Values
 
 | Status | Set by | Meaning |

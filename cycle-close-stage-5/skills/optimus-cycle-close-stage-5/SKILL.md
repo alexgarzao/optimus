@@ -365,7 +365,37 @@ TASK_BRANCH=$(grep "T-XXX" tasks.md | ... extract Branch column ...)
 gh pr list --head "$TASK_BRANCH" --json number,state,title,url --jq '.[] | select(.state == "OPEN")'
 ```
 
-If an open PR is found, ask via `AskUser`:
+If an open PR is found:
+
+#### Step 3.2.1: Validate PR Title (Conventional Commits)
+
+**BEFORE offering merge options**, validate the PR title follows the **Conventional Commits 1.0.0**
+specification (https://www.conventionalcommits.org/en/v1.0.0/). This is critical because squash
+merges use the PR title as the merge commit message on the target branch.
+
+```bash
+PR_TITLE=$(gh pr view <number> --json title --jq '.title')
+```
+
+**Expected format:** `<type>[optional scope]: <description>`
+
+Validate:
+1. Title matches: `^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$`
+2. The type matches the task's **Tipo** column mapping (Feature→`feat`, Fix→`fix`, etc.)
+
+**If validation fails:** fix the title BEFORE merging:
+```bash
+gh pr edit <number> --title "<corrected title>"
+```
+
+Use the task's Tipo to derive the correct type. Use the task ID as scope if no other scope
+is obvious. Example: `feat(T-003): add user registration API`
+
+Inform the user of the correction.
+
+#### Step 3.2.2: Offer Merge Options
+
+Ask via `AskUser`:
 ```
 Task T-XXX is done. PR #N is still open. What should I do?
 ```
