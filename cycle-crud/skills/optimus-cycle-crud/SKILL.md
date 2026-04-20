@@ -68,23 +68,33 @@ Administrative CRUD operations for tasks in `tasks.md`.
    - **(a) Create a new tasks.md** — creates an empty tasks.md in the project root with the optimus format marker and empty table
    - **(b) Run cycle-migrate** — use this if you already have task files in another format
 
-   If the user chooses to create, write `./tasks.md` with:
+   If the user chooses to create, ask for an initial version name via `AskUser` (e.g., "MVP",
+   "v1"), then write `./tasks.md` with:
    ```markdown
    <!-- optimus:tasks-v1 -->
    # Tasks
 
-   | ID | Title | Tipo | Status | Depends | Priority | Branch |
-   |----|-------|------|--------|---------|----------|--------|
+   ## Versions
+   | Version | Status | Description |
+   |---------|--------|-------------|
+   | <user-provided> | Ativa | <ask user for description> |
+
+   | ID | Title | Tipo | Status | Depends | Priority | Version | Branch |
+   |----|-------|------|--------|---------|----------|---------|--------|
    ```
    Then commit: `chore(tasks): initialize tasks.md`
 
 2. **Validate format (HARD BLOCK):**
    - **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
-   - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Branch
+   - A `## Versions` section exists with columns: Version, Status, Description
+   - All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
+   - Exactly one version has Status `Ativa`
+   - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
    - All task IDs match `T-NNN` pattern
    - All Tipo values are valid (`Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`)
    - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
    - All Depends values are `-` or comma-separated valid task IDs
+   - All Version values reference a version name in the Versions table
    - No duplicate task IDs
 
 If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
@@ -99,6 +109,8 @@ Parse the user's request to determine which operation to perform:
 | **Edit** | "edit T-XXX", "change T-XXX", "update T-XXX", "rename T-XXX" |
 | **Remove** | "remove T-XXX", "delete T-XXX" |
 | **Reorder** | "move T-XXX before/after T-YYY", "reorder tasks" |
+| **Version** | "create version", "add version", "edit version", "remove version" |
+| **Move version** | "move tasks to v2", "move T-XXX to Futuro" |
 
 If unclear, ask the user via `AskUser`:
 
@@ -107,6 +119,8 @@ If unclear, ask the user via `AskUser`:
 - (b) Edit an existing task
 - (c) Remove a task
 - (d) Reorder tasks
+- (e) Manage versions (create, edit, remove)
+- (f) Move tasks between versions
 
 ## Phase 1: Create Task
 
@@ -117,9 +131,10 @@ Ask the user for task details using `AskUser` (one question at a time or batch i
 1. **Title** (required): Short description of the task
 2. **Tipo** (required): `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, or `Test`
 3. **Priority** (required): `Alta`, `Media`, or `Baixa`
-4. **Dependencies** (optional): Comma-separated task IDs (e.g., `T-001, T-003`) or `-` for none
-5. **Objective** (required): What the task achieves (for the detail section)
-6. **Acceptance criteria** (required): Checklist items (for the detail section)
+4. **Version** (required): Must match a version in the Versions table. Default: the version with Status `Ativa`
+5. **Dependencies** (optional): Comma-separated task IDs (e.g., `T-001, T-003`) or `-` for none
+6. **Objective** (required): What the task achieves (for the detail section)
+7. **Acceptance criteria** (required): Checklist items (for the detail section)
 
 If the user provided some of these in the initial request, use them and ask only for missing fields.
 
@@ -138,10 +153,10 @@ If similar tasks are found, present them to the user via `AskUser`:
 ```
 I found N existing tasks that look similar to your new task:
 
-| ID | Title | Status | Objetivo (excerpt) |
-|----|-------|--------|--------------------|
-| T-003 | User login page | Pendente | Implement login with JWT... |
-| T-008 | Auth login flow | Em Andamento | Create the login screen... |
+| ID | Title | Version | Status | Objetivo (excerpt) |
+|----|-------|---------|--------|--------------------|
+| T-003 | User login page | MVP | Pendente | Implement login with JWT... |
+| T-008 | Auth login flow | v2 | Em Andamento | Create the login screen... |
 
 Your new task: "<new title>"
 
@@ -171,7 +186,7 @@ If the user specified dependencies:
 
 1. Add a new row to the table:
    ```
-   | T-NNN | <title> | <tipo> | Pendente | <depends> | <priority> | - |
+   | T-NNN | <title> | <tipo> | Pendente | <depends> | <priority> | <version> | - |
    ```
 2. Add a detail section at the end of the file:
    ```markdown
@@ -192,6 +207,7 @@ Show the user the added task:
 Created task T-NNN: <title>
   Tipo: <tipo>
   Priority: <priority>
+  Version: <version>
   Depends on: <depends>
   Status: Pendente
 ```
@@ -211,6 +227,7 @@ Determine which field(s) to edit. Editable fields:
 | Title | Yes | Updates both table and H2 section header |
 | Tipo | Yes | Must be `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, or `Test` |
 | Priority | Yes | Must be `Alta`, `Media`, or `Baixa` |
+| Version | Yes | Must reference a version in the Versions table |
 | Depends | Yes | Must validate references and check circular deps |
 | Status | **No** | Status is managed ONLY by stage agents |
 | Branch | **No** | Branch is managed ONLY by stage-1 and close |
@@ -318,12 +335,113 @@ If the user provides multiple tasks to create at once (e.g., a list of tasks), p
 3. Add all rows and detail sections
 4. Show summary of all created tasks
 
+## Phase 6: Version Management
+
+### Step 6.0: Determine Version Operation
+
+| Sub-operation | Triggers |
+|---------------|----------|
+| **Create** | "create version", "add version", "new version" |
+| **Edit** | "edit version", "change version status", "rename version" |
+| **Remove** | "remove version", "delete version" |
+| **Reorder** | "reorder versions" |
+
+### Step 6.1: Create Version
+
+Ask the user for:
+1. **Name** (required): Version name (e.g., `v3`, `Sprint 4`, `Futuro`)
+2. **Status** (required): `Ativa`, `Próxima`, `Planejada`, `Backlog`, or `Concluída`. Default: `Planejada`
+3. **Description** (required): Short description of the version's scope
+
+**Validation:**
+- If the name already exists in the Versions table → **STOP**: "Version '<name>' already exists."
+- If the user sets Status to `Ativa` and another version is already `Ativa` → ask via `AskUser`:
+  "Version '<existing>' is currently Ativa. Change it to Próxima and set '<new>' as Ativa?"
+
+Add the row to the Versions table and commit: `chore(tasks): create version <name>`
+
+### Step 6.2: Edit Version
+
+Editable fields:
+
+| Field | Notes |
+|-------|-------|
+| Name | Updates the Versions table AND all tasks referencing this version |
+| Status | Must be valid. If setting to `Ativa`, demote current `Ativa` to `Próxima` (ask user) |
+| Description | Free text |
+
+Commit: `chore(tasks): update version <name>`
+
+### Step 6.3: Remove Version
+
+**HARD BLOCK:** Check if any task references this version:
+```
+Scan the Version column of ALL tasks for references to <version-name>
+```
+
+If any task references it:
+```
+Cannot remove version '<name>' — the following tasks reference it:
+- T-XXX: <title>
+- T-YYY: <title>
+
+Move these tasks to another version first.
+```
+
+If no tasks reference it, remove the row from the Versions table.
+Commit: `chore(tasks): remove version <name>`
+
+### Step 6.4: Reorder Versions
+
+Rearrange rows in the Versions table. Does NOT change any values — only visual order.
+
+## Phase 7: Move Tasks Between Versions
+
+Move one or more tasks from one version to another.
+
+### Step 7.0: Parse Move Request
+
+The user may say:
+- "move T-003 to v2" → single task
+- "move T-003, T-005 to Futuro" → multiple specific tasks
+- "move all Pendente from MVP to v2" → batch by status + source version
+- "move all from MVP to v2" → batch by source version (all statuses except DONE)
+
+### Step 7.1: Validate Target Version
+
+Verify the target version exists in the Versions table. If not → **STOP**: "Version '<name>' does not exist. Create it first."
+
+### Step 7.2: Identify Tasks to Move
+
+For batch moves, list the tasks that match the criteria and present to the user via `AskUser`:
+
+```
+Tasks to move from <source> to <target>:
+
+| ID | Title | Status | Priority |
+|----|-------|--------|----------|
+| T-003 | Login page | Pendente | Alta |
+| T-005 | E2E tests | Pendente | Media |
+
+Confirm move?
+```
+
+**BLOCKING:** Do NOT proceed without confirmation.
+
+### Step 7.3: Apply Move
+
+1. Update the Version column for each identified task
+2. Do NOT change Status, Branch, Depends, Priority, or any other field
+3. Save and commit: `chore(tasks): move N tasks from <source> to <target>`
+
 ## Rules
 
 1. **Never modify Status or Branch columns** — those are managed exclusively by stage agents
-2. **Always validate format** after any modification (re-check marker, columns, IDs, deps)
+2. **Always validate format** after any modification (re-check marker, columns, IDs, deps, versions)
 3. **IDs are permanent** — never renumber or reuse deleted IDs
 4. **Circular dependency detection is mandatory** — check before saving
 5. **Confirm destructive operations** (remove) with the user before executing
 6. **Preserve format marker** — first line must always be `<!-- optimus:tasks-v1 -->`
 7. **Commit changes** — after any modification, commit with message: `chore(tasks): <operation> T-XXX`
+8. **Version validation** — every task must reference a version that exists in the Versions table
+9. **Exactly one Ativa version** — when setting a version to `Ativa`, the current `Ativa` must be demoted (ask user)

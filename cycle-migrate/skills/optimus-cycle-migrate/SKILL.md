@@ -113,6 +113,7 @@ For each task found (regardless of format), extract:
 | **Status** | YAML `status:`, column in table, checkbox state | Default: `Pendente` |
 | **Dependencies** | YAML `dependencies:`, "Depends on" text, "After T-XXX" | Default: `-` (none) |
 | **Priority** | YAML `priority:`, explicit mention, position in file | Default: `Media` |
+| **Version** | YAML `milestone:`, `version:`, labels, folder structure | Default: user-chosen version (see Step 0.5) |
 | **Branch** | YAML `branch:`, git branch naming convention | Default: `-` |
 | **Objective** | H2/H3 "Objetivo", "Objective", "Description" section | Use title as fallback |
 | **Acceptance Criteria** | Checklist items, "Criteria", "Tasks" section | Leave empty, warn user |
@@ -193,6 +194,24 @@ Subtasks become checklist items in the parent task's acceptance criteria section
 ```
 
 Nested subtasks become indented checklist items.
+
+### Step 0.5: Version Setup
+
+Since the Versions table is mandatory, ask the user for the default version to assign to migrated tasks:
+
+```
+The optimus format requires a Versions table. What version should I assign to the migrated tasks?
+```
+
+Options via `AskUser`:
+- **User-provided name** (e.g., "MVP", "v1") — creates it as `Ativa`
+- **Backlog** — creates a "Backlog" version with Status `Backlog`
+
+If the source tasks have labels, milestones, or folder-based grouping that suggest version
+assignments, infer them and present to the user for confirmation. Create a version for each
+distinct group found.
+
+Store the default version for Step 1.1 (tasks without inferred version get this default).
 
 ---
 
@@ -312,9 +331,10 @@ If `tasks.md` exists in non-optimus format:
 Create `tasks.md` with:
 1. Format marker: `<!-- optimus:tasks-v1 -->` (MUST be the first line)
 2. H1 heading: `# Tasks`
-3. The table (all columns)
-4. Empty line
-5. H2 sections for each task (with extracted content)
+3. `## Versions` section with the versions table (from Step 0.5)
+4. The tasks table (all columns including Version)
+5. Empty line
+6. H2 sections for each task (with extracted content)
 
 ### Step 3.3: Commit
 

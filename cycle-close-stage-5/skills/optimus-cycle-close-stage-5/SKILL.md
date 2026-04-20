@@ -62,7 +62,10 @@ Stage 5 of the task lifecycle. Verifies all prerequisites before marking a task 
 1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either, **STOP** and suggest `/optimus-cycle-migrate`.
 2. **Validate format (HARD BLOCK):**
    - **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
-   - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Branch
+   - A `## Versions` section exists with columns: Version, Status, Description
+   - Exactly one version has Status `Ativa`
+   - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
+   - All Version values reference a version name in the Versions table
    - All task IDs match `T-NNN` pattern
    - All Tipo values are valid (`Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`)
    - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)

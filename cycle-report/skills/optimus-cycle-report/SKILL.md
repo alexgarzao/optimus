@@ -82,7 +82,15 @@ Read `tasks.md` and extract the markdown table. Expected columns:
 | Status | Current status (Pendente, Validando Spec, Em Andamento, Validando Impl, Revisando PR, **DONE**) |
 | Depends | Comma-separated dependency IDs, or `-` for none |
 | Priority | Alta, Media, or Baixa |
+| Version | Version/milestone this task belongs to |
 | Branch | Git branch name, or `-` |
+
+### Step 0.2.1: Parse Versions Table
+
+Read the `## Versions` section and extract the versions table. Expected columns:
+- Version (name), Status (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`), Description
+
+Identify the version with Status `Ativa` — this is the **active version** used for default filtering.
 
 For each task, also check if an H2 section exists below the table (`## T-NNN: Title`) to verify completeness.
 
@@ -115,6 +123,42 @@ Status is `Pendente` AND all dependencies are `**DONE**` (or no dependencies).
 ### Blocked
 Status is `Pendente` AND at least one dependency is NOT `**DONE**`.
 Record which dependencies are blocking.
+
+---
+
+## Phase 1.5: Version Filtering
+
+**Default behavior:** If a `## Versions` section exists and a version has Status `Ativa`,
+the dashboard shows **only tasks from the active version** by default.
+
+**Override:** If the user specifies a version (e.g., "show status for v2") or asks for
+"all tasks", show accordingly. If the user says "show all", display all versions.
+
+**When filtering by a specific version:**
+- All subsequent phases (dependency graph, parallelization, dashboard tables) only include
+  tasks from that version
+- Cross-version dependencies are shown as external references (e.g., "depends on T-001 [MVP, DONE]")
+
+---
+
+## Phase 1.6: Version Progress Summary
+
+Compute progress for each version, regardless of filtering:
+
+```
+┌─────────────────────────────────────────────────────┐
+│ VERSION PROGRESS                                     │
+├─────────┬────────┬──────┬────────┬─────────┬────────┤
+│ Version │ Status │ Done │ Active │ Pending │ Progr. │
+├─────────┼────────┼──────┼────────┼─────────┼────────┤
+│ MVP     │ Ativa  │ 5    │ 2      │ 4       │ 45%    │
+│ v2      │ Próxima│ 0    │ 0      │ 6       │ 0%     │
+│ Futuro  │ Backlog│ 0    │ 0      │ 3       │ 0%     │
+└─────────┴────────┴──────┴────────┴─────────┴────────┘
+```
+
+This section is ALWAYS shown (even when filtering by a specific version) to give the
+user the full project overview.
 
 ---
 

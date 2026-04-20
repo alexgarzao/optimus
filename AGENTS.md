@@ -154,13 +154,20 @@ suggests running `/optimus-cycle-migrate`.
 <!-- optimus:tasks-v1 -->
 # Tasks
 
-| ID | Title | Tipo | Status | Depends | Priority | Branch |
-|----|-------|------|--------|---------|----------|--------|
-| T-001 | Setup auth module | Feature | **DONE** | - | Alta | - |
-| T-002 | User registration API | Feature | Em Andamento | T-001 | Alta | feat/t-002-user-registration |
-| T-003 | Login page | Feature | Pendente | T-001 | Alta | - |
-| T-004 | Password reset flow | Fix | Pendente | T-002, T-003 | Media | fix/t-004-password-reset |
-| T-005 | E2E auth tests | Test | Pendente | T-002, T-003 | Media | - |
+## Versions
+| Version | Status | Description |
+|---------|--------|-------------|
+| MVP | Ativa | Core functionality for launch |
+| v2 | Próxima | Post-launch improvements |
+| Futuro | Backlog | Ideas not yet scheduled |
+
+| ID | Title | Tipo | Status | Depends | Priority | Version | Branch |
+|----|-------|------|--------|---------|----------|---------|--------|
+| T-001 | Setup auth module | Feature | **DONE** | - | Alta | MVP | - |
+| T-002 | User registration API | Feature | Em Andamento | T-001 | Alta | MVP | feat/t-002-user-registration |
+| T-003 | Login page | Feature | Pendente | T-001 | Alta | MVP | - |
+| T-004 | Password reset flow | Fix | Pendente | T-002, T-003 | Media | v2 | fix/t-004-password-reset |
+| T-005 | E2E auth tests | Test | Pendente | T-002, T-003 | Media | MVP | - |
 
 ## T-001: Setup auth module
 
@@ -189,6 +196,7 @@ suggests running `/optimus-cycle-migrate`.
 | Status | Yes | Current stage status (see valid values below) |
 | Depends | Yes | Comma-separated list of task IDs this task depends on. `-` if no dependencies |
 | Priority | Yes | `Alta`, `Media`, or `Baixa` |
+| Version | Yes | Must match a version name from the Versions table |
 | Branch | No | Git branch name. `-` if not yet created |
 
 ### Valid Tipo Values
@@ -292,16 +300,59 @@ The checkboxes in **Critérios de Aceite** are updated by stage agents as the ta
 
 This ensures tasks.md accurately reflects what was delivered at every point in the lifecycle.
 
+### Version Management
+
+The `## Versions` section in tasks.md is **mandatory** and defines the available versions
+(milestones) for the project. It is managed by `cycle-crud` (version operations).
+
+#### Versions Table
+
+| Column | Required | Description |
+|--------|----------|-------------|
+| Version | Yes | Version name (free text, e.g., `MVP`, `v2`, `Sprint 3`, `Futuro`) |
+| Status | Yes | One of: `Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída` |
+| Description | Yes | Short description of the version's scope |
+
+#### Valid Version Status Values
+
+| Status | Meaning |
+|--------|---------|
+| `Ativa` | Current focus — auto-detect and reports prioritize tasks in this version |
+| `Próxima` | Next cycle — fallback for auto-detect when no Ativa tasks are available |
+| `Planejada` | Planned for the future |
+| `Backlog` | Ideas not yet scheduled |
+| `Concluída` | All tasks delivered, version complete |
+
+#### Version Rules
+
+1. **Exactly one `Ativa` version** at any time. Agents refuse to set two versions as `Ativa`.
+2. **Version does NOT block execution** — a task in `Futuro` can be executed if the user wants.
+   The version is organizational, not a gate.
+3. **Cross-version dependencies are allowed** — T-003 (v2) can depend on T-001 (MVP).
+   The dependency system already validates that dependencies are `**DONE**`.
+4. **Moving tasks between versions** does not alter Status, Branch, Depends, or any other field.
+5. **Tasks keep their version when DONE** — they are not moved automatically.
+6. **Version lifecycle is manual** — the user changes version status via `cycle-crud`.
+   `cycle-report` shows progress but never alters version status.
+7. **Every task must reference a valid version** — the Version column value must exist
+   in the Versions table. Agents validate this during format validation.
+8. **Auto-detect priority**: when auto-detecting the next task, stages 1-2 prioritize
+   tasks from the `Ativa` version, then `Próxima`, then any other version (with a warning).
+
 ### Format Validation
 
 Every stage agent (1-5) MUST validate the tasks.md format before operating:
 1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
-2. A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Branch
-3. All task IDs follow the `T-NNN` pattern
-4. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
-5. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`
-6. All Depends values are either `-` or comma-separated valid task IDs
-7. No duplicate task IDs
+2. A `## Versions` section exists with a table containing columns: Version, Status, Description
+3. All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
+4. Exactly one version has Status `Ativa`
+5. A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
+6. All task IDs follow the `T-NNN` pattern
+7. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
+8. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`
+9. All Depends values are either `-` or comma-separated valid task IDs
+10. All Version values reference a version name that exists in the Versions table
+11. No duplicate task IDs
 
 If the format marker is missing or validation fails, the agent must **STOP** and suggest
 running `/optimus-cycle-migrate` to fix the format. Do NOT attempt to interpret malformed data.

@@ -80,7 +80,10 @@ Catches gaps, contradictions, and ambiguities that would cause rework.
 1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either, **STOP** and suggest `/optimus-cycle-migrate`.
 2. **Validate format (HARD BLOCK):**
    - **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
-   - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Branch
+   - A `## Versions` section exists with columns: Version, Status, Description
+   - Exactly one version has Status `Ativa`
+   - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
+   - All Version values reference a version name in the Versions table
    - All task IDs match `T-NNN` pattern
    - All Tipo values are valid (`Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`)
    - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
@@ -99,7 +102,8 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 1. **Identify the next eligible task:** Scan the table for the first task that:
    - Has status `Pendente` or `Validando Spec` (re-execution)
    - Has all dependencies (Depends column) with status `**DONE**` (or Depends is `-`)
-2. **If multiple candidates exist**, pick the one with highest Priority (`Alta` > `Media` > `Baixa`), then lowest ID
+   - **Version priority:** prefer tasks from the `Ativa` version first. If none found, try `Próxima`. If none found, pick from any version and warn the user: "No eligible tasks in the active version (<name>). Suggesting T-XXX from version '<other>'."
+2. **If multiple candidates exist in the same version priority**, pick the one with highest Priority (`Alta` > `Media` > `Baixa`), then lowest ID
 3. **Suggest to the user** using `AskUser`: "I identified the next task to validate: T-XXX — [task title]. Is this correct, or would you like to validate a different task?"
 4. **If no eligible tasks exist**, ask the user to provide a task ID
 
