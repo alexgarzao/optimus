@@ -122,8 +122,8 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 - Confirm with the user using `AskUser`: "I'll validate task T-012: [task title]. Correct?"
 
 **If the user did NOT specify a task ID** (e.g., "validate the last task", or just invoked the skill):
-1. **Identify the task to validate:** Scan the table for tasks with status `Em Andamento` (cycle-impl-stage-2 completed). If exactly one, suggest it. If multiple, ask user which one.
-2. **If no tasks with `Em Andamento`:** Check git branch name for task ID references, then ask the user.
+1. **Identify the task to validate:** Scan the table for tasks with status `Em Andamento` (cycle-impl-stage-2 completed) or `Validando Impl` (re-execution). If exactly one, suggest it. If multiple, ask user which one.
+2. **If no tasks with `Em Andamento` or `Validando Impl`:** Check git branch name for task ID references, then ask the user.
 3. **Suggest to the user** using `AskUser`: "I identified the task to validate: T-XXX — [task title]. Is this correct, or would you like to validate a different task?"
 4. **If no task can be identified**, ask the user to provide a task ID
 
@@ -168,7 +168,13 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
    - **If re-execution** (status is already `Validando Impl`) OR the user specified the task ID explicitly:
      - Skip expanded confirmation (user already has context)
 5. Update the Status column to `Validando Impl` (if not already)
-6. Do NOT commit this change separately — it will be committed with the task's work
+6. Commit the status change immediately:
+   ```bash
+   git add tasks.md
+   git commit -m "chore(tasks): set T-XXX status to Validando Impl"
+   ```
+
+**Why commit immediately:** If the session is interrupted or the agent crashes before any review fixes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of the review outcome.
 
 ### Step 0.1: Discover Project Structure
 

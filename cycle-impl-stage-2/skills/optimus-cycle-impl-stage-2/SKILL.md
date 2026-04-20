@@ -155,7 +155,13 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
    - **If re-execution** (status is already `Em Andamento`) OR the user specified the task ID explicitly:
      - Skip expanded confirmation (user already has context)
 5. Update the Status column to `Em Andamento` (if not already)
-6. Do NOT commit this change separately — it will be committed with the task's work
+6. Commit the status change immediately:
+   ```bash
+   git add tasks.md
+   git commit -m "chore(tasks): set T-XXX status to Em Andamento"
+   ```
+
+**Why commit immediately:** If the session is interrupted or the agent crashes before any code changes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of what happens during implementation.
 
 ### Step 0.0.3: Verify Workspace
 

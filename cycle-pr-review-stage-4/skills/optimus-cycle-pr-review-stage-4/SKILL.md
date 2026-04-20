@@ -131,7 +131,7 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
        Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
        ```
 6. **Expanded confirmation before status change:**
-   - **If status will change** (current status is NOT `Revisando PR`):
+   - **If status will change** (current status is NOT `Revisando PR`) AND the user did NOT specify the task ID explicitly (auto-detect):
      - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
      - Present to the user via `AskUser`:
        ```
@@ -147,10 +147,16 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
        Confirm status change?
        ```
      - **BLOCKING:** Do NOT change status until the user confirms
-   - **If re-execution** (status is already `Revisando PR`):
+   - **If re-execution** (status is already `Revisando PR`) OR the user specified the task ID explicitly:
      - Skip expanded confirmation (user already has context)
 7. **Update status:** Change the task status in `tasks.md` to `Revisando PR` (if not already).
-8. Do NOT commit this change separately — it will be committed with the task's work.
+8. Commit the status change immediately:
+   ```bash
+   git add tasks.md
+   git commit -m "chore(tasks): set T-XXX status to Revisando PR"
+   ```
+
+   **Why commit immediately:** If the session is interrupted or the agent crashes before any review fixes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of the review outcome.
 9. At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes cycle-close-stage-5 next.
 
 ### Standalone Mode (no task)
