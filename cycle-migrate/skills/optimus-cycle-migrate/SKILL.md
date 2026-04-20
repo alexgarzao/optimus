@@ -237,7 +237,7 @@ Present what was found to the user:
 | T-001 | Setup auth module | Feature (default) | **DONE** (inferred from checkboxes) | - | MVP (inferred) | 3 subtasks |
 | T-002 | User registration | Feature (default) | Pendente (no status found) | T-001 (explicit) | MVP (default) | - |
 | T-003 | Login page | Feature (default) | Pendente (no status found) | T-001 (inferred) | MVP (default) | 2 subtasks |
-| ... | ... | ... | ... | ... |
+| ... | ... | ... | ... | ... | ... | ... |
 
 ### Warnings
 - T-004: No acceptance criteria found — section will be empty

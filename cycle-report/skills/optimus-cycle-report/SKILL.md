@@ -217,32 +217,32 @@ Present the full dashboard using the format below. Use the `<json-render>` forma
 
 Progress: ████████░░░░░░░░░░░░ XX% (done/total)
 
-┌─────────────────────────────────────────────────┐
-│ ACTIVE TASKS                                     │
-├────────┬──────────────────────┬──────────────────┤
-│ ID     │ Title                │ Status           │
-├────────┼──────────────────────┼──────────────────┤
-│ T-005  │ User registration    │ Em Andamento     │
-│ T-007  │ Login page           │ Validando Impl   │
-└────────┴──────────────────────┴──────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│ ACTIVE TASKS                                              │
+├────────┬──────────────────────┬──────────┬────────────────┤
+│ ID     │ Title                │ Version  │ Status         │
+├────────┼──────────────────────┼──────────┼────────────────┤
+│ T-005  │ User registration    │ MVP      │ Em Andamento   │
+│ T-007  │ Login page           │ MVP      │ Validando Impl │
+└────────┴──────────────────────┴──────────┴────────────────┘
 
-┌─────────────────────────────────────────────────┐
-│ READY TO START (dependencies satisfied)          │
-├────────┬──────────────────────┬──────────────────┤
-│ ID     │ Title                │ Priority         │
-├────────┼──────────────────────┼──────────────────┤
-│ T-006  │ Password reset       │ Alta             │
-│ T-008  │ E2E auth tests       │ Media            │
-└────────┴──────────────────────┴──────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│ READY TO START (dependencies satisfied)                   │
+├────────┬──────────────────────┬──────────┬────────────────┤
+│ ID     │ Title                │ Version  │ Priority       │
+├────────┼──────────────────────┼──────────┼────────────────┤
+│ T-006  │ Password reset       │ v2       │ Alta           │
+│ T-008  │ E2E auth tests       │ MVP      │ Media          │
+└────────┴──────────────────────┴──────────┴────────────────┘
 
-┌─────────────────────────────────────────────────┐
-│ BLOCKED (waiting for dependencies)               │
-├────────┬──────────────────────┬──────────────────┤
-│ ID     │ Title                │ Blocked by       │
-├────────┼──────────────────────┼──────────────────┤
-│ T-009  │ Admin dashboard      │ T-007            │
-│ T-010  │ Role management      │ T-009            │
-└────────┴──────────────────────┴──────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│ BLOCKED (waiting for dependencies)                        │
+├────────┬──────────────────────┬──────────┬────────────────┤
+│ ID     │ Title                │ Version  │ Blocked by     │
+├────────┼──────────────────────┼──────────┼────────────────┤
+│ T-009  │ Admin dashboard      │ MVP      │ T-007          │
+│ T-010  │ Role management      │ v2       │ T-009          │
+└────────┴──────────────────────┴──────────┴────────────────┘
 
 ┌─────────────────────────────────────────────────┐
 │ DEPENDENCY GRAPH                                 │
@@ -284,9 +284,9 @@ Also generate a `<json-render>` dashboard with these components:
 - **Heading**: "Project Status"
 - **ProgressBar**: overall completion (done/total)
 - **Metric**: Total, Done, Active, Pending counts
-- **Table**: Active tasks (columns: ID, Title, Status)
-- **Table**: Ready to start (columns: ID, Title, Priority)
-- **Table**: Blocked (columns: ID, Title, Blocked by)
+- **Table**: Active tasks (columns: ID, Title, Version, Status)
+- **Table**: Ready to start (columns: ID, Title, Version, Priority)
+- **Table**: Blocked (columns: ID, Title, Version, Blocked by)
 - **List**: Parallelization opportunities
 - **StatusLine**: one per active task (success=done, info=active, warning=blocked, error=failed)
 

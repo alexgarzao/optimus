@@ -462,3 +462,4 @@ Confirm move?
 7. **Commit changes** — after any modification, commit with message: `chore(tasks): <operation> T-XXX`
 8. **Version validation** — every task must reference a version that exists in the Versions table
 9. **Exactly one Ativa version** — when setting a version to `Ativa`, the current `Ativa` must be demoted (ask user)
+10. **At most one Próxima version** — when setting a version to `Próxima`, the current `Próxima` must be demoted to `Planejada` (ask user)
