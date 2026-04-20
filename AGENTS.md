@@ -465,6 +465,9 @@ Any status → Cancelado  (via cycle-crud cancel operation)
 | cycle-pr-review-stage-4 | `Validando Impl` or `Revisando PR` | `Revisando PR` | Yes (accepts own status) |
 | cycle-close-stage-5 | `Validando Impl` or `Revisando PR` | `**DONE**` | No (final stage) |
 
+**NOTE:** `Cancelado` is a terminal status. No stage agent accepts it — all stages refuse
+tasks with status `Cancelado`. Cancellation is managed exclusively by `cycle-crud`.
+
 **NOTE:** cycle-pr-review-stage-4 is optional. cycle-close-stage-5 accepts both `Validando Impl`
 (if pr-review was skipped) and `Revisando PR` (if pr-review ran).
 

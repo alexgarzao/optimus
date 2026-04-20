@@ -178,6 +178,7 @@ For the ASCII art graph:
 - Use `●` for active tasks
 - Use `○` for ready-to-start tasks
 - Use `⊘` for blocked tasks
+- Use `✗` for cancelled tasks
 - Use `─►` for dependency arrows
 - Use `┬`, `├`, `└` for branching
 
@@ -191,7 +192,7 @@ T-001 ✓ ─┬─► T-002 ✓ ─┬─► T-004 ○
 
 T-007 ◐ ────► T-009 ⊘ ────► T-010 ⊘
 
-Legend: ✓=Done ●=Active ◐=Validating ○=Ready ⊘=Blocked
+Legend: ✓=Done ●=Active ◐=Validating ○=Ready ⊘=Blocked ✗=Cancelled
 ```
 
 For trees with depth > 3 levels, simplify by showing only the critical path and noting "N more tasks omitted".
@@ -222,7 +223,7 @@ Present the full dashboard using the format below. Use the `<json-render>` forma
 ║  Total: NN  │  Done: NN  │  Active: NN  │  Pending: NN  │  Cancelled: NN  ║
 ╚══════════════════════════════════════════════════════╝
 
-Progress: ████████░░░░░░░░░░░░ XX% (done/total)
+Progress: ████████░░░░░░░░░░░░ XX% (done / (total - cancelled))
 
 ┌──────────────────────────────────────────────────────────┐
 │ ACTIVE TASKS                                              │
@@ -258,7 +259,7 @@ Progress: ████████░░░░░░░░░░░░ XX% (done
 │  [insert computed graph here]                    │
 │                                                  │
 │  Legend: ✓=Done ●=Active ◐=Validating            │
-│          ○=Ready ⊘=Blocked                       │
+│          ○=Ready ⊘=Blocked ✗=Cancelled           │
 └─────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────┐
@@ -295,7 +296,7 @@ Progress: ████████░░░░░░░░░░░░ XX% (done
 
 Also generate a `<json-render>` dashboard with these components:
 - **Heading**: "Project Status"
-- **ProgressBar**: overall completion (done/total)
+- **ProgressBar**: overall completion (done / (total - cancelled))
 - **Metric**: Total, Done, Active, Pending, Cancelled counts
 - **Table**: Active tasks (columns: ID, Title, Version, Status)
 - **Table**: Ready to start (columns: ID, Title, Version, Priority)

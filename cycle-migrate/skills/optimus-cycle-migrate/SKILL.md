@@ -133,6 +133,8 @@ When no explicit status exists, infer from available signals:
 | YAML `status: done/completed/closed` | `**DONE**` |
 | YAML `status: in_progress/active/started` | `Em Andamento` |
 | YAML `status: pending/todo/backlog` | `Pendente` |
+| File mentions "cancelled", "abandoned", "won't do" | `Cancelado` |
+| YAML `status: cancelled/abandoned/wontfix/wont_do` | `Cancelado` |
 
 #### Tipo Inference Rules
 
