@@ -15,9 +15,9 @@ prerequisite: >
   - Task exists in tasks.md with status "Validando Impl" or "Revisando PR"
   - At least cycle-impl-review-stage-3 has completed (cycle-pr-review-stage-4 is optional)
 NOT_skip_when: >
-  - "Everything is already ready" → Verify it. Do not assume.
-  - "Tests passed in CI" → Also run locally to confirm.
-  - "It's a small task" → All tasks need the same close verification.
+  - "Everything is already ready" -- Verify it. Do not assume.
+  - "Tests passed in CI" -- Also run locally to confirm.
+  - "It's a small task" -- All tasks need the same close verification.
 examples:
   - name: Close a completed task
     invocation: "Close task T-012"
@@ -32,7 +32,7 @@ examples:
     expected_flow: >
       1. Confirm task ID
       2. Validate status
-      3. Run checklist — uncommitted changes found
+      3. Run checklist -- uncommitted changes found
       4. Report what's missing, do NOT change status
   - name: Force close (skip checklist)
     invocation: "Force close T-012" or "force done T-012"

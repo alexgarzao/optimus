@@ -21,15 +21,15 @@ prerequisite: >
   - Project rules file exists with coding standards
   - Project has lint, test, integration test, and E2E test commands configured
 NOT_skip_when: >
-  - "Task is simple" → Simple tasks still need the full dev-cycle gates.
-  - "I already know the codebase" → Always explore before coding.
-  - "Tests can come later" → dev-cycle enforces testing gates.
-  - "Code review is optional" → dev-cycle Gate 4 is mandatory.
+  - "Task is simple" -- Simple tasks still need the full dev-cycle gates.
+  - "I already know the codebase" -- Always explore before coding.
+  - "Tests can come later" -- dev-cycle enforces testing gates.
+  - "Code review is optional" -- dev-cycle Gate 4 is mandatory.
 examples:
   - name: Execute a full-stack task
     invocation: "Execute task T-012"
     expected_flow: >
-      1. User specified task ID — confirm with user
+      1. User specified task ID -- confirm with user
       2. Load context from reference docs
       3. Explore existing codebase patterns
       4. Ask all questions upfront

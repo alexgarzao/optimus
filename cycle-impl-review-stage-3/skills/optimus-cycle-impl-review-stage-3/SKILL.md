@@ -16,19 +16,19 @@ skip_when: >
   - Already inside a code review skill execution
 prerequisite: >
   - Task execution is complete (user provides ID or skill auto-detects last executed task)
-  - Changed files exist (committed or uncommitted — both are supported)
+  - Changed files exist (committed or uncommitted -- both are supported)
   - Reference docs exist (task spec, coding standards)
   - Project has lint and test commands configured
 NOT_skip_when: >
-  - "Task was simple" → Simple tasks still need spec compliance checks.
-  - "Tests already pass" → Passing tests do not guarantee spec compliance or code quality.
-  - "optimus-cycle-impl-stage-2 already ran verification gates" → Gates check pass/fail; this validates correctness.
-  - "Time pressure" → Validation prevents rework, saving time overall.
+  - "Task was simple" -- Simple tasks still need spec compliance checks.
+  - "Tests already pass" -- Passing tests do not guarantee spec compliance or code quality.
+  - "optimus-cycle-impl-stage-2 already ran verification gates" -- Gates check pass/fail; this validates correctness.
+  - "Time pressure" -- Validation prevents rework, saving time overall.
 examples:
   - name: Validate a full-stack task
     invocation: "Validate task T-012"
     expected_flow: >
-      1. User specified task ID — confirm with user
+      1. User specified task ID -- confirm with user
       2. Load task spec and reference docs
       3. Identify changed files
       4. Dispatch 8 parallel agents (code, business logic, security, QA, frontend, backend, cross-file, spec compliance)
@@ -48,7 +48,7 @@ examples:
   - name: Validate a frontend-only task
     invocation: "Validate task T-015"
     expected_flow: >
-      1. User specified task ID — confirm with user
+      1. User specified task ID -- confirm with user
       2. Load context, classify as frontend-only
       3. Dispatch 7 agents (skip backend specialist)
       4. Consolidate, present, resolve findings

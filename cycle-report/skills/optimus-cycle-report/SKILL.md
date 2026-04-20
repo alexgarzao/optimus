@@ -4,7 +4,7 @@ description: >
   Task status dashboard. Reads tasks.md, computes dependency graph, and presents
   a comprehensive project status report. Shows progress, active tasks, blocked tasks,
   ready-to-start tasks, dependency graph, and parallelization opportunities.
-  Read-only — this agent NEVER modifies any files.
+  Read-only -- this agent NEVER modifies any files.
 trigger: >
   - When user asks for project status (e.g., "show tasks", "project status", "what's ready?")
   - When user wants to know what can be parallelized
@@ -17,8 +17,8 @@ skip_when: >
 prerequisite: >
   - .optimus/tasks.md exists in the project
 NOT_skip_when: >
-  - "I already know the status" → The dashboard shows dependencies and parallelization you might miss.
-  - "There's only one task" → Even single tasks benefit from status verification.
+  - "I already know the status" -- The dashboard shows dependencies and parallelization you might miss.
+  - "There's only one task" -- Even single tasks benefit from status verification.
 examples:
   - name: Full project status
     invocation: "Show project status"

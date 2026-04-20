@@ -2,7 +2,7 @@
 name: optimus-verify-code
 description: >
   Two-phase code verification. Phase 1 runs static analysis in parallel
-  (lint, format, unit tests — commands auto-detected from project stack).
+  (lint, format, unit tests -- commands auto-detected from project stack).
   Phase 2 runs integration and E2E tests sequentially. Presents executive
   summary with MERGE_READY or NEEDS_FIX verdict. Supports Go, TypeScript,
   Python, and any project with a Makefile.
@@ -15,9 +15,9 @@ skip_when: >
 prerequisite: >
   - Project has a recognized stack (go.mod, package.json, pyproject.toml, Cargo.toml, or Makefile)
 NOT_skip_when: >
-  - "Tests passed last time" → Code changed since then. Verify again.
-  - "Only changed one file" → One file can break lint, vet, and tests.
-  - "CI will catch it" → Catching locally is faster and cheaper.
+  - "Tests passed last time" -- Code changed since then. Verify again.
+  - "Only changed one file" -- One file can break lint, vet, and tests.
+  - "CI will catch it" -- Catching locally is faster and cheaper.
 examples:
   - name: Full verification before merge
     invocation: "/optimus-verify-code"

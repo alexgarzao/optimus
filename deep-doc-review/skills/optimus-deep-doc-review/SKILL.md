@@ -16,9 +16,9 @@ prerequisite: >
   - Project has documentation to review
   - Docs are accessible in the repository
 NOT_skip_when: >
-  - "Docs were already reviewed" → Docs evolve and accumulate inconsistencies over time.
-  - "There are only a few docs" → Even a few docs can have contradictions between them.
-  - "Only one doc changed" → A change in one doc can create inconsistencies with others.
+  - "Docs were already reviewed" -- Docs evolve and accumulate inconsistencies over time.
+  - "There are only a few docs" -- Even a few docs can have contradictions between them.
+  - "Only one doc changed" -- A change in one doc can create inconsistencies with others.
 examples:
   - name: Review all project docs
     invocation: "Review the project docs"

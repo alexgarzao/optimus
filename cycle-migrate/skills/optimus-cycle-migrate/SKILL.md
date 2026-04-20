@@ -15,9 +15,9 @@ skip_when: >
 prerequisite: >
   - Project has some form of task tracking (files, markdown, etc.)
 NOT_skip_when: >
-  - "The project is small" → Even small projects benefit from standardized task tracking.
-  - "I'll just create tasks.md manually" → This agent handles edge cases you'd miss.
-  - "Tasks are already in markdown" → Markdown != optimus format. Columns, dependencies, and status need standardizing.
+  - "The project is small" -- Even small projects benefit from standardized task tracking.
+  - "I'll just create tasks.md manually" -- This agent handles edge cases you'd miss.
+  - "Tasks are already in markdown" -- Markdown != optimus format. Columns, dependencies, and status need standardizing.
 examples:
   - name: Migrate from index-only tasks.md
     invocation: "Migrate tasks to optimus format"

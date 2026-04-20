@@ -19,11 +19,11 @@ prerequisite: >
   - gh CLI is installed and authenticated
   - For Codacy/DeepSource findings: workflows codacy-issues.yml and deepsource-pr-issues.yml should exist in the repo (if not present, those sources are simply skipped)
 NOT_skip_when: >
-  - "The PR is small" → Small PRs still benefit from structured review with PR context.
-  - "I already looked at the diff" → Specialist agents catch issues human review misses.
-  - "CI passed" → CI checks automated rules; agents review logic, security, and quality.
-  - "CodeRabbit already reviewed" → Agents validate/contest CodeRabbit findings and catch what it misses.
-  - "Codacy/DeepSource already analyzed" → Agents validate/contest static analysis findings and catch what they miss.
+  - "The PR is small" -- Small PRs still benefit from structured review with PR context.
+  - "I already looked at the diff" -- Specialist agents catch issues human review misses.
+  - "CI passed" -- CI checks automated rules; agents review logic, security, and quality.
+  - "CodeRabbit already reviewed" -- Agents validate/contest CodeRabbit findings and catch what it misses.
+  - "Codacy/DeepSource already analyzed" -- Agents validate/contest static analysis findings and catch what they miss.
 examples:
   - name: Review a PR by URL
     invocation: "Review this PR: https://github.com/org/repo/pull/42"

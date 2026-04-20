@@ -5,7 +5,7 @@ description: >
   When multiple tasks run simultaneously on different feature branches, each
   commits status changes to tasks.md. When branches merge, conflicts arise.
   This skill detects, parses, and resolves those conflicts using the "most
-  advanced status" rule — each task's row is independent.
+  advanced status" rule -- each task's row is independent.
 trigger: >
   - When tasks.md has merge conflict markers (<<<<<<, ======, >>>>>>)
   - When user says "resolve tasks.md conflict" or "fix tasks conflict"
@@ -17,8 +17,8 @@ skip_when: >
 prerequisite: >
   - tasks.md exists and contains merge conflict markers
 NOT_skip_when: >
-  - "I can resolve it manually" → Manual resolution risks reverting a task's status backward.
-  - "It's just one line" → Even one-line conflicts can silently lose a DONE status.
+  - "I can resolve it manually" -- Manual resolution risks reverting a task's status backward.
+  - "It's just one line" -- Even one-line conflicts can silently lose a DONE status.
 examples:
   - name: Resolve after merge
     invocation: "Resolve tasks.md conflict"

@@ -18,10 +18,10 @@ prerequisite: >
   - CodeRabbit config file exists (.coderabbit.yaml)
   - Git repository with a base branch to compare against
 NOT_skip_when: >
-  - "CodeRabbit already ran in CI" → Local review catches issues before push, saving CI cycles.
-  - "It's a small change" → Small changes still benefit from TDD-driven fixes.
-  - "Tests already pass" → Passing tests don't guarantee CodeRabbit findings are addressed.
-  - "We'll fix later" → TDD cycle ensures each fix is verified immediately.
+  - "CodeRabbit already ran in CI" -- Local review catches issues before push, saving CI cycles.
+  - "It's a small change" -- Small changes still benefit from TDD-driven fixes.
+  - "Tests already pass" -- Passing tests don't guarantee CodeRabbit findings are addressed.
+  - "We'll fix later" -- TDD cycle ensures each fix is verified immediately.
 examples:
   - name: Review against main branch
     invocation: "Run CodeRabbit review"

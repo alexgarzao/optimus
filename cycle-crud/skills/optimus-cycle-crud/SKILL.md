@@ -3,7 +3,7 @@ name: optimus-cycle-crud
 description: >
   Administrative task management for tasks.md. Create, edit, remove, reorder, and cancel
   tasks. Manage versions (create, edit, remove, reorder) and move tasks between versions.
-  Validates format, dependencies, and ID uniqueness. Runs on any branch — this is an
+  Validates format, dependencies, and ID uniqueness. Runs on any branch -- this is an
   administrative skill, not an execution skill.
 trigger: >
   - When user wants to add a new task (e.g., "add task", "create task", "new task")
@@ -18,12 +18,12 @@ trigger: >
   - When user says "manage tasks" or "edit tasks.md"
 skip_when: >
   - User wants to execute a task (use cycle-spec-stage-1 instead)
-  - User wants to change task status through the lifecycle (status is managed by stage agents — except cancellation, which is handled here)
+  - User wants to change task status through the lifecycle (status is managed by stage agents -- except cancellation, which is handled here)
 prerequisite: >
   - .optimus/tasks.md exists in the project
 NOT_skip_when: >
-  - "I can edit tasks.md manually" → This agent validates format, dependencies, and IDs automatically.
-  - "It's just a small change" → Even small changes can break format or create circular dependencies.
+  - "I can edit tasks.md manually" -- This agent validates format, dependencies, and IDs automatically.
+  - "It's just a small change" -- Even small changes can break format or create circular dependencies.
 examples:
   - name: Add a new task
     invocation: "Add a task: implement password reset"

@@ -15,19 +15,19 @@ prerequisite: >
   - tasks.md exists in valid optimus format
   - At least one task is eligible (Pendente or in-progress)
 NOT_skip_when: >
-  - "I can run stages one by one" → Batch mode saves context-switching and ensures no stage is skipped.
-  - "Only one task" → Even a single task benefits from automated stage chaining.
+  - "I can run stages one by one" -- Batch mode saves context-switching and ensures no stage is skipped.
+  - "Only one task" -- Even a single task benefits from automated stage chaining.
 examples:
   - name: Full pipeline for one task
     invocation: "Run all stages for T-003"
     expected_flow: >
       1. Validate T-003 is eligible
       2. Run stage-1 (spec validation)
-      3. Checkpoint — user approves continuing
+      3. Checkpoint -- user approves continuing
       4. Run stage-2 (implementation)
-      5. Checkpoint — user approves continuing
+      5. Checkpoint -- user approves continuing
       6. Run stage-3 (impl review)
-      7. Checkpoint — user chooses stage-4 or skip to stage-5
+      7. Checkpoint -- user chooses stage-4 or skip to stage-5
       8. Run stage-5 (close)
   - name: Multiple tasks sequentially
     invocation: "Process T-003, T-004, T-005"

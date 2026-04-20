@@ -3,7 +3,7 @@ name: optimus-cycle-spec-stage-1
 description: >
   Stage 1 of the task lifecycle. Validates a task specification against project
   docs BEFORE code generation begins. Catches gaps, contradictions, ambiguities,
-  test coverage holes, and observability issues. Analysis only — does not generate code.
+  test coverage holes, and observability issues. Analysis only -- does not generate code.
 trigger: >
   - Before starting any task implementation
   - When user requests spec validation (e.g., "validate spec for T-006")
@@ -17,15 +17,15 @@ prerequisite: >
   - Reference docs exist (PRD, TRD, API design, data model)
   - Coding standards / project rules file exists
 NOT_skip_when: >
-  - "Task spec looks complete" → Completeness is not correctness. Cross-doc contradictions are invisible without validation.
-  - "We already reviewed the spec" → Human review misses field-level contradictions. Automated validation catches what eyes skip.
-  - "Time pressure" → Validation prevents rework, saving more time than it costs.
-  - "Simple task" → Simple tasks still need dependency and test coverage checks.
+  - "Task spec looks complete" -- Completeness is not correctness. Cross-doc contradictions are invisible without validation.
+  - "We already reviewed the spec" -- Human review misses field-level contradictions. Automated validation catches what eyes skip.
+  - "Time pressure" -- Validation prevents rework, saving more time than it costs.
+  - "Simple task" -- Simple tasks still need dependency and test coverage checks.
 examples:
   - name: Validate a full-stack task
     invocation: "Validate spec for T-006"
     expected_flow: >
-      1. User specified task ID — confirm with user
+      1. User specified task ID -- confirm with user
       2. Discover project structure and reference docs
       3. Load task spec and all reference docs
       4. Cross-reference across all docs
@@ -42,7 +42,7 @@ examples:
   - name: Validate a backend-only task
     invocation: "Validate spec for T-010"
     expected_flow: >
-      1. User specified task ID — confirm with user
+      1. User specified task ID -- confirm with user
       2. Load context, skip frontend-related checks
       3. Focus on API contracts, data model, integration tests
       4. Present and resolve findings

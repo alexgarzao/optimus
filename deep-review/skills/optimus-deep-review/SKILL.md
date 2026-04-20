@@ -17,10 +17,10 @@ prerequisite: >
   - Project has source code to review
   - Code is accessible in the repository
 NOT_skip_when: >
-  - "Code already works" → Working code can still have security issues, maintainability problems, and missing edge cases.
-  - "It's a small change" → Small changes can introduce regressions and security vulnerabilities.
-  - "We'll review later" → Later reviews accumulate debt and miss context.
-  - "CI will catch it" → CI catches syntax and test failures, not architectural or business logic issues.
+  - "Code already works" -- Working code can still have security issues, maintainability problems, and missing edge cases.
+  - "It's a small change" -- Small changes can introduce regressions and security vulnerabilities.
+  - "We'll review later" -- Later reviews accumulate debt and miss context.
+  - "CI will catch it" -- CI catches syntax and test failures, not architectural or business logic issues.
 examples:
   - name: Initial review during development
     invocation: "Review the code (initial)"
@@ -55,7 +55,7 @@ related:
       difference: >
         optimus-cycle-impl-review-stage-3 validates a completed task against its spec
         (acceptance criteria, test IDs, spec compliance). optimus-deep-review is
-        a generic code review without task/spec context — focused on code quality,
+        a generic code review without task/spec context -- focused on code quality,
         security, and best practices.
     - name: optimus-verify-code
       difference: >
