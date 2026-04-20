@@ -557,12 +557,14 @@ orchestrator does NOT apply fixes directly. This ensures consistent code quality
 
 **Code fixes** → dispatch ring backend/frontend/QA droids with **TDD cycle** (RED-GREEN-REFACTOR):
 - `ring-dev-team-backend-engineer-golang` (Go), `ring-dev-team-backend-engineer-typescript` (TS),
-  `ring-dev-team-frontend-engineer` (React/Next.js), `ring-dev-team-qa-analyst` (tests),
-  `worker` with domain instructions (fallback)
+  `ring-dev-team-frontend-engineer` (React/Next.js), `ring-dev-team-qa-analyst` (tests)
 
 **Documentation fixes** → dispatch ring documentation droids **without TDD** (no tests for docs):
 - `ring-tw-team-functional-writer` (guides), `ring-tw-team-api-writer` (API docs),
-  `ring-tw-team-docs-reviewer` (quality fixes), `worker` (fallback)
+  `ring-tw-team-docs-reviewer` (quality fixes)
+
+**Ring droids are REQUIRED** — there is no fallback to `worker`. If the required droids are
+not installed, the skill MUST stop and inform the user which droids need to be installed.
 
 ### Verification Timing (cycle review skills)
 
@@ -656,9 +658,13 @@ The convergence loop eliminates false convergence caused by session bias:
 - LOW severity findings are NOT a reason to stop — ALL findings are presented to the user
 
 ### Agent Dispatch
-Skills dispatch specialist droids in parallel via Task tool:
-- Preferred: ring-default-* droids (code-reviewer, business-logic-reviewer, security-reviewer, etc.)
-- Fallback: worker droid with domain-specific instructions
+Skills dispatch specialist ring droids in parallel via Task tool:
+- ring-default-* droids (code-reviewer, business-logic-reviewer, security-reviewer, etc.)
+- ring-dev-team-* droids (backend-engineer-golang, frontend-engineer, qa-analyst, etc.)
+- ring-tw-team-* droids (functional-writer, api-writer, docs-reviewer)
+
+**Ring droids are REQUIRED** — there is no fallback. If the required droids are not
+installed, the skill MUST stop and list which droids need to be installed.
 
 ## GitHub CLI Prerequisite
 
@@ -713,8 +719,7 @@ design — standalone skills use a simplified model that does not require the ri
 ecosystem. The ring droid dispatch pattern (described in "Common Patterns Across Skills")
 applies only to cycle review skills (stages 1, 3, 4, and coderabbit-review).
 
-Both `deep-review` and `deep-doc-review` dispatch parallel review agents for analysis
-and include convergence loops to catch issues missed in the first pass.
+`deep-doc-review` dispatches parallel review agents for analysis.
 
 ## Optional: Notification Hooks
 

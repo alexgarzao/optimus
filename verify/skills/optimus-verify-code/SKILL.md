@@ -284,10 +284,9 @@ Required output format:
   - Priority: X HIGH, Y MEDIUM, Z LOW gaps
 ```
 
-Use the best available droid:
+Use the appropriate ring droid:
 1. `ring-default-ring-test-reviewer` (preferred)
 2. `ring-dev-team-qa-analyst`
-3. `worker` with the instructions above
 
 ### Step 3: Present Gap Summary
 

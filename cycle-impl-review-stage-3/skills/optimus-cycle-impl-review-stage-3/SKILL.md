@@ -363,7 +363,7 @@ Create findings for coverage issues:
 
 ### Step 0.5.4: Test Scenario Gap Analysis
 
-Dispatch a test gap analyzer via `Task` tool (use `ring-default-ring-test-reviewer` or `worker`).
+Dispatch a test gap analyzer via `Task` tool (use `ring-default-ring-test-reviewer`).
 
 The agent receives: source files, test files, and `go tool cover -func` output.
 
@@ -397,34 +397,29 @@ Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receiv
 
 Dispatch specialist agents covering the validation domains below. Use the agent selection priority to pick the best available droid for each domain.
 
-**Agent selection priority:**
+**Ring droids are REQUIRED.** If the core review droids are not installed, **STOP** and inform the user:
+```
+Required ring droids are not installed. Install them before running this skill:
+  - ring-default-code-reviewer
+  - ring-default-business-logic-reviewer
+  - ring-default-security-reviewer
+  - ring-default-ring-test-reviewer
+  - ring-dev-team-qa-analyst
+```
 
-1. **Ring review droids (preferred when available):**
-   - `ring-default-code-reviewer` → Code Quality
-   - `ring-default-business-logic-reviewer` → Business Logic
-   - `ring-default-security-reviewer` → Security
-   - `ring-default-ring-test-reviewer` → Test Quality
-   - `ring-default-ring-nil-safety-reviewer` → Nil/Null Safety (always dispatch if available)
-   - `ring-default-ring-consequences-reviewer` → Ripple Effects (always dispatch if available)
-   - `ring-default-ring-dead-code-reviewer` → Dead Code (always dispatch if available)
-   - `ring-dev-team-qa-analyst` → QA / Spec Compliance
-   - `ring-dev-team-backend-engineer-golang` → Backend Patterns (Go projects)
-   - `ring-dev-team-frontend-engineer` → Frontend Patterns (React/Next.js projects)
-2. **Other available specialist droids:** If Ring droids are not available, use any other review droids
-3. **Worker droid with domain instructions:** Fall back to `worker` with domain-specific instructions
+**Droids to dispatch:**
 
-| Validation Domain | When to Dispatch | Preferred Ring Droid |
-|-------------------|------------------|---------------------|
+| Validation Domain | When to Dispatch | Ring Droid |
+|-------------------|------------------|------------|
 | **Code Quality** — architecture, patterns, SOLID, DRY, maintainability | Always | `ring-default-code-reviewer` |
 | **Business Logic** — domain correctness, edge cases, business rules | Always | `ring-default-business-logic-reviewer` |
 | **Security** — vulnerabilities, OWASP, input validation, secrets | Always | `ring-default-security-reviewer` |
 | **Test Quality** — coverage gaps, test quality, missing scenarios | Always | `ring-default-ring-test-reviewer` |
-| **Nil/Null Safety** — nil pointer risks, unsafe dereferences | Always (if droid available) | `ring-default-ring-nil-safety-reviewer` |
-| **Ripple Effects** — how changes propagate beyond changed files | Always (if droid available) | `ring-default-ring-consequences-reviewer` |
-| **Dead Code** — orphaned code from changes | Always (if droid available) | `ring-default-ring-dead-code-reviewer` |
+| **Nil/Null Safety** — nil pointer risks, unsafe dereferences | Always | `ring-default-ring-nil-safety-reviewer` |
+| **Ripple Effects** — how changes propagate beyond changed files | Always | `ring-default-ring-consequences-reviewer` |
+| **Dead Code** — orphaned code from changes | Always | `ring-default-ring-dead-code-reviewer` |
 | **Frontend Patterns** — framework patterns, accessibility, performance | Frontend or full-stack tasks | `ring-dev-team-frontend-engineer` |
 | **Backend Patterns** — language patterns, error handling, conventions | Backend or full-stack tasks | `ring-dev-team-backend-engineer-golang` |
-| **Cross-File Consistency** — duplication, shared constants, imports | Always | `worker` with cross-file instructions |
 | **Spec Compliance** — acceptance criteria, test IDs, API contracts | Always | `ring-dev-team-qa-analyst` |
 
 ### Agent Prompt Template
@@ -643,12 +638,11 @@ code quality and proper TDD methodology.
 
 Dispatch the appropriate ring droid for each fix (or group of related fixes):
 
-**Droid selection priority:**
+**Droid selection (based on fix domain):**
 1. `ring-dev-team-backend-engineer-golang` — Go code fixes
 2. `ring-dev-team-backend-engineer-typescript` — TypeScript backend fixes
 3. `ring-dev-team-frontend-engineer` — React/Next.js frontend fixes
 4. `ring-dev-team-qa-analyst` — test-only fixes
-5. `worker` with domain instructions — fallback
 
 **Each droid dispatch MUST include TDD instructions:**
 ```
@@ -677,11 +671,10 @@ Return: files changed, test results, commit-ready status
 
 Dispatch a ring documentation droid:
 
-**Droid selection priority:**
+**Droid selection (based on doc type):**
 1. `ring-tw-team-functional-writer` — guides, conceptual docs
 2. `ring-tw-team-api-writer` — API reference docs
 3. `ring-tw-team-docs-reviewer` — doc quality fixes
-4. `worker` with documentation instructions — fallback
 
 **Documentation droids do NOT follow TDD** — there are no tests to write for documentation.
 They apply the fix directly and return the result.
@@ -735,7 +728,7 @@ If `make test-e2e` target does not exist, mark as SKIP in the summary. Do NOT as
 
 After coverage measurement, dispatch an agent to cross-reference the task spec's acceptance criteria with implemented tests and identify missing scenarios.
 
-**Dispatch a test gap analyzer** via `Task` tool. Use `ring-default-ring-test-reviewer`, `ring-dev-team-qa-analyst`, or `worker` (in that priority order).
+**Dispatch a test gap analyzer** via `Task` tool. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
 
 The agent receives:
 1. **Task spec** — acceptance criteria, testing strategy, test IDs
@@ -805,7 +798,7 @@ The solution: **rounds 2+ are executed by a fresh sub-agent** dispatched via `Ta
 
 **Fresh sub-agent dispatch (rounds 2+):**
 
-Dispatch a single sub-agent via `Task` tool (use `worker` or any available review droid). The sub-agent receives:
+Dispatch a single sub-agent via `Task` tool (use any available ring review droid, e.g., `ring-default-code-reviewer`). The sub-agent receives:
 
 1. **All changed files** — full content, re-read fresh from disk (not from orchestrator's cache)
 2. **Task spec** — the full task section from tasks.md
@@ -1047,7 +1040,7 @@ context. The agent NEVER creates a PR without explicit user approval.
 - Dispatch Frontend/Backend specialists based on task scope (Step 0.4)
 - Each agent receives the FULL content of ALL changed files — never partial content
 - Agents run in PARALLEL — do not wait for one before dispatching another
-- Use whatever review droids are available; fall back to `worker` with domain instructions
+- Ring droids are required — do not proceed without them
 
 ### Scope
 - Validate ONLY the files changed by this task — do not audit the entire codebase

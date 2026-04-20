@@ -630,17 +630,26 @@ For EACH finding (new or evaluated), provide:
 
 ### Agents (always dispatch ALL)
 
-| # | Agent | Focus | Preferred Droid | Fallback |
-|---|-------|-------|-----------------|----------|
-| 1 | Code quality | Architecture, SOLID, DRY, maintainability | `ring-default-code-reviewer` | `worker` |
-| 2 | Business logic | Domain correctness, edge cases | `ring-default-business-logic-reviewer` | `worker` |
-| 3 | Security | Vulnerabilities, OWASP, input validation | `ring-default-security-reviewer` | `worker` |
-| 4 | Test quality | Coverage gaps, error scenarios, flaky patterns | `ring-default-ring-test-reviewer` | `worker` |
-| 5 | Nil/null safety | Nil pointer risks, unsafe dereferences | `ring-default-ring-nil-safety-reviewer` | `worker` |
-| 6 | Ripple effects | Cross-file impacts beyond changed files | `ring-default-ring-consequences-reviewer` | `worker` |
-| 7 | Dead code | Orphaned code from changes | `ring-default-ring-dead-code-reviewer` | `worker` |
+| # | Agent | Focus | Ring Droid |
+|---|-------|-------|------------|
+| 1 | Code quality | Architecture, SOLID, DRY, maintainability | `ring-default-code-reviewer` |
+| 2 | Business logic | Domain correctness, edge cases | `ring-default-business-logic-reviewer` |
+| 3 | Security | Vulnerabilities, OWASP, input validation | `ring-default-security-reviewer` |
+| 4 | Test quality | Coverage gaps, error scenarios, flaky patterns | `ring-default-ring-test-reviewer` |
+| 5 | Nil/null safety | Nil pointer risks, unsafe dereferences | `ring-default-ring-nil-safety-reviewer` |
+| 6 | Ripple effects | Cross-file impacts beyond changed files | `ring-default-ring-consequences-reviewer` |
+| 7 | Dead code | Orphaned code from changes | `ring-default-ring-dead-code-reviewer` |
 
-Use the preferred ring droid when available in the environment. If a ring droid is not available, fall back to `worker` with domain-specific instructions. All agents MUST be dispatched in a SINGLE message with parallel Task calls.
+**Ring droids are REQUIRED.** If the core review droids are not installed, **STOP** and inform the user:
+```
+Required ring droids are not installed. Install them before running this skill:
+  - ring-default-code-reviewer
+  - ring-default-business-logic-reviewer
+  - ring-default-security-reviewer
+  - ring-default-ring-test-reviewer
+```
+
+All agents MUST be dispatched in a SINGLE message with parallel Task calls.
 
 ---
 
@@ -873,7 +882,7 @@ For each approved fix, dispatch a specialist droid via `Task` tool:
 4. **RUN UNIT TESTS:** Execute `make test` to verify no regressions
 
 **For documentation fixes (docs, README, specs):** dispatch ring documentation droids
-(`ring-tw-team-functional-writer`, `ring-tw-team-api-writer`, or `worker`). Documentation
+(`ring-tw-team-functional-writer`, `ring-tw-team-api-writer`). Documentation
 droids do NOT follow TDD — they apply the fix directly.
 
 **Droid selection priority (code fixes):**
@@ -881,7 +890,7 @@ droids do NOT follow TDD — they apply the fix directly.
 2. `ring-dev-team-backend-engineer-typescript` — TypeScript backend
 3. `ring-dev-team-frontend-engineer` — React/Next.js frontend
 4. `ring-dev-team-qa-analyst` — test fixes
-5. `worker` with domain instructions — fallback
+5. `ring-dev-team-qa-analyst` — test fixes
 
 ### Step 6.3: Handle Test Failures (max 3 attempts)
 
@@ -955,7 +964,7 @@ go tool cover -func=coverage-unit.out | tail -1
 
 ### Step 6.6.2: Test Gap Analysis
 
-Dispatch a test gap analyzer via `Task` tool. Use `ring-default-ring-test-reviewer` if available, otherwise `worker` with test analysis instructions.
+Dispatch a test gap analyzer via `Task` tool. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
 
 HIGH priority gaps are presented as findings for user decision.
 
@@ -983,7 +992,7 @@ The solution: **rounds 2+ are executed by a fresh sub-agent** dispatched via `Ta
 
 **Fresh sub-agent dispatch (rounds 2+):**
 
-Dispatch a single sub-agent via `Task` tool (use `worker` or any available review droid). The sub-agent receives:
+Dispatch a single sub-agent via `Task` tool (use any available ring review droid, e.g., `ring-default-code-reviewer`). The sub-agent receives:
 
 1. **All changed files** — full content, re-read fresh from disk
 2. **PR context** — description, linked issues, base branch
@@ -1409,7 +1418,7 @@ gh api graphql -f query='
 - No changes without user approval
 - BEFORE presenting each finding: deep research is MANDATORY — project patterns, architectural decisions, existing codebase, task focus, user/consumer use cases, UX impact, API best practices, engineering best practices, language-specific idioms. Option A must be the correct approach backed by research evidence, regardless of effort
 - If the user responds with a question or disagreement: STOP, research and answer thoroughly RIGHT NOW — do NOT defer to the fix phase or continue to the next finding
-- Dispatch agents using ring droids when available (preferred), falling back to `worker` with domain-specific instructions
+- Ring droids are required — do not proceed without them
 - Fixes use TDD cycle (RED-GREEN-REFACTOR) with separate commits per finding
 - For won't-fix Codacy findings: use the underlying linter's suppression syntax (e.g., `biome-ignore` for Biome, `eslint-disable-next-line` for ESLint, `//nolint` for Go). `codacy:ignore` does NOT exist.
 - For won't-fix DeepSource findings: add `// skipcq: <shortcode>` inline and commit

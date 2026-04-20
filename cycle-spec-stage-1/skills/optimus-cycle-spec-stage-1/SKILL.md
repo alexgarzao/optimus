@@ -462,17 +462,23 @@ For EACH new component:
 
 ### Step 3.1: Dispatch Validation Agents (MANDATORY)
 
-**HARD BLOCK:** Dispatch specialist agents in parallel to validate the task spec. Each agent receives the task spec, reference docs, and the gaps/findings identified so far. The `worker` droid is always available as fallback, so this step is never skipped.
+**HARD BLOCK:** Dispatch specialist ring droids in parallel to validate the task spec. Each agent receives the task spec, reference docs, and the gaps/findings identified so far.
 
-**Agent selection priority:**
+**Ring droids are REQUIRED. If any of the droids below are not available, STOP and inform the user:**
+```
+Required ring droids are not installed. Install them before running this skill:
+  - ring-default-business-logic-reviewer
+  - ring-default-security-reviewer
+  - ring-dev-team-qa-analyst
+  - ring-default-code-reviewer
+```
 
-1. **Ring review droids (preferred):**
-   - `ring-default-business-logic-reviewer` — validate business rules completeness, edge cases, and domain correctness in the task spec
-   - `ring-default-security-reviewer` — identify security gaps in the spec (missing auth, input validation, data exposure risks)
-   - `ring-dev-team-qa-analyst` — validate testing strategy completeness, identify untested scenarios
-   - `ring-default-code-reviewer` — assess architectural feasibility, identify patterns that may conflict with the codebase
-2. **Other available review droids:** If Ring droids are not available, use any other review droids
-3. **Worker droid with domain instructions (fallback):** Fall back to `worker` with domain-specific instructions — always available
+**Droids to dispatch:**
+
+1. `ring-default-business-logic-reviewer` — validate business rules completeness, edge cases, and domain correctness in the task spec
+2. `ring-default-security-reviewer` — identify security gaps in the spec (missing auth, input validation, data exposure risks)
+3. `ring-dev-team-qa-analyst` — validate testing strategy completeness, identify untested scenarios
+4. `ring-default-code-reviewer` — assess architectural feasibility, identify patterns that may conflict with the codebase
 
 **Agent prompt MUST include:**
 ```
@@ -602,7 +608,7 @@ The solution: **rounds 2+ are executed by a fresh sub-agent** dispatched via `Ta
 
 **Fresh sub-agent dispatch (rounds 2+):**
 
-Dispatch a single sub-agent via `Task` tool (use `worker` or any available review droid). The sub-agent receives:
+Dispatch a single sub-agent via `Task` tool (use any available ring review droid, e.g., `ring-default-code-reviewer`). The sub-agent receives:
 
 1. **All relevant files** — task spec, reference docs, tasks.md, project rules (re-read fresh, not from cache)
 2. **The findings ledger** — list of ALL findings from previous rounds with their resolutions (fixed/skipped/deferred), used ONLY for deduplication

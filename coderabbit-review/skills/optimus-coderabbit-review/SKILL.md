@@ -281,28 +281,26 @@ For fixes that alter execution flow, conditions, method calls, or observable beh
 
 1. **Dispatch review agents in parallel** via `Task` tool. Use the agent selection priority below:
 
-**Agent selection priority:**
+**Ring droids are REQUIRED.** If the core review droids are not installed, **STOP** and inform the user:
+```
+Required ring droids are not installed. Install them before running this skill:
+  - ring-default-code-reviewer
+  - ring-default-business-logic-reviewer
+  - ring-default-security-reviewer
+  - ring-default-ring-test-reviewer
+```
 
-1. **Ring review droids (preferred when available):**
-   - `ring-default-code-reviewer` → Code quality, architecture, patterns
-   - `ring-default-business-logic-reviewer` → Domain correctness, edge cases
-   - `ring-default-security-reviewer` → Vulnerabilities, OWASP, input validation
-   - `ring-default-ring-test-reviewer` → Test coverage gaps, test quality
-   - `ring-default-ring-nil-safety-reviewer` → Nil/null pointer risks, unsafe dereferences
-   - `ring-default-ring-consequences-reviewer` → Ripple effects beyond changed files
-   - `ring-default-ring-dead-code-reviewer` → Orphaned code from changes
-2. **Other available specialist droids**
-3. **Worker droid with domain instructions** — as fallback
+**Droids to dispatch:**
 
-| Domain | When to Dispatch | Preferred Ring Droid |
-|--------|-----------------|---------------------|
+| Domain | When to Dispatch | Ring Droid |
+|--------|-----------------|------------|
 | **Code Quality** | Always | `ring-default-code-reviewer` |
 | **Business Logic** | Always | `ring-default-business-logic-reviewer` |
 | **Security** | Always | `ring-default-security-reviewer` |
 | **Test Quality** | Always | `ring-default-ring-test-reviewer` |
-| **Nil/Null Safety** | Always (if droid available) | `ring-default-ring-nil-safety-reviewer` |
-| **Ripple Effects** | Always (if droid available) | `ring-default-ring-consequences-reviewer` |
-| **Dead Code** | Always (if droid available) | `ring-default-ring-dead-code-reviewer` |
+| **Nil/Null Safety** | Always | `ring-default-ring-nil-safety-reviewer` |
+| **Ripple Effects** | Always | `ring-default-ring-consequences-reviewer` |
+| **Dead Code** | Always | `ring-default-ring-dead-code-reviewer` |
 
 2. **Skip agent validation** for purely cosmetic fixes (comments, rename, formatting, DRY without logic change)
 
@@ -322,7 +320,7 @@ For each approved fix:
 4. **RUN UNIT TESTS:** Execute `make test` to verify no regressions
 
 **For documentation fixes (docs, README, specs):** dispatch ring documentation droids
-(`ring-tw-team-functional-writer`, `ring-tw-team-api-writer`, or `worker`). Documentation
+(`ring-tw-team-functional-writer`, `ring-tw-team-api-writer`). Documentation
 droids do NOT follow TDD — they apply the fix directly.
 
 ### Step 3.3: Handle Test Failures
@@ -377,7 +375,7 @@ If coverage is below threshold, flag as a finding:
 
 Dispatch an agent to identify missing test scenarios in the changed files.
 
-**Dispatch a test gap analyzer** via `Task` tool. Use `ring-default-ring-test-reviewer`, `ring-dev-team-qa-analyst`, or `worker` (in that priority order).
+**Dispatch a test gap analyzer** via `Task` tool. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
 
 The agent receives:
 1. **Changed source files** — full content (non-test files only)
@@ -439,7 +437,7 @@ The solution: **rounds 2+ are executed by a fresh sub-agent** dispatched via `Ta
 
 **Fresh sub-agent dispatch (rounds 2+):**
 
-Dispatch a single sub-agent via `Task` tool (use `worker` or any available review droid). The sub-agent receives:
+Dispatch a single sub-agent via `Task` tool (use any available ring review droid, e.g., `ring-default-code-reviewer`). The sub-agent receives:
 
 1. **All changed files** — full content, re-read fresh from disk
 2. **Project rules and coding standards** — re-read fresh

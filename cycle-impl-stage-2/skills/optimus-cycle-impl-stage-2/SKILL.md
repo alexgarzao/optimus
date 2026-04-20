@@ -345,11 +345,18 @@ simplified pipeline. Each step dispatches specialist droids via `Task` tool.
 
 Dispatch a specialist droid to implement the task using TDD methodology:
 
-**Droid selection priority:**
+**Droid selection (based on project stack):**
 1. `ring-dev-team-backend-engineer-golang` — Go projects
 2. `ring-dev-team-backend-engineer-typescript` — TypeScript projects
 3. `ring-dev-team-frontend-engineer` — React/Next.js projects
-4. `worker` with implementation instructions — fallback (always available)
+
+**If no matching ring droid is available for the project stack, STOP:**
+```
+No ring implementation droid available for this stack. Install the appropriate droid:
+  - Go: ring-dev-team-backend-engineer-golang
+  - TypeScript: ring-dev-team-backend-engineer-typescript
+  - React/Next.js: ring-dev-team-frontend-engineer
+```
 
 **The droid MUST:**
 1. Follow TDD: write failing tests first, implement to pass, refactor
@@ -359,11 +366,11 @@ Dispatch a specialist droid to implement the task using TDD methodology:
 
 #### Step 1.2.2: Code Review
 
-Dispatch parallel review droids via `Task` tool:
+Dispatch parallel ring review droids via `Task` tool:
 
-1. `ring-default-code-reviewer` or `worker` — architecture, patterns, SOLID, DRY
-2. `ring-default-business-logic-reviewer` or `worker` — domain correctness, edge cases
-3. `ring-default-security-reviewer` or `worker` — vulnerabilities, OWASP, input validation
+1. `ring-default-code-reviewer` — architecture, patterns, SOLID, DRY
+2. `ring-default-business-logic-reviewer` — domain correctness, edge cases
+3. `ring-default-security-reviewer` — vulnerabilities, OWASP, input validation
 
 Present findings to the user ONE AT A TIME. For each finding:
 - Show problem, impact, and 2-3 options

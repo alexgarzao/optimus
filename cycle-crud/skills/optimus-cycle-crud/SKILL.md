@@ -399,7 +399,31 @@ Show the new table order.
       - **Delete local and remote** — clean up the branch
       - **Keep** — leave the branch as is
       **NOTE:** If an open PR was kept in step (a), skip branch deletion — deleting the branch would orphan the PR.
-5. **If task has a worktree**, offer to remove it (same logic as cycle-close-stage-5 Step 3.1)
+5. **If task has a worktree**, check and offer to remove it:
+
+   **IMPORTANT:** Worktree must be removed BEFORE attempting branch deletion (step 4b).
+   Git refuses to delete a branch that is checked out in a worktree.
+
+   ```bash
+   git worktree list | grep -i "T-XXX"
+   ```
+
+   If a worktree is found, ask via `AskUser`:
+   ```
+   Task T-XXX has a worktree at '<path>'. What should I do with it?
+   ```
+   Options:
+   - **Remove worktree** — `git worktree remove <path>`
+   - **Keep** — leave the worktree as is
+
+   **Edge case — running INSIDE the worktree:** If the agent's current working directory
+   IS the worktree being removed, `git worktree remove` will fail. Before removing:
+   1. Identify the main repository path from `git worktree list` (the first entry)
+   2. Change working directory to the main repository: `cd <main-repo-path>`
+   3. Then run `git worktree remove <worktree-path>`
+
+   **Ordering:** Remove worktree (step 5) BEFORE deleting branch (step 4b). If both are
+   requested, execute in this order: worktree removal → branch deletion.
 
 ### Step 5.2: Apply Cancellation
 
