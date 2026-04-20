@@ -159,7 +159,7 @@ suggests running `/optimus-cycle-migrate`.
 | T-001 | Setup auth module | Feature | **DONE** | - | Alta | - |
 | T-002 | User registration API | Feature | Em Andamento | T-001 | Alta | feat/t-002-user-registration |
 | T-003 | Login page | Feature | Pendente | T-001 | Alta | - |
-| T-004 | Password reset flow | Fix | Pendente | T-002, T-003 | Media | - |
+| T-004 | Password reset flow | Fix | Pendente | T-002, T-003 | Media | fix/t-004-password-reset |
 | T-005 | E2E auth tests | Test | Pendente | T-002, T-003 | Media | - |
 
 ## T-001: Setup auth module

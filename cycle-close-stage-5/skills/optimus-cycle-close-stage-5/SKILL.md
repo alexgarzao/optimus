@@ -398,8 +398,8 @@ Identify the task's branch from the **Branch column** in `tasks.md` (primary sou
 # Primary: read Branch column from tasks.md for this task ID
 TASK_BRANCH=$(grep "T-XXX" tasks.md | ... extract Branch column ...)
 
-# Fallback: search by convention
-git branch --list "feat/*T-XXX*" "feat/*t-xxx*"
+# Fallback: search by convention (any Tipo prefix)
+git branch --list "feat/*T-XXX*" "feat/*t-xxx*" "fix/*T-XXX*" "fix/*t-xxx*" "refactor/*T-XXX*" "refactor/*t-xxx*" "chore/*T-XXX*" "chore/*t-xxx*" "docs/*T-XXX*" "docs/*t-xxx*" "test/*T-XXX*" "test/*t-xxx*"
 
 # Check if branch exists locally
 git branch --list "$TASK_BRANCH"
@@ -460,8 +460,8 @@ git push
 |----------|--------|-------------|
 | Worktree `/path/to/wt` | Not found | - |
 | PR #42 | Open | Merged / Kept / Closed |
-| Branch `feat/t-xxx-...` (local) | Found | Deleted / Kept |
-| Branch `feat/t-xxx-...` (remote) | Found | Deleted / Kept |
+| Branch `<tipo>/t-xxx-...` (local) | Found | Deleted / Kept |
+| Branch `<tipo>/t-xxx-...` (remote) | Found | Deleted / Kept |
 ```
 
 ---

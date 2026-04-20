@@ -169,20 +169,22 @@ Options:
 - **(a) Git worktree (recommended)** — creates a worktree in a sibling directory, keeps the current branch untouched
 - **(b) New branch** — creates and checks out a new branch in the current repository
 
-**Branch naming:** Generate a descriptive name from the task ID and title:
-- Pattern: `feat/<task-id>-<keywords>` where keywords are 2-4 lowercase words from the title
-- Examples: `feat/t-016-boleto-cancellation`, `feat/t-003-user-auth-jwt`
+**Branch naming:** Generate a descriptive name from the task's **Tipo** and ID:
+- Pattern: `<tipo-prefix>/<task-id>-<keywords>` where keywords are 2-4 lowercase words from the title
+- The `<tipo-prefix>` is derived from the task's Tipo column using the same mapping as Conventional Commits:
+  - Feature → `feat`, Fix → `fix`, Refactor → `refactor`, Chore → `chore`, Docs → `docs`, Test → `test`
+- Examples: `feat/t-003-user-auth-jwt`, `fix/t-007-duplicate-login`, `refactor/t-012-extract-middleware`
 - Strip articles, prepositions, and generic words (implement, add, create, update)
 
 **If worktree (recommended):**
 ```bash
-git worktree add ../<repo>-<task-id>-<keywords> -b feat/<task-id>-<keywords>
+git worktree add ../<repo>-<task-id>-<keywords> -b <tipo-prefix>/<task-id>-<keywords>
 ```
 Then change working directory to the new worktree path for all subsequent steps.
 
 **If new branch:**
 ```bash
-git checkout -b feat/<task-id>-<keywords>
+git checkout -b <tipo-prefix>/<task-id>-<keywords>
 ```
 
 **BLOCKING**: Do NOT proceed until the workspace is created.
