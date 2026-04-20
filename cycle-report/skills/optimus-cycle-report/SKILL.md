@@ -315,6 +315,7 @@ After the dashboard, present any issues found:
 - Tasks with missing H2 detail sections
 - Circular dependencies
 - Invalid dependency references (pointing to non-existent task IDs)
+- Tasks blocked by a cancelled dependency (e.g., "T-005 depends on T-003, but T-003 is Cancelado — remove or replace this dependency via `/optimus-cycle-crud`")
 - Tasks stuck in the same status for too long (if git log shows no commits on their branch)
 
 ### Recommendations

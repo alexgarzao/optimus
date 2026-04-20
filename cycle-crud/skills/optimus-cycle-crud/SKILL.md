@@ -1,7 +1,8 @@
 ---
 name: optimus-cycle-crud
 description: >
-  Administrative task management for tasks.md. Create, edit, remove, and reorder tasks.
+  Administrative task management for tasks.md. Create, edit, remove, reorder, and cancel
+  tasks. Manage versions (create, edit, remove, reorder) and move tasks between versions.
   Validates format, dependencies, and ID uniqueness. Runs on any branch — this is an
   administrative skill, not an execution skill.
 trigger: >
@@ -9,10 +10,13 @@ trigger: >
   - When user wants to edit a task (e.g., "change priority of T-003", "rename T-005")
   - When user wants to remove a task (e.g., "remove T-004", "delete task")
   - When user wants to reorder tasks (e.g., "move T-005 before T-003")
+  - When user wants to cancel a task (e.g., "cancel T-004", "abandon T-004", "won't do T-004")
+  - When user wants to manage versions (e.g., "create version", "add version v2", "edit version MVP")
+  - When user wants to move tasks between versions (e.g., "move T-003 to v2")
   - When user says "manage tasks" or "edit tasks.md"
 skip_when: >
   - User wants to execute a task (use cycle-spec-stage-1 instead)
-  - User wants to change task status (status is managed by stage agents only)
+  - User wants to change task status through the lifecycle (status is managed by stage agents — except cancellation, which is handled here)
 prerequisite: >
   - tasks.md exists in the project root or docs/ directory
 NOT_skip_when: >
@@ -400,7 +404,7 @@ If the user provides multiple tasks to create at once (e.g., a list of tasks), p
 
 ## Phase 7: Version Management
 
-### Step 6.0: Determine Version Operation
+### Step 7.0: Determine Version Operation
 
 | Sub-operation | Triggers |
 |---------------|----------|
@@ -409,7 +413,7 @@ If the user provides multiple tasks to create at once (e.g., a list of tasks), p
 | **Remove** | "remove version", "delete version" |
 | **Reorder** | "reorder versions" |
 
-### Step 6.1: Create Version
+### Step 7.1: Create Version
 
 Ask the user for:
 1. **Name** (required): Version name (e.g., `v3`, `Sprint 4`, `Futuro`)
@@ -425,7 +429,7 @@ Ask the user for:
 
 Add the row to the Versions table and commit: `chore(tasks): create version <name>`
 
-### Step 6.2: Edit Version
+### Step 7.2: Edit Version
 
 Editable fields:
 
@@ -459,7 +463,7 @@ Editable fields:
 
 Commit: `chore(tasks): update version <name>`
 
-### Step 6.3: Remove Version
+### Step 7.3: Remove Version
 
 **HARD BLOCK:** Check if any task references this version:
 ```
@@ -478,7 +482,7 @@ Move these tasks to another version first.
 If no tasks reference it, remove the row from the Versions table.
 Commit: `chore(tasks): remove version <name>`
 
-### Step 6.4: Reorder Versions
+### Step 7.4: Reorder Versions
 
 Rearrange rows in the Versions table. Does NOT change any values — only visual order.
 
@@ -486,7 +490,7 @@ Rearrange rows in the Versions table. Does NOT change any values — only visual
 
 Move one or more tasks from one version to another.
 
-### Step 7.0: Parse Move Request
+### Step 8.0: Parse Move Request
 
 The user may say:
 - "move T-003 to v2" → single task
@@ -494,11 +498,11 @@ The user may say:
 - "move all Pendente from MVP to v2" → batch by status + source version
 - "move all from MVP to v2" → batch by source version (all statuses except DONE)
 
-### Step 7.1: Validate Target Version
+### Step 8.1: Validate Target Version
 
 Verify the target version exists in the Versions table. If not → **STOP**: "Version '<name>' does not exist. Create it first."
 
-### Step 7.2: Identify Tasks to Move
+### Step 8.2: Identify Tasks to Move
 
 For batch moves, list the tasks that match the criteria and present to the user via `AskUser`:
 
@@ -515,7 +519,7 @@ Confirm move?
 
 **BLOCKING:** Do NOT proceed without confirmation.
 
-### Step 7.3: Apply Move
+### Step 8.3: Apply Move
 
 1. Update the Version column for each identified task
 2. Do NOT change Status, Branch, Depends, Priority, or any other field
