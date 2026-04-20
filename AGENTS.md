@@ -20,6 +20,8 @@ optimus/
 ├── cycle-migrate/                   # Admin: Task format migrator (one-time)
 ├── cycle-report/                    # Admin: Task status dashboard (read-only)
 ├── cycle-crud/                      # Admin: Create, edit, remove, reorder tasks
+├── cycle-batch/                     # Execution: Pipeline orchestrator (stages 1-5)
+├── cycle-conflict-resolve/          # Admin: Resolve tasks.md merge conflicts
 ├── cycle-spec-stage-1/              # Execution Stage 1: Spec validation + workspace creation
 ├── cycle-impl-stage-2/              # Execution Stage 2: Task implementation
 ├── cycle-impl-review-stage-3/       # Execution Stage 3: Implementation review
@@ -162,13 +164,13 @@ suggests running `/optimus-cycle-migrate`.
 | v2 | Próxima | Post-launch improvements |
 | Futuro | Backlog | Ideas not yet scheduled |
 
-| ID | Title | Tipo | Status | Depends | Priority | Version | Branch |
-|----|-------|------|--------|---------|----------|---------|--------|
-| T-001 | Setup auth module | Feature | **DONE** | - | Alta | MVP | - |
-| T-002 | User registration API | Feature | Em Andamento | T-001 | Alta | MVP | feat/t-002-user-registration |
-| T-003 | Login page | Feature | Pendente | T-001 | Alta | MVP | - |
-| T-004 | Password reset flow | Fix | Pendente | T-002, T-003 | Media | v2 | fix/t-004-password-reset |
-| T-005 | E2E auth tests | Test | Pendente | T-002, T-003 | Media | MVP | - |
+| ID | Title | Tipo | Status | Depends | Priority | Version | Branch | Estimate |
+|----|-------|------|--------|---------|----------|---------|--------|----------|
+| T-001 | Setup auth module | Feature | **DONE** | - | Alta | MVP | - | S |
+| T-002 | User registration API | Feature | Em Andamento | T-001 | Alta | MVP | feat/t-002-user-registration | M |
+| T-003 | Login page | Feature | Pendente | T-001 | Alta | MVP | - | M |
+| T-004 | Password reset flow | Fix | Pendente | T-002, T-003 | Media | v2 | fix/t-004-password-reset | L |
+| T-005 | E2E auth tests | Test | Pendente | T-002, T-003 | Media | MVP | - | S |
 
 ## T-001: Setup auth module
 
@@ -199,6 +201,7 @@ suggests running `/optimus-cycle-migrate`.
 | Priority | Yes | `Alta`, `Media`, or `Baixa` |
 | Version | Yes | Must match a version name from the Versions table |
 | Branch | No | Git branch name. `-` if not yet created |
+| Estimate | No | Task size estimate. Free text (e.g., `S`, `M`, `L`, `XL`, `2h`, `1d`). `-` if not estimated |
 
 ### Valid Tipo Values
 
@@ -273,7 +276,7 @@ Examples: `chore(tasks): start T-003 — set status to Validando Spec`,
 | `Cancelado` | cycle-crud | Task abandoned, will not be implemented |
 
 **Administrative status operations** (managed by cycle-crud, not by stage agents):
-- **Reopen:** `**DONE**` → `Pendente` (if branch deleted) or `Em Andamento` (if branch exists) — when a bug is found after close
+- **Reopen:** `**DONE**` → `Pendente` (if branch deleted) or `Em Andamento` (if branch exists) — when a bug is found after close. Also accepts `Cancelado` → `Pendente` — when a cancellation decision is reversed.
 - **Advance:** move forward one stage — when work was done manually outside the pipeline
 - **Demote:** move backward one stage — when rework is needed after review
 - **Cancel:** any non-terminal → `Cancelado` — task will not be implemented
@@ -362,7 +365,7 @@ Every stage agent (1-5) MUST validate the tasks.md format before operating:
 3. All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
 4. Exactly one version has Status `Ativa`
 5. At most one version has Status `Próxima`
-6. A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
+6. A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch, Estimate (Estimate is optional — tables without it are still valid)
 7. All task IDs follow the `T-NNN` pattern
 8. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
 9. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`
@@ -370,9 +373,16 @@ Every stage agent (1-5) MUST validate the tasks.md format before operating:
 11. All Priority values are one of: `Alta`, `Media`, `Baixa`
 12. All Version values reference a version name that exists in the Versions table
 13. No duplicate task IDs
+14. No circular dependencies in the dependency graph (e.g., T-001 → T-002 → T-001)
 
 If the format marker is missing or validation fails, the agent must **STOP** and suggest
 running `/optimus-cycle-migrate` to fix the format. Do NOT attempt to interpret malformed data.
+
+15. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
+
+**NOTE:** For circular dependency detection (item 14), trace the full dependency chain for
+each task. If any task appears twice in the chain, a cycle exists. Report ALL tasks involved
+in the cycle so the user can fix it with `/optimus-cycle-crud`.
 
 ### Parallelization
 
@@ -413,7 +423,11 @@ Any status → Cancelado  (via cycle-crud cancel operation)
    `**DONE**`, it cannot be re-closed.
 6. **Dependency check** — every agent verifies that ALL dependencies (Depends column)
    have status `**DONE**` before proceeding. If any dependency is not done, the agent
-   refuses with a clear message identifying which dependency is blocking.
+   fires the `task-blocked` hook (if configured) and then refuses with a clear message
+   identifying which dependency is blocking. **If the blocking dependency has status
+   `Cancelado`**, the message must differentiate: "T-YYY was cancelled (Cancelado).
+   Consider removing this dependency via `/optimus-cycle-crud`." This helps the user
+   understand the blocker requires a dependency edit, not waiting for completion.
 7. **Expanded confirmation on status change** — when a stage agent is about to change
    a task's status, it shows the task description (Objetivo + Critérios de Aceite) and
    asks for explicit confirmation via `AskUser`. This prevents accidental status changes
@@ -445,6 +459,8 @@ Any status → Cancelado  (via cycle-crud cancel operation)
    | Execution | cycle-impl-review-stage-3 | **No** | Modifies code (applies fixes), verifies workspace |
    | Execution | cycle-pr-review-stage-4 | **No** | Modifies code (applies fixes), verifies workspace |
    | Execution | cycle-close-stage-5 | **No** | Runs verification on task branch, then cleanup |
+   | Admin | cycle-batch | Yes | Orchestrates stages, delegates to stage skills |
+   | Admin | cycle-conflict-resolve | Yes | Only resolves merge conflicts in tasks.md |
 
    **Administrative skills** manage tasks.md metadata. They never modify project code
    and can run on any branch.
@@ -501,6 +517,106 @@ Before marking done, cycle-close-stage-5 runs 8 checks:
 8. `make test-e2e` passes (if target exists)
 
 ALL must pass (SKIP counts as pass). If any fails, status stays unchanged.
+
+## Dry-Run Mode (all stages)
+
+All stage agents (1-5) support **dry-run mode**. When the user includes "dry-run" or
+"preview" in their invocation (e.g., "dry-run spec T-003", "preview review T-012"):
+
+1. **Run all analysis/validation phases normally** — agent dispatch, findings, etc.
+2. **Do NOT change task status** — skip the status update step
+3. **Do NOT commit or push anything** — no git operations that modify state
+4. **Do NOT create workspaces** — skip branch/worktree creation (stage-1)
+5. **Do NOT apply fixes** — skip batch-apply phases
+6. **Present results as informational** — "what would happen" without side effects
+
+This allows users to preview what a stage would do before committing to it.
+
+## Session State (cross-session resumption)
+
+Stage agents (1-5) write a session state file to track progress. This enables resumption
+when a session is interrupted (agent crash, user closes terminal, context window limit).
+
+### Session File
+
+Location: `.optimus/session-<task-id>.json` (project root, gitignored). Each task gets
+its own session file (e.g., `.optimus/session-T-003.json`), enabling parallel execution
+across multiple worktrees without file conflicts.
+
+```json
+{
+  "task_id": "T-003",
+  "stage": "cycle-impl-stage-2",
+  "status": "Em Andamento",
+  "branch": "feat/t-003-user-auth",
+  "started_at": "2025-01-15T10:30:00Z",
+  "updated_at": "2025-01-15T11:45:00Z",
+  "phase": "Phase 1: Implementation",
+  "notes": "Implementation in progress, 3 of 5 acceptance criteria done"
+}
+```
+
+### Behavior
+
+**On stage start:** After identifying the task (task ID is known), check if
+`.optimus/session-<task-id>.json` exists:
+- If it exists AND the task's status in `tasks.md` matches the session's `status` →
+  offer to resume via `AskUser`:
+  ```
+  Previous session found:
+    Task: T-003 — [title]
+    Stage: cycle-impl-stage-2
+    Last active: 2h ago
+    Progress: Phase 1: Implementation
+  Resume this session?
+  ```
+  Options: Resume / Start fresh / Ignore
+- If the session file is stale (>24h) or the task status has changed → delete the file and proceed normally
+
+**On stage progress:** Update `.optimus/session-<task-id>.json` with the current phase and any progress notes.
+
+**On stage completion:** Delete `.optimus/session-<task-id>.json` (the stage is done, no resumption needed).
+
+**On cycle-close-stage-5 marking DONE:** Delete `.optimus/session-<task-id>.json` for that task.
+
+### Gitignore
+
+Stage agents that create session files should also ensure `.optimus/` is in
+`.gitignore` (session state is local, not shared):
+```bash
+grep -q '.optimus/' .gitignore 2>/dev/null || echo '.optimus/' >> .gitignore
+```
+
+## Verification Command Configuration
+
+Projects can customize verification commands via `.optimus/config.json` instead of relying
+on auto-detection from Makefile or stack conventions.
+
+### Config File
+
+Location: `.optimus/config.json` (project root)
+
+```json
+{
+  "commands": {
+    "lint": "npm run lint",
+    "test": "npm test",
+    "test-integration": "npm run test:integration",
+    "test-e2e": "npx playwright test",
+    "format-check": "npx prettier --check .",
+    "typecheck": "npx tsc --noEmit"
+  }
+}
+```
+
+### Behavior
+
+All skills that run verification commands (verify, cycle-close-stage-5, cycle-impl-stage-2,
+cycle-impl-review-stage-3) MUST check for `.optimus/config.json` BEFORE auto-detecting
+commands. If the config file exists, use its commands instead of auto-detection.
+
+If a command key is missing from the config, fall back to auto-detection for that command.
+If a command key is present but empty (`""`), skip that check entirely.
 
 ## Project Rules Discovery (all skills)
 
@@ -771,12 +887,21 @@ esac
 
 ### Agent Behavior
 
-Stage agents (1-5) and cycle-crud check for `tasks-hooks.sh` after committing a status change:
+Stage agents (1-5) and cycle-crud check for `tasks-hooks.sh` in two situations:
 
+**After committing a status change:**
 ```bash
 HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
 if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
   "$HOOKS_FILE" <event> <task-id> <old-status> <new-status> 2>/dev/null &
+fi
+```
+
+**When a dependency check fails (task is blocked):**
+```bash
+HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+  "$HOOKS_FILE" task-blocked <task-id> "<current-status>" "<current-status>" "blocked by <dep-id> (<dep-status>)" 2>/dev/null &
 fi
 ```
 

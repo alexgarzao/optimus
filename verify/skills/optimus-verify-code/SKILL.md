@@ -66,9 +66,9 @@ Two-phase code verification supporting multiple stacks.
 
 Before running any checks, detect the project stack and determine available commands.
 
-### Step 0.1: Identify Stack
+### Step 0.1: Identify Stack(s)
 
-Check for these files in order — the first match determines the primary stack:
+Check for ALL of these files — a project may have multiple stacks (e.g., Go backend + React frontend):
 
 | File | Stack | Language |
 |------|-------|----------|
@@ -76,11 +76,55 @@ Check for these files in order — the first match determines the primary stack:
 | `package.json` | Node.js | TypeScript/JavaScript |
 | `pyproject.toml` or `setup.py` | Python | Python |
 | `Cargo.toml` | Rust | Rust |
-| `Makefile` (alone) | Generic | Unknown — use Makefile targets only |
+| `Makefile` (alone, no other matches) | Generic | Unknown — use Makefile targets only |
+
+**Multi-stack detection:** If multiple stack files are found (e.g., `go.mod` AND `package.json`),
+detect ALL stacks and build a **union** of their command matrices in Step 0.2. Run checks
+for ALL detected stacks. The primary stack (for reporting purposes) is the first match in
+the table above.
+
+**Example:** A project with `go.mod` and `package.json` runs Go lint + vet + format + tests
+AND Node.js lint + typecheck + format + tests.
+
+### Step 0.1.1: Check for Custom Commands
+
+Check if `.optimus/config.json` exists and contains a `commands` section:
+
+```bash
+cat .optimus/config.json 2>/dev/null | jq '.commands' 2>/dev/null
+```
+
+If found, use the configured commands instead of auto-detection. Missing keys fall back
+to auto-detection. Empty string values (`""`) mean skip that check.
+
+### Step 0.1.2: Determine Scope
+
+Ask the user what to verify (or detect from invocation):
+
+- **Full project** (default) — run all checks on the entire codebase
+- **Changed files only** — scope checks to files changed since a base branch:
+  ```bash
+  DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+  CHANGED_FILES=$(git diff --name-only "origin/$DEFAULT_BRANCH"...HEAD)
+  ```
+  If `CHANGED_FILES` is empty (no files changed), inform the user and exit early:
+  ```
+  No changes detected between your branch and <default_branch>. Nothing to verify.
+  ```
+  **STOP** — do not proceed to Phase 1.
+
+  When scoped to changed files:
+  - **Lint:** run lint only on changed files (if the linter supports file arguments)
+  - **Vet/Typecheck:** run on full project (type checking needs full context)
+  - **Format:** check only changed files
+  - **Tests:** run tests for packages/modules containing changed files, not all tests
+
+If the user says "verify changes", "verify diff", or "verify changed files", use diff mode.
+If the user says "verify" or "verify all", use full project mode.
 
 ### Step 0.2: Build Command Matrix
 
-Based on the detected stack, determine which commands to run:
+Based on the detected stack(s), determine which commands to run:
 
 | # | Check | Go | Node.js | Python | Generic (Makefile) |
 |---|-------|----|---------|--------|--------------------|

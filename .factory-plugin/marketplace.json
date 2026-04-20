@@ -46,6 +46,16 @@
       "source": "./cycle-close-stage-5"
     },
     {
+      "name": "cycle-batch",
+      "description": "Pipeline orchestrator: chains stages 1-5 for one or more tasks with user checkpoints between stages.",
+      "source": "./cycle-batch"
+    },
+    {
+      "name": "cycle-conflict-resolve",
+      "description": "Administrative: Resolves merge conflicts in tasks.md caused by parallel task execution across feature branches.",
+      "source": "./cycle-conflict-resolve"
+    },
+    {
       "name": "deep-doc-review",
       "description": "Deep review of project documentation. Finds errors, inconsistencies, gaps, and improvements with interactive resolution.",
       "source": "./deep-doc-review"

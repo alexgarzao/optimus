@@ -1,0 +1,4 @@
+{
+  "name": "cycle-batch",
+  "description": "Chains stages 1-5 for one or more tasks with user checkpoints between stages."
+}

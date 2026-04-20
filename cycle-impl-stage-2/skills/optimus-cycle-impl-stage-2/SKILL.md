@@ -114,6 +114,9 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
    - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`)
    - All Depends values are `-` or comma-separated valid task IDs
    - No duplicate task IDs
+   - All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
+   - No circular dependencies in the dependency graph
+   - No unescaped pipe characters (`|`) in task titles
 
 If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
 
@@ -133,6 +136,48 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 4. **If no eligible tasks exist**, ask the user to provide a task ID
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to execute.
+
+### Step 0.2.1: Check Session State
+
+After identifying the task, check for a previous session:
+
+```bash
+SESSION_FILE=".optimus/session-${TASK_ID}.json"
+if [ -f "$SESSION_FILE" ]; then
+  cat "$SESSION_FILE"
+fi
+```
+
+- If the file exists AND the task's status in `tasks.md` matches the session's `status`:
+  - Present via `AskUser`:
+    ```
+    Previous session found:
+      Task: T-XXX — [title]
+      Stage: cycle-impl-stage-2
+      Last active: <time since updated_at>
+      Progress: <phase from session>
+    Resume this session?
+    ```
+    Options: Resume / Start fresh / Ignore
+  - If **Resume**: skip to the phase indicated in the session file
+  - If **Start fresh**: delete the session file and proceed normally
+  - If **Ignore**: proceed normally
+- If the file is stale (>24h) or the task status has changed → delete and proceed normally
+- If no file exists → proceed normally
+
+**On stage progress:** Update the session file at key phase transitions:
+```bash
+mkdir -p .optimus
+grep -q '.optimus/' .gitignore 2>/dev/null || echo '.optimus/' >> .gitignore
+cat > ".optimus/session-${TASK_ID}.json" << EOF
+{"task_id":"${TASK_ID}","stage":"cycle-impl-stage-2","status":"Em Andamento","branch":"$(git branch --show-current)","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","phase":"<current-phase>","notes":"<progress>"}
+EOF
+```
+
+**On stage completion** (after Phase 2 post-execution): Delete the session file:
+```bash
+rm -f ".optimus/session-${TASK_ID}.json"
+```
 
 ### Step 0.3: Validate and Update Task Status
 
@@ -187,6 +232,27 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
    ```
 
 **Why commit immediately:** If the session is interrupted or the agent crashes before any code changes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of what happens during implementation.
+
+### Step 0.3.1: Check tasks.md Divergence (warning)
+
+Compare `tasks.md` on the current branch with the default branch to detect concurrent edits:
+
+```bash
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
+git diff "origin/$DEFAULT_BRANCH" -- tasks.md 2>/dev/null | head -20
+```
+
+- If diff output is non-empty → warn via `AskUser`:
+  ```
+  tasks.md has diverged between your branch and <default_branch>.
+  This may cause merge conflicts when the PR is merged.
+  ```
+  Options:
+  - **Sync now** — run `git merge origin/<default_branch>` to incorporate changes
+  - **Continue without syncing** — I'll handle conflicts later
+- If diff output is empty → proceed silently
+- **NOTE:** This is a warning, not a HARD BLOCK.
 
 ### Step 0.4: Verify Workspace
 
@@ -310,7 +376,11 @@ When using dev-cycle (Step 1.1), pass the Tipo so dev-cycle can adapt its gate e
 Check if the `dev-cycle` skill is available in the current environment:
 
 1. **If `dev-cycle` is available** → use it (preferred path, Step 1.1)
-2. **If `dev-cycle` is NOT available** → use the built-in fallback (Step 1.2)
+2. **If `dev-cycle` is NOT available** → use the built-in fallback (Step 1.2).
+   **NOTE:** The built-in fallback covers Implementation (TDD), Code Review, Verification,
+   and User Validation. It does NOT include DevOps (Docker/IaC), SRE (observability validation),
+   or dedicated testing gates — those are only available via `dev-cycle`. This is acceptable
+   for most tasks; install `dev-cycle` for full gate coverage.
 
 ### Step 1.1: Execute via dev-cycle (preferred)
 
@@ -347,6 +417,28 @@ While dev-cycle executes:
 
 When `dev-cycle` is not installed, execute implementation directly using the following
 simplified pipeline. Each step dispatches specialist droids via `Task` tool.
+
+#### Step 1.2.0: Detect Re-Execution (existing implementation)
+
+**If this is a re-execution** (status was already `Em Andamento` when the skill started),
+check if implementation files already exist from a previous run:
+
+```bash
+git diff --name-only $(git merge-base HEAD origin/$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'))..HEAD
+```
+
+If changed files exist, ask via `AskUser`:
+```
+Previous implementation detected — N files were already changed on this branch.
+How should I proceed?
+```
+Options:
+- **Continue from current state** — review existing changes and build on them
+- **Start fresh** — revert all changes and re-implement from scratch (`git reset --hard origin/<default>`)
+
+If the user chooses "Continue from current state", pass the existing file list and their
+content to the implementation droid with instructions: "These files already exist from a
+previous run. Review, update, and complete them rather than creating from scratch."
 
 #### Step 1.2.1: Implementation (TDD)
 
@@ -386,6 +478,9 @@ Present findings to the user ONE AT A TIME. For each finding:
 
 #### Step 1.2.3: Verification
 
+Check for custom commands in `.optimus/config.json` first. If found, use configured
+commands. If not found or key is missing, fall back to Makefile:
+
 Run all available verification commands:
 
 ```bash
@@ -422,8 +517,12 @@ about mismatched checkbox state.
 
 **If this is a re-execution** (status was already `Em Andamento` when the skill started):
 1. Read the task's detail section
-2. Reset ALL checkboxes to unchecked (`- [ ]`) before re-evaluating
-3. This prevents stale `[x]` marks from a previous partial run from persisting
+2. **If the user chose "Start fresh" in Step 1.2.0:** Reset ALL checkboxes to unchecked
+   (`- [ ]`) before re-evaluating. This prevents stale `[x]` marks from a previous
+   partial run from persisting.
+3. **If the user chose "Continue from current state" in Step 1.2.0:** Do NOT reset
+   checkboxes. The existing `[x]` marks reflect work already completed in the previous
+   run. Only evaluate and mark the remaining `[ ]` criteria.
 
 ### Step 1.5.1: Evaluate and Mark Checkboxes
 
@@ -444,7 +543,7 @@ about mismatched checkbox state.
 
 After implementation completes (via dev-cycle or built-in fallback):
 
-### Step 2.0: Test Gap Cross-Reference
+### Step 2.1: Test Gap Cross-Reference
 
 Review any test gaps identified during implementation:
 
@@ -475,6 +574,26 @@ Only after explicit user approval:
 3. If clean, stage all relevant files and commit with a descriptive message
 4. Run `git status` to confirm the commit succeeded
 
+### Step 2.4: Push Commits (optional)
+
+After committing, offer to push all local commits:
+
+```bash
+git log @{u}..HEAD --oneline 2>/dev/null
+```
+
+If there are unpushed commits, ask via `AskUser`:
+```
+There are N unpushed commits on this branch. Push now?
+```
+Options:
+- **Push now** — `git push` (or `git push -u origin $(git branch --show-current)` if no upstream)
+- **Skip** — I'll push manually later
+
+**Why push here:** Stages 1-2 commit status changes and implementation code but never push.
+If the user's local machine fails before Stage-3 or Stage-5, all work is lost. Offering a
+push here protects against local data loss.
+
 ---
 
 ## Rules
@@ -495,3 +614,13 @@ Only after explicit user approval:
 - Never go silent — if dev-cycle is running, inform the user of progress
 - **Next step suggestion:** After the final commit, inform the user: "Implementation
   complete. Next step: run `/optimus-cycle-impl-review-stage-3` to validate this task."
+
+### Dry-Run Mode
+If the user requests a dry-run (e.g., "dry-run impl T-003", "preview implementation"):
+- Run ALL discovery and context-loading phases (Phase 0) normally
+- Present the implementation plan and all questions (Step 0.9)
+- **Do NOT change task status** — skip Step 0.3 (status update)
+- **Do NOT execute implementation** — skip Phase 1 entirely
+- **Do NOT update checkboxes** — skip Phase 1.5
+- **Do NOT commit or push anything** — skip Phase 2 commits
+- Present a summary of: what would be implemented, estimated effort, identified risks

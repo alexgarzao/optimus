@@ -41,6 +41,7 @@ terminal display when available, otherwise use markdown tables.
 | **cycle-migrate** | `/optimus-cycle-migrate` | Setting up Optimus on a project for the first time. Converts existing task files to the standard `tasks.md` format. |
 | **cycle-report** | `/optimus-cycle-report` | Checking project status — shows progress, active/blocked/ready tasks, dependency graph, parallelization opportunities, and velocity metrics. Read-only. |
 | **cycle-crud** | `/optimus-cycle-crud` | Creating, editing, removing, reordering, cancelling, or reopening tasks. Managing versions. Any administrative task management. |
+| **cycle-conflict-resolve** | `/optimus-cycle-conflict-resolve` | Resolving merge conflicts in `tasks.md` caused by parallel task execution across feature branches. |
 | **help** | `/optimus-help` | This skill — discovering what's available. |
 
 ### Execution Skills (task lifecycle, stages 1-5)
@@ -58,7 +59,8 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 | **cycle-impl-stage-2** | `/optimus-cycle-impl-stage-2` | After spec validation — implements the task end-to-end with TDD, verification gates, and code review. |
 | **cycle-impl-review-stage-3** | `/optimus-cycle-impl-review-stage-3` | After implementation — validates code quality, spec compliance, and test coverage using parallel specialist agents. |
 | **cycle-pr-review-stage-4** | `/optimus-cycle-pr-review-stage-4` | (Optional) After impl review — orchestrates PR review collecting findings from Codacy, DeepSource, CodeRabbit, and human reviewers. Also works standalone without a task. |
-| **cycle-close-stage-5** | `/optimus-cycle-close-stage-5` | Final step — verifies all prerequisites (tests, lint, PR ready) and marks the task as DONE. Offers to merge the PR. |
+| **cycle-close-stage-5** | `/optimus-cycle-close-stage-5` | Final step — verifies all prerequisites (tests, lint, PR ready) and marks the task as DONE. Offers to merge the PR. Supports force-close for tasks done outside the pipeline. |
+| **cycle-batch** | `/optimus-cycle-batch` | Pipeline orchestrator — chains stages 1-5 for one or more tasks with user checkpoints between stages. Handles dependency ordering. |
 
 ### Review & Verification Skills (standalone, no task required)
 
@@ -86,6 +88,19 @@ on their situation:
 1. First: `/optimus-cycle-report` to see what's ready
 2. Then: `/optimus-cycle-spec-stage-1` to validate and create workspace
 3. Then: `/optimus-cycle-impl-stage-2` to implement
+4. Or use `/optimus-cycle-batch` to run all stages in sequence with checkpoints
+
+### "I want a quick status check"
+- Use `/optimus-cycle-report` with "quick status" — shows only current task and next-up
+
+### "I have a merge conflict in tasks.md"
+- Use `/optimus-cycle-conflict-resolve` to auto-resolve using most-advanced-status rule
+
+### "I completed a task outside the pipeline"
+- Use `/optimus-cycle-close-stage-5` with "force close T-XXX" to skip the checklist
+
+### "I want to preview what a stage would do"
+- Add "dry-run" to any stage command (e.g., "dry-run spec T-003", "preview review T-012")
 
 ### "I want to check project status"
 - Use `/optimus-cycle-report` for the full dashboard

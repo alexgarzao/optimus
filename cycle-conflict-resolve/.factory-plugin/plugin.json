@@ -1,0 +1,4 @@
+{
+  "name": "cycle-conflict-resolve",
+  "description": "Resolves merge conflicts in tasks.md caused by parallel task execution across feature branches."
+}

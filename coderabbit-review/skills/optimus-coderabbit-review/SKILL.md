@@ -353,21 +353,29 @@ make lint
 If lint fails, fix formatting issues and re-run.
 
 **Measure unit test coverage:**
-```bash
-go test -coverprofile=coverage-unit.out ./...
-go tool cover -func=coverage-unit.out | tail -1
-```
 
-**Untested functions:**
+Use the project's Makefile or `.optimus/config.json` commands. If neither exists, fall
+back to stack-specific commands:
+
 ```bash
-go tool cover -func=coverage-unit.out | grep "0.0%"
+# Preferred: Makefile target
+make test-coverage 2>/dev/null
+
+# Fallback: stack-specific
+# Go:     go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out | tail -1
+# Node:   npm test -- --coverage
+# Python: pytest --cov=. --cov-report=term
 ```
 
 **Threshold:** Unit tests: 85% minimum
 
-If coverage is below threshold, flag as a finding:
+If coverage measurement is available and below threshold, flag as a finding:
 - **HIGH** severity for unit test coverage below 85%
 - List untested business-logic functions as individual **HIGH** findings
+
+If coverage measurement is NOT available (no Makefile target, no recognized stack), mark
+as SKIP and note: "Coverage measurement not available — configure `make test-coverage`
+or `.optimus/config.json`."
 
 **NOTE:** Integration and E2E tests run only before push or when user invokes directly.
 
@@ -380,7 +388,7 @@ Dispatch an agent to identify missing test scenarios in the changed files.
 The agent receives:
 1. **Changed source files** — full content (non-test files only)
 2. **Test files for changed source** — full content
-3. **Coverage profile** — `go tool cover -func` output
+3. **Coverage profile** — coverage command output (if available)
 
 ```
 Goal: Identify missing test scenarios in files changed during this review.
@@ -450,7 +458,7 @@ Goal: Independent code review (convergence round X of 5)
 You are a FRESH reviewer with NO prior context. Review from scratch.
 
 Steps:
-  1. Re-run CodeRabbit CLI: coderabbit-cli review --base origin/main
+  1. Re-run CodeRabbit CLI: coderabbit review --prompt-only --base <base-branch> --plain
   2. Parse CodeRabbit output for findings
   3. Review all changed files for: code quality, business logic, security,
      test quality, spec compliance

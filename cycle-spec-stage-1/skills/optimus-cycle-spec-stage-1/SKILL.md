@@ -106,6 +106,9 @@ spec validation only to discover `gh` is not set up when they try to run Stage-2
    - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`)
    - All Depends values are `-` or comma-separated valid task IDs
    - No duplicate task IDs
+   - All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
+   - No circular dependencies in the dependency graph
+   - No unescaped pipe characters (`|`) in task titles
 
 If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
 
@@ -125,6 +128,48 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 4. **If no eligible tasks exist**, ask the user to provide a task ID
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
+
+### Step 0.0.2.1: Check Session State
+
+After identifying the task, check for a previous session:
+
+```bash
+SESSION_FILE=".optimus/session-${TASK_ID}.json"
+if [ -f "$SESSION_FILE" ]; then
+  cat "$SESSION_FILE"
+fi
+```
+
+- If the file exists AND the task's status in `tasks.md` matches the session's `status`:
+  - Present via `AskUser`:
+    ```
+    Previous session found:
+      Task: T-XXX — [title]
+      Stage: cycle-spec-stage-1
+      Last active: <time since updated_at>
+      Progress: <phase from session>
+    Resume this session?
+    ```
+    Options: Resume / Start fresh / Ignore
+  - If **Resume**: skip to the phase indicated in the session file
+  - If **Start fresh**: delete the session file and proceed normally
+  - If **Ignore**: proceed normally
+- If the file is stale (>24h) or the task status has changed → delete and proceed normally
+- If no file exists → proceed normally
+
+**On stage progress:** Update the session file at key phase transitions:
+```bash
+mkdir -p .optimus
+grep -q '.optimus/' .gitignore 2>/dev/null || echo '.optimus/' >> .gitignore
+cat > ".optimus/session-${TASK_ID}.json" << EOF
+{"task_id":"${TASK_ID}","stage":"cycle-spec-stage-1","status":"Validando Spec","branch":"$(git branch --show-current)","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","phase":"<current-phase>","notes":"<progress>"}
+EOF
+```
+
+**On stage completion** (after the convergence loop exits in Step 7): Delete the session file:
+```bash
+rm -f ".optimus/session-${TASK_ID}.json"
+```
 
 ### Step 0.0.3: Validate Task Status (DO NOT modify yet)
 
@@ -168,11 +213,11 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
    - **If re-execution** (status is already `Validando Spec`) OR the user specified the task ID explicitly:
      - Skip expanded confirmation (user already has context)
 
-**IMPORTANT:** Do NOT modify tasks.md yet. Status and Branch updates happen in Step 0.0.5 AFTER the workspace is created. This ensures the modifications happen in the correct working directory (worktree or feature branch).
+**IMPORTANT:** Do NOT modify tasks.md yet. Status and Branch updates happen in Step 0.0.6 AFTER the workspace is created. This ensures the modifications happen in the correct working directory (worktree or feature branch).
 
 **Anti-pulo:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`), refuse to proceed — the task has already passed this stage or was cancelled.
 
-### Step 0.0.3.5: Detect and Clean Abandoned Workspaces
+### Step 0.0.4: Detect and Clean Abandoned Workspaces
 
 **If re-execution** (status is `Validando Spec`), check for orphaned workspaces from
 a previous run that was abandoned:
@@ -202,7 +247,7 @@ a previous run that was abandoned:
       4. Commit: `chore(tasks): reset T-XXX — clean abandoned workspace`
       5. **STOP** — task is back to Pendente, user can re-run stage-1 when ready
 
-### Step 0.0.4: Create Workspace (if on default branch)
+### Step 0.0.5: Create Workspace (if on default branch)
 
 Check if currently on the default/main branch:
 
@@ -211,9 +256,20 @@ DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@
 CURRENT_BRANCH=$(git branch --show-current)
 ```
 
-**If already on a feature branch** (not default/main/master): proceed to Step 0.0.5 (re-execution or workspace already exists).
+**If already on a feature branch** (not default/main/master): proceed to Step 0.0.6 (update tasks.md).
 
-**If on default branch:** Create a workspace for the task. Ask the user via `AskUser`:
+**If on default branch:** First, check if the branch already exists from a previous interrupted run:
+
+```bash
+git branch --list "<tipo-prefix>/*<task-id>*"
+```
+
+If a matching branch is found but the task status is `Pendente` (Step 0.0.4 was skipped because
+status is not `Validando Spec`), offer the same options as Step 0.0.4: Reuse, Clean and recreate,
+or Clean and keep as Pendente. This handles the case where a previous run crashed AFTER creating
+the branch but BEFORE updating tasks.md.
+
+If no existing branch is found, create a workspace for the task. Ask the user via `AskUser`:
 
 "Task T-XXX needs a workspace. How should I create it?"
 
@@ -241,12 +297,12 @@ git checkout -b <tipo-prefix>/<task-id>-<keywords>
 
 **BLOCKING**: Do NOT proceed until the workspace is created.
 
-### Step 0.0.5: Update tasks.md (Status + Branch)
+### Step 0.0.6: Update tasks.md (Status + Branch)
 
 **IMPORTANT:** This step runs AFTER the workspace is created, so modifications happen in the feature branch's working directory — not on the default branch.
 
 1. Update the **Status** column to `Validando Spec` (if not already)
-2. Update the **Branch** column with the branch name created in Step 0.0.4 (if a new workspace was created)
+2. Update the **Branch** column with the branch name created in Step 0.0.5 (if a new workspace was created)
 3. Commit these changes immediately:
    ```bash
    git add tasks.md
@@ -262,6 +318,28 @@ git checkout -b <tipo-prefix>/<task-id>-<keywords>
    ```
 
 **Why commit immediately:** Stage-1 is analysis-only — it may not produce any other file changes. If no findings are fixed (all skipped), Step 6 would not commit, leaving tasks.md changes uncommitted and at risk of being lost. Committing now ensures the status change is persisted regardless of the analysis outcome.
+
+### Step 0.0.7: Check tasks.md Divergence (warning)
+
+Compare `tasks.md` on the current branch with the default branch to detect concurrent edits
+that could cause merge conflicts later:
+
+```bash
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
+git diff "origin/$DEFAULT_BRANCH" -- tasks.md 2>/dev/null | head -20
+```
+
+- If diff output is non-empty → the file has diverged. Warn via `AskUser`:
+  ```
+  tasks.md has diverged between your branch and <default_branch>.
+  This may cause merge conflicts when the PR is merged.
+  ```
+  Options:
+  - **Sync now** — run `git merge origin/<default_branch>` to incorporate changes
+  - **Continue without syncing** — I'll handle conflicts later
+- If diff output is empty → proceed silently (files are in sync)
+- **NOTE:** This is a warning, not a HARD BLOCK. The user may choose to continue.
 
 ### Step 0.1: Discover Project Structure
 
@@ -631,7 +709,7 @@ The solution: **rounds 2+ are executed by a fresh sub-agent** dispatched via `Ta
 
 **Fresh sub-agent dispatch (rounds 2+):**
 
-Dispatch a single sub-agent via `Task` tool (use any available ring review droid, e.g., `ring-default-code-reviewer`). The sub-agent receives:
+Dispatch a single sub-agent via `Task` tool (use `ring-default-business-logic-reviewer` for spec validation, as it focuses on domain correctness and requirements compliance rather than code-level concerns). The sub-agent receives:
 
 1. **All relevant files** — task spec, reference docs, tasks.md, project rules (re-read fresh, not from cache)
 2. **The findings ledger** — list of ALL findings from previous rounds with their resolutions (fixed/skipped/deferred), used ONLY for deduplication
@@ -697,7 +775,27 @@ Required output:
 - Status: CONVERGED / CONTINUING / HARD LIMIT REACHED
 ```
 
-**When the loop exits**, proceed to the Output Format section with the cumulative results from ALL rounds.
+**When the loop exits**, proceed to Step 8 (Push) and then the Output Format section with the cumulative results from ALL rounds.
+
+### Step 8: Push Commits (optional)
+
+After the convergence loop exits, offer to push all local commits:
+
+```bash
+git log @{u}..HEAD --oneline 2>/dev/null
+```
+
+If there are unpushed commits, ask via `AskUser`:
+```
+There are N unpushed commits on this branch. Push now?
+```
+Options:
+- **Push now** — `git push` (or `git push -u origin $(git branch --show-current)` if no upstream)
+- **Skip** — I'll push manually later
+
+**Why push here:** Stage-1 commits status changes but never pushes. If the user's local
+machine fails before Stage-2, the status change and any spec corrections are lost.
+Offering a push here protects against local data loss.
 
 ---
 
@@ -792,3 +890,13 @@ Components verified: [list each component checked]
 - **Next step suggestion:** After the convergence loop exits and the final report is presented,
   inform the user: "Spec validation complete. Next step: run `/optimus-cycle-impl-stage-2` to
   implement this task."
+
+### Dry-Run Mode
+If the user requests a dry-run (e.g., "dry-run spec T-003", "preview spec"):
+- Run ALL analysis phases (Phase 0, Validation Dimensions, Steps 1-3, Step 3.1) normally
+- Present ALL findings in Step 4 (interactive resolution)
+- **Do NOT change task status** — skip Step 0.0.6 (status update)
+- **Do NOT create workspaces** — skip Step 0.0.5 (workspace creation)
+- **Do NOT commit or push anything** — skip Steps 5, 6, 8
+- **Do NOT run convergence loop** — one pass is sufficient for preview
+- Present results as informational: "what would happen" without side effects

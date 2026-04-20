@@ -220,6 +220,19 @@ Present the full findings table for a bird's-eye view:
 
 ## Phase 4: Interactive Finding-by-Finding Resolution
 
+Findings are presented ONE AT A TIME, decisions collected for ALL, then fixes applied ALL AT ONCE in Phase 4.5.
+
+**=== MANDATORY — Progress Tracking (NEVER SKIP) ===**
+
+**BEFORE presenting the first finding, you MUST:**
+1. Count the TOTAL number of findings (N)
+2. Display the total prominently: `"### Total findings to review: N"`
+
+**For EVERY finding presented, you MUST:**
+1. Include `"Finding X of N"` in the header
+2. X starts at 1 and increments sequentially
+3. N is the total announced above and NEVER changes mid-review
+
 Present findings ONE AT A TIME, in severity order (CRITICAL first, LOW last).
 
 For EACH finding, present:
@@ -249,6 +262,12 @@ Include a recommendation when one option is clearly better.
 
 Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
 
+**CRITICAL — If the user responds with a question or disagreement instead of a decision:**
+- STOP immediately — do NOT continue to the next finding
+- Research the user's question/concern RIGHT NOW using `WebSearch`, codebase analysis, or both
+- Provide a thorough answer with evidence
+- Only AFTER the user is satisfied, ask for their decision again
+
 The user may:
 - Approve an option (e.g., "A", "B")
 - Request more context
@@ -258,9 +277,11 @@ The user may:
 
 ### 5. After Decision
 
-- **Approved:** Implement the fix immediately, confirm what changed in 1-2 sentences, move to next
-- **Discarded:** Record as discarded, move to next
-- **Deferred:** Add note in the appropriate location (backlog, tasks), move to next
+Record the decision internally. Do NOT apply any fix yet — all fixes are applied in Phase 4.5 after ALL decisions are collected.
+
+- **Approved:** Record finding ID, chosen option. Move to next finding.
+- **Discarded:** Record as discarded. Move to next finding.
+- **Deferred:** Record destination (backlog, tasks). Move to next finding.
 
 ### Optimization for Simple Findings
 
@@ -272,9 +293,131 @@ If there are 3+ findings of the same nature (e.g., "inconsistent import path in 
 
 ---
 
+## Phase 4.5: Batch Apply All Approved Fixes
+
+**IMPORTANT:** This phase runs ONCE, after ALL findings have been presented and ALL decisions
+collected in Phase 4. No fix is applied during Phase 4.
+
+### Step 4.5.1: Present Pre-Apply Summary
+
+```markdown
+## Fixes to Apply (X of Y findings)
+
+| # | Finding | Decision | Files Affected |
+|---|---------|----------|---------------|
+
+### Skipped (Z findings)
+| # | Finding | Reason |
+|---|---------|--------|
+
+### Deferred (W findings)
+| # | Finding | Destination |
+|---|---------|-------------|
+```
+
+### Step 4.5.2: Apply Fixes
+
+For each approved fix, apply the change. After each fix, confirm what changed in 1-2 sentences.
+
+For fixes that alter execution flow, conditions, or observable behavior, run unit tests
+after the fix to verify no regressions.
+
+### Step 4.5.3: Final Lint Check
+
+After ALL fixes are applied, run lint once (if available):
+```bash
+make lint
+```
+If lint fails, fix formatting issues.
+
+---
+
+## Phase 4.6: Convergence Loop (MANDATORY)
+
+After Phase 4.5, automatically re-validate using fresh sub-agents to eliminate session bias.
+
+**CRITICAL — Why Fresh Sub-Agents:**
+
+The primary failure mode of convergence loops is **false convergence**: the orchestrator
+re-runs analysis in the same session, with the same mental model, and declares "zero new
+findings" — not because there are none, but because it can't see past its own prior reasoning.
+
+The solution: **rounds 2+ are executed by a fresh sub-agent** dispatched via `Task` tool.
+The sub-agent has zero context from prior rounds, reads all files from scratch, and returns
+findings independently. The orchestrator then deduplicates against the cumulative ledger.
+
+**Round structure:**
+
+| Round | Who analyzes | How |
+|-------|-------------|-----|
+| **1** (initial) | Orchestrator (this agent) | Phase 1 (parallel agent dispatch) + Phase 2 (consolidate) — normal flow |
+| **2** (mandatory) | **Fresh sub-agent** via `Task` | Sub-agent reads all files from scratch, reviews independently, returns findings |
+| **3-5** | **Fresh sub-agent** via `Task` | Same as round 2 — only triggered if round 2+ found new findings |
+
+**Round 2 is MANDATORY.** The "zero new findings" stop condition can only trigger starting from round 3.
+
+**Fresh sub-agent dispatch (rounds 2+):**
+
+Dispatch a single sub-agent via `Task` tool (use `ring-default-code-reviewer` or any
+available ring review droid). The sub-agent receives:
+
+1. **All files in scope** — full content, re-read fresh from disk
+2. **Project rules and coding standards** — re-read fresh
+3. **The findings ledger** — for deduplication ONLY
+
+```
+Goal: Independent code review (convergence round X of 5)
+
+You are a FRESH reviewer with NO prior context. Review from scratch.
+
+Context:
+  - Review type: Initial / Final
+  - Files to review: [full content — re-read from disk]
+  - Project rules: [full content — re-read from files]
+
+Previously identified findings (for DEDUP ONLY):
+  [list of findings with IDs and descriptions]
+
+CRITICAL: Analyze INDEPENDENTLY. Do NOT skip areas because previous rounds
+"already covered" them. The orchestrator will dedup.
+
+Required output:
+  For each finding: severity, file, line, category, description, recommendation
+  If no issues: "PASS — all domains clean"
+```
+
+**Orchestrator deduplication after sub-agent returns:**
+
+1. Compare each sub-agent finding against the cumulative ledger (match by file + topic + description similarity)
+2. **Genuinely new findings** → add to ledger, present to user via Phase 4 (interactive resolution)
+3. **Duplicates** → discard silently
+
+**Loop rules:**
+- Max 5 rounds (initial = round 1)
+- **Round 2 is MANDATORY** — always dispatch a fresh sub-agent regardless of round 1 results
+- Show `"=== Re-validation round X of 5 (fresh sub-agent) ==="` at start
+- **If new findings exist:** Present them using Phase 4, fix via Phase 4.5, then loop again
+- **Stop conditions (any one triggers exit):**
+  1. Zero new findings — **only valid from round 3 onward** (round 2 is mandatory)
+  2. Round 5 completed (hard limit)
+  3. User explicitly requests to stop
+- **LOW severity findings are NOT a reason to stop** — ALL findings are presented to the user
+
+**Round summary (show after each round):**
+
+```markdown
+### Round X of 5 (fresh sub-agent) — Summary
+- New findings this round: N (C critical, H high, M medium, L low)
+- Cumulative: X total findings across Y rounds
+- Fixed: A | Skipped: B | Deferred: C
+- Status: CONVERGED / CONTINUING / HARD LIMIT REACHED
+```
+
+---
+
 ## Phase 5: Final Summary
 
-After processing all findings:
+After the convergence loop exits and all findings are processed:
 
 ```markdown
 ## Deep Review — Summary

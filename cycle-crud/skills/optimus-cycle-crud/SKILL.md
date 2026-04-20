@@ -100,8 +100,8 @@ For operations that do not use `gh` (create, edit, remove, reorder, version mana
    |---------|--------|-------------|
    | <user-provided> | Ativa | <ask user for description> |
 
-   | ID | Title | Tipo | Status | Depends | Priority | Version | Branch |
-   |----|-------|------|--------|---------|----------|---------|--------|
+   | ID | Title | Tipo | Status | Depends | Priority | Version | Branch | Estimate |
+   |----|-------|------|--------|---------|----------|---------|--------|----------|
    ```
    Then commit: `chore(tasks): initialize tasks.md`
 
@@ -156,15 +156,97 @@ If unclear, ask the user via `AskUser`:
 
 ### Step 1.0: Gather Task Information
 
-Ask the user for task details using `AskUser` (one question at a time or batch if info provided):
+**Option A: From template.** Ask the user if they want to use a template via `AskUser`:
+
+```
+Create from a template or from scratch?
+```
+Options:
+- **API Endpoint** — pre-fills Feature tipo, standard API acceptance criteria
+- **Bug Fix** — pre-fills Fix tipo, standard debugging acceptance criteria
+- **UI Component** — pre-fills Feature tipo, standard frontend acceptance criteria
+- **Chore/Infra** — pre-fills Chore tipo, standard infrastructure criteria
+- **Refactor** — pre-fills Refactor tipo, standard refactoring criteria
+- **Documentation** — pre-fills Docs tipo, standard documentation criteria
+- **Test** — pre-fills Test tipo, standard testing criteria
+- **From scratch** — manual entry (no template)
+
+#### Built-in Templates
+
+**API Endpoint template:**
+- Tipo: `Feature`, Priority: `Alta`
+- Acceptance criteria:
+  - [ ] Endpoint implemented with correct HTTP method and path
+  - [ ] Request validation (required fields, types, constraints)
+  - [ ] Success response format matches API contract
+  - [ ] Error responses with appropriate HTTP status codes
+  - [ ] Authentication/authorization enforced
+  - [ ] Unit tests for handler (happy path + error paths)
+  - [ ] Integration tests for repository layer
+  - [ ] Documentation updated (if applicable)
+
+**Bug Fix template:**
+- Tipo: `Fix`, Priority: `Alta`
+- Acceptance criteria:
+  - [ ] Root cause identified and documented
+  - [ ] Fix implemented with minimal scope
+  - [ ] Regression test added (reproduces the bug, passes after fix)
+  - [ ] No unrelated changes included
+  - [ ] Unit tests passing
+
+**UI Component template:**
+- Tipo: `Feature`, Priority: `Media`
+- Acceptance criteria:
+  - [ ] Component renders correctly in all states (empty, loading, error, success)
+  - [ ] Responsive design (mobile, tablet, desktop)
+  - [ ] Accessibility (keyboard navigation, ARIA labels, screen reader)
+  - [ ] Unit tests for component logic
+  - [ ] Visual matches design spec
+
+**Chore/Infra template:**
+- Tipo: `Chore`, Priority: `Media`
+- Acceptance criteria:
+  - [ ] Configuration/infrastructure change applied
+  - [ ] No regression in existing functionality
+  - [ ] Documentation updated (if applicable)
+
+**Refactor template:**
+- Tipo: `Refactor`, Priority: `Media`
+- Acceptance criteria:
+  - [ ] Refactoring applied without changing external behavior
+  - [ ] All existing tests still pass
+  - [ ] No new warnings introduced
+  - [ ] Code review confirms improvement in readability/maintainability
+
+**Documentation template:**
+- Tipo: `Docs`, Priority: `Baixa`
+- Acceptance criteria:
+  - [ ] Documentation written/updated
+  - [ ] Examples included (if applicable)
+  - [ ] Links and references verified
+  - [ ] Spelling and grammar checked
+
+**Test template:**
+- Tipo: `Test`, Priority: `Media`
+- Acceptance criteria:
+  - [ ] Test scenarios identified and documented
+  - [ ] Tests implemented and passing
+  - [ ] Coverage improved for target area
+  - [ ] No flaky tests introduced
+
+When a template is selected, pre-fill the Tipo, Priority, and acceptance criteria.
+The user can then modify any field before confirming.
+
+**Option B: From scratch.** Ask the user for task details using `AskUser` (one question at a time or batch if info provided):
 
 1. **Title** (required): Short description of the task
 2. **Tipo** (required): `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, or `Test`
 3. **Priority** (required): `Alta`, `Media`, or `Baixa`
-4. **Version** (required): Must match a version in the Versions table. Default: the version with Status `Ativa`
-5. **Dependencies** (optional): Comma-separated task IDs (e.g., `T-001, T-003`) or `-` for none
-6. **Objective** (required): What the task achieves (for the detail section)
-7. **Acceptance criteria** (required): Checklist items (for the detail section)
+4. **Estimate** (optional): Task size estimate (`S`, `M`, `L`, `XL`, `2h`, `1d`, etc.). Default: `-`
+5. **Version** (required): Must match a version in the Versions table. Default: the version with Status `Ativa`
+6. **Dependencies** (optional): Comma-separated task IDs (e.g., `T-001, T-003`) or `-` for none
+7. **Objective** (required): What the task achieves (for the detail section)
+8. **Acceptance criteria** (required): Checklist items (for the detail section)
 
 If the user provided some of these in the initial request, use them and ask only for missing fields.
 
@@ -199,6 +281,18 @@ Options:
 
 If no similar tasks are found, proceed silently.
 
+### Step 1.1.1: Validate Title Characters
+
+**HARD BLOCK:** The task title must not contain unescaped pipe characters (`|`) because
+tasks.md uses markdown tables where `|` is the column delimiter.
+
+If the title contains `|`:
+- Automatically replace `|` with `—` (em dash) or `\|` (escaped pipe)
+- Inform the user: "Title contained pipe characters which would break the tasks.md table format. Replaced with '—'."
+
+Also reject titles longer than 120 characters — longer titles break table formatting.
+If too long, ask the user to shorten it.
+
 ### Step 1.2: Generate Task ID
 
 1. Parse all existing task IDs from the table
@@ -216,7 +310,7 @@ If the user specified dependencies:
 
 1. Add a new row to the table:
    ```
-   | T-NNN | <title> | <tipo> | Pendente | <depends> | <priority> | <version> | - |
+   | T-NNN | <title> | <tipo> | Pendente | <depends> | <priority> | <version> | - | <estimate or -> |
    ```
 2. Add a detail section at the end of the file:
    ```markdown
@@ -259,6 +353,7 @@ Determine which field(s) to edit. Editable fields:
 | Priority | Yes | Must be `Alta`, `Media`, or `Baixa` |
 | Version | Yes | Must reference a version in the Versions table |
 | Depends | Yes | Must validate references and check circular deps |
+| Estimate | Yes | Free text (S, M, L, XL, 2h, 1d) or `-` |
 | Status | **No** | Status is managed ONLY by stage agents |
 | Branch | **No** | Branch is managed ONLY by stage-1 and close |
 | ID | **No** | IDs are immutable |
@@ -268,7 +363,9 @@ Determine which field(s) to edit. Editable fields:
 **HARD BLOCK:** If the user tries to change Status or Branch, refuse:
 ```
 Status is managed by the cycle stage agents (spec, impl, review, close).
-Use the appropriate stage agent to change task status.
+To change status manually, use the Advance or Demote operations in this skill
+(e.g., "advance T-XXX" or "demote T-XXX"). To reopen a completed or cancelled
+task, use "reopen T-XXX".
 ```
 
 ### Step 2.1: Apply Changes
@@ -435,6 +532,13 @@ Show the new table order.
      "$HOOKS_FILE" task-cancelled T-XXX "<old status>" "Cancelado" 2>/dev/null &
    fi
    ```
+5. **Fire `task-blocked` hook for affected dependents:** For each non-cancelled task that
+   depends on T-XXX (identified in Step 5.1.3), fire the `task-blocked` hook:
+   ```bash
+   if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+     "$HOOKS_FILE" task-blocked T-YYY "<dep-status>" "<dep-status>" "blocked by T-XXX (Cancelado)" 2>/dev/null &
+   fi
+   ```
 
 ### Step 5.3: Confirm
 
@@ -442,6 +546,24 @@ Show the new table order.
 Cancelled task T-XXX: <title>
   Previous status: <old status>
   Branch: <deleted / kept / none>
+```
+
+**Proactive dependent notification:** If any non-cancelled tasks depend on T-XXX
+(identified in Step 5.1.3), display them with resolution guidance:
+
+```markdown
+### Affected Dependents (now blocked)
+
+The following tasks depend on T-XXX and are now blocked:
+
+| ID | Title | Status | Resolution Options |
+|----|-------|--------|--------------------|
+| T-YYY | <title> | <status> | Remove dependency / Replace / Cancel |
+
+To resolve, run `/optimus-cycle-crud`:
+  - "edit T-YYY, remove T-XXX from dependencies"
+  - "edit T-YYY, replace T-XXX with T-ZZZ in dependencies"
+  - "cancel T-YYY"
 ```
 
 ## Phase 5.5: Reopen Task
@@ -454,13 +576,16 @@ Cancelled task T-XXX: <title>
 
 ### Step 5.5.1: Validate Reopen
 
-1. **If status is NOT `**DONE**`** → **STOP**: "Task T-XXX is not done (status: '<status>'). Only completed tasks can be reopened."
-2. **Determine target status based on workspace availability:**
-   - Read the **Branch** column for this task
-   - If Branch is NOT `-` AND the branch exists locally (`git branch --list "<branch>"`):
-     - Target status: `Em Andamento` (workspace exists, can resume implementation)
-   - If Branch is `-` OR the branch no longer exists:
-     - Target status: `Pendente` (workspace must be recreated via cycle-spec-stage-1)
+1. **If status is NOT `**DONE**` and NOT `Cancelado`** → **STOP**: "Task T-XXX is in status '<status>'. Only completed or cancelled tasks can be reopened."
+2. **Determine target status based on current status and workspace availability:**
+   - **If reopening from `Cancelado`:** Target status is always `Pendente` (task must restart
+     from the beginning via cycle-spec-stage-1).
+   - **If reopening from `**DONE**`:**
+     - Read the **Branch** column for this task
+     - If Branch is NOT `-` AND the branch exists locally (`git branch --list "<branch>"`):
+       - Target status: `Em Andamento` (workspace exists, can resume implementation)
+     - If Branch is `-` OR the branch no longer exists:
+       - Target status: `Pendente` (workspace must be recreated via cycle-spec-stage-1)
 3. Warn via `AskUser`:
    ```
    Task T-XXX is marked as **DONE**. Reopening will set it to '<target status>'.
@@ -468,15 +593,21 @@ Cancelled task T-XXX: <title>
    **T-XXX: [title]**
    **Version:** [version]
    **Branch:** [branch value or "deleted"]
+   **Previous status:** [**DONE** or Cancelado]
    **Target status:** <target status>
    **Reason:** <see below>
 
-   [If Pendente]: The original branch was deleted. After reopening, run
-   `/optimus-cycle-spec-stage-1` to create a new workspace, then
-   `/optimus-cycle-impl-stage-2` to resume implementation.
+   [If reopening from Cancelado]: Task was cancelled. After reopening, run
+   `/optimus-cycle-spec-stage-1` to create a workspace, then proceed through
+   the normal pipeline.
 
-   [If Em Andamento]: The branch still exists. After reopening, switch to it
-   and run `/optimus-cycle-impl-stage-2` to resume implementation.
+   [If reopening from DONE with Pendente target]: The original branch was deleted.
+   After reopening, run `/optimus-cycle-spec-stage-1` to create a new workspace,
+   then `/optimus-cycle-impl-stage-2` to resume implementation.
+
+   [If reopening from DONE with Em Andamento target]: The branch still exists.
+   After reopening, switch to it and run `/optimus-cycle-impl-stage-2` to resume
+   implementation.
 
    Why are you reopening this task? (This is logged for audit trail)
    ```
@@ -484,16 +615,19 @@ Cancelled task T-XXX: <title>
    - **Bug found** — implementation has a defect
    - **Incomplete** — not all acceptance criteria were actually met
    - **Requirements changed** — spec was updated after close
-   - **Cancel** — keep as DONE
+   - **Decision reversed** — cancellation decision was reconsidered (only for Cancelado)
+   - **Cancel** — keep current status
 
    **BLOCKING:** Do NOT proceed without user confirmation and justification.
 
 ### Step 5.5.2: Apply Reopen
 
-1. Update the **Status** column from `**DONE**` to the target status determined in Step 5.5.1:
-   - `Em Andamento` if the workspace/branch still exists
-   - `Pendente` if the workspace/branch was deleted (so cycle-spec-stage-1 can create a new one)
-2. Save and commit: `chore(tasks): reopen T-XXX — <reason> (status: <target status>)`
+1. Update the **Status** column to the target status determined in Step 5.5.1:
+   - From `**DONE**`: `Em Andamento` if workspace exists, `Pendente` if not
+   - From `Cancelado`: always `Pendente` (must restart from stage-1)
+2. If reopening from `Cancelado`, also clear the **Branch** column to `-` (any previous
+   branch is stale and should not be reused)
+3. Save and commit: `chore(tasks): reopen T-XXX — <reason> (from <previous status>, now <target status>)`
 3. **Invoke notification hooks (if present):**
    ```bash
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
@@ -506,7 +640,7 @@ Cancelled task T-XXX: <title>
 
 ```
 Reopened task T-XXX: <title>
-  Previous status: **DONE**
+  Previous status: [**DONE** | Cancelado]
   New status: <target status>
   Reason: <user's reason>
   Next step: [run /optimus-cycle-spec-stage-1 | switch to branch and run /optimus-cycle-impl-stage-2]

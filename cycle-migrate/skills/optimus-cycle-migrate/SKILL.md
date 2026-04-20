@@ -115,6 +115,7 @@ For each task found (regardless of format), extract:
 | **Priority** | YAML `priority:`, explicit mention, position in file | Default: `Media` |
 | **Version** | YAML `milestone:`, `version:`, labels, folder structure | Default: user-chosen version (see Step 0.5) |
 | **Branch** | YAML `branch:`, git branch naming convention | Default: `-` |
+| **Estimate** | YAML `estimate:`, `size:`, `effort:`, or explicit mention | Default: `-` |
 | **Objective** | H2/H3 "Objetivo", "Objective", "Description" section | Use title as fallback |
 | **Acceptance Criteria** | Checklist items, "Criteria", "Tasks" section | Leave empty, warn user |
 | **Subtasks** | Files in subtasks/ referencing this task, nested checklists | Merge into criteria |
@@ -234,7 +235,7 @@ Present what was found to the user:
 | 3 | ./subtasks/ | Subtask files | 5 files |
 
 ### Tasks Extracted
-| ID | Title | Tipo (inferred?) | Status (inferred?) | Dependencies | Version | Subtasks |
+| ID | Title | Tipo (inferred?) | Status (inferred?) | Dependencies | Version | Estimate | Subtasks |
 |----|-------|-------------------|-------------------|-------------|---------|----------|
 | T-001 | Setup auth module | Feature (default) | **DONE** (inferred from checkboxes) | - | MVP (inferred) | 3 subtasks |
 | T-002 | User registration | Feature (default) | Pendente (no status found) | T-001 (explicit) | MVP (default) | - |

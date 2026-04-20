@@ -87,7 +87,7 @@ Unified PR review orchestrator. Fetches PR metadata, collects ALL review comment
 
 ---
 
-## Phase -1: Verify GitHub CLI (HARD BLOCK)
+## Pre-Check: Verify GitHub CLI (HARD BLOCK)
 
 ```bash
 gh auth status 2>/dev/null
@@ -123,7 +123,10 @@ This skill operates in TWO modes:
 When the user references a task (e.g., "review PR for T-012") or a `tasks.md` exists with a task in status `Validando Impl` or `Revisando PR`:
 
 1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`.
-2. **Validate format:** First line must be `<!-- optimus:tasks-v1 -->`. If missing, **STOP** and suggest `/optimus-cycle-migrate`.
+2. **Validate format:** First line must be `<!-- optimus:tasks-v1 -->`. If missing, **STOP** and suggest `/optimus-cycle-migrate`. Additionally validate:
+   - All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
+   - No circular dependencies in the dependency graph
+   - No unescaped pipe characters (`|`) in task titles
 3. **Verify workspace (HARD BLOCK):** This agent modifies code. It MUST NOT run on the default/main branch.
    ```bash
    DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
@@ -148,6 +151,43 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
        ```
        Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
        ```
+5.1. **Check session state:** After confirming the task, check for a previous session:
+   ```bash
+   SESSION_FILE=".optimus/session-${TASK_ID}.json"
+   if [ -f "$SESSION_FILE" ]; then
+     cat "$SESSION_FILE"
+   fi
+   ```
+   - If the file exists AND the task's status in `tasks.md` matches the session's `status`:
+     - Present via `AskUser`:
+       ```
+       Previous session found:
+         Task: T-XXX — [title]
+         Stage: cycle-pr-review-stage-4
+         Last active: <time since updated_at>
+         Progress: <phase from session>
+       Resume this session?
+       ```
+       Options: Resume / Start fresh / Ignore
+     - If **Resume**: skip to the phase indicated in the session file
+     - If **Start fresh**: delete the session file and proceed normally
+     - If **Ignore**: proceed normally
+   - If the file is stale (>24h) or the task status has changed → delete and proceed normally
+   - If no file exists → proceed normally
+
+   **On stage progress:** Update the session file at key phase transitions:
+   ```bash
+   mkdir -p .optimus
+   grep -q '.optimus/' .gitignore 2>/dev/null || echo '.optimus/' >> .gitignore
+   cat > ".optimus/session-${TASK_ID}.json" << EOF
+   {"task_id":"${TASK_ID}","stage":"cycle-pr-review-stage-4","status":"Revisando PR","branch":"$(git branch --show-current)","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","phase":"<current-phase>","notes":"<progress>"}
+   EOF
+   ```
+
+   **On stage completion** (after Phase 9 final summary): Delete the session file:
+   ```bash
+   rm -f ".optimus/session-${TASK_ID}.json"
+   ```
 6. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Revisando PR`) AND the user did NOT specify the task ID explicitly (auto-detect):
      - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
@@ -183,7 +223,7 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
    ```
 
    **Why commit immediately:** If the session is interrupted or the agent crashes before any review fixes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of the review outcome.
-9. At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes cycle-close-stage-5 next.
+**NOTE:** At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes cycle-close-stage-5 next.
 
 ### Standalone Mode (no task)
 When no task is referenced and no `tasks.md` exists, or the user explicitly wants to review a PR without a task context:
@@ -292,14 +332,17 @@ You MUST collect BOTH types for each tool.
 
 #### Step 0.3.1: Fetch ALL Review Threads via GraphQL (PRIMARY SOURCE)
 
-This is the **single source of truth** for all review threads. It captures threads from ALL sources (native apps, workflows, humans, bots) in one query:
+This is the **single source of truth** for all review threads. It captures threads from ALL sources (native apps, workflows, humans, bots) in one query.
+
+**IMPORTANT — Pagination:** The query uses `first: 100` for threads and `first: 10` for comments. If the response's `pageInfo.hasNextPage` is `true`, you MUST fetch additional pages using cursor-based pagination (`after: "<endCursor>"`). PRs with 100+ review threads or threads with 10+ comments will silently lose data without pagination.
 
 ```bash
 gh api graphql -f query='
-  query {
+  query($cursor: String) {
     repository(owner: "<owner>", name: "<repo>") {
       pullRequest(number: <number>) {
-        reviewThreads(first: 100) {
+        reviewThreads(first: 100, after: $cursor) {
+          pageInfo { hasNextPage endCursor }
           nodes {
             id
             isResolved
@@ -321,6 +364,8 @@ gh api graphql -f query='
   }
 '
 ```
+
+If `pageInfo.hasNextPage` is `true`, re-run with `-f cursor="<endCursor>"` until all pages are fetched. Merge all nodes into a single list.
 
 For each thread, classify by the **first comment's author**:
 
@@ -959,10 +1004,19 @@ Record the suppression commit SHA for use in Phase 8.
 
 ### Step 6.6.1: Coverage Measurement (Unit Tests)
 
+Use the project's Makefile or `.optimus/config.json` commands:
+
 ```bash
-go test -coverprofile=coverage-unit.out ./...
-go tool cover -func=coverage-unit.out | tail -1
+# Preferred: Makefile target
+make test-coverage 2>/dev/null
+
+# Fallback: stack-specific
+# Go:     go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out | tail -1
+# Node:   npm test -- --coverage
+# Python: pytest --cov=. --cov-report=term
 ```
+
+If no coverage command is available, mark as SKIP.
 
 **Threshold:** Unit tests: 85% minimum
 
@@ -1183,6 +1237,11 @@ Update the thread map with fresh `isResolved` status. Skip threads already resol
 ### Step 8.3: Reply AND Resolve Each Thread (atomically)
 
 **CRITICAL:** For EACH thread, reply and resolve in the SAME step. Never batch "all replies first, then all resolves". The pattern is: reply → resolve → confirm → next thread.
+
+**Deduplication check (MANDATORY):** Before posting a reply to any thread, check if a reply
+from the agent already exists in that thread (e.g., from a previous interrupted run). If a
+reply with similar content already exists, skip posting and proceed directly to resolve.
+This prevents duplicate replies when re-executing after a crash between reply and resolve.
 
 **For each unresolved thread, use the correct reply method based on the source:**
 
@@ -1437,3 +1496,15 @@ gh api graphql -f query='
 - Do NOT auto-skip, auto-dismiss, or auto-resolve any finding regardless of severity
 - **Next step suggestion (Task Mode only):** After the final summary, inform the user:
   "PR review complete. Next step: run `/optimus-cycle-close-stage-5` to close this task."
+
+### Dry-Run Mode
+If the user requests a dry-run (e.g., "dry-run pr-review", "preview PR review"):
+- Fetch ALL PR data normally (Phase 0)
+- Dispatch ALL review agents (Phase 2) and consolidate (Phase 3)
+- Present ALL findings in Phase 5 (interactive resolution)
+- **Do NOT change task status** — skip status update in Task Mode
+- **Do NOT apply fixes** — skip Phase 6 (TDD cycle)
+- **Do NOT push anything** — skip Phase 7.1
+- **Do NOT respond to PR comments** — skip Phase 8
+- **Do NOT run convergence loop** — one pass for preview
+- Present results as informational with estimated fix effort

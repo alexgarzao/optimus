@@ -186,15 +186,40 @@ Present the full findings table for a bird's-eye view:
 
 ## Phase 3: Interactive Resolution (one by one)
 
+**=== MANDATORY — Progress Tracking (NEVER SKIP) ===**
+
+**BEFORE presenting the first finding, you MUST:**
+1. Count the TOTAL number of findings (N)
+2. Display the total prominently: `"### Total findings to review: N"`
+
+**For EVERY finding presented, you MUST:**
+1. Include `"Finding X of N"` in the header
+2. X starts at 1 and increments sequentially
+3. N is the total announced above and NEVER changes mid-review
+
 Present each finding individually, in severity order (CRITICAL first).
 
 For EACH finding:
 
-### 1. Show the Item
+### 1. Deep Research Before Presenting (MANDATORY)
 
-Display the number, type, severity, affected file(s), problem description, suggested fix, and tradeoff.
+**BEFORE presenting any finding to the user, research it silently.** Do not show the
+research process — present only the conclusions.
 
-### 2. Ask the User
+**Research checklist:**
+1. **Verify accuracy against codebase:** If the doc references code, check that the code matches
+2. **Check precedent in other docs:** Is this pattern used consistently elsewhere?
+3. **Assess implementation impact:** Would this error cause a developer to build the wrong thing?
+4. **Cross-reference sources:** Does the fix align with the project's source-of-truth hierarchy?
+5. **Evaluate completeness:** Is there additional context the user needs to make a decision?
+
+### 2. Show the Item
+
+`## Finding X of N — [TYPE] [SEVERITY] | [File(s)]`
+
+Display the type, severity, affected file(s), problem description, suggested fix, and tradeoff.
+
+### 3. Ask the User
 
 Use `AskUser` with contextual options:
 - Fix as suggested
@@ -203,7 +228,13 @@ Use `AskUser` with contextual options:
 
 **BLOCKING**: Do NOT advance to the next item until the user decides.
 
-### 3. Apply (if approved)
+**CRITICAL — If the user responds with a question or disagreement instead of a decision:**
+- STOP immediately — do NOT continue to the next finding
+- Research the user's concern RIGHT NOW
+- Provide a thorough answer with evidence
+- Only AFTER the user is satisfied, ask for their decision again
+
+### 4. Apply (if approved)
 
 If the user chose to fix:
 1. Apply the correction immediately

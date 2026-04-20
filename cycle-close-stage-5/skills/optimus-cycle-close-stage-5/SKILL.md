@@ -34,6 +34,14 @@ examples:
       2. Validate status
       3. Run checklist — uncommitted changes found
       4. Report what's missing, do NOT change status
+  - name: Force close (skip checklist)
+    invocation: "Force close T-012" or "force done T-012"
+    expected_flow: >
+      1. Confirm task ID
+      2. Validate status
+      3. Skip the 8-check checklist
+      4. Warn user about risks
+      5. Mark as DONE after explicit confirmation
 related:
   complementary:
     - optimus-cycle-pr-review-stage-4
@@ -84,6 +92,9 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
    - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`)
    - All Depends values are `-` or comma-separated valid task IDs
    - No duplicate task IDs
+   - All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
+   - No circular dependencies in the dependency graph
+   - No unescaped pipe characters (`|`) in task titles
 
 If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
 
@@ -117,6 +128,48 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 4. If none found, inform the user there are no tasks ready to close
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to close.
+
+### Step 0.0.2.1: Check Session State
+
+After identifying the task, check for a previous session:
+
+```bash
+SESSION_FILE=".optimus/session-${TASK_ID}.json"
+if [ -f "$SESSION_FILE" ]; then
+  cat "$SESSION_FILE"
+fi
+```
+
+- If the file exists AND the task's status in `tasks.md` matches the session's `status`:
+  - Present via `AskUser`:
+    ```
+    Previous session found:
+      Task: T-XXX — [title]
+      Stage: cycle-close-stage-5
+      Last active: <time since updated_at>
+      Progress: <phase from session>
+    Resume this session?
+    ```
+    Options: Resume / Start fresh / Ignore
+  - If **Resume**: skip to the phase indicated in the session file
+  - If **Start fresh**: delete the session file and proceed normally
+  - If **Ignore**: proceed normally
+- If the file is stale (>24h) or the task status has changed → delete and proceed normally
+- If no file exists → proceed normally
+
+**On stage progress:** Update the session file at key phase transitions:
+```bash
+mkdir -p .optimus
+grep -q '.optimus/' .gitignore 2>/dev/null || echo '.optimus/' >> .gitignore
+cat > ".optimus/session-${TASK_ID}.json" << EOF
+{"task_id":"${TASK_ID}","stage":"cycle-close-stage-5","status":"**DONE**","branch":"$(git branch --show-current)","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","phase":"<current-phase>","notes":"<progress>"}
+EOF
+```
+
+**On marking DONE** (Phase 2, after marking task as `**DONE**`): Delete the session file:
+```bash
+rm -f ".optimus/session-${TASK_ID}.json"
+```
 
 ### Step 0.1: Validate Task Status
 
@@ -280,7 +333,26 @@ If no PR was found in Check 3 (`PR_NUMBER` is empty), skip this check.
 
 ### Group B: Code Quality
 
+#### Load Verification Commands
+
+Before running checks 5-8, check for custom commands in `.optimus/config.json`:
+
+```bash
+CONFIG_FILE=".optimus/config.json"
+if [ -f "$CONFIG_FILE" ]; then
+  LINT_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands.lint // empty')
+  TEST_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands.test // empty')
+  TEST_INT_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands["test-integration"] // empty')
+  TEST_E2E_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands["test-e2e"] // empty')
+fi
+```
+
+- If config.json exists, use its commands for checks 5-8 (empty string means skip)
+- If config.json does not exist or a key is missing, fall back to Makefile targets
+
 #### Check 5: Lint Passes
+
+Run `$LINT_CMD` (from config.json) or `make lint` (fallback).
 
 ```bash
 make lint
@@ -297,6 +369,8 @@ The Makefile is responsible for knowing which tools apply to the stack.
 
 #### Check 6: Unit Tests Pass
 
+Run `$TEST_CMD` (from config.json) or `make test` (fallback).
+
 ```bash
 make test
 ```
@@ -305,6 +379,8 @@ make test
 - **FAIL:** Show first 20 lines of error output
 
 #### Check 7: Integration Tests Pass (if Makefile target exists)
+
+Run `$TEST_INT_CMD` (from config.json) or `make test-integration` (fallback).
 
 ```bash
 make test-integration
@@ -315,6 +391,8 @@ make test-integration
 - **SKIP:** `make test-integration` target does not exist
 
 #### Check 8: E2E Tests Pass (if Makefile target exists)
+
+Run `$TEST_E2E_CMD` (from config.json) or `make test-e2e` (fallback).
 
 ```bash
 make test-e2e
@@ -390,6 +468,16 @@ Task status remains unchanged. Fix the issues above and run cycle-close-stage-5 
 ```
 
 Do NOT change the status.
+
+**Warning when all quality checks are SKIP:** If checks 5-8 (lint, unit tests, integration
+tests, E2E tests) ALL resulted in SKIP (no Makefile targets found, no test commands detected),
+display a prominent warning:
+```
+WARNING: No quality verification was possible — no lint or test commands were found.
+The close checklist passed based on git state only (commits, push, PR).
+Consider running quality checks manually before closing, or configure a Makefile
+with `lint`, `test`, `test-integration`, `test-e2e` targets.
+```
 
 **Offer to fix actionable failures** via `AskUser`:
 
@@ -473,8 +561,21 @@ NOT be present on the default branch. Before closing, the agent MUST:
    git commit -m "chore(tasks): mark T-XXX as done"
    git push
    ```
-3. Then close the PR: `gh pr close <number>`
-4. Switch back to continue with branch cleanup
+3. **If the cherry-pick fails** (conflict because tasks.md diverged significantly):
+   - Do NOT abort silently. Inform the user:
+     ```
+     Cherry-pick of DONE status failed due to merge conflict in tasks.md.
+     tasks.md has diverged too much between this branch and <default_branch>.
+     ```
+   - Offer resolution via `AskUser`:
+     - **Resolve manually** — open tasks.md, show the conflict markers, let user fix
+     - **Apply status directly** — instead of cherry-pick, read the current tasks.md on
+       the default branch, find the row for T-XXX, update its Status to `**DONE**`, commit
+       and push. This bypasses the cherry-pick entirely.
+     - **Skip** — close the PR without preserving status. User will update tasks.md manually.
+   - **BLOCKING:** Do NOT proceed until the conflict is resolved or the user chooses to skip.
+4. Then close the PR: `gh pr close <number>`
+5. Switch back to continue with branch cleanup
 
 This ensures the DONE status is preserved on the default branch even when the PR is
 not merged. Without this, deleting the branch would lose the status change entirely.
@@ -564,6 +665,37 @@ git push
 - After marking as done, always commit and push the status change
 - **Next step suggestion:** After the cleanup summary, inform the user: "Task T-XXX is done.
   Run `/optimus-cycle-report` to see updated project status and what to work on next."
+
+### Force-Close Mode
+If the user requests a force close (e.g., "force close T-012", "force done T-012"):
+- **Skip most of the close checklist** (Phase 1) — skip checks 2-8
+- **ALWAYS run Check 1 (uncommitted changes)** even in force-close mode. If uncommitted
+  changes exist, warn via `AskUser`:
+  ```
+  WARNING: There are uncommitted changes on this branch. Force-closing and deleting
+  the branch would lose this work.
+  ```
+  Options:
+  - **Commit and continue** — `git add -A && git commit -m "chore: commit pending changes for T-XXX"`, then proceed
+  - **Continue without committing** — I accept the risk
+  - **Cancel force-close** — let me handle this first
+- **Require explicit confirmation** via `AskUser`:
+  ```
+  WARNING: Force-closing T-XXX will skip ALL verification checks:
+  - No lint, test, or CI validation
+  - No check for uncommitted/unpushed changes
+  - No PR state verification
+
+  This is intended for tasks completed outside the pipeline (manual implementation,
+  external tools, or when you've already verified everything yourself).
+
+  Type the task ID to confirm: T-XXX
+  ```
+  The user must type the exact task ID (not just "yes") to prevent accidental force-closes.
+- **If confirmed:** mark as `**DONE**`, commit, push, then run cleanup (Phase 3) normally
+- **Commit message:** `chore(tasks): force-close T-XXX as done (checklist skipped)`
+- **NOTE:** Force-close still validates task status (Step 0.1) and dependencies — it only
+  skips the quality/git checks in Phase 1
 
 ### Dry-Run Mode
 If the user requests a dry-run (e.g., "dry-run close T-012", "preview close"):

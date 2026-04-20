@@ -10,6 +10,7 @@ trigger: >
   - When user wants to know what can be parallelized
   - When user asks "what should I work on next?"
   - Before starting a new task (to see the full picture)
+  - When user asks "quick status", "what am I working on?", "current task"
 skip_when: >
   - No tasks.md exists in the project
   - User wants to run a specific stage agent (use that agent directly)
@@ -32,6 +33,12 @@ examples:
       1. Parse tasks.md
       2. Find tasks with status Pendente and all dependencies DONE
       3. Present ready-to-start tasks with priority ordering
+  - name: Quick status check
+    invocation: "Quick status" or "What am I working on?"
+    expected_flow: >
+      1. Parse tasks.md
+      2. Show only: current active task, its acceptance criteria progress, and next-up
+      3. Skip dependency graph, parallelization, velocity, and completed tasks
 related:
   complementary:
     - optimus-cycle-spec-stage-1
@@ -70,6 +77,40 @@ If missing, warn the user: "tasks.md exists but is not in optimus format (missin
 
 The report agent still ATTEMPTS to parse and display data even without the marker (best effort), but shows the warning prominently.
 
+### Step 0.1.2: Default Branch Warning
+
+Detect if the report is being run on the default branch:
+
+```bash
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+CURRENT_BRANCH=$(git branch --show-current)
+```
+
+If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`):
+
+1. **Check for active feature branches:** Scan the Branch column of all tasks in the table.
+   For each task where Branch is NOT `-`, check if that branch exists locally:
+   ```bash
+   git branch --list "<branch>"
+   ```
+2. **If any active branches are found**, display a warning at the TOP of the dashboard
+   (before any tables or metrics):
+   ```
+   WARNING: You are on the default branch (main). Status changes made on feature
+   branches are not visible here until their PRs are merged. The following tasks
+   may have a more advanced status on their feature branches:
+   ```
+   Then list each task with an active branch, marking it with `*`:
+   ```
+   - T-003 (Pendente*) — branch feat/t-003-user-auth exists locally
+   - T-005 (Pendente*) — branch fix/t-005-login-bug exists locally
+   ```
+3. **In all dashboard tables**, append `*` to the Status of any task that has an active
+   feature branch. Example: `Pendente*` instead of `Pendente`.
+4. **Add a legend** to the dashboard: `* = task has an active feature branch; status may be more advanced there`
+
+If NOT on the default branch, skip this step silently.
+
 ### Step 0.2: Parse the Tasks Table
 
 Read `tasks.md` and extract the markdown table. Expected columns:
@@ -84,6 +125,7 @@ Read `tasks.md` and extract the markdown table. Expected columns:
 | Priority | Alta, Media, or Baixa |
 | Version | Version/milestone this task belongs to |
 | Branch | Git branch name, or `-` |
+| Estimate | Task size estimate (S, M, L, XL, etc.), or `-` |
 
 ### Step 0.2.1: Parse Versions Table
 
@@ -100,6 +142,28 @@ For each task with dependencies:
 1. Verify all referenced task IDs exist in the table
 2. Check for circular dependencies (A→B→A)
 3. If invalid dependencies found, report them as warnings in the dashboard
+
+---
+
+## Phase 0.5: Quick Status Mode Detection
+
+If the user's invocation matches quick status triggers ("quick status", "what am I working on?",
+"current task", "status rápido"):
+
+1. Parse tasks.md (Phase 0 still runs fully)
+2. Find tasks with status other than `Pendente`, `**DONE**`, and `Cancelado` (active tasks)
+3. For each active task, read its detail section and count checked vs total acceptance criteria
+4. Present ONLY:
+
+```
+Quick Status:
+  Active: T-XXX — [title] (Em Andamento) — 3/5 criteria done
+  Next up: T-YYY — [title] (Pendente, ready to start)
+```
+
+5. **STOP here** — do NOT run Phases 1-6 (dependency graph, parallelization, velocity, etc.)
+
+If the invocation does NOT match quick status triggers, proceed to Phase 1 normally.
 
 ---
 
@@ -292,6 +356,25 @@ Progress: ████████░░░░░░░░░░░░ XX% (done
 └────────┴──────────────────────────────────────────┘
 ```
 
+### Estimate Summary
+
+If any tasks have Estimate values (non-`-`), show an estimate breakdown by status:
+
+```
+┌─────────────────────────────────────────────────┐
+│ ESTIMATE BREAKDOWN                               │
+├──────────┬────────────────────────────────────────┤
+│ Status   │ Estimates                              │
+├──────────┼────────────────────────────────────────┤
+│ Active   │ 2S, 1M, 1L                            │
+│ Ready    │ 1M, 2L                                 │
+│ Blocked  │ 1S, 1XL                                │
+│ Done     │ 3S, 2M, 1L                            │
+└──────────┴────────────────────────────────────────┘
+```
+
+If no tasks have Estimate values, skip this section.
+
 ### json-render Format
 
 Also generate a `<json-render>` dashboard with these components:
@@ -315,13 +398,24 @@ data that a static snapshot (Phase 4) cannot show.
 
 ### Step 4.5.1: Compute Task Completion History
 
-Search git log for task completion commits:
+Search git log for task completion commits using multiple patterns to catch various
+commit message formats:
 
 ```bash
-git log --oneline --all --grep="mark T-" --grep="as done" --all-match --since="4 weeks ago" --format="%H %ai %s"
+# Pattern 1: Standard optimus format
+git log --oneline --all --grep="chore(tasks): mark T-" --since="4 weeks ago" --format="%H %ai %s"
+
+# Pattern 2: Keyword-based (mark + done)
+git log --oneline --all --grep="mark T-" --grep="done" --all-match --since="4 weeks ago" --format="%H %ai %s"
+
+# Pattern 3: Force-close format
+git log --oneline --all --grep="force-close T-" --since="4 weeks ago" --format="%H %ai %s"
+
+# Pattern 4: Status contains DONE
+git log --oneline --all --grep="T-[0-9]" --grep="DONE" --all-match --since="4 weeks ago" --format="%H %ai %s"
 ```
 
-Also search for: `chore(tasks): mark T-` patterns in commit messages.
+Merge and deduplicate results from all patterns (same commit SHA = same event).
 
 For each completed task found, extract: task ID, completion date.
 
@@ -405,6 +499,44 @@ Cancelled tasks do NOT satisfy dependencies — T-YYY cannot start.
 
 This section is shown for EACH blocked-by-cancelled case, not just as a generic warning.
 
+### Workspace Health
+
+Check for orphaned or stale worktrees by listing all git worktrees and cross-referencing
+with task status:
+
+```bash
+git worktree list
+```
+
+For each worktree (excluding the main repository entry):
+1. Extract the branch name from the worktree entry
+2. Find the corresponding task in tasks.md (match by Branch column)
+3. Check the task's Status
+
+Flag worktrees as potentially orphaned if:
+- The task is `**DONE**` — worktree should have been cleaned up by cycle-close-stage-5
+- The task is `Cancelado` — worktree should have been cleaned up by cycle-crud cancel
+- The task is `Pendente` — worktree exists but task was never started or was reset
+- No matching task found — worktree has no corresponding task in tasks.md
+
+```
+┌─────────────────────────────────────────────────┐
+│ WORKSPACE HEALTH                                 │
+├─────────────────────────────────────────────────┤
+│ Active worktrees: N                              │
+│                                                  │
+│ ⚠ Potentially orphaned:                         │
+│   /path/to/wt-t-003  →  T-003 (**DONE**)        │
+│   /path/to/wt-t-007  →  T-007 (Cancelado)       │
+│   /path/to/wt-unknown →  no matching task        │
+│                                                  │
+│ To clean up, run:                                │
+│   git worktree remove <path>                     │
+└─────────────────────────────────────────────────┘
+```
+
+If no orphaned worktrees are found, show: "Workspace Health: OK — no orphaned worktrees."
+
 ### Recommendations
 - Suggest which ready tasks to start next (highest priority first)
 - If multiple tasks are parallelizable, mention it explicitly
@@ -412,9 +544,48 @@ This section is shown for EACH blocked-by-cancelled case, not just as a generic 
 
 ---
 
+## Phase 6: Export (optional)
+
+If the user requests an export (e.g., "export report", "save report", "report to file"):
+
+### Step 6.1: Generate Markdown Export
+
+Compile the full dashboard into a single markdown file including all sections:
+- Project status summary (progress bar, counts)
+- Version progress table
+- Active / Ready / Blocked tables
+- Dependency graph (ASCII art)
+- Parallelization opportunities
+- Velocity metrics
+- Workspace health
+- Warnings and recommendations
+
+### Step 6.2: Write File
+
+```bash
+mkdir -p .optimus
+```
+
+Write to `.optimus/report-<date>.md`:
+
+```markdown
+# Project Status Report — <date>
+
+Generated by optimus-cycle-report
+
+[full dashboard content]
+```
+
+Inform the user: "Report exported to `.optimus/report-<date>.md`"
+
+**NOTE:** This is the ONLY case where cycle-report writes a file. The export file is
+an artifact in `.optimus/` (gitignored), not a project file.
+
+---
+
 ## Rules
 
-- **NEVER modify any files** — this agent is strictly read-only
+- **NEVER modify project files** — this agent is strictly read-only (except export to `.optimus/`)
 - **NEVER change task status** — only report current state
 - **NEVER invoke other stage agents** — only recommend
 - Present the full dashboard even if there's only 1 task

@@ -121,52 +121,63 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
    - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`)
    - All Depends values are `-` or comma-separated valid task IDs
    - No duplicate task IDs
+   - All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
+   - No circular dependencies in the dependency graph
+   - No unescaped pipe characters (`|`) in task titles
 
 If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
 
-3. **Verify workspace (HARD BLOCK):** This agent modifies code. It MUST NOT run on the default/main branch.
-   ```bash
-   DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-   CURRENT_BRANCH=$(git branch --show-current)
-   ```
-   - If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`) → **STOP**:
-     ```
-     Cannot run cycle-impl-review-stage-3 on the default branch (<branch>).
-     Switch to the task's feature branch first.
-     ```
+### Step 0.0.1.2: Verify Workspace (HARD BLOCK)
 
-4. **Check tasks.md divergence (warning):** Compare `tasks.md` on the current branch with the default branch to detect concurrent edits that could cause merge conflicts later:
-   ```bash
-   git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
-   git diff "origin/$DEFAULT_BRANCH" -- tasks.md 2>/dev/null | head -20
-   ```
-   - If diff output is non-empty → the file has diverged. Warn via `AskUser`:
-     ```
-     tasks.md has diverged between your branch and <default_branch>.
-     This may cause merge conflicts when the PR is merged.
-     ```
-     Options:
-     - **Sync now** — run `git merge origin/<default_branch>` to incorporate changes
-     - **Continue without syncing** — I'll handle conflicts later
-   - If diff output is empty → proceed silently (files are in sync)
-   - **NOTE:** This is a warning, not a HARD BLOCK. The user may choose to continue.
+This agent modifies code. It MUST NOT run on the default/main branch.
+```bash
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+CURRENT_BRANCH=$(git branch --show-current)
+```
+- If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`) → **STOP**:
+  ```
+  Cannot run cycle-impl-review-stage-3 on the default branch (<branch>).
+  Switch to the task's feature branch first.
+  ```
 
-5. **Branch-task cross-validation:** After confirming the task ID (Step 0.0.2), check that the current branch matches the **Branch** column in `tasks.md` for this task:
-   - Read the Branch column for the confirmed task ID
-   - If Branch is `-` or empty → warn: "tasks.md shows no branch for T-XXX, but you are on `<current>`. Continue anyway?" (via `AskUser`)
-   - If Branch has a value AND it does not match `CURRENT_BRANCH` → warn: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?" (via `AskUser`)
-   - If Branch matches `CURRENT_BRANCH` → proceed silently
+### Step 0.0.1.3: Check tasks.md Divergence (warning)
 
-6. **Validate PR title (if PR exists):** Check if a PR already exists for the current branch:
-   ```bash
-   gh pr view --json number,title --jq '{number, title}' 2>/dev/null
-   ```
-   If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
-   - Regex: `^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$`
-   - Cross-check the type against the task's **Tipo** column (Feature→`feat`, Fix→`fix`, etc.)
-   - **If title is invalid:** warn via `AskUser`: "PR #N title `<current>` does not follow Conventional Commits. Suggested: `<corrected>`. Fix now with `gh pr edit <number> --title \"<corrected>\"`?"
-   - **If title is valid:** proceed silently
-   - If no PR exists, skip.
+Compare `tasks.md` on the current branch with the default branch to detect concurrent edits that could cause merge conflicts later:
+```bash
+git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
+git diff "origin/$DEFAULT_BRANCH" -- tasks.md 2>/dev/null | head -20
+```
+- If diff output is non-empty → the file has diverged. Warn via `AskUser`:
+  ```
+  tasks.md has diverged between your branch and <default_branch>.
+  This may cause merge conflicts when the PR is merged.
+  ```
+  Options:
+  - **Sync now** — run `git merge origin/<default_branch>` to incorporate changes
+  - **Continue without syncing** — I'll handle conflicts later
+- If diff output is empty → proceed silently (files are in sync)
+- **NOTE:** This is a warning, not a HARD BLOCK. The user may choose to continue.
+
+### Step 0.0.1.4: Branch-Task Cross-Validation
+
+After confirming the task ID (Step 0.0.2), check that the current branch matches the **Branch** column in `tasks.md` for this task:
+- Read the Branch column for the confirmed task ID
+- If Branch is `-` or empty → warn: "tasks.md shows no branch for T-XXX, but you are on `<current>`. Continue anyway?" (via `AskUser`)
+- If Branch has a value AND it does not match `CURRENT_BRANCH` → warn: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?" (via `AskUser`)
+- If Branch matches `CURRENT_BRANCH` → proceed silently
+
+### Step 0.0.1.5: Validate PR Title (if PR exists)
+
+Check if a PR already exists for the current branch:
+```bash
+gh pr view --json number,title --jq '{number, title}' 2>/dev/null
+```
+If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
+- Regex: `^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$`
+- Cross-check the type against the task's **Tipo** column (Feature→`feat`, Fix→`fix`, etc.)
+- **If title is invalid:** warn via `AskUser`: "PR #N title `<current>` does not follow Conventional Commits. Suggested: `<corrected>`. Fix now with `gh pr edit <number> --title \"<corrected>\"`?"
+- **If title is valid:** proceed silently
+- If no PR exists, skip.
 
 ### Step 0.0.2: Identify Task to Validate
 
@@ -181,6 +192,48 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 4. **If no task can be identified**, ask the user to provide a task ID
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
+
+### Step 0.0.2.1: Check Session State
+
+After identifying the task, check for a previous session:
+
+```bash
+SESSION_FILE=".optimus/session-${TASK_ID}.json"
+if [ -f "$SESSION_FILE" ]; then
+  cat "$SESSION_FILE"
+fi
+```
+
+- If the file exists AND the task's status in `tasks.md` matches the session's `status`:
+  - Present via `AskUser`:
+    ```
+    Previous session found:
+      Task: T-XXX — [title]
+      Stage: cycle-impl-review-stage-3
+      Last active: <time since updated_at>
+      Progress: <phase from session>
+    Resume this session?
+    ```
+    Options: Resume / Start fresh / Ignore
+  - If **Resume**: skip to the phase indicated in the session file
+  - If **Start fresh**: delete the session file and proceed normally
+  - If **Ignore**: proceed normally
+- If the file is stale (>24h) or the task status has changed → delete and proceed normally
+- If no file exists → proceed normally
+
+**On stage progress:** Update the session file at key phase transitions:
+```bash
+mkdir -p .optimus
+grep -q '.optimus/' .gitignore 2>/dev/null || echo '.optimus/' >> .gitignore
+cat > ".optimus/session-${TASK_ID}.json" << EOF
+{"task_id":"${TASK_ID}","stage":"cycle-impl-review-stage-3","status":"Validando Impl","branch":"$(git branch --show-current)","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","phase":"<current-phase>","notes":"<progress>"}
+EOF
+```
+
+**On stage completion** (after Phase 7 validation summary): Delete the session file:
+```bash
+rm -f ".optimus/session-${TASK_ID}.json"
+```
 
 ### Step 0.0.3: Validate and Update Task Status
 
@@ -307,6 +360,8 @@ This determines which specialist agents to dispatch in Phase 1.
 
 Run ALL applicable checks simultaneously. Capture stdout, stderr, exit code for each.
 
+Check `.optimus/config.json` for custom commands first. If `commands.lint` exists, use it. If missing, fall back to auto-detection below.
+
 | # | Check | Command (discover from project) | What it detects |
 |---|-------|---------------------------------|-----------------|
 | 1 | Lint | `make lint` or `golangci-lint run` or `npm run lint` | Linter rule violations |
@@ -329,6 +384,8 @@ Skip checks whose commands don't exist in the project (e.g., skip `go vet` in a 
 **HARD BLOCK:** Unit tests must pass before proceeding to agent dispatch. This establishes
 the baseline — if unit tests are already failing, review cannot proceed.
 
+Check `.optimus/config.json` for custom `commands.test` first. Fall back to `make test` if not configured.
+
 ```bash
 make test                    # Unit tests — MANDATORY
 ```
@@ -338,12 +395,20 @@ make test                    # Unit tests — MANDATORY
 2. Ask the user via `AskUser`: "Unit tests are failing. Fix before continuing, or skip cycle-impl-review-stage-3?"
 3. Do NOT proceed to Phase 1 until unit tests pass or user explicitly chooses to skip
 
-**If unit tests pass:** collect coverage data for analysis:
+**If unit tests pass:** collect coverage data for analysis using the project's Makefile
+or `.optimus/config.json` commands:
 
 ```bash
-go test -coverprofile=coverage-unit.out ./...
-# or: npm test -- --coverage
+# Preferred: Makefile target
+make test-coverage 2>/dev/null
+
+# Fallback: stack-specific
+# Go:     go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out
+# Node:   npm test -- --coverage
+# Python: pytest --cov=. --cov-report=term
 ```
+
+If no coverage command is available, mark as SKIP.
 
 **NOTE:** Integration and E2E tests are NOT run here. They run only in Phase 6.5
 (after convergence loop, before summary) or when the user invokes them directly.
@@ -351,16 +416,10 @@ This avoids slow test suites blocking the review loop.
 
 ### Step 0.5.3: Analyze Coverage
 
-```bash
-# Overall coverage
-go tool cover -func=coverage-unit.out | tail -1
-
-# Packages with low coverage (sorted)
-go tool cover -func=coverage-unit.out | grep -v "total:" | awk '{print $NF, $1}' | sort -n | head -20
-
-# Untested functions (0% coverage)
-go tool cover -func=coverage-unit.out | grep "0.0%"
-```
+Parse the coverage output (format varies by stack) to identify:
+- Overall coverage percentage
+- Packages/files with lowest coverage (bottom 20)
+- Functions/methods with 0% coverage (untested)
 
 Create findings for coverage issues:
 - **HIGH**: Business logic functions with 0% coverage
@@ -372,7 +431,7 @@ Create findings for coverage issues:
 
 Dispatch a test gap analyzer via `Task` tool (use `ring-default-ring-test-reviewer`).
 
-The agent receives: source files, test files, and `go tool cover -func` output.
+The agent receives: source files, test files, and coverage output (if available).
 
 ```
 Goal: Cross-reference implemented tests with source code to find missing scenarios.
@@ -711,16 +770,24 @@ to fix, revert the offending fix and ask the user.
 After the final verification passes, measure unit test coverage:
 
 **Unit test coverage:**
+
+Use the project's Makefile or `.optimus/config.json` commands:
 ```bash
-go test -coverprofile=coverage-unit.out ./...
-go tool cover -func=coverage-unit.out | tail -1
+# Preferred: Makefile target
+make test-coverage 2>/dev/null
+
+# Fallback: stack-specific
+# Go:     go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out | tail -1
+# Node:   npm test -- --coverage
+# Python: pytest --cov=. --cov-report=term
 ```
 
+If no coverage command is available, mark as SKIP.
+
 **Coverage gap analysis:**
-```bash
-# Untested functions (0% coverage) — potential gaps
-go tool cover -func=coverage-unit.out | grep "0.0%"
-```
+
+Parse the coverage output to identify untested functions/methods (0% coverage).
+The format depends on the stack — use the output from the coverage command above.
 
 **Threshold:** Unit tests: 85% minimum
 
@@ -741,7 +808,7 @@ The agent receives:
 1. **Task spec** — acceptance criteria, testing strategy, test IDs
 2. **Source files changed by this task** — full content
 3. **Test files for changed source** — full content
-4. **Coverage profile** — `go tool cover -func` output
+4. **Coverage profile** — coverage command output (if available)
 
 ```
 Goal: Cross-reference task spec with implemented tests to find scenario gaps.
@@ -750,7 +817,7 @@ Context:
   - Task spec: [paste task section with acceptance criteria and test IDs]
   - Source files: [full content]
   - Test files: [full content]
-  - Coverage profile: [go tool cover -func output]
+  - Coverage profile: [coverage command output]
 
 Your job:
   1. For each acceptance criterion in the task spec, verify:
