@@ -219,7 +219,7 @@ Present the full dashboard using the format below. Use the `<json-render>` forma
 ╔══════════════════════════════════════════════════════╗
 ║                  PROJECT STATUS                      ║
 ╠══════════════════════════════════════════════════════╣
-║  Total: NN  │  Done: NN  │  Active: NN  │  Pending: NN  ║
+║  Total: NN  │  Done: NN  │  Active: NN  │  Pending: NN  │  Cancelled: NN  ║
 ╚══════════════════════════════════════════════════════╝
 
 Progress: ████████░░░░░░░░░░░░ XX% (done/total)
@@ -283,6 +283,12 @@ Progress: ████████░░░░░░░░░░░░ XX% (done
 │ T-001  │ Setup auth module                        │
 │ T-002  │ User registration API                    │
 └────────┴──────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────┐
+│ CANCELLED                                        │
+├────────┬──────────────────────────────────────────┤
+│ T-011  │ Legacy migration script                  │
+└────────┴──────────────────────────────────────────┘
 ```
 
 ### json-render Format
@@ -290,7 +296,7 @@ Progress: ████████░░░░░░░░░░░░ XX% (done
 Also generate a `<json-render>` dashboard with these components:
 - **Heading**: "Project Status"
 - **ProgressBar**: overall completion (done/total)
-- **Metric**: Total, Done, Active, Pending counts
+- **Metric**: Total, Done, Active, Pending, Cancelled counts
 - **Table**: Active tasks (columns: ID, Title, Version, Status)
 - **Table**: Ready to start (columns: ID, Title, Version, Priority)
 - **Table**: Blocked (columns: ID, Title, Version, Blocked by)

@@ -353,13 +353,26 @@ Show the new table order.
    Cancel anyway?
    ```
    **BLOCKING:** Do NOT proceed without user confirmation.
-4. **If task has a branch** (Branch column is not `-`), ask via `AskUser`:
-   ```
-   Task T-XXX has branch '<branch>'. What should I do with it?
-   ```
-   Options:
-   - **Delete local and remote** — clean up the branch
-   - **Keep** — leave the branch as is
+4. **If task has a branch** (Branch column is not `-`):
+   a. **Check for open PR:**
+      ```bash
+      gh pr list --head "<branch>" --json number,state,url --jq '.[] | select(.state == "OPEN")'
+      ```
+      If an open PR exists, ask via `AskUser`:
+      ```
+      Task T-XXX has an open PR (#N). What should I do with it?
+      ```
+      Options:
+      - **Close PR without merging** — `gh pr close <number>`
+      - **Keep PR open** — leave it for manual handling
+   b. **Ask about branch cleanup** via `AskUser`:
+      ```
+      Task T-XXX has branch '<branch>'. What should I do with it?
+      ```
+      Options:
+      - **Delete local and remote** — clean up the branch
+      - **Keep** — leave the branch as is
+      **NOTE:** If an open PR was kept in step (a), skip branch deletion — deleting the branch would orphan the PR.
 5. **If task has a worktree**, offer to remove it (same logic as cycle-close-stage-5 Step 3.1)
 
 ### Step 5.2: Apply Cancellation
@@ -427,12 +440,20 @@ Editable fields:
   "Version '<existing>' is currently Ativa. Change it to Próxima and set '<name>' as Ativa?"
 - If setting to `Próxima` and another version is already `Próxima` → ask via `AskUser`:
   "Version '<existing>' is currently Próxima. Change it to Planejada and set '<name>' as Próxima?"
-- If setting to `Concluída` → check if ALL tasks in this version have status `**DONE**`:
-  - If all DONE → proceed
-  - If any are NOT DONE → warn via `AskUser`:
-    "Version '<name>' has N tasks that are not DONE:
+- If setting to `Concluída` → check tasks in this version:
+  - Classify non-DONE tasks into two groups:
+    - **In progress:** tasks with status other than `**DONE**` or `Cancelado` (e.g., Pendente, Em Andamento, etc.)
+    - **Cancelled:** tasks with status `Cancelado`
+  - If no in-progress AND no cancelled → proceed (all DONE)
+  - If no in-progress BUT some cancelled → softer warning via `AskUser`:
+    "Version '<name>' has all active tasks DONE, but N tasks were cancelled:
+    - T-XXX: <title> (Cancelado)
+    Mark as Concluída anyway?"
+  - If any in-progress → stronger warning via `AskUser`:
+    "Version '<name>' has N tasks still in progress:
     - T-XXX: <title> (Status: <status>)
     - T-YYY: <title> (Status: <status>)
+    [And M cancelled tasks, if any]
     Mark as Concluída anyway?"
   - **BLOCKING:** Do NOT proceed without user confirmation
 
