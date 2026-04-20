@@ -138,6 +138,23 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 
    **NOTE:** cycle-close-stage-5 does not support re-execution (status always changes to `**DONE**`), so the re-execution skip does not apply here.
 
+### Step 0.2: Push Unpushed Commits (if any)
+
+Previous stages (1-4) commit tasks.md status changes immediately but do not push. Before running the close checklist, ensure the feature branch is in sync with remote:
+
+```bash
+git log @{u}..HEAD --oneline 2>/dev/null
+```
+
+If there are unpushed commits:
+1. Push them: `git push`
+2. If push fails (e.g., no upstream set), set upstream first:
+   ```bash
+   git push -u origin $(git branch --show-current)
+   ```
+
+**Why push now:** The close checklist (Check 2) verifies "no unpushed commits". Stages 2-4 commit status changes eagerly to prevent data loss on session interruption, but they don't push. Without this step, Check 2 would always fail with false positives from those legitimate status commits.
+
 ---
 
 ## Phase 1: Close Checklist
