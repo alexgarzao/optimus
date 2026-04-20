@@ -159,7 +159,7 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 5. Update the Status column to `Em Andamento` (if not already)
 6. Commit the status change immediately:
    ```bash
-   git add tasks.md
+   git add .optimus/tasks.md
    git commit -m "chore(tasks): set T-XXX status to Em Andamento"
    ```
 7. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
@@ -406,7 +406,7 @@ about mismatched checkbox state.
    - If NOT satisfied → leave as `- [ ]` and warn the user
 3. Commit the updated checkboxes:
    ```bash
-   git add tasks.md
+   git add .optimus/tasks.md
    git commit -m "chore(tasks): update acceptance criteria for T-XXX"
    ```
 

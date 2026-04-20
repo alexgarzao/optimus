@@ -132,12 +132,23 @@ source of truth for task tracking.
 
 ### File Location
 
-All agents search for `tasks.md` in this order:
-1. `./tasks.md` (project root) — **preferred**
-2. `./docs/tasks.md` — fallback
+All agents look for `tasks.md` in a single fixed location:
 
-If not found in either location, the agent must inform the user and suggest running
-`cycle-migrate` to create one. Do NOT look in other locations.
+```
+.optimus/tasks.md
+```
+
+There are no fallback locations. If `.optimus/tasks.md` does not exist, the agent must
+inform the user and suggest running `cycle-migrate` to create one.
+
+The `.optimus/` directory is also used for `config.json` and session state files.
+The `.gitignore` should be configured to commit `tasks.md` and `config.json` but
+ignore session files:
+```
+.optimus/*
+!.optimus/tasks.md
+!.optimus/config.json
+```
 
 ### Format Marker
 
@@ -547,7 +558,7 @@ Every stage agent MUST validate tasks.md before operating. The full validation r
 defined in the "Format Validation" section above (items 1-15). This protocol is the
 executable version:
 
-1. **Find tasks.md:** Look in `./tasks.md`. If not found, look in `./docs/tasks.md`. If not found in either, **STOP** and suggest `/optimus-cycle-migrate`.
+1. **Find tasks.md:** Look in `.optimus/tasks.md`. If not found, **STOP** and suggest `/optimus-cycle-migrate`.
 2. **Validate format:** Execute all 15 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-cycle-migrate`.
 
 Skills reference this as: "Find and validate tasks.md (HARD BLOCK) — see AGENTS.md Protocol: tasks.md Validation."
@@ -618,7 +629,10 @@ fi
 
 ```bash
 mkdir -p .optimus
-grep -q '.optimus/' .gitignore 2>/dev/null || echo '.optimus/' >> .gitignore
+# Ensure .optimus/ session files are gitignored but tasks.md and config.json are tracked
+if ! grep -q '.optimus/\*' .gitignore 2>/dev/null; then
+  printf '\n.optimus/*\n!.optimus/tasks.md\n!.optimus/config.json\n' >> .gitignore
+fi
 cat > ".optimus/session-${TASK_ID}.json" << EOF
 {"task_id":"${TASK_ID}","stage":"<stage-name>","status":"<status>","branch":"$(git branch --show-current)","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","phase":"<current-phase>","notes":"<progress>"}
 EOF
@@ -666,7 +680,7 @@ edits that could cause merge conflicts later:
 ```bash
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
 git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
-git diff "origin/$DEFAULT_BRANCH" -- tasks.md 2>/dev/null | head -20
+git diff "origin/$DEFAULT_BRANCH" -- .optimus/tasks.md 2>/dev/null | head -20
 ```
 
 - If diff output is non-empty → warn via `AskUser`:

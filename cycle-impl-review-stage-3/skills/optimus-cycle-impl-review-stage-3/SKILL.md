@@ -173,7 +173,7 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 5. Update the Status column to `Validando Impl` (if not already)
 6. Commit the status change immediately:
    ```bash
-   git add tasks.md
+   git add .optimus/tasks.md
    git commit -m "chore(tasks): set T-XXX status to Validando Impl"
    ```
 7. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.

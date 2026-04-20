@@ -242,7 +242,7 @@ If validation fails, inform the user and offer to fix or abort.
 ### Step 3.3: Stage the File
 
 ```bash
-git add tasks.md
+git add .optimus/tasks.md
 ```
 
 ### Step 3.4: Inform Next Steps

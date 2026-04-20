@@ -15,7 +15,7 @@ skip_when: >
   - No tasks.md exists in the project
   - User wants to run a specific stage agent (use that agent directly)
 prerequisite: >
-  - tasks.md exists in the project root or docs/ directory
+  - .optimus/tasks.md exists in the project
 NOT_skip_when: >
   - "I already know the status" → The dashboard shows dependencies and parallelization you might miss.
   - "There's only one task" → Even single tasks benefit from status verification.
@@ -63,11 +63,9 @@ Read-only agent that parses `tasks.md` and presents a comprehensive project stat
 
 ### Step 0.1: Locate tasks.md
 
-Search for `tasks.md` in these locations (in order):
-1. Project root: `./tasks.md` — **preferred**
-2. Docs directory: `./docs/tasks.md` — fallback
+Look for `.optimus/tasks.md`. There are no fallback locations.
 
-If not found, inform the user and suggest: "No tasks.md found. Run `/optimus-cycle-migrate` to create one from existing task files, or create it manually following the optimus format."
+If not found, inform the user and suggest: "No .optimus/tasks.md found. Run `/optimus-cycle-migrate` to create one from existing task files, or create it manually following the optimus format."
 
 ### Step 0.1.1: Validate Format Marker
 

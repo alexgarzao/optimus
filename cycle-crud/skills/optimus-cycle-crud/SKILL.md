@@ -20,7 +20,7 @@ skip_when: >
   - User wants to execute a task (use cycle-spec-stage-1 instead)
   - User wants to change task status through the lifecycle (status is managed by stage agents — except cancellation, which is handled here)
 prerequisite: >
-  - tasks.md exists in the project root or docs/ directory
+  - .optimus/tasks.md exists in the project
 NOT_skip_when: >
   - "I can edit tasks.md manually" → This agent validates format, dependencies, and IDs automatically.
   - "It's just a small change" → Even small changes can break format or create circular dependencies.
@@ -83,14 +83,14 @@ For operations that do not use `gh` (create, edit, remove, reorder, version mana
 
 ### Step 0.0.1: Find and Validate tasks.md
 
-1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either location, ask the user via `AskUser`:
+1. **Find tasks.md:** Look in `.optimus/tasks.md`. If not found, ask the user via `AskUser`:
 
-   "No tasks.md found. What should I do?"
-   - **(a) Create a new tasks.md** — creates an empty tasks.md in the project root with the optimus format marker and empty table
+   "No .optimus/tasks.md found. What should I do?"
+   - **(a) Create a new tasks.md** — creates `.optimus/tasks.md` with the optimus format marker and empty table
    - **(b) Run cycle-migrate** — use this if you already have task files in another format
 
-   If the user chooses to create, ask for an initial version name via `AskUser` (e.g., "MVP",
-   "v1"), then write `./tasks.md` with:
+   If the user chooses to create, first `mkdir -p .optimus`. Ask for an initial version name
+   via `AskUser` (e.g., "MVP", "v1"), then write `.optimus/tasks.md` with:
    ```markdown
    <!-- optimus:tasks-v1 -->
    # Tasks

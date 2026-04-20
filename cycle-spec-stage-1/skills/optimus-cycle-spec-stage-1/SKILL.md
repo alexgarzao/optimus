@@ -244,7 +244,7 @@ git checkout -b <tipo-prefix>/<task-id>-<keywords>
 2. Update the **Branch** column with the branch name created in Step 0.0.5 (if a new workspace was created)
 3. Commit these changes immediately:
    ```bash
-   git add tasks.md
+   git add .optimus/tasks.md
    git commit -m "chore(tasks): start T-XXX — set status to Validando Spec"
    ```
 

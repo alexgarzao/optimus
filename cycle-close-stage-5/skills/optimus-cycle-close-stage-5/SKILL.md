@@ -454,8 +454,8 @@ NOT be present on the default branch. Before closing, the agent MUST:
 2. Cherry-pick ONLY the tasks.md DONE status commit from the feature branch:
    ```bash
    git cherry-pick <done-commit-sha> --no-commit
-   git checkout -- . ':!tasks.md'   # keep only tasks.md changes
-   git add tasks.md
+   git checkout -- . ':!.optimus/tasks.md'   # keep only tasks.md changes
+   git add .optimus/tasks.md
    git commit -m "chore(tasks): mark T-XXX as done"
    git push
    ```
@@ -534,7 +534,7 @@ git push origin --delete <branch>
 
 **After branch deletion:** Update the Branch column in `tasks.md` to `-` (the branch no longer exists, keeping the old name would be misleading). Commit and push (this is an administrative commit directly on the default branch — acceptable because the feature branch no longer exists):
 ```bash
-git add tasks.md
+git add .optimus/tasks.md
 git commit -m "chore(tasks): clear branch for T-XXX after cleanup"
 git push
 ```

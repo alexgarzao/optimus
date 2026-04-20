@@ -55,8 +55,8 @@ verification:
 
 Discovers existing task files and converts them to the standard optimus `tasks.md` format.
 
-**CRITICAL:** This agent NEVER deletes original files. It creates/updates `tasks.md` and
-leaves originals untouched. The user decides whether to remove them later.
+**CRITICAL:** This agent NEVER deletes original files. It creates/updates `.optimus/tasks.md`
+and leaves originals untouched. The user decides whether to remove them later.
 
 ---
 
@@ -68,6 +68,7 @@ Search the project for any form of task tracking. Check ALL of these locations:
 
 ```
 # Files to check (in order)
+.optimus/tasks.md
 ./tasks.md
 ./docs/tasks.md
 ./docs/pre-dev/tasks.md
@@ -230,7 +231,7 @@ Present what was found to the user:
 ### Sources Found
 | # | Location | Type | Tasks Found |
 |---|----------|------|-------------|
-| 1 | ./tasks.md | Index-only | 8 links |
+| 1 | .optimus/tasks.md | Index-only | 8 links |
 | 2 | ./tasks/ | Individual files | 8 files |
 | 3 | ./subtasks/ | Subtask files | 5 files |
 
@@ -318,20 +319,22 @@ Options:
 
 ## Phase 3: Apply Conversion
 
-### Step 3.1: Check for Existing tasks.md
+### Step 3.1: Check for Existing .optimus/tasks.md
 
-If `tasks.md` already exists in optimus format:
-- Ask via `AskUser`: "tasks.md already exists. Merge new tasks into it, or replace entirely?"
+If `.optimus/tasks.md` already exists in optimus format:
+- Ask via `AskUser`: ".optimus/tasks.md already exists. Merge new tasks into it, or replace entirely?"
 - If merge: add only tasks that don't already exist (match by ID or title)
 - If replace: backup the existing file content (show it to the user first)
 
-If `tasks.md` exists in non-optimus format:
-- Rename to `tasks.md.bak` before creating the new one
-- Inform the user: "Backed up original to tasks.md.bak"
+If `.optimus/tasks.md` exists in non-optimus format:
+- Rename to `.optimus/tasks.md.bak` before creating the new one
+- Inform the user: "Backed up original to .optimus/tasks.md.bak"
 
-### Step 3.2: Write tasks.md
+### Step 3.2: Write .optimus/tasks.md
 
-Create `tasks.md` with:
+First ensure the directory exists: `mkdir -p .optimus`
+
+Create `.optimus/tasks.md` with:
 1. Format marker: `<!-- optimus:tasks-v1 -->` (MUST be the first line)
 2. H1 heading: `# Tasks`
 3. `## Versions` section with the versions table (from Step 0.5)
@@ -342,7 +345,7 @@ Create `tasks.md` with:
 ### Step 3.3: Commit
 
 ```bash
-git add tasks.md
+git add .optimus/tasks.md
 git commit -m "chore: migrate tasks to optimus format (cycle-migrate)
 
 Migrated N tasks from [sources list].
@@ -356,7 +359,7 @@ Original files preserved."
 
 - **Tasks migrated:** N
 - **Sources processed:** [list]
-- **tasks.md created:** ./tasks.md
+- **tasks.md created:** .optimus/tasks.md
 - **Original files:** NOT deleted (remove manually if desired)
 
 ### Next Steps
@@ -369,12 +372,12 @@ Original files preserved."
 
 ## Rules
 
-- **NEVER delete original files** — only create/update tasks.md
+- **NEVER delete original files** — only create/update .optimus/tasks.md
 - **NEVER apply changes without user approval** — always present and confirm first
 - **NEVER invent task content** — only extract what exists in the source files
 - **NEVER assume dependencies from task order** — sequential IDs don't imply dependency
 - If a task has no content (just a title), create the H2 section with empty Objetivo and Critérios de Aceite, and warn the user
 - If status inference is uncertain, mark as `Pendente` and flag as "(inferred)" in the inventory
-- If the project already has a valid optimus tasks.md (first line is `<!-- optimus:tasks-v1 -->`), inform the user and stop (nothing to migrate)
+- If the project already has a valid `.optimus/tasks.md` (first line is `<!-- optimus:tasks-v1 -->`), inform the user and stop (nothing to migrate)
 - Subtasks always become checklist items in the parent task — never separate entries in the table
 - Task IDs must be unique — if duplicates found, warn the user before proceeding
