@@ -93,8 +93,9 @@ Administrative CRUD operations for tasks in `tasks.md`.
    - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
    - All task IDs match `T-NNN` pattern
    - All Tipo values are valid (`Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`)
-   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
+   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`)
    - All Depends values are `-` or comma-separated valid task IDs
+   - All Priority values are valid (`Alta`, `Media`, `Baixa`)
    - All Version values reference a version name in the Versions table
    - No duplicate task IDs
 
@@ -110,6 +111,7 @@ Parse the user's request to determine which operation to perform:
 | **Edit** | "edit T-XXX", "change T-XXX", "update T-XXX", "rename T-XXX" |
 | **Remove** | "remove T-XXX", "delete T-XXX" |
 | **Reorder** | "move T-XXX before/after T-YYY", "reorder tasks" |
+| **Cancel** | "cancel T-XXX", "abandon T-XXX", "won't do T-XXX" |
 | **Version** | "create version", "add version", "edit version", "remove version" |
 | **Move version** | "move tasks to v2", "move T-XXX to Futuro" |
 
@@ -120,8 +122,9 @@ If unclear, ask the user via `AskUser`:
 - (b) Edit an existing task
 - (c) Remove a task
 - (d) Reorder tasks
-- (e) Manage versions (create, edit, remove)
-- (f) Move tasks between versions
+- (e) Cancel a task (mark as abandoned)
+- (f) Manage versions (create, edit, remove)
+- (g) Move tasks between versions
 
 ## Phase 1: Create Task
 
@@ -327,7 +330,53 @@ Options:
 
 Show the new table order.
 
-## Phase 5: Batch Operations
+## Phase 5: Cancel Task
+
+### Step 5.0: Identify Task
+
+1. Parse the task ID from the user's request
+2. Find the task row in the table
+3. If task not found → **STOP**: "Task T-XXX not found in tasks.md"
+
+### Step 5.1: Validate Cancellation
+
+1. **If status is `**DONE**`** → **STOP**: "Task T-XXX is already done. Cannot cancel a completed task."
+2. **If status is `Cancelado`** → **STOP**: "Task T-XXX is already cancelled."
+3. **Check for dependents:** Scan the Depends column of ALL tasks for references to T-XXX.
+   If any non-cancelled task depends on T-XXX, warn via `AskUser`:
+   ```
+   Task T-XXX has dependents that are not cancelled:
+   - T-YYY: <title> (Status: <status>)
+   - T-ZZZ: <title> (Status: <status>)
+
+   Cancelling T-XXX will block these tasks (Cancelado does NOT satisfy dependencies).
+   Cancel anyway?
+   ```
+   **BLOCKING:** Do NOT proceed without user confirmation.
+4. **If task has a branch** (Branch column is not `-`), ask via `AskUser`:
+   ```
+   Task T-XXX has branch '<branch>'. What should I do with it?
+   ```
+   Options:
+   - **Delete local and remote** — clean up the branch
+   - **Keep** — leave the branch as is
+5. **If task has a worktree**, offer to remove it (same logic as cycle-close-stage-5 Step 3.1)
+
+### Step 5.2: Apply Cancellation
+
+1. Update the **Status** column to `Cancelado`
+2. Update the **Branch** column to `-` (if branch was deleted in Step 5.1)
+3. Save and commit: `chore(tasks): cancel T-XXX`
+
+### Step 5.3: Confirm
+
+```
+Cancelled task T-XXX: <title>
+  Previous status: <old status>
+  Branch: <deleted / kept / none>
+```
+
+## Phase 6: Batch Operations
 
 If the user provides multiple tasks to create at once (e.g., a list of tasks), process them sequentially:
 
@@ -336,7 +385,7 @@ If the user provides multiple tasks to create at once (e.g., a list of tasks), p
 3. Add all rows and detail sections
 4. Show summary of all created tasks
 
-## Phase 6: Version Management
+## Phase 7: Version Management
 
 ### Step 6.0: Determine Version Operation
 
@@ -412,7 +461,7 @@ Commit: `chore(tasks): remove version <name>`
 
 Rearrange rows in the Versions table. Does NOT change any values — only visual order.
 
-## Phase 7: Move Tasks Between Versions
+## Phase 8: Move Tasks Between Versions
 
 Move one or more tasks from one version to another.
 

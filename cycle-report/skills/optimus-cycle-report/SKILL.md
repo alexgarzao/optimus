@@ -79,7 +79,7 @@ Read `tasks.md` and extract the markdown table. Expected columns:
 | ID | Task identifier (e.g., T-001) |
 | Title | Short description |
 | Tipo | Task type: Feature, Fix, Refactor, Chore, Docs, or Test |
-| Status | Current status (Pendente, Validando Spec, Em Andamento, Validando Impl, Revisando PR, **DONE**) |
+| Status | Current status (Pendente, Validando Spec, Em Andamento, Validando Impl, Revisando PR, **DONE**, Cancelado) |
 | Depends | Comma-separated dependency IDs, or `-` for none |
 | Priority | Alta, Media, or Baixa |
 | Version | Version/milestone this task belongs to |
@@ -110,8 +110,12 @@ Classify each task into one of these categories:
 ### Done
 Status is `**DONE**`.
 
+### Cancelled
+Status is `Cancelado`. These tasks were abandoned and will not be implemented.
+Show in a separate section — do NOT count them in progress calculations.
+
 ### Active
-Status is anything other than `Pendente` or `**DONE**`:
+Status is anything other than `Pendente`, `**DONE**`, or `Cancelado`:
 - `Validando Spec` (cycle-spec-stage-1 running)
 - `Em Andamento` (cycle-impl-stage-2 running)
 - `Validando Impl` (cycle-impl-review-stage-3 running)
@@ -121,8 +125,9 @@ Status is anything other than `Pendente` or `**DONE**`:
 Status is `Pendente` AND all dependencies are `**DONE**` (or no dependencies).
 
 ### Blocked
-Status is `Pendente` AND at least one dependency is NOT `**DONE**`.
-Record which dependencies are blocking.
+Status is `Pendente` AND at least one dependency is NOT `**DONE**` or is `Cancelado`.
+Record which dependencies are blocking (note if a blocker is `Cancelado` — the dependency
+should be removed or replaced).
 
 ---
 
@@ -143,18 +148,20 @@ the dashboard shows **only tasks from the active version** by default.
 
 ## Phase 1.6: Version Progress Summary
 
-Compute progress for each version, regardless of filtering:
+Compute progress for each version, regardless of filtering.
+**Cancelled tasks are excluded from progress calculations** — they do not count toward
+the total, done, active, or pending numbers. Progress = Done / (Total - Cancelled).
 
 ```
-┌─────────────────────────────────────────────────────┐
-│ VERSION PROGRESS                                     │
-├─────────┬────────┬──────┬────────┬─────────┬────────┤
-│ Version │ Status │ Done │ Active │ Pending │ Progr. │
-├─────────┼────────┼──────┼────────┼─────────┼────────┤
-│ MVP     │ Ativa  │ 5    │ 2      │ 4       │ 45%    │
-│ v2      │ Próxima│ 0    │ 0      │ 6       │ 0%     │
-│ Futuro  │ Backlog│ 0    │ 0      │ 3       │ 0%     │
-└─────────┴────────┴──────┴────────┴─────────┴────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ VERSION PROGRESS                                              │
+├─────────┬────────┬──────┬────────┬─────────┬──────────┬──────┤
+│ Version │ Status │ Done │ Active │ Pending │ Canceld. │ Prog │
+├─────────┼────────┼──────┼────────┼─────────┼──────────┼──────┤
+│ MVP     │ Ativa  │ 5    │ 2      │ 4       │ 1        │ 45%  │
+│ v2      │ Próxima│ 0    │ 0      │ 6       │ 0        │ 0%   │
+│ Futuro  │ Backlog│ 0    │ 0      │ 3       │ 0        │ 0%   │
+└─────────┴────────┴──────┴────────┴─────────┴──────────┴──────┘
 ```
 
 This section is ALWAYS shown (even when filtering by a specific version) to give the

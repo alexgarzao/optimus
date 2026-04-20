@@ -84,10 +84,11 @@ Catches gaps, contradictions, and ambiguities that would cause rework.
    - Exactly one version has Status `Ativa`
    - At most one version has Status `Próxima`
    - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
+   - All Priority values are valid (`Alta`, `Media`, `Baixa`)
    - All Version values reference a version name in the Versions table
    - All task IDs match `T-NNN` pattern
    - All Tipo values are valid (`Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`)
-   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
+   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`)
    - All Depends values are `-` or comma-separated valid task IDs
    - No duplicate task IDs
 
@@ -154,7 +155,7 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 
 **IMPORTANT:** Do NOT modify tasks.md yet. Status and Branch updates happen in Step 0.0.4 AFTER the workspace is created. This ensures the modifications happen in the correct working directory (worktree or feature branch).
 
-**Anti-pulo:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`), refuse to proceed — the task has already passed this stage.
+**Anti-pulo:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`), refuse to proceed — the task has already passed this stage or was cancelled.
 
 ### Step 0.0.3: Create Workspace (if on default branch)
 

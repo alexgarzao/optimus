@@ -66,10 +66,11 @@ Stage 5 of the task lifecycle. Verifies all prerequisites before marking a task 
    - Exactly one version has Status `Ativa`
    - At most one version has Status `Próxima`
    - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
+   - All Priority values are valid (`Alta`, `Media`, `Baixa`)
    - All Version values reference a version name in the Versions table
    - All task IDs match `T-NNN` pattern
    - All Tipo values are valid (`Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`)
-   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
+   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`)
    - All Depends values are `-` or comma-separated valid task IDs
    - No duplicate task IDs
 
@@ -118,6 +119,7 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
    - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run cycle-impl-stage-2 and cycle-impl-review-stage-3 first."
    - If status is `Em Andamento` → **STOP**: "Task T-XXX is in 'Em Andamento'. Run cycle-impl-review-stage-3 first."
    - If status is `**DONE**` → **STOP**: "Task T-XXX is already done. Re-execution of cycle-close-stage-5 is not supported."
+   - If status is `Cancelado` → **STOP**: "Task T-XXX was cancelled. Cannot close a cancelled task."
 3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:
@@ -149,7 +151,28 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 
    **NOTE:** cycle-close-stage-5 does not support re-execution (status always changes to `**DONE**`), so the re-execution skip does not apply here.
 
-### Step 0.2: Push Unpushed Commits (if any)
+### Step 0.2: Check tasks.md Divergence (warning)
+
+Compare `tasks.md` on the current branch with the default branch to detect concurrent edits that could cause merge conflicts when the PR is merged:
+
+```bash
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
+git diff "origin/$DEFAULT_BRANCH" -- tasks.md 2>/dev/null | head -20
+```
+
+- If diff output is non-empty → the file has diverged. Warn via `AskUser`:
+  ```
+  tasks.md has diverged between your branch and <default_branch>.
+  This may cause merge conflicts when the PR is merged.
+  ```
+  Options:
+  - **Sync now** — run `git merge origin/<default_branch>` to incorporate changes
+  - **Continue without syncing** — I'll handle conflicts later
+- If diff output is empty → proceed silently (files are in sync)
+- **NOTE:** This is a warning, not a HARD BLOCK. The user may choose to continue.
+
+### Step 0.3: Push Unpushed Commits (if any)
 
 Previous stages (1-4) commit tasks.md status changes immediately but do not push. Before running the close checklist, ensure the feature branch is in sync with remote.
 

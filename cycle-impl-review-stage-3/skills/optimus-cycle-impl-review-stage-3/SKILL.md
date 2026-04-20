@@ -99,10 +99,11 @@ Runs AFTER optimus-cycle-impl-stage-2 finishes and BEFORE the final commit.
    - Exactly one version has Status `Ativa`
    - At most one version has Status `Próxima`
    - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
+   - All Priority values are valid (`Alta`, `Media`, `Baixa`)
    - All Version values reference a version name in the Versions table
    - All task IDs match `T-NNN` pattern
    - All Tipo values are valid (`Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`)
-   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
+   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`)
    - All Depends values are `-` or comma-separated valid task IDs
    - No duplicate task IDs
 
@@ -119,13 +120,29 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
      Switch to the task's feature branch first.
      ```
 
-4. **Branch-task cross-validation:** After confirming the task ID (Step 0.0.1), check that the current branch matches the **Branch** column in `tasks.md` for this task:
+4. **Check tasks.md divergence (warning):** Compare `tasks.md` on the current branch with the default branch to detect concurrent edits that could cause merge conflicts later:
+   ```bash
+   git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
+   git diff "origin/$DEFAULT_BRANCH" -- tasks.md 2>/dev/null | head -20
+   ```
+   - If diff output is non-empty → the file has diverged. Warn via `AskUser`:
+     ```
+     tasks.md has diverged between your branch and <default_branch>.
+     This may cause merge conflicts when the PR is merged.
+     ```
+     Options:
+     - **Sync now** — run `git merge origin/<default_branch>` to incorporate changes
+     - **Continue without syncing** — I'll handle conflicts later
+   - If diff output is empty → proceed silently (files are in sync)
+   - **NOTE:** This is a warning, not a HARD BLOCK. The user may choose to continue.
+
+5. **Branch-task cross-validation:** After confirming the task ID (Step 0.0.1), check that the current branch matches the **Branch** column in `tasks.md` for this task:
    - Read the Branch column for the confirmed task ID
    - If Branch is `-` or empty → warn: "tasks.md shows no branch for T-XXX, but you are on `<current>`. Continue anyway?" (via `AskUser`)
    - If Branch has a value AND it does not match `CURRENT_BRANCH` → warn: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?" (via `AskUser`)
    - If Branch matches `CURRENT_BRANCH` → proceed silently
 
-5. **Validate PR title (if PR exists):** Check if a PR already exists for the current branch:
+6. **Validate PR title (if PR exists):** Check if a PR already exists for the current branch:
    ```bash
    gh pr view --json number,title --jq '{number, title}' 2>/dev/null
    ```
@@ -160,7 +177,7 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
    - If status is `Validando Impl` → proceed (re-execution of this stage)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run cycle-spec-stage-1 and cycle-impl-stage-2 first."
    - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run cycle-impl-stage-2 first."
-   - If status is `Revisando PR` or `**DONE**` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage."
+   - If status is `Revisando PR`, `**DONE**`, or `Cancelado` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage or was cancelled."
 3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:

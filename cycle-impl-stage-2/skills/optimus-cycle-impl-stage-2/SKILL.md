@@ -96,10 +96,11 @@ Executes a validated task specification end-to-end: identifies the task, loads c
    - Exactly one version has Status `Ativa`
    - At most one version has Status `Próxima`
    - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
+   - All Priority values are valid (`Alta`, `Media`, `Baixa`)
    - All Version values reference a version name in the Versions table
    - All task IDs match `T-NNN` pattern
    - All Tipo values are valid (`Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`)
-   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`)
+   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`)
    - All Depends values are `-` or comma-separated valid task IDs
    - No duplicate task IDs
 
@@ -131,7 +132,7 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
    - If status is `Validando Spec` → proceed (cycle-spec-stage-1 has completed)
    - If status is `Em Andamento` → proceed (re-execution of this stage)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run cycle-spec-stage-1 first."
-   - If status is `Validando Impl`, `Revisando PR`, or `**DONE**` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage."
+   - If status is `Validando Impl`, `Revisando PR`, `**DONE**`, or `Cancelado` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage or was cancelled."
 3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:

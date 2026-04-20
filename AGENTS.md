@@ -269,11 +269,14 @@ Examples: `chore(tasks): start T-003 — set status to Validando Spec`,
 | `Validando Impl` | cycle-impl-review-stage-3 | Implementation being reviewed |
 | `Revisando PR` | cycle-pr-review-stage-4 | PR being reviewed (optional stage) |
 | `**DONE**` | cycle-close-stage-5 | Completed |
+| `Cancelado` | cycle-crud | Task abandoned, will not be implemented |
 
 ### Dependency Rules
 
 1. **A task can only start if ALL its dependencies are `**DONE**`**. If any dependency
-   is not done, the task is BLOCKED.
+   is not done, the task is BLOCKED. `Cancelado` does NOT satisfy dependencies —
+   if a dependency is cancelled, the dependent task is blocked until the dependency
+   is removed or replaced.
 2. **Dependencies are by task ID**, not by status. `Depends: T-001, T-003` means
    both T-001 AND T-003 must be `**DONE**` before this task can start.
 3. **`-` means no dependencies** — the task can start immediately.
@@ -352,10 +355,11 @@ Every stage agent (1-5) MUST validate the tasks.md format before operating:
 6. A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
 7. All task IDs follow the `T-NNN` pattern
 8. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
-9. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`
+9. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`
 10. All Depends values are either `-` or comma-separated valid task IDs
-11. All Version values reference a version name that exists in the Versions table
-12. No duplicate task IDs
+11. All Priority values are one of: `Alta`, `Media`, `Baixa`
+12. All Version values reference a version name that exists in the Versions table
+13. No duplicate task IDs
 
 If the format marker is missing or validation fails, the agent must **STOP** and suggest
 running `/optimus-cycle-migrate` to fix the format. Do NOT attempt to interpret malformed data.
@@ -376,6 +380,8 @@ Tasks flow through 5 stages (cycle-pr-review-stage-4 is optional). Status lives 
 Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando PR] → **DONE**
            (cycle-spec-stage-1)   (cycle-impl-stage-2)  (cycle-impl-review-stage-3)  (cycle-pr-review-stage-4)  (cycle-close-stage-5)
                                                                [optional]
+
+Any status → Cancelado  (via cycle-crud cancel operation)
 ```
 
 ### Rules
