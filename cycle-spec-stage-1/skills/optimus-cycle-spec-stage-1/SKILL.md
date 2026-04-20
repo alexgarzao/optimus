@@ -208,13 +208,7 @@ status is not `Validando Spec`), offer the same options as Step 0.0.4: Reuse, Cl
 or Clean and keep as Pendente. This handles the case where a previous run crashed AFTER creating
 the branch but BEFORE updating tasks.md.
 
-If no existing branch is found, create a workspace for the task. Ask the user via `AskUser`:
-
-"Task T-XXX needs a workspace. How should I create it?"
-
-Options:
-- **(a) Git worktree (recommended)** — creates a worktree in a sibling directory, keeps the current branch untouched
-- **(b) New branch** — creates and checks out a new branch in the current repository
+If no existing branch is found, create a worktree for the task.
 
 **Branch naming:** Generate a descriptive name from the task's **Tipo** and ID:
 - Pattern: `<tipo-prefix>/<task-id>-<keywords>` where keywords are 2-4 lowercase words from the title
@@ -223,18 +217,14 @@ Options:
 - Examples: `feat/t-003-user-auth-jwt`, `fix/t-007-duplicate-login`, `refactor/t-012-extract-middleware`
 - Strip articles, prepositions, and generic words (implement, add, create, update)
 
-**If worktree (recommended):**
+**Create worktree:**
 ```bash
-git worktree add ../<repo>-<task-id>-<keywords> -b <tipo-prefix>/<task-id>-<keywords>
+REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
+git worktree add ../${REPO_NAME}-<task-id>-<keywords> -b <tipo-prefix>/<task-id>-<keywords>
 ```
 Then change working directory to the new worktree path for all subsequent steps.
 
-**If new branch:**
-```bash
-git checkout -b <tipo-prefix>/<task-id>-<keywords>
-```
-
-**BLOCKING**: Do NOT proceed until the workspace is created.
+**BLOCKING**: Do NOT proceed until the worktree is created.
 
 ### Step 0.0.6: Update tasks.md (Status + Branch)
 

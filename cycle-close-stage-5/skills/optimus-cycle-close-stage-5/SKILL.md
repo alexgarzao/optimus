@@ -73,8 +73,8 @@ Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
 **HARD BLOCK:** Find and validate tasks.md — see AGENTS.md Protocol: tasks.md Validation.
 
-3. **Verify workspace (HARD BLOCK):** See AGENTS.md Protocol: Workspace Verification.
-4. **Branch-task cross-validation:** Included in AGENTS.md Protocol: Workspace Verification.
+3. **Resolve workspace (HARD BLOCK):** See AGENTS.md Protocol: Workspace Auto-Navigation.
+4. **Branch-task cross-validation:** Included in AGENTS.md Protocol: Workspace Auto-Navigation.
 
 ### Step 0.0.2: Identify Task to Close
 

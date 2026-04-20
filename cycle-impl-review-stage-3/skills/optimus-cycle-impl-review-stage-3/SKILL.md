@@ -101,13 +101,13 @@ Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 **HARD BLOCK:** Find and validate tasks.md — see AGENTS.md Protocol: tasks.md Validation.
 
 ### Step 0.0.1.2: Verify Workspace (HARD BLOCK)
-Verify workspace — see AGENTS.md Protocol: Workspace Verification.
+Resolve workspace — see AGENTS.md Protocol: Workspace Auto-Navigation.
 
 ### Step 0.0.1.3: Check tasks.md Divergence (warning)
 Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 
 ### Step 0.0.1.4: Branch-Task Cross-Validation
-Branch-task cross-validation — included in AGENTS.md Protocol: Workspace Verification.
+Branch-task cross-validation — included in AGENTS.md Protocol: Workspace Auto-Navigation.
 
 ### Step 0.0.1.5: Validate PR Title (if PR exists)
 Validate PR title — see AGENTS.md Protocol: PR Title Validation.

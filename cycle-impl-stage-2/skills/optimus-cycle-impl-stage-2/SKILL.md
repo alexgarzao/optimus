@@ -172,7 +172,7 @@ Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 
 ### Step 0.4: Verify Workspace
 
-**HARD BLOCK:** Verify workspace — see AGENTS.md Protocol: Workspace Verification.
+**HARD BLOCK:** Resolve workspace — see AGENTS.md Protocol: Workspace Auto-Navigation.
 
 Branch-task cross-validation is part of the workspace protocol above.
 

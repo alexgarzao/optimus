@@ -465,11 +465,11 @@ Any status → Cancelado  (via cycle-crud cancel operation)
    | Admin | cycle-migrate | Yes | Only creates/modifies tasks.md |
    | Admin | cycle-report | Yes | Read-only, no modifications |
    | Admin | cycle-crud | Yes | Only creates/edits/removes tasks in tasks.md |
-   | Execution | cycle-spec-stage-1 | Yes (creates workspace) | Creates branch/worktree, then works there |
-   | Execution | cycle-impl-stage-2 | **No** | Modifies code, verifies workspace exists |
-   | Execution | cycle-impl-review-stage-3 | **No** | Modifies code (applies fixes), verifies workspace |
-   | Execution | cycle-pr-review-stage-4 | **No** | Modifies code (applies fixes), verifies workspace |
-   | Execution | cycle-close-stage-5 | **No** | Runs verification on task branch, then cleanup |
+   | Execution | cycle-spec-stage-1 | Yes (creates worktree) | Always creates worktree on default branch, then works there |
+   | Execution | cycle-impl-stage-2 | Yes (auto-navigates) | Finds task worktree and navigates to it |
+   | Execution | cycle-impl-review-stage-3 | Yes (auto-navigates) | Finds task worktree and navigates to it |
+   | Execution | cycle-pr-review-stage-4 | Yes (auto-navigates) | Finds task worktree and navigates to it |
+   | Execution | cycle-close-stage-5 | Yes (auto-navigates) | Finds task worktree and navigates to it |
    | Admin | cycle-batch | Yes | Orchestrates stages, delegates to stage skills |
    | Admin | cycle-conflict-resolve | Yes | Only resolves merge conflicts in tasks.md |
 
@@ -477,9 +477,9 @@ Any status → Cancelado  (via cycle-crud cancel operation)
    and can run on any branch.
 
    **Execution skills** modify code or run verification. They require a feature branch
-   (workspace). Stage-1 is special: it creates the workspace when invoked on the default
-   branch, then switches to it. Stages 2-5 verify the workspace exists and refuse to
-   run on the default branch.
+   (workspace). Stage-1 always creates a worktree when invoked on the default branch.
+   Stages 2-5 auto-navigate to the task's worktree when invoked on the default branch
+   (see Protocol: Workspace Auto-Navigation).
 
    To detect the default branch:
    ```bash
@@ -645,30 +645,57 @@ rm -f ".optimus/session-${TASK_ID}.json"
 
 Skills reference this as: "Execute session state protocol from AGENTS.md using stage=`<name>`, status=`<status>`."
 
-### Protocol: Workspace Verification (HARD BLOCK)
+### Protocol: Workspace Auto-Navigation (HARD BLOCK)
 
-**Referenced by:** stages 2-5 (stage 1 creates the workspace instead of verifying)
+**Referenced by:** stages 2-5
 
-Execution stages (2-5) MUST verify they are NOT on the default branch:
+Execution stages (2-5) resolve the correct workspace automatically. The agent MUST
+be in the task's worktree before proceeding with any work.
 
 ```bash
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
 CURRENT_BRANCH=$(git branch --show-current)
 ```
 
-- If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`) → **STOP**:
-  ```
-  Cannot run <stage-name> on the default branch (<branch>).
-  Switch to the task's feature branch first.
-  ```
+**Resolution order:**
 
-**Branch-task cross-validation:** After confirming the task ID, check that the current
-branch matches the **Branch** column in `tasks.md` for this task:
-- If Branch is `-` or empty → warn via `AskUser`: "tasks.md shows no branch for T-XXX, but you are on `<current>`. Continue anyway?"
-- If Branch has a value AND does not match `CURRENT_BRANCH` → warn via `AskUser`: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?"
-- If Branch matches `CURRENT_BRANCH` → proceed silently
+1. **Already on a feature branch?**
+   - Cross-validate: check that `CURRENT_BRANCH` matches the **Branch** column in
+     `.optimus/tasks.md` for the target task.
+   - If Branch matches → proceed silently.
+   - If Branch does not match → warn via `AskUser`: "tasks.md shows branch `<expected>`
+     for T-XXX, but you are on `<current>`. Continue on current branch, or switch?"
+   - If Branch is `-` or empty → warn via `AskUser`: "tasks.md shows no branch for
+     T-XXX, but you are on `<current>`. Continue anyway?"
 
-Skills reference this as: "Verify workspace (HARD BLOCK) — see AGENTS.md Protocol: Workspace Verification."
+2. **On the default branch (auto-navigate)?**
+   - Read `.optimus/tasks.md` and list tasks with status compatible with the current stage
+     (use the Transition Table to determine which statuses are valid).
+   - **If 0 eligible tasks** → **STOP**: "No tasks in `<expected-status>` found."
+   - **If 1 eligible task** → suggest via `AskUser`: "Found task T-XXX — [title] in
+     worktree `<path>`. Continue with this task?"
+   - **If N eligible tasks** → list all with worktree paths via `AskUser`:
+     ```
+     Multiple tasks available:
+       T-001 — User auth (Em Andamento) → /projeto-t-001-.../
+       T-002 — Login page (Em Andamento) → /projeto-t-002-.../
+     Which task should I continue?
+     ```
+   - After task is identified, locate the worktree:
+     ```bash
+     git worktree list | grep "<branch-name>"
+     ```
+   - **If worktree found** → change working directory to the worktree path.
+   - **If worktree NOT found** (branch exists but no worktree) → create the worktree
+     automatically:
+     ```bash
+     REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
+     WORKTREE_DIR="../${REPO_NAME}-$(echo <task-id> | tr '[:upper:]' '[:lower:]')-<keywords>"
+     git worktree add "$WORKTREE_DIR" <branch-name>
+     ```
+     Then change working directory to the new worktree.
+
+Skills reference this as: "Resolve workspace (HARD BLOCK) — see AGENTS.md Protocol: Workspace Auto-Navigation."
 
 ### Protocol: Divergence Warning
 

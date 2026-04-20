@@ -116,8 +116,8 @@ This skill operates in TWO modes:
 When the user references a task (e.g., "review PR for T-012") or a `tasks.md` exists with a task in status `Validando Impl` or `Revisando PR`:
 
 1. **Find and validate tasks.md** — see AGENTS.md Protocol: tasks.md Validation.
-3. **Verify workspace (HARD BLOCK):** See AGENTS.md Protocol: Workspace Verification.
-3.1. **Branch-task cross-validation:** Included in AGENTS.md Protocol: Workspace Verification.
+3. **Resolve workspace (HARD BLOCK):** See AGENTS.md Protocol: Workspace Auto-Navigation.
+3.1. **Branch-task cross-validation:** Included in AGENTS.md Protocol: Workspace Auto-Navigation.
 4. **Validate status:** The task MUST be in status `Validando Impl` (set by cycle-impl-review-stage-3) or `Revisando PR` (re-execution). If not, STOP and tell the user which agent to run first.
 5. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)
