@@ -140,18 +140,25 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 
 ### Step 0.2: Push Unpushed Commits (if any)
 
-Previous stages (1-4) commit tasks.md status changes immediately but do not push. Before running the close checklist, ensure the feature branch is in sync with remote:
+Previous stages (1-4) commit tasks.md status changes immediately but do not push. Before running the close checklist, ensure the feature branch is in sync with remote.
+
+**Step 1 — Check if upstream tracking exists:**
 
 ```bash
-git log @{u}..HEAD --oneline 2>/dev/null
+git rev-parse --abbrev-ref @{u} 2>/dev/null
 ```
 
-If there are unpushed commits:
-1. Push them: `git push`
-2. If push fails (e.g., no upstream set), set upstream first:
-   ```bash
-   git push -u origin $(git branch --show-current)
-   ```
+- **If command fails (no upstream):** The branch was never pushed. Push with `-u` to create the upstream:
+  ```bash
+  git push -u origin $(git branch --show-current)
+  ```
+- **If command succeeds (upstream exists):** Check for unpushed commits:
+  ```bash
+  git log @{u}..HEAD --oneline
+  ```
+  If there are unpushed commits, push them: `git push`
+
+**Why check upstream first:** `git log @{u}..HEAD` silently produces empty output when no upstream exists, making it appear there's nothing to push. But in reality ALL local commits are unpushed because the remote branch doesn't exist yet. Without this check, the close checklist would pass while the feature branch was never pushed — and branch deletion in cleanup would lose all work.
 
 **Why push now:** The close checklist (Check 2) verifies "no unpushed commits". Stages 2-4 commit status changes eagerly to prevent data loss on session interruption, but they don't push. Without this step, Check 2 would always fail with false positives from those legitimate status commits.
 
@@ -174,12 +181,18 @@ git status --porcelain
 
 #### Check 2: No Unpushed Commits
 
+First verify upstream exists, then check for unpushed commits:
+
 ```bash
+# Step 1: verify upstream exists
+git rev-parse --abbrev-ref @{u} 2>/dev/null
+# Step 2: if upstream exists, check for unpushed commits
 git log @{u}..HEAD --oneline
 ```
 
-- **PASS:** Output is empty (local is in sync with remote)
-- **FAIL:** List the unpushed commits
+- **PASS:** Upstream exists AND output of `git log` is empty (local is in sync with remote)
+- **FAIL (no upstream):** "Branch has no upstream tracking. Run `git push -u origin $(git branch --show-current)` first."
+- **FAIL (unpushed commits):** List the unpushed commits
 
 #### Check 3: PR Ready to Merge (if applicable)
 
