@@ -488,9 +488,11 @@ Security verdict: PASS / FAIL
 
 ## Phase 4: Interactive Finding-by-Finding Resolution (collect decisions only)
 
+**BEFORE presenting the first finding:** Announce total findings count prominently: `"### Total findings to review: N"`
+
 Process ONE finding at a time, starting from highest severity. Present ALL findings sequentially, collecting the user's decision for each. Do NOT apply any fix during this phase — only collect decisions.
 
-For EACH finding, present:
+For EACH finding, present with `"Finding X of N"` in the header:
 
 ### Problem Description
 - What is wrong (file, line, code snippet if relevant)
@@ -535,7 +537,14 @@ Include a recommendation when one option is clearly better, with brief justifica
 
 Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
 
-Internally record every decision: finding ID, chosen option (or "skip"), and rationale if provided.
+**CRITICAL — If the user responds with a question or disagreement instead of a decision:**
+- STOP immediately — do NOT continue to the next finding
+- Research the user's question/concern RIGHT NOW using `WebSearch`, codebase analysis, or both
+- Provide a thorough answer with evidence (links, code references, best practice citations)
+- Only AFTER the user is satisfied, ask for their decision again
+- This may go back and forth multiple times — that is expected and correct behavior
+
+Internally record every decision: finding ID, chosen option (or "skip"), and rationale if provided. Do NOT apply any fix yet — all fixes are applied in Phase 5.
 
 ---
 

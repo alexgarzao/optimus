@@ -458,15 +458,22 @@ Merge agent findings with the findings from Steps 1-3. Deduplicate and sort by s
 
 ### Step 4: Phase 1 — Present Summary, then Walk Through Each Finding
 
-1. **Present the summary report** (tables from Output Format) for bird's-eye view
-2. **Then present findings ONE AT A TIME** in priority order: contradictions > missing specs > test gaps > observability > DoD > ambiguities
-3. **For EACH finding**, present:
+1. **Announce total findings count:** Display `"### Total findings to review: N"` prominently before presenting the first finding
+2. **Present the summary report** (tables from Output Format) for bird's-eye view
+3. **Then present findings ONE AT A TIME** in priority order: contradictions > missing specs > test gaps > observability > DoD > ambiguities
+4. **For EACH finding**, present with `"Finding X of N"` in the header:
    - **Problem:** Clear description, referencing exact doc locations
    - **Why it matters:** Impact through UX and engineering best practices lenses
    - **Options:** 2-3 concrete resolution options with pros/cons/effort
    - **Recommendation:** Preferred option with justification
-4. Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides
-5. **Track all decisions** internally
+5. Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides
+6. **CRITICAL — If the user responds with a question or disagreement instead of a decision:**
+   - STOP immediately — do NOT continue to the next finding
+   - Research the user's question/concern RIGHT NOW using `WebSearch`, codebase analysis, or both
+   - Provide a thorough answer with evidence (links, code references, best practice citations)
+   - Only AFTER the user is satisfied, ask for their decision again
+   - This may go back and forth multiple times — that is expected and correct behavior
+7. **Track all decisions** internally. Do NOT apply any fix yet — all fixes are applied in Step 5.
 
 ### Step 5: Phase 2 — Apply ALL Approved Corrections
 

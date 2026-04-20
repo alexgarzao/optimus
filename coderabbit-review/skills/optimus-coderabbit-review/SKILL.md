@@ -141,11 +141,13 @@ Parse the CodeRabbit output and categorize each finding by severity:
 
 ---
 
-## Phase 2: Interactive Finding-by-Finding Resolution
+## Phase 2: Interactive Finding-by-Finding Resolution (collect decisions only)
 
-Process ONE finding at a time, in severity order (CRITICAL first, LOW last).
+**BEFORE presenting the first finding:** Announce total findings count prominently: `"### Total findings to review: N"`
 
-For EACH finding, present:
+Process ONE finding at a time, in severity order (CRITICAL first, LOW last). Collect ALL decisions first — do NOT apply any fix during this phase.
+
+For EACH finding, present with `"Finding X of N"` in the header:
 
 ### 1. Description
 
@@ -182,14 +184,25 @@ For straightforward fixes with no ambiguity, state: "Direct fix, no tradeoffs."
 
 Use `AskUser` tool. **BLOCKING**: Do NOT proceed to the next finding until the user decides.
 
+**CRITICAL — If the user responds with a question or disagreement instead of a decision:**
+- STOP immediately — do NOT continue to the next finding
+- Research the user's question/concern RIGHT NOW using `WebSearch`, codebase analysis, or both
+- Provide a thorough answer with evidence (links, code references, best practice citations)
+- Only AFTER the user is satisfied, ask for their decision again
+- This may go back and forth multiple times — that is expected and correct behavior
+
 The user may:
 - Accept one of the proposed options (e.g., "A", "B")
 - Resolve differently (user describes approach)
 - Ignore this issue (proceed without fixing)
 
+Record the decision internally. Do NOT apply any fix yet — all fixes are applied in Phase 3.
+
 ---
 
-## Phase 3: Fix with TDD + Agent Validation
+## Phase 3: Apply All Approved Fixes with TDD + Agent Validation
+
+**IMPORTANT:** This phase runs ONCE, after ALL findings have been presented and ALL decisions collected in Phase 2. No fix is applied during Phase 2.
 
 For each approved fix (skipped for ignored findings):
 

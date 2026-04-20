@@ -392,14 +392,20 @@ source of truth for coding standards and must be passed to every dispatched sub-
 
 ## Common Patterns Across Skills
 
-### Finding Presentation
+### Finding Presentation (Unified Model)
 All review/validation skills follow this pattern:
 1. Collect findings from agents/tools
 2. Consolidate and deduplicate
-3. Present overview table with severity counts
-4. Walk through findings one by one (AskUser for each decision)
-5. Batch apply approved fixes
-6. Present final summary
+3. Announce total findings count: `"### Total findings to review: N"`
+4. Present overview table with severity counts
+5. Walk through findings ONE AT A TIME with `"Finding X of N"` header, severity order
+6. For each finding: present analysis + options, collect decision via AskUser
+7. **If the user responds with a question or disagreement** instead of a decision:
+   STOP immediately, research the concern RIGHT NOW (WebSearch, codebase analysis),
+   provide a thorough answer with evidence, then re-ask for decision. Do NOT advance.
+8. After ALL N decisions collected: apply ALL approved fixes at once
+9. Run verification (lint + tests)
+10. Present final summary
 
 ### Convergence Loop (Fresh Sub-Agent Model)
 Used by: cycle-spec-stage-1, cycle-impl-review-stage-3, cycle-pr-review-stage-4, coderabbit-review

@@ -617,7 +617,7 @@ Each finding MUST include its source(s):
 
 ## Phase 5: Batched Finding Presentation and Resolution
 
-Findings are presented in **batches**, then resolved in **batches**. This prevents context loss on large PRs while keeping the user in control of batch size.
+Findings are presented ONE AT A TIME, decisions collected for ALL, then fixes applied ALL AT ONCE at the end.
 
 **=== MANDATORY — Progress Tracking (NEVER SKIP) ===**
 
@@ -628,7 +628,7 @@ Findings are presented in **batches**, then resolved in **batches**. This preven
 
 **For EVERY finding presented, you MUST:**
 1. Include `"Finding X of N"` in the header — this is NOT optional
-2. X starts at 1 and increments sequentially across all batches
+2. X starts at 1 and increments sequentially
 3. N is the total announced above and NEVER changes mid-review
 4. If you present a finding WITHOUT "Finding X of N" in the header, you are violating this rule — STOP and correct it
 
@@ -637,25 +637,11 @@ Findings are presented in **batches**, then resolved in **batches**. This preven
 - Which finding they are currently reviewing (X)
 - How many remain (N - X)
 
-### Step 5.0: Determine Batch Size
+### Step 5.1: Present Findings One at a Time (collect decisions only)
 
-Ask the user using `AskUser`:
+Present ALL findings sequentially, one after another, collecting the user's decision for each. Do NOT apply any fix during this phase — only collect decisions.
 
-```
-There are N findings to review. How many would you like to review per batch?
-- All at once (present all N, then resolve all)
-- 5 per batch
-- 10 per batch
-- Custom number
-```
-
-Default to **5 per batch** if the user doesn't choose.
-
-### Step 5.1: Present Batch (questions phase)
-
-Present all findings in the current batch, one after another, collecting decisions for each. Do NOT apply any fix during this phase.
-
-For EACH finding in the batch:
+For EACH finding:
 
 #### Finding Header
 
@@ -723,38 +709,6 @@ Use `AskUser`. **BLOCKING** — do not advance until decided.
 
 Record: finding ID, source(s), decision (fix/skip/defer), chosen option. Do NOT apply any fix yet.
 
-### Step 5.2: Resolve Batch (fixes phase)
-
-After ALL findings in the current batch have been presented and decisions collected, apply the fixes for this batch following Phase 6 (TDD cycle, commit per fix, suppressions).
-
-### Step 5.3: Batch Summary
-
-After resolving the current batch, show progress:
-
-```markdown
-### Batch X complete — Progress: Y of N findings reviewed
-
-| Status | Count |
-|--------|-------|
-| Fixed (this batch) | A |
-| Skipped (this batch) | B |
-| Deferred (this batch) | C |
-| Remaining | N - Y |
-```
-
-### Step 5.4: Continue or Adjust
-
-If findings remain, ask the user using `AskUser`:
-
-```
-Y of N findings reviewed. Z remaining. Continue with next batch?
-- Continue (same batch size)
-- Change batch size
-- Stop here (skip remaining)
-```
-
-Then present the next batch (Step 5.1) and repeat until all findings are processed or the user stops.
-
 ---
 
 ## Phase 5.5: Recommend Rule Configuration (Codacy/DeepSource)
@@ -785,9 +739,9 @@ Ask the user whether to apply config changes. If approved, edit the config files
 
 ---
 
-## Phase 6: Apply Fixes with TDD Cycle
+## Phase 6: Apply All Approved Fixes with TDD Cycle
 
-**IMPORTANT:** This phase runs after each batch of findings has been presented and decisions collected (Step 5.2). It is called once per batch, NOT once at the end.
+**IMPORTANT:** This phase runs ONCE, after ALL findings have been presented and ALL decisions collected in Phase 5. No fix is applied during Phase 5.
 
 ### Step 6.1: Pre-Apply Summary
 
@@ -874,7 +828,7 @@ Record the suppression commit SHA for use in Phase 8.
 
 ## Phase 6.6: Coverage Verification and Test Gap Analysis
 
-**IMPORTANT:** This phase runs ONLY ONCE, after ALL batches have been processed (all findings presented, decided, and fixed). Do NOT run coverage verification between batches.
+**IMPORTANT:** This phase runs ONLY ONCE, after ALL fixes from Phase 6 have been applied.
 
 ### Step 6.6.1: Coverage Measurement
 
@@ -1296,10 +1250,9 @@ gh api graphql -f query='
 ## Completion Checklist (MANDATORY — verify before ending)
 
 - [ ] Total findings count (N) was announced before the first finding
-- [ ] Batch size was asked and confirmed with the user
-- [ ] All findings presented with "Finding X of N" in EVERY header (all N presented across all batches)
+- [ ] All findings presented with "Finding X of N" in EVERY header
 - [ ] All decisions collected (fix / skip / defer for every finding)
-- [ ] All approved fixes committed with TDD cycle (applied per batch)
+- [ ] All approved fixes committed with TDD cycle (applied after all decisions collected)
 - [ ] Won't-fix Codacy/DeepSource findings suppressed inline
 - [ ] Push completed or explicitly skipped
 - [ ] ALL comment threads replied AND resolved atomically (reply → resolve → next, never batch separately)
@@ -1319,10 +1272,9 @@ gh api graphql -f query='
 - Every finding must include source attribution
 - Only review files changed in the PR
 - ALWAYS announce total findings count (N) before presenting the first finding: `"### Total findings to review: N"`
-- ALWAYS ask the user for batch size before starting (default: 5 per batch)
-- Present findings in batches: present all in the batch, collect decisions, then apply fixes for the batch before moving to the next
-- One finding at a time within each batch, severity order, ALWAYS showing "Finding X of N" in EVERY finding header — NEVER present a finding without this progress indicator
-- Coverage verification and convergence loop run ONLY after the last batch is complete
+- Present findings ONE AT A TIME in severity order, ALWAYS showing "Finding X of N" in EVERY finding header
+- Collect ALL decisions first (Phase 5), then apply ALL approved fixes at once (Phase 6)
+- Coverage verification and convergence loop run ONLY after all fixes are applied
 - No changes without user approval
 - BEFORE presenting each finding: research best practices (API design, UI/UX, security, engineering) using WebSearch and codebase analysis. Option A must be your researched recommendation with clear justification
 - If the user responds with a question or disagreement: STOP, research and answer thoroughly RIGHT NOW — do NOT defer to the fix phase or continue to the next finding
