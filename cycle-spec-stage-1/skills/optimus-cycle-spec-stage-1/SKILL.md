@@ -461,19 +461,67 @@ Merge agent findings with the findings from Steps 1-3. Deduplicate and sort by s
 1. **Announce total findings count:** Display `"### Total findings to review: N"` prominently before presenting the first finding
 2. **Present the summary report** (tables from Output Format) for bird's-eye view
 3. **Then present findings ONE AT A TIME** in priority order: contradictions > missing specs > test gaps > observability > DoD > ambiguities
-4. **For EACH finding**, present with `"Finding X of N"` in the header:
-   - **Problem:** Clear description, referencing exact doc locations
-   - **Why it matters:** Impact through UX and engineering best practices lenses
-   - **Options:** 2-3 concrete resolution options with pros/cons/effort
-   - **Recommendation:** Preferred option with justification
-5. Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides
-6. **CRITICAL — If the user responds with a question or disagreement instead of a decision:**
+
+**For EACH finding**, present with `"Finding X of N"` in the header:
+
+#### Deep Research Before Presenting (MANDATORY)
+
+**BEFORE presenting any finding to the user, you MUST research it deeply.** This research
+is done SILENTLY — do not show the research process. Present only the conclusions.
+
+**Research checklist (ALL items, every finding):**
+
+1. **Project patterns:** Read related files fully, understand existing conventions
+2. **Architectural decisions:** Review project rules (AGENTS.md, PROJECT_RULES.md, etc.) and architecture docs. Understand WHY the project is structured this way
+3. **Existing codebase:** Search for precedent — if the codebase already handles similar cases, that context changes the finding's weight
+4. **Current task focus:** Is this finding within the scope of the task spec being validated? Flag tangential findings as such
+5. **User/consumer use cases:** Who will use this feature — end users, other services, internal modules? Trace impact to real user scenarios
+6. **UX impact:** For user-facing features, evaluate usability, accessibility, error messaging, and workflows
+7. **API best practices:** REST conventions, error handling, idempotency, status codes, pagination, versioning, backward compatibility
+8. **Engineering best practices:** SOLID principles, DRY, separation of concerns, error handling, resilience, observability, testability
+9. **Language-specific best practices:** Use `WebSearch` to research idioms for the specific language (Go, TypeScript, etc.) — official style guides, linter rules, community patterns
+10. **Correctness over convenience:** Always recommend the correct approach, regardless of effort
+
+**After research, form your recommendation:** Option A MUST be the approach you believe is correct based on all the research above, backed by evidence.
+
+#### Present the Finding
+
+- **Problem:** Clear description, referencing exact doc locations
+- **Why it matters:** Impact analysis through four lenses:
+  - **UX:** How does this affect the end user?
+  - **Task focus:** Within task scope or tangential?
+  - **Project focus:** MVP-critical or gold-plating?
+  - **Engineering quality:** Maintainability, testability, reliability impact
+
+#### Proposed Solutions (2-3 options)
+
+**Option A MUST be your researched recommendation** — always prefer correctness over convenience.
+
+```
+**Option A: [name] (RECOMMENDED)**
+[Concrete steps — what to change in the spec/docs]
+- Why recommended: [reference to research — best practice, project pattern, official docs]
+- Impact: UX / Task focus / Project focus / Engineering quality
+- Effort: low / medium / high / very high
+- Estimated time: < 5 min / 5-15 min / 15-60 min / 1-4h / > 4h
+
+**Option B: [name]**
+[Alternative approach]
+- Impact: UX / Task focus / Project focus / Engineering quality
+- Effort: low / medium / high / very high
+- Estimated time: < 5 min / 5-15 min / 15-60 min / 1-4h / > 4h
+```
+
+#### Collect Decision
+
+4. Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides
+5. **CRITICAL — If the user responds with a question or disagreement instead of a decision:**
    - STOP immediately — do NOT continue to the next finding
    - Research the user's question/concern RIGHT NOW using `WebSearch`, codebase analysis, or both
    - Provide a thorough answer with evidence (links, code references, best practice citations)
    - Only AFTER the user is satisfied, ask for their decision again
    - This may go back and forth multiple times — that is expected and correct behavior
-7. **Track all decisions** internally. Do NOT apply any fix yet — all fixes are applied in Step 5.
+6. **Track all decisions** internally. Do NOT apply any fix yet — all fixes are applied in Step 5.
 
 ### Step 5: Phase 2 — Apply ALL Approved Corrections
 
@@ -668,6 +716,7 @@ Components verified: [list each component checked]
 - ALWAYS use the two-phase flow: Phase 1 presents summary then walks through each finding one at a time. Phase 2 applies all approved corrections at once
 - If corrections were applied, ask the user for commit approval — do NOT commit without explicit approval
 - Every finding must reference a specific doc section or standard — "I would do it differently" is not a valid finding
+- BEFORE presenting each finding: deep research is MANDATORY — project patterns, architectural decisions, existing codebase, task focus, user/consumer use cases, UX impact, API best practices, engineering best practices, language-specific idioms. Option A must be the correct approach backed by research evidence, regardless of effort
 - The agent NEVER decides whether a finding should be fixed or skipped — the USER always decides
 - ALL findings (CRITICAL, HIGH, MEDIUM, and LOW) MUST be presented to the user for decision
 - The agent may recommend an option, but MUST wait for user approval via AskUser before proceeding

@@ -149,13 +149,33 @@ Process ONE finding at a time, in severity order (CRITICAL first, LOW last). Col
 
 For EACH finding, present with `"Finding X of N"` in the header:
 
-### 1. Description
+### 1. Deep Research Before Presenting (MANDATORY)
+
+**BEFORE presenting any finding to the user, you MUST research it deeply.** This research
+is done SILENTLY — do not show the research process. Present only the conclusions.
+
+**Research checklist (ALL items, every finding):**
+
+1. **Project patterns:** Read the affected file(s) fully, understand the patterns used, check how similar cases are handled elsewhere in the codebase
+2. **Architectural decisions:** Review project rules (AGENTS.md, PROJECT_RULES.md, etc.) and architecture docs. Understand WHY the project is structured this way
+3. **Existing codebase:** Search for precedent — if the codebase already does the same thing in other places, that context changes the finding's weight
+4. **Current task focus:** Is this finding within the scope of the changes being reviewed? Flag tangential findings as such
+5. **User/consumer use cases:** Who consumes this code — end users, other services, internal modules? Trace impact to real user scenarios
+6. **UX impact:** For user-facing changes, evaluate usability, accessibility, error messaging, and workflows
+7. **API best practices:** REST conventions, error handling, idempotency, status codes, pagination, versioning, backward compatibility
+8. **Engineering best practices:** SOLID principles, DRY, separation of concerns, error handling, resilience, observability, testability
+9. **Language-specific best practices:** Use `WebSearch` to research idioms for the specific language (Go, TypeScript, etc.) — official style guides, linter rules, community patterns
+10. **Correctness over convenience:** Always recommend the correct approach, regardless of effort
+
+**After research, form your recommendation:** Option A MUST be the approach you believe is correct based on all the research above, backed by evidence.
+
+### 2. Description
 
 - What was found (problem identified)
 - Relevant current code with context
 - Severity classification (CRITICAL/HIGH/MEDIUM/LOW) with justification
 
-### 2. Impact Analysis (four lenses)
+### 3. Impact Analysis (four lenses)
 
 Evaluate the finding through all four perspectives to help the user make an informed decision:
 
@@ -164,23 +184,28 @@ Evaluate the finding through all four perspectives to help the user make an info
 - **Project focus:** Is this MVP-critical, or gold-plating? Does ignoring it now create rework later? Does it conflict with the project's priorities?
 - **Engineering quality:** Does this hurt maintainability, testability, reliability, or codebase consistency? What is the technical debt cost of skipping it?
 
-### 3. Proposed Solutions (2-3 options)
+### 4. Proposed Solutions (2-3 options)
 
-For each option, evaluate all four lenses:
+**Option A MUST be your researched recommendation** — always prefer correctness over convenience.
+
+For each option:
 
 ```
-**Option A: [name]**
-[What to do — concrete steps, files to change]
-- UX: [impact on the end user's experience]
-- Task focus: [within scope / tangential]
-- Project focus: [MVP-aligned / nice-to-have / out-of-scope]
-- Engineering: [pros and cons — complexity, maintainability, test coverage, consistency]
-- Effort: [trivial (< 5 min) / small (5-15 min) / moderate (15-60 min) / large (> 1h)]
+**Option A: [name] (RECOMMENDED)**
+[Concrete steps — what to do, which files to change, what code to write]
+- Why recommended: [reference to research — best practice, project pattern, official docs]
+- Impact: UX / Task focus / Project focus / Engineering quality
+- Effort: low / medium / high / very high
+- Estimated time: < 5 min / 5-15 min / 15-60 min / 1-4h / > 4h
+
+**Option B: [name]**
+[Alternative approach]
+- Impact: UX / Task focus / Project focus / Engineering quality
+- Effort: low / medium / high / very high
+- Estimated time: < 5 min / 5-15 min / 15-60 min / 1-4h / > 4h
 ```
 
-For straightforward fixes with no ambiguity, state: "Direct fix, no tradeoffs."
-
-### 4. Wait for User Decision
+### 5. Wait for User Decision
 
 Use `AskUser` tool. **BLOCKING**: Do NOT proceed to the next finding until the user decides.
 
@@ -489,6 +514,7 @@ After the convergence loop exits:
 ## Rules
 
 - All findings are investigated, one at a time, in severity order (CRITICAL > HIGH > MEDIUM > LOW)
+- BEFORE presenting each finding: deep research is MANDATORY — project patterns, architectural decisions, existing codebase, task focus, user/consumer use cases, UX impact, API best practices, engineering best practices, language-specific idioms. Option A must be the correct approach backed by research evidence, regardless of effort
 - No changes without prior user approval — the user ALWAYS decides the approach
 - Ignored findings are recorded but not fixed
 - Use review agents (Step 3.1) for logic changes; use codebase exploration for context investigation

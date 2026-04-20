@@ -651,19 +651,25 @@ Example: `## Finding 1 of 12 — [HIGH] F1 | Codacy + Agent | Security`
 Example: `## Finding 5 of 12 — [MEDIUM] F5 | DeepSource + Agent | Anti-pattern`
 Example: `## Finding 12 of 12 — [LOW] F12 | CodeRabbit + Agent | Style`
 
-#### Research Before Presenting (MANDATORY)
+#### Deep Research Before Presenting (MANDATORY)
 
-**BEFORE presenting any finding to the user, you MUST research:**
+**BEFORE presenting any finding to the user, you MUST research it deeply.** This research
+is done SILENTLY — do not show the research process. Present only the conclusions.
 
-1. **Project context:** Read the affected file fully, understand the patterns used, check how similar cases are handled elsewhere in the codebase
-2. **Best practices:** Use `WebSearch` to research the specific issue:
-   - API design: REST conventions, error handling patterns, idempotency, status codes
-   - UI/UX: accessibility standards (WCAG), usability heuristics, component patterns
-   - Engineering: SOLID principles, language-specific idioms, framework best practices
-   - Security: OWASP guidelines, common vulnerability patterns
-3. **Form your recommendation:** Based on the research, decide what Option A (your recommended approach) should be. Option A must be backed by the research, not just a generic suggestion.
+**Research checklist (ALL items, every finding):**
 
-This research is done SILENTLY — do not show the research process to the user. Present only the conclusion as part of the finding analysis below.
+1. **Project patterns:** Read the affected file(s) fully, understand the patterns used, check how similar cases are handled elsewhere in the codebase
+2. **Architectural decisions:** Review project rules (AGENTS.md, PROJECT_RULES.md, etc.) and architecture docs. Understand WHY the project is structured this way
+3. **Existing codebase:** Search for precedent — if the codebase already does the same thing in other places, that context changes the finding's weight
+4. **Current task focus:** Is this finding within the scope of the PR/task? Flag tangential findings as such
+5. **User/consumer use cases:** Who consumes this code — end users, other services, internal modules? Trace impact to real user scenarios
+6. **UX impact:** For user-facing changes, evaluate usability, accessibility, error messaging, and workflows
+7. **API best practices:** REST conventions, error handling, idempotency, status codes, pagination, versioning, backward compatibility
+8. **Engineering best practices:** SOLID principles, DRY, separation of concerns, error handling, resilience, observability, testability
+9. **Language-specific best practices:** Use `WebSearch` to research idioms for the specific language (Go, TypeScript, etc.) — official style guides, linter rules, community patterns
+10. **Correctness over convenience:** Always recommend the correct approach, regardless of effort
+
+**After research, form your recommendation:** Option A MUST be the approach you believe is correct based on all the research above, backed by evidence (project patterns, best practice references, official docs).
 
 #### Deep Technical Analysis
 
@@ -680,20 +686,22 @@ This research is done SILENTLY — do not show the research process to the user.
 
 #### Proposed Solutions
 
-**Option A MUST be your researched recommendation** — the approach you believe is correct based on best practices research, project context, and engineering principles. State clearly why this is the recommended option.
+**Option A MUST be your researched recommendation** — the approach you believe is correct based on best practices research, project context, and engineering principles. State clearly why this is the recommended option. Always prefer correctness over convenience.
 
 For each option:
 ```
 **Option A: [name] (RECOMMENDED)**
-[Concrete steps]
-- Why recommended: [reference to best practice, standard, or project pattern]
-- UX / Task / Project / Engineering impact
-- Effort: trivial / small / moderate / large
+[Concrete steps — what to do, which files to change]
+- Why recommended: [reference to research — best practice, project pattern, official docs]
+- Impact: UX / Task focus / Project focus / Engineering quality
+- Effort: low / medium / high / very high
+- Estimated time: < 5 min / 5-15 min / 15-60 min / 1-4h / > 4h
 
 **Option B: [name]**
 [Alternative approach]
-- UX / Task / Project / Engineering impact
-- Effort: trivial / small / moderate / large
+- Impact: UX / Task focus / Project focus / Engineering quality
+- Effort: low / medium / high / very high
+- Estimated time: < 5 min / 5-15 min / 15-60 min / 1-4h / > 4h
 ```
 
 #### Collect Decision
@@ -1276,7 +1284,7 @@ gh api graphql -f query='
 - Collect ALL decisions first (Phase 5), then apply ALL approved fixes at once (Phase 6)
 - Coverage verification and convergence loop run ONLY after all fixes are applied
 - No changes without user approval
-- BEFORE presenting each finding: research best practices (API design, UI/UX, security, engineering) using WebSearch and codebase analysis. Option A must be your researched recommendation with clear justification
+- BEFORE presenting each finding: deep research is MANDATORY — project patterns, architectural decisions, existing codebase, task focus, user/consumer use cases, UX impact, API best practices, engineering best practices, language-specific idioms. Option A must be the correct approach backed by research evidence, regardless of effort
 - If the user responds with a question or disagreement: STOP, research and answer thoroughly RIGHT NOW — do NOT defer to the fix phase or continue to the next finding
 - Dispatch agents using ring droids when available (preferred), falling back to `worker` with domain-specific instructions
 - Fixes use TDD cycle (RED-GREEN-REFACTOR) with separate commits per finding

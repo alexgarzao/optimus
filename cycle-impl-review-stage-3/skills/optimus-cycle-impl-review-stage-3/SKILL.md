@@ -494,6 +494,26 @@ Process ONE finding at a time, starting from highest severity. Present ALL findi
 
 For EACH finding, present with `"Finding X of N"` in the header:
 
+### Deep Research Before Presenting (MANDATORY)
+
+**BEFORE presenting any finding to the user, you MUST research it deeply.** This research
+is done SILENTLY — do not show the research process. Present only the conclusions.
+
+**Research checklist (ALL items, every finding):**
+
+1. **Project patterns:** Read the affected file(s) fully, understand the patterns used, check how similar cases are handled elsewhere in the codebase
+2. **Architectural decisions:** Review project rules (AGENTS.md, PROJECT_RULES.md, etc.) and architecture docs. Understand WHY the project is structured this way
+3. **Existing codebase:** Search for precedent — if the codebase already does the same thing in other places, that context changes the finding's weight
+4. **Current task focus:** Is this finding within the scope of the task being validated? Flag tangential findings as such
+5. **User/consumer use cases:** Who consumes this code — end users, other services, internal modules? Trace impact to real user scenarios
+6. **UX impact:** For user-facing changes, evaluate usability, accessibility, error messaging, and workflows
+7. **API best practices:** REST conventions, error handling, idempotency, status codes, pagination, versioning, backward compatibility
+8. **Engineering best practices:** SOLID principles, DRY, separation of concerns, error handling, resilience, observability, testability
+9. **Language-specific best practices:** Use `WebSearch` to research idioms for the specific language (Go, TypeScript, etc.) — official style guides, linter rules, community patterns
+10. **Correctness over convenience:** Always recommend the correct approach, regardless of effort
+
+**After research, form your recommendation:** Option A MUST be the approach you believe is correct based on all the research above, backed by evidence (project patterns, best practice references, official docs).
+
 ### Problem Description
 - What is wrong (file, line, code snippet if relevant)
 - Which rule/spec it violates (exact reference to coding standards section, task spec line, or named best practice)
@@ -511,27 +531,24 @@ Evaluate the finding through all four perspectives:
 
 ### Proposed Solutions (2-3 options)
 
-For each option, evaluate all four lenses:
+**Option A MUST be your researched recommendation** — the approach you believe is correct based on the deep research above. Always prefer correctness over convenience.
+
+For each option:
 
 ```
-**Option A: [name]**
-[What to do — concrete steps, files to change]
-- UX: [impact on the end user's experience]
-- Task focus: [within task scope / tangential]
-- Project focus: [MVP-aligned / nice-to-have / out-of-scope]
-- Engineering: [pros and cons — complexity, maintainability, test coverage, consistency]
-- Effort: [trivial (< 5 min) / small (5-15 min) / moderate (15-60 min) / large (> 1h)]
+**Option A: [name] (RECOMMENDED)**
+[Concrete steps — what to do, which files to change, what code to write]
+- Why recommended: [reference to research — best practice, project pattern, official docs]
+- Impact: UX / Task focus / Project focus / Engineering quality
+- Effort: low / medium / high / very high
+- Estimated time: < 5 min / 5-15 min / 15-60 min / 1-4h / > 4h
 
 **Option B: [name]**
-[What to do]
-- UX: [impact]
-- Task focus: [alignment]
-- Project focus: [alignment]
-- Engineering: [pros/cons]
-- Effort: [estimate]
+[Alternative approach]
+- Impact: UX / Task focus / Project focus / Engineering quality
+- Effort: low / medium / high / very high
+- Estimated time: < 5 min / 5-15 min / 15-60 min / 1-4h / > 4h
 ```
-
-Include a recommendation when one option is clearly better, with brief justification.
 
 ### Ask for Decision
 
@@ -855,6 +872,7 @@ Required output:
 - Every finding must reference a specific rule (coding standards section, task spec line, or named best practice)
 - "I would do it differently" is NOT a valid finding — it must violate a documented standard or create a measurable risk
 - Subjective style preferences are LOW severity at most
+- BEFORE presenting each finding: deep research is MANDATORY — project patterns, architectural decisions, existing codebase, task focus, user/consumer use cases, UX impact, API best practices, engineering best practices, language-specific idioms. Option A must be the correct approach backed by research evidence, regardless of effort
 
 ### Prioritization
 - Security vulnerabilities and spec violations are always CRITICAL/HIGH regardless of effort to fix

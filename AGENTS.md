@@ -398,14 +398,76 @@ All review/validation skills follow this pattern:
 2. Consolidate and deduplicate
 3. Announce total findings count: `"### Total findings to review: N"`
 4. Present overview table with severity counts
-5. Walk through findings ONE AT A TIME with `"Finding X of N"` header, severity order
-6. For each finding: present analysis + options, collect decision via AskUser
-7. **If the user responds with a question or disagreement** instead of a decision:
+5. **Deep research BEFORE presenting each finding** (see research checklist below)
+6. Walk through findings ONE AT A TIME with `"Finding X of N"` header, severity order
+7. For each finding: present research-backed analysis + options, collect decision via AskUser
+8. **If the user responds with a question or disagreement** instead of a decision:
    STOP immediately, research the concern RIGHT NOW (WebSearch, codebase analysis),
    provide a thorough answer with evidence, then re-ask for decision. Do NOT advance.
-8. After ALL N decisions collected: apply ALL approved fixes at once
-9. Run verification (lint + tests)
-10. Present final summary
+9. After ALL N decisions collected: apply ALL approved fixes at once
+10. Run verification (lint + tests)
+11. Present final summary
+
+### Deep Research Before Presenting (MANDATORY for all review skills)
+Used by: cycle-spec-stage-1, cycle-impl-review-stage-3, cycle-pr-review-stage-4, coderabbit-review
+
+**BEFORE presenting any finding to the user, the agent MUST research it deeply.** This
+research is done SILENTLY — do not show the research process. Present only the conclusions.
+
+**Research checklist (ALL items, every finding):**
+
+1. **Project patterns:** Read the affected file(s) fully. Check how similar cases are handled
+   elsewhere in the codebase. Identify existing conventions the finding might violate or follow.
+2. **Architectural decisions:** Review project rules (AGENTS.md, PROJECT_RULES.md, etc.) and
+   architecture docs (TRD, ADRs). Understand WHY the project is structured this way before
+   suggesting changes.
+3. **Existing codebase:** Search for precedent. If the codebase already does the same thing
+   in 10 other places without issue, that context changes the finding's weight.
+4. **Current task focus:** Is this finding within the scope of the task being worked on?
+   Tangential findings should be flagged as such (not dismissed, but contextualized).
+5. **User/consumer use cases:** Who consumes this code — end users, other services, internal
+   modules? How does the finding affect them? Trace the impact to real user scenarios.
+6. **UX impact:** For user-facing changes, evaluate usability, accessibility, error messaging,
+   and workflows. Would the user notice? Would it block their work?
+7. **API best practices:** For API changes, check REST conventions, error handling patterns,
+   idempotency, status codes, pagination, versioning, and backward compatibility.
+8. **Engineering best practices:** SOLID principles, DRY, separation of concerns, error
+   handling, resilience patterns, observability, testability.
+9. **Language-specific best practices:** Use `WebSearch` to research idioms and conventions
+   for the specific language (Go, TypeScript, Python, etc.). Check official style guides,
+   common linter rules, and community-accepted patterns.
+10. **Correctness over convenience:** Always recommend the correct approach, regardless of
+    effort. The easy option may be presented as an alternative, but Option A must be what
+    the agent believes is right based on all the research above.
+
+**After research, form the recommendation:** Option A MUST be the approach the agent
+believes is correct based on the research. It must be backed by evidence (project patterns,
+best practice references, official documentation), not just a generic suggestion.
+
+### Finding Option Format (MANDATORY for all review skills)
+
+Every finding must present 2-3 options with this structure:
+
+```
+**Option A: [name] (RECOMMENDED)**
+[Concrete steps — what to do, which files to change, what code to write]
+- Why recommended: [reference to research — best practice, project pattern, official docs]
+- Impact: [UX / Task focus / Project focus / Engineering quality]
+- Effort: [low / medium / high / very high]
+- Estimated time: [< 5 min / 5-15 min / 15-60 min / 1-4h / > 4h]
+
+**Option B: [name]**
+[Alternative approach]
+- Impact: [UX / Task focus / Project focus / Engineering quality]
+- Effort: [low / medium / high / very high]
+- Estimated time: [< 5 min / 5-15 min / 15-60 min / 1-4h / > 4h]
+```
+
+**Effort scale:**
+- **Low:** Localized change, single file, no tests needed
+- **Medium:** Multiple files, straightforward, may need test updates
+- **High:** Significant refactoring, new tests, multiple modules affected
+- **Very high:** Architectural change, many files, extensive testing, risk of regressions
 
 ### Convergence Loop (Fresh Sub-Agent Model)
 Used by: cycle-spec-stage-1, cycle-impl-review-stage-3, cycle-pr-review-stage-4, coderabbit-review
