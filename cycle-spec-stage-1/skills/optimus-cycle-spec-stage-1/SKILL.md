@@ -105,7 +105,7 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
 
-### Step 0.0.2: Validate and Update Task Status
+### Step 0.0.2: Validate Task Status (DO NOT modify yet)
 
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
@@ -145,8 +145,8 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
      - **BLOCKING:** Do NOT change status until the user confirms
    - **If re-execution** (status is already `Validando Spec`) OR the user specified the task ID explicitly:
      - Skip expanded confirmation (user already has context)
-5. Update the Status column to `Validando Spec` (if not already)
-6. Do NOT commit this change separately — it will be committed with the task's work
+
+**IMPORTANT:** Do NOT modify tasks.md yet. Status and Branch updates happen in Step 0.0.4 AFTER the workspace is created. This ensures the modifications happen in the correct working directory (worktree or feature branch).
 
 **Anti-pulo:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`), refuse to proceed — the task has already passed this stage.
 
@@ -159,7 +159,7 @@ DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@
 CURRENT_BRANCH=$(git branch --show-current)
 ```
 
-**If already on a feature branch** (not default/main/master): proceed (re-execution or workspace already exists).
+**If already on a feature branch** (not default/main/master): proceed to Step 0.0.4 (re-execution or workspace already exists).
 
 **If on default branch:** Create a workspace for the task. Ask the user via `AskUser`:
 
@@ -185,9 +185,21 @@ Then change working directory to the new worktree path for all subsequent steps.
 git checkout -b feat/<task-id>-<keywords>
 ```
 
-After creating the workspace, update the **Branch** column in `tasks.md` for this task with the branch name.
-
 **BLOCKING**: Do NOT proceed until the workspace is created.
+
+### Step 0.0.4: Update tasks.md (Status + Branch)
+
+**IMPORTANT:** This step runs AFTER the workspace is created, so modifications happen in the feature branch's working directory — not on the default branch.
+
+1. Update the **Status** column to `Validando Spec` (if not already)
+2. Update the **Branch** column with the branch name created in Step 0.0.3 (if a new workspace was created)
+3. Commit these changes immediately:
+   ```bash
+   git add tasks.md
+   git commit -m "chore(tasks): start T-XXX — set status to Validando Spec"
+   ```
+
+**Why commit immediately:** Stage-1 is analysis-only — it may not produce any other file changes. If no findings are fixed (all skipped), Step 6 would not commit, leaving tasks.md changes uncommitted and at risk of being lost. Committing now ensures the status change is persisted regardless of the analysis outcome.
 
 ### Step 0.1: Discover Project Structure
 

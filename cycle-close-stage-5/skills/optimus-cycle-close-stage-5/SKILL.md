@@ -319,7 +319,27 @@ Options:
 - **Remove worktree**: `git worktree remove <path>`
 - **Keep**: Leave the worktree as is
 
-### Step 3.2: Check for Task Branch
+### Step 3.2: Check for Open PR
+
+**IMPORTANT:** PR must be merged BEFORE branch deletion. If the branch is deleted first, all commits on it (including the DONE status change) are lost.
+
+```bash
+TASK_BRANCH=$(grep "T-XXX" tasks.md | ... extract Branch column ...)
+gh pr list --head "$TASK_BRANCH" --json number,state,title,url --jq '.[] | select(.state == "OPEN")'
+```
+
+If an open PR is found, ask via `AskUser`:
+```
+Task T-XXX is done. PR #N is still open. What should I do?
+```
+Options:
+- **Merge (merge commit)**: `gh pr merge <number> --merge`
+- **Merge (squash)**: `gh pr merge <number> --squash`
+- **Merge (rebase)**: `gh pr merge <number> --rebase`
+- **Keep open**: Leave the PR for manual merge
+- **Close without merging**: `gh pr close <number>`
+
+### Step 3.3: Check for Task Branch
 
 Identify the task's branch from the **Branch column** in `tasks.md` (primary source). If the column is `-` or empty, fall back to convention:
 
@@ -355,23 +375,6 @@ git branch -d <branch>
 git push origin --delete <branch>
 ```
 
-### Step 3.3: Check for Open PR
-
-```bash
-gh pr list --head "<task-branch>" --json number,state,title,url --jq '.[] | select(.state == "OPEN")'
-```
-
-If an open PR is found, ask via `AskUser`:
-```
-Task T-XXX is done. PR #N is still open. What should I do?
-```
-Options:
-- **Merge (merge commit)**: `gh pr merge <number> --merge`
-- **Merge (squash)**: `gh pr merge <number> --squash`
-- **Merge (rebase)**: `gh pr merge <number> --rebase`
-- **Keep open**: Leave the PR for manual merge
-- **Close without merging**: `gh pr close <number>`
-
 ### Step 3.4: Cleanup Summary
 
 ```markdown
@@ -380,9 +383,9 @@ Options:
 | Resource | Status | Action Taken |
 |----------|--------|-------------|
 | Worktree `/path/to/wt` | Not found | - |
+| PR #42 | Open | Merged / Kept / Closed |
 | Branch `feat/t-xxx-...` (local) | Found | Deleted / Kept |
 | Branch `feat/t-xxx-...` (remote) | Found | Deleted / Kept |
-| PR #42 | Open | Merged / Kept / Closed |
 ```
 
 ---

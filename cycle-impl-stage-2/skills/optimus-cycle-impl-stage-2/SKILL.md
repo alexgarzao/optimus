@@ -109,7 +109,7 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 
 **If the user did NOT specify a task ID** (e.g., "execute the next task", or just invoked the skill):
 1. **Identify the next task ready for implementation:** Scan the table for the first task that:
-   - Has status `Validando Spec` (cycle-spec-stage-1 completed)
+   - Has status `Validando Spec` (cycle-spec-stage-1 completed) or `Em Andamento` (re-execution)
    - Has all dependencies (Depends column) with status `**DONE**` (or Depends is `-`)
 2. **If multiple candidates exist**, pick the one with highest Priority (`Alta` > `Media` > `Baixa`), then lowest ID
 3. **Suggest to the user** using `AskUser`: "I identified the next task to execute: T-XXX — [task title]. Is this correct, or would you like to execute a different task?"

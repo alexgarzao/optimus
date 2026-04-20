@@ -56,8 +56,9 @@ The agent NEVER decides whether a finding should be fixed or skipped. ALL findin
 recommends but the user decides.
 
 ### 2. No False Convergence
-Convergence loops must use escalating scrutiny (5 rounds). Agents in re-validation
-rounds should analyze from scratch — the orchestrator deduplicates, not the agent.
+Convergence loops use the **fresh sub-agent model**: round 1 is analyzed by the
+orchestrator, rounds 2+ are executed by a fresh sub-agent (via `Task` tool) with zero
+prior context. Round 2 is mandatory. The orchestrator deduplicates, not the sub-agent.
 LOW severity is NOT a stop condition.
 
 ### 3. Atomic Thread Resolution
