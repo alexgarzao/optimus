@@ -265,9 +265,70 @@ If there are 3+ findings of the same nature (e.g., "inconsistent import path in 
 
 ---
 
+## Phase 4.5: Convergence Loop (MANDATORY — fresh sub-agent re-validation)
+
+After all findings from Phase 4 have been resolved (fixed, discarded, or deferred), the
+reviewer MUST automatically re-validate using a fresh sub-agent. This catches issues missed
+in round 1 due to session bias and issues introduced by fixes.
+
+**Round structure:**
+
+| Round | Who analyzes | How |
+|-------|-------------|-----|
+| **1** (initial) | Orchestrator (this agent) | Phase 1 (parallel agent dispatch) + Phase 2 (consolidate) — normal flow |
+| **2** (mandatory) | **Fresh sub-agent** via `Task` | Sub-agent reads all files in scope from scratch, reviews independently |
+| **3-5** | **Fresh sub-agent** via `Task` | Same as round 2 — only if round 2+ found new findings |
+
+**Round 2 is MANDATORY.** The "zero new findings" stop condition can only trigger from round 3.
+
+**Fresh sub-agent dispatch (rounds 2+):**
+
+Dispatch a single sub-agent via `Task` tool (use `worker` or any available review droid):
+
+```
+Goal: Independent code review (convergence round X of 5)
+
+You are a FRESH reviewer with NO prior context. Review from scratch.
+
+Context:
+  - Review type: Initial / Final
+  - Files to review: [full content — re-read from disk]
+  - Project rules: [full content — re-read from files]
+
+Previously identified findings (for DEDUP ONLY):
+  [list of findings with IDs and resolutions]
+
+CRITICAL: Analyze INDEPENDENTLY. Do NOT skip areas because previous rounds
+"already covered" them. The orchestrator will dedup.
+
+Required output:
+  For each finding: severity, file, line, category, description, recommendation
+  If no issues: "PASS — all domains clean"
+```
+
+**Orchestrator deduplication:** Compare sub-agent findings against cumulative ledger. New
+findings go through Phase 3-4 (present + resolve). Duplicates are discarded silently.
+
+**Loop rules:**
+- Max 5 rounds (initial = round 1). Round 2 is MANDATORY
+- Show `"=== Re-validation round X of 5 (fresh sub-agent) ==="` at start of each
+- Stop when: zero new findings (round 3+), round 5 reached, or user explicitly stops
+- LOW severity is NOT a stop condition — ALL findings are presented to the user
+
+**Round summary:**
+```markdown
+### Round X of 5 (fresh sub-agent) — Summary
+- New findings this round: N
+- Cumulative: X total findings across Y rounds
+- Fixed: A | Discarded: B | Deferred: C
+- Status: CONVERGED / CONTINUING / HARD LIMIT REACHED
+```
+
+---
+
 ## Phase 5: Final Summary
 
-After processing all findings:
+After the convergence loop exits:
 
 ```markdown
 ## Deep Review — Summary

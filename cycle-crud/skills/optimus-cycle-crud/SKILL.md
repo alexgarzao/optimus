@@ -11,6 +11,8 @@ trigger: >
   - When user wants to remove a task (e.g., "remove T-004", "delete task")
   - When user wants to reorder tasks (e.g., "move T-005 before T-003")
   - When user wants to cancel a task (e.g., "cancel T-004", "abandon T-004", "won't do T-004")
+  - When user wants to reopen a done task (e.g., "reopen T-004", "undo done T-004")
+  - When user wants to advance or demote a task status manually (e.g., "advance T-004", "demote T-004")
   - When user wants to manage versions (e.g., "create version", "add version v2", "edit version MVP")
   - When user wants to move tasks between versions (e.g., "move T-003 to v2")
   - When user says "manage tasks" or "edit tasks.md"
@@ -64,7 +66,22 @@ Administrative CRUD operations for tasks in `tasks.md`.
 
 ## Phase 0: Initialize
 
-### Step 0.0: Find and Validate tasks.md
+### Step 0.0: Verify GitHub CLI (conditional)
+
+Operations that interact with GitHub (cancel with PR/branch cleanup, reopen) require `gh`:
+
+```bash
+gh auth status 2>/dev/null
+```
+
+If this command fails and the requested operation involves PR or branch cleanup (cancel, reopen), **STOP** immediately:
+```
+GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
+```
+
+For operations that do not use `gh` (create, edit, remove, reorder, version management), skip this check.
+
+### Step 0.0.1: Find and Validate tasks.md
 
 1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either location, ask the user via `AskUser`:
 
@@ -116,6 +133,9 @@ Parse the user's request to determine which operation to perform:
 | **Remove** | "remove T-XXX", "delete T-XXX" |
 | **Reorder** | "move T-XXX before/after T-YYY", "reorder tasks" |
 | **Cancel** | "cancel T-XXX", "abandon T-XXX", "won't do T-XXX" |
+| **Reopen** | "reopen T-XXX", "undo done T-XXX", "unclose T-XXX" |
+| **Advance status** | "advance T-XXX", "set T-XXX to Em Andamento", "skip stage for T-XXX" |
+| **Demote status** | "demote T-XXX", "move T-XXX back", "reset T-XXX status" |
 | **Version** | "create version", "add version", "edit version", "remove version" |
 | **Move version** | "move tasks to v2", "move T-XXX to Futuro" |
 
@@ -127,8 +147,10 @@ If unclear, ask the user via `AskUser`:
 - (c) Remove a task
 - (d) Reorder tasks
 - (e) Cancel a task (mark as abandoned)
-- (f) Manage versions (create, edit, remove)
-- (g) Move tasks between versions
+- (f) Reopen a done task (revert to in-progress)
+- (g) Advance or demote task status manually
+- (h) Manage versions (create, edit, remove)
+- (i) Move tasks between versions
 
 ## Phase 1: Create Task
 
@@ -393,6 +415,181 @@ Cancelled task T-XXX: <title>
   Branch: <deleted / kept / none>
 ```
 
+## Phase 5.5: Reopen Task
+
+### Step 5.5.0: Identify Task
+
+1. Parse the task ID from the user's request
+2. Find the task row in the table
+3. If task not found → **STOP**: "Task T-XXX not found in tasks.md"
+
+### Step 5.5.1: Validate Reopen
+
+1. **If status is NOT `**DONE**`** → **STOP**: "Task T-XXX is not done (status: '<status>'). Only completed tasks can be reopened."
+2. **Determine target status based on workspace availability:**
+   - Read the **Branch** column for this task
+   - If Branch is NOT `-` AND the branch exists locally (`git branch --list "<branch>"`):
+     - Target status: `Em Andamento` (workspace exists, can resume implementation)
+   - If Branch is `-` OR the branch no longer exists:
+     - Target status: `Pendente` (workspace must be recreated via cycle-spec-stage-1)
+3. Warn via `AskUser`:
+   ```
+   Task T-XXX is marked as **DONE**. Reopening will set it to '<target status>'.
+
+   **T-XXX: [title]**
+   **Version:** [version]
+   **Branch:** [branch value or "deleted"]
+   **Target status:** <target status>
+   **Reason:** <see below>
+
+   [If Pendente]: The original branch was deleted. After reopening, run
+   `/optimus-cycle-spec-stage-1` to create a new workspace, then
+   `/optimus-cycle-impl-stage-2` to resume implementation.
+
+   [If Em Andamento]: The branch still exists. After reopening, switch to it
+   and run `/optimus-cycle-impl-stage-2` to resume implementation.
+
+   Why are you reopening this task? (This is logged for audit trail)
+   ```
+   Options:
+   - **Bug found** — implementation has a defect
+   - **Incomplete** — not all acceptance criteria were actually met
+   - **Requirements changed** — spec was updated after close
+   - **Cancel** — keep as DONE
+
+   **BLOCKING:** Do NOT proceed without user confirmation and justification.
+
+### Step 5.5.2: Apply Reopen
+
+1. Update the **Status** column from `**DONE**` to the target status determined in Step 5.5.1:
+   - `Em Andamento` if the workspace/branch still exists
+   - `Pendente` if the workspace/branch was deleted (so cycle-spec-stage-1 can create a new one)
+2. Save and commit: `chore(tasks): reopen T-XXX — <reason> (status: <target status>)`
+
+### Step 5.5.3: Confirm
+
+```
+Reopened task T-XXX: <title>
+  Previous status: **DONE**
+  New status: <target status>
+  Reason: <user's reason>
+  Next step: [run /optimus-cycle-spec-stage-1 | switch to branch and run /optimus-cycle-impl-stage-2]
+```
+
+---
+
+## Phase 5.6: Advance Status
+
+Manually advance a task's status to skip a stage (e.g., when the user implemented
+code manually without using stage-2).
+
+### Step 5.6.0: Identify Task and Target Status
+
+1. Parse the task ID from the user's request
+2. Find the task row in the table
+3. If task not found → **STOP**: "Task T-XXX not found in tasks.md"
+4. Determine the target status. If the user specified one, use it. Otherwise, advance
+   to the next status in the lifecycle:
+
+   | Current Status | Next Status |
+   |---------------|-------------|
+   | `Pendente` | `Validando Spec` |
+   | `Validando Spec` | `Em Andamento` |
+   | `Em Andamento` | `Validando Impl` |
+   | `Validando Impl` | `Revisando PR` |
+   | `Revisando PR` | (use cycle-close-stage-5 to mark DONE) |
+   | `**DONE**` | (use Reopen instead) |
+   | `Cancelado` | (use Reopen or create new task) |
+
+### Step 5.6.1: Validate Advance
+
+1. **If status is `**DONE**` or `Cancelado`** → **STOP**: "Task T-XXX is in terminal status '<status>'. Use 'reopen' for DONE tasks."
+2. **Check dependencies (HARD BLOCK):** same rules as stage agents — all dependencies must be `**DONE**`.
+3. **Workspace check (warning):** If the target status is `Em Andamento` or later, verify
+   that a workspace exists for this task:
+   - Read the Branch column for the task
+   - If Branch is `-` or the branch does not exist locally → warn via `AskUser`:
+     ```
+     Task T-XXX has no workspace (branch). Advancing to '<target status>' without a
+     workspace means execution stages (2-5) will fail when they verify the workspace.
+
+     Options:
+     - Advance anyway (I'll create the workspace manually)
+     - Cancel (run /optimus-cycle-spec-stage-1 first to create the workspace)
+     ```
+4. Warn via `AskUser`:
+   ```
+   You are manually advancing task T-XXX status.
+
+   **T-XXX: [title]**
+   Current: <current status> → New: <target status>
+
+   WARNING: This skips the validation that the corresponding stage agent provides.
+   Only do this if you've already performed the work outside the pipeline
+   (e.g., manual implementation, external review).
+
+   Confirm?
+   ```
+   **BLOCKING:** Do NOT proceed without confirmation.
+
+### Step 5.6.2: Apply Advance
+
+1. Update the **Status** column to the target status
+2. Save and commit: `chore(tasks): advance T-XXX to <target status> (manual override)`
+
+---
+
+## Phase 5.7: Demote Status
+
+Move a task back to a previous status (e.g., when stage-3 review identifies
+that significant rework is needed and the task should go back to implementation).
+
+### Step 5.7.0: Identify Task and Target Status
+
+1. Parse the task ID from the user's request
+2. Find the task row in the table
+3. If task not found → **STOP**: "Task T-XXX not found in tasks.md"
+4. Determine the target status. If the user specified one, use it. Otherwise, demote
+   to the previous status in the lifecycle:
+
+   | Current Status | Previous Status |
+   |---------------|----------------|
+   | `Validando Spec` | `Pendente` |
+   | `Em Andamento` | `Validando Spec` |
+   | `Validando Impl` | `Em Andamento` |
+   | `Revisando PR` | `Validando Impl` |
+   | `Pendente` | (already at start) |
+   | `**DONE**` | (use Reopen instead) |
+   | `Cancelado` | (terminal, cannot demote) |
+
+### Step 5.7.1: Validate Demotion
+
+1. **If status is `Pendente`** → **STOP**: "Task T-XXX is already at the initial status."
+2. **If status is `**DONE**` or `Cancelado`** → **STOP**: "Task T-XXX is in terminal status '<status>'. Use 'reopen' for DONE tasks."
+3. Require justification via `AskUser`:
+   ```
+   You are demoting task T-XXX status backward.
+
+   **T-XXX: [title]**
+   Current: <current status> → New: <target status>
+
+   Why is this task being sent back? (This is logged for audit trail)
+   ```
+   Options:
+   - **Rework needed** — implementation needs significant changes
+   - **Spec incomplete** — spec needs more detail before continuing
+   - **Wrong approach** — need to restart with a different strategy
+   - **Cancel** — keep current status
+
+   **BLOCKING:** Do NOT proceed without confirmation and justification.
+
+### Step 5.7.2: Apply Demotion
+
+1. Update the **Status** column to the target status
+2. Save and commit: `chore(tasks): demote T-XXX to <target status> — <reason>`
+
+---
+
 ## Phase 6: Batch Operations
 
 If the user provides multiple tasks to create at once (e.g., a list of tasks), process them sequentially:
@@ -527,7 +724,7 @@ Confirm move?
 
 ## Rules
 
-1. **Never modify Status or Branch columns** — those are managed exclusively by stage agents
+1. **Status changes are restricted** — the Edit operation cannot change Status (use Reopen, Advance, or Demote operations instead, which include validation and audit trail). Branch is managed exclusively by stage agents and close cleanup.
 2. **Always validate format** after any modification (re-check marker, columns, IDs, deps, versions)
 3. **IDs are permanent** — never renumber or reuse deleted IDs
 4. **Circular dependency detection is mandatory** — check before saving

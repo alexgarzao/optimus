@@ -3,8 +3,8 @@ name: optimus-cycle-impl-stage-2
 description: >
   Stage 2 of the task lifecycle. Executes a validated task specification
   end-to-end: identifies the task, loads context, questions ambiguities upfront,
-  then delegates execution to the dev-cycle skill which handles the 6-gate
-  pipeline (implementation, devops, SRE, testing, review, validation).
+  then delegates execution to the dev-cycle skill (preferred) or uses a built-in
+  fallback pipeline (implementation, review, verification, validation).
   Commits only after user approval.
 trigger: >
   - After optimus-cycle-spec-stage-1 has PASSED for a task
@@ -87,7 +87,18 @@ Executes a validated task specification end-to-end: identifies the task, loads c
 
 ## Phase 0: Load Context & Question Everything
 
-### Step 0.0: Find and Validate tasks.md
+### Step 0.0: Verify GitHub CLI (HARD BLOCK)
+
+```bash
+gh auth status 2>/dev/null
+```
+
+If this command fails (exit code != 0), **STOP** immediately:
+```
+GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
+```
+
+### Step 0.1: Find and Validate tasks.md
 
 1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either, **STOP** and suggest `/optimus-cycle-migrate`.
 2. **Validate format (HARD BLOCK):**
@@ -106,7 +117,7 @@ Executes a validated task specification end-to-end: identifies the task, loads c
 
 If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
 
-### Step 0.0.1: Identify Task to Execute
+### Step 0.2: Identify Task to Execute
 
 **If the user specified a task ID** (e.g., "execute T-012"):
 - Use the provided task ID
@@ -123,7 +134,7 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to execute.
 
-### Step 0.0.2: Validate and Update Task Status
+### Step 0.3: Validate and Update Task Status
 
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
@@ -170,7 +181,7 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 
 **Why commit immediately:** If the session is interrupted or the agent crashes before any code changes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of what happens during implementation.
 
-### Step 0.0.3: Verify Workspace
+### Step 0.4: Verify Workspace
 
 **HARD BLOCK:** The workspace (branch/worktree) should have been created by cycle-spec-stage-1. Verify:
 
@@ -193,7 +204,7 @@ CURRENT_BRANCH=$(git branch --show-current)
 - If Branch has a value AND it does not match `CURRENT_BRANCH` → warn: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?" (via `AskUser`)
 - If Branch matches `CURRENT_BRANCH` → proceed silently
 
-### Step 0.0.4: Validate PR Title (if PR exists)
+### Step 0.5: Validate PR Title (if PR exists)
 
 Check if a PR already exists for the current branch:
 
@@ -270,11 +281,31 @@ Use the `AskUser` tool to ask ALL questions at once (max 4 per call, multiple ca
 
 ---
 
-## Phase 1: Execute via dev-cycle
+## Phase 1: Execute Implementation
 
-After context is loaded and all questions are answered, delegate execution to the `dev-cycle` skill.
+After context is loaded and all questions are answered, execute the implementation.
 
-### Step 1.1: Invoke dev-cycle
+### Step 1.0: Choose Execution Strategy
+
+**Tipo-aware gate selection:** Not all task types need all gates. Before choosing the
+execution strategy, check the task's **Tipo** column and adapt:
+
+| Tipo | Skip Gates | Reason |
+|------|-----------|--------|
+| `Feature`, `Fix`, `Refactor` | None — run all gates | Code changes need full validation |
+| `Chore` | Gate 1 (DevOps) may be the primary gate | Depends on task content |
+| `Docs` | Gate 1 (DevOps), Gate 2 (SRE), Gate 3 (Testing) | No production code — skip TDD, coverage, observability |
+| `Test` | Gate 1 (DevOps), Gate 2 (SRE) | Tests ARE the deliverable — skip DevOps and SRE but run Gate 3 for coverage |
+
+When using the built-in fallback (Step 1.2), skip irrelevant steps based on the table above.
+When using dev-cycle (Step 1.1), pass the Tipo so dev-cycle can adapt its gate execution.
+
+Check if the `dev-cycle` skill is available in the current environment:
+
+1. **If `dev-cycle` is available** → use it (preferred path, Step 1.1)
+2. **If `dev-cycle` is NOT available** → use the built-in fallback (Step 1.2)
+
+### Step 1.1: Execute via dev-cycle (preferred)
 
 Use the `Skill` tool to load and execute the dev-cycle:
 
@@ -293,32 +324,91 @@ Pass the tasks file path that contains the confirmed task. The dev-cycle handles
 | Gate 4 | Code Review (3+ parallel reviewers) | requesting-code-review |
 | Gate 5 | Validation (user approval) | dev-validation |
 
-### Step 1.2: Provide Context to dev-cycle
-
-When dev-cycle starts, provide:
+Provide to dev-cycle:
 - The tasks file path and confirmed task ID
 - All reference docs discovered in Phase 0
 - Codebase patterns found in Step 0.3
 - Answers to all questions from Step 0.4
 - Any user preferences or constraints mentioned during questioning
 
-### Step 1.3: Monitor and Support
-
 While dev-cycle executes:
 - The dev-cycle manages its own state persistence, gate transitions, and agent dispatch
 - If dev-cycle encounters a blocker or needs user input, it will handle it through its own flow
 - Do NOT interfere with dev-cycle's gate execution — let it run its full pipeline
 
+### Step 1.2: Built-in Fallback (when dev-cycle is unavailable)
+
+When `dev-cycle` is not installed, execute implementation directly using the following
+simplified pipeline. Each step dispatches specialist droids via `Task` tool.
+
+#### Step 1.2.1: Implementation (TDD)
+
+Dispatch a specialist droid to implement the task using TDD methodology:
+
+**Droid selection priority:**
+1. `ring-dev-team-backend-engineer-golang` — Go projects
+2. `ring-dev-team-backend-engineer-typescript` — TypeScript projects
+3. `ring-dev-team-frontend-engineer` — React/Next.js projects
+4. `worker` with implementation instructions — fallback (always available)
+
+**The droid MUST:**
+1. Follow TDD: write failing tests first, implement to pass, refactor
+2. Follow project coding standards (from Step 0.1)
+3. Implement EXACTLY what the task spec says — no more, no less
+4. Run `make test` (or equivalent) to verify all tests pass
+
+#### Step 1.2.2: Code Review
+
+Dispatch parallel review droids via `Task` tool:
+
+1. `ring-default-code-reviewer` or `worker` — architecture, patterns, SOLID, DRY
+2. `ring-default-business-logic-reviewer` or `worker` — domain correctness, edge cases
+3. `ring-default-security-reviewer` or `worker` — vulnerabilities, OWASP, input validation
+
+Present findings to the user ONE AT A TIME. For each finding:
+- Show problem, impact, and 2-3 options
+- Collect decision via `AskUser`
+- Apply approved fixes via specialist droids
+
+#### Step 1.2.3: Verification
+
+Run all available verification commands:
+
+```bash
+make lint                    # Lint — if target exists
+make test                   # Unit tests — MANDATORY
+make test-integration       # Integration tests — if target exists
+make test-e2e               # E2E tests — if target exists
+```
+
+If any MANDATORY check fails, fix and retry (max 3 attempts). If optional checks fail,
+warn the user but do not block.
+
+#### Step 1.2.4: User Validation
+
+Present a summary of what was implemented and ask for explicit approval via `AskUser`:
+- Files created/modified
+- Tests added
+- Acceptance criteria coverage
+- Verification results
+
 ---
 
-## Phase 2: Post-Execution
+## Phase 1.5: Update Acceptance Criteria Checkboxes
 
-After dev-cycle completes all 6 gates (Gate 5 passes with user approval):
+**IMPORTANT:** This step runs AFTER implementation and verification complete but BEFORE
+presenting the final summary. This ensures that when stage-3 (impl-review) runs, the
+checkboxes in tasks.md already reflect what was implemented, preventing false findings
+about mismatched checkbox state.
 
-### Step 2.0: Update Acceptance Criteria Checkboxes
+### Step 1.5.0: Reset Checkboxes on Re-Execution
 
-After implementation completes, update the **Critérios de Aceite** checkboxes in the task's
-H2 detail section (`## T-XXX: Title`) of `tasks.md` to reflect what was implemented.
+**If this is a re-execution** (status was already `Em Andamento` when the skill started):
+1. Read the task's detail section
+2. Reset ALL checkboxes to unchecked (`- [ ]`) before re-evaluating
+3. This prevents stale `[x]` marks from a previous partial run from persisting
+
+### Step 1.5.1: Evaluate and Mark Checkboxes
 
 1. Read the task's detail section and list all acceptance criteria (`- [ ] ...`)
 2. For each criterion, verify whether the implementation satisfies it:
@@ -331,14 +421,15 @@ H2 detail section (`## T-XXX: Title`) of `tasks.md` to reflect what was implemen
    git commit -m "chore(tasks): update acceptance criteria for T-XXX"
    ```
 
-**Why now:** The acceptance criteria checkboxes are the developer-facing progress tracker.
-Updating them immediately after implementation ensures tasks.md accurately reflects what
-was delivered. Stage-3 (impl-review) will later validate that the checked criteria are
-actually correct.
+---
 
-### Step 2.1: Test Gap Cross-Reference
+## Phase 2: Post-Execution
 
-Review any test gaps identified during dev-cycle execution:
+After implementation completes (via dev-cycle or built-in fallback):
+
+### Step 2.0: Test Gap Cross-Reference
+
+Review any test gaps identified during implementation:
 
 1. **Search future tasks** in the tasks file to check if the test is planned for a later task
 2. **If planned in a future task (T-XXX):**

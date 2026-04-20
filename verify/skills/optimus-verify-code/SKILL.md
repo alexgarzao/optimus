@@ -1,20 +1,19 @@
 ---
 name: optimus-verify-code
 description: >
-  Two-phase code verification for Go projects. Phase 1 runs static analysis
-  in parallel (lint, vet, imports, format, docs, unit tests). Phase 2 runs
-  integration and E2E tests sequentially. Presents executive summary with
-  MERGE_READY or NEEDS_FIX verdict.
+  Two-phase code verification. Phase 1 runs static analysis in parallel
+  (lint, format, unit tests — commands auto-detected from project stack).
+  Phase 2 runs integration and E2E tests sequentially. Presents executive
+  summary with MERGE_READY or NEEDS_FIX verdict. Supports Go, TypeScript,
+  Python, and any project with a Makefile.
 trigger: >
   - When user asks to verify, validate, or check the code before merge
   - Before creating a pull request
   - After completing implementation and wanting to confirm everything passes
 skip_when: >
-  - Project is not Go (no go.mod found)
   - User only wants to run a single specific command
 prerequisite: >
-  - go.mod exists in the project
-  - Makefile exists with lint, test-unit, test-integration, test-e2e targets
+  - Project has a recognized stack (go.mod, package.json, pyproject.toml, Cargo.toml, or Makefile)
 NOT_skip_when: >
   - "Tests passed last time" → Code changed since then. Verify again.
   - "Only changed one file" → One file can break lint, vet, and tests.
@@ -59,31 +58,60 @@ verification:
 
 # Verify Code
 
-Two-phase code verification for Go projects.
+Two-phase code verification supporting multiple stacks.
+
+---
+
+## Phase 0: Detect Project Stack
+
+Before running any checks, detect the project stack and determine available commands.
+
+### Step 0.1: Identify Stack
+
+Check for these files in order — the first match determines the primary stack:
+
+| File | Stack | Language |
+|------|-------|----------|
+| `go.mod` | Go | Go |
+| `package.json` | Node.js | TypeScript/JavaScript |
+| `pyproject.toml` or `setup.py` | Python | Python |
+| `Cargo.toml` | Rust | Rust |
+| `Makefile` (alone) | Generic | Unknown — use Makefile targets only |
+
+### Step 0.2: Build Command Matrix
+
+Based on the detected stack, determine which commands to run:
+
+| # | Check | Go | Node.js | Python | Generic (Makefile) |
+|---|-------|----|---------|--------|--------------------|
+| 1 | Lint | `make lint` or `golangci-lint run ./...` | `npm run lint` or `npx eslint .` | `make lint` or `ruff check .` | `make lint` |
+| 2 | Vet/Typecheck | `go vet ./...` | `npx tsc --noEmit` | `mypy .` (if installed) | SKIP |
+| 3 | Import/Format check | `goimports -l .` + `gofmt -l .` | `npx prettier --check .` | `ruff format --check .` | SKIP |
+| 4 | Doc generation | `make generate-docs` | `make generate-docs` | `make generate-docs` | `make generate-docs` |
+| 5 | Unit tests | `go test -coverprofile=coverage-unit.out ./...` | `npm test -- --coverage` | `pytest --cov=. --cov-report=term` | `make test` |
+
+**IMPORTANT:** If a `Makefile` exists, prefer `make` targets over direct commands — the
+Makefile is the project's source of truth for how to run checks. Check for target existence
+with `make -n <target> 2>/dev/null`.
+
+For each command: if the tool is not installed or the Makefile target does not exist, mark
+as SKIP (not FAIL). Only report what is available.
 
 ---
 
 ## Phase 1: Static Analysis + Unit Tests (parallel)
 
-Run ALL 6 commands simultaneously. Capture stdout, stderr, exit code, and duration for each.
-
-| # | Command | What it checks |
-|---|---------|---------------|
-| 1 | `make lint` | Linter rules (golangci-lint or equivalent) |
-| 2 | `go vet ./...` | Suspicious constructs the compiler doesn't catch |
-| 3 | `goimports -l .` | Import ordering and missing/extra imports |
-| 4 | `gofmt -l .` | Code formatting compliance |
-| 5 | `make generate-docs` | Documentation generation (fails if docs are stale) |
-| 6 | `go test -coverprofile=coverage-unit.out ./...` | Unit tests with coverage profiling |
+Run ALL detected commands simultaneously. Capture stdout, stderr, exit code, and duration for each.
 
 **Execution rules:**
-- Run all 6 in parallel (do not wait for one to finish before starting another)
+- Run all commands in parallel (do not wait for one to finish before starting another)
 - Capture output of each independently
-- `goimports -l .` and `gofmt -l .` fail if they produce any output (listed files need fixing)
+- Format check commands fail if they produce any output (listed files need fixing)
 - If `make generate-docs` modifies files, report which files changed — this means docs were stale
+- Commands that are SKIP (tool not installed, target not found) do not count as failures
 
 **Phase 1 verdict:**
-- ALL 6 pass → proceed to Phase 2
+- ALL commands pass (SKIP counts as pass) → proceed to Phase 2
 - ANY fails → still proceed to Phase 2, but final verdict will be NEEDS_FIX
 
 ---
@@ -92,16 +120,17 @@ Run ALL 6 commands simultaneously. Capture stdout, stderr, exit code, and durati
 
 Run sequentially, continue even if one fails:
 
-| # | Command | What it checks |
-|---|---------|---------------|
-| 7 | Integration tests with coverage (see below) | Integration tests (DB, external services) |
-| 8 | `make test-e2e` | End-to-end tests (full user flows) |
+| # | Check | Go | Node.js | Python | Generic |
+|---|-------|----|---------|--------|---------|
+| 6 | Integration tests | `make test-integration` or `go test -tags=integration ./...` | `npm run test:integration` | `pytest tests/integration/` | `make test-integration` |
+| 7 | E2E tests | `make test-e2e` | `npm run test:e2e` or `npx playwright test` | `pytest tests/e2e/` | `make test-e2e` |
 
 **Integration test command:**
 Run integration tests with coverage profiling. The exact command depends on the project:
-- If `make test-integration` exists and supports coverage: `make test-integration COVER_FLAGS="-coverprofile=coverage-integration.out"`
-- Otherwise: `go test -tags=integration -coverprofile=coverage-integration.out ./...`
-- Check the Makefile to determine the correct approach
+- **Go:** If `make test-integration` exists: use it. Otherwise: `go test -tags=integration -coverprofile=coverage-integration.out ./...`
+- **Node.js:** `npm run test:integration` (if script exists)
+- **Python:** `pytest tests/integration/ --cov=. --cov-report=term` (if directory exists)
+- **Generic:** `make test-integration` (if target exists)
 
 **Execution rules:**
 - Run integration tests first
@@ -126,22 +155,27 @@ After Phase 2 completes, analyze test coverage from the generated profiles.
 
 ### Step 1: Extract Coverage Percentages
 
+**Go:**
 ```bash
-# Unit test coverage
 go tool cover -func=coverage-unit.out | tail -1
-
-# Integration test coverage (if profile exists)
 go tool cover -func=coverage-integration.out | tail -1 2>/dev/null
 ```
+
+**Node.js:** Parse the coverage summary from `npm test -- --coverage` output (look for
+"All files" line with Stmts/Branch/Funcs/Lines percentages).
+
+**Python:** Parse the coverage summary from `pytest --cov` output (look for "TOTAL" line).
 
 ### Step 2: Identify Coverage Gaps
 
 For each coverage profile, identify packages/files with low coverage:
 
+**Go:**
 ```bash
-# List all packages with their coverage, sorted by lowest first
 go tool cover -func=coverage-unit.out | grep -v "total:" | awk '{print $NF, $1}' | sort -n | head -20
 ```
+
+**Node.js/Python:** Parse per-file coverage from the coverage report output.
 
 Flag files/packages below thresholds:
 - **CRITICAL:** 0% coverage (completely untested code)
@@ -359,6 +393,7 @@ For each failed command:
 - Do NOT use `-short` flag in any test command — all tests must run completely
 - Do NOT skip commands that are slow — run everything
 - If a Makefile target does not exist, SKIP it and note in the summary (do not fail)
-- If `goimports` or `gofmt` are not installed, report as SKIP with note
+- If a stack-specific tool is not installed (e.g., `goimports`, `prettier`, `ruff`), report as SKIP with note
 - Always show the full summary even if everything passes
 - Duration must be measured for each command individually
+- Auto-detect the stack from project files — do NOT assume Go

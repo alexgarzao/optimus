@@ -308,6 +308,70 @@ Present BOTH formats: the ASCII art first (always readable), then the json-rende
 
 ---
 
+## Phase 4.5: Velocity and History Metrics
+
+After the dashboard, compute velocity metrics from git history. These provide trend
+data that a static snapshot (Phase 4) cannot show.
+
+### Step 4.5.1: Compute Task Completion History
+
+Search git log for task completion commits:
+
+```bash
+git log --oneline --all --grep="mark T-" --grep="as done" --all-match --since="4 weeks ago" --format="%H %ai %s"
+```
+
+Also search for: `chore(tasks): mark T-` patterns in commit messages.
+
+For each completed task found, extract: task ID, completion date.
+
+### Step 4.5.2: Present Velocity Dashboard
+
+```
+┌─────────────────────────────────────────────────┐
+│ VELOCITY (last 4 weeks)                          │
+├─────────────────────────────────────────────────┤
+│ Tasks completed:                                 │
+│   Week -4: ██░░░░░░░░ 2                         │
+│   Week -3: ████░░░░░░ 4                         │
+│   Week -2: ███░░░░░░░ 3                         │
+│   Week -1: █████░░░░░ 5                         │
+│                                                  │
+│ Average: 3.5 tasks/week                          │
+│ Trend: ↑ accelerating                            │
+│                                                  │
+│ At current pace:                                 │
+│   Remaining tasks (active version): N            │
+│   Estimated completion: ~X weeks                 │
+└─────────────────────────────────────────────────┘
+```
+
+**If no completion history is found** (new project, no tasks completed yet), show:
+```
+Velocity: No completed tasks in the last 4 weeks. Complete a task to start tracking.
+```
+
+### Step 4.5.3: Average Time Per Stage
+
+If enough data exists (3+ completed tasks), compute average time spent in each stage
+by analyzing git log timestamps for status change commits:
+
+```bash
+git log --oneline --all --grep="chore(tasks):" --format="%H %ai %s" | head -50
+```
+
+Present as:
+```
+Average time per stage (from N completed tasks):
+  Validando Spec:  ~2h
+  Em Andamento:    ~1.5 days
+  Validando Impl:  ~3h
+  Revisando PR:    ~1h
+  Close:           ~15min
+```
+
+---
+
 ## Phase 5: Warnings and Recommendations
 
 After the dashboard, present any issues found:
@@ -316,8 +380,30 @@ After the dashboard, present any issues found:
 - Tasks with missing H2 detail sections
 - Circular dependencies
 - Invalid dependency references (pointing to non-existent task IDs)
-- Tasks blocked by a cancelled dependency (e.g., "T-005 depends on T-003, but T-003 is Cancelado — remove or replace this dependency via `/optimus-cycle-crud`")
+- Tasks blocked by a cancelled dependency (see "Blocked by Cancelled" section below)
 - Tasks stuck in the same status for too long (if git log shows no commits on their branch)
+
+### Blocked by Cancelled Dependencies (guided resolution)
+
+For each task that is blocked because a dependency has status `Cancelado`, present a
+dedicated resolution guide:
+
+```markdown
+### Blocked by Cancelled Dependency
+
+T-YYY depends on T-XXX, but T-XXX was cancelled (Cancelado).
+Cancelled tasks do NOT satisfy dependencies — T-YYY cannot start.
+
+**Resolution options (run `/optimus-cycle-crud` to apply):**
+1. **Remove the dependency** — edit T-YYY to remove T-XXX from Depends
+   Command: "edit T-YYY, remove T-XXX from dependencies"
+2. **Replace with another task** — if another task covers what T-XXX was supposed to deliver
+   Command: "edit T-YYY, replace T-XXX with T-ZZZ in dependencies"
+3. **Cancel T-YYY too** — if T-YYY no longer makes sense without T-XXX
+   Command: "cancel T-YYY"
+```
+
+This section is shown for EACH blocked-by-cancelled case, not just as a generic warning.
 
 ### Recommendations
 - Suggest which ready tasks to start next (highest priority first)

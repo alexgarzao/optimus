@@ -57,7 +57,18 @@ Stage 5 of the task lifecycle. Verifies all prerequisites before marking a task 
 
 ## Phase 0: Identify and Validate Task
 
-### Step 0.0: Find and Validate tasks.md
+### Step 0.0: Verify GitHub CLI (HARD BLOCK)
+
+```bash
+gh auth status 2>/dev/null
+```
+
+If this command fails (exit code != 0), **STOP** immediately:
+```
+GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
+```
+
+### Step 0.0.1: Find and Validate tasks.md
 
 1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either, **STOP** and suggest `/optimus-cycle-migrate`.
 2. **Validate format (HARD BLOCK):**
@@ -366,7 +377,27 @@ across stages 1-5 use `chore(tasks):` for consistency.
 Task status remains unchanged. Fix the issues above and run cycle-close-stage-5 again.
 ```
 
-Do NOT change the status. Do NOT offer to fix the issues — just report them.
+Do NOT change the status.
+
+**Offer to fix actionable failures** via `AskUser`:
+
+```
+X checks failed. I can attempt to fix some of these automatically. What should I do?
+```
+
+Options:
+- **Auto-fix what I can** — the agent will attempt to fix the following actionable failures:
+  - Uncommitted changes (Check 1) → `git add -A && git commit -m "chore: commit pending changes for T-XXX"`
+  - Unpushed commits (Check 2) → `git push` (or `git push -u origin $(git branch --show-current)`)
+  - Lint failures (Check 5) → run auto-fix (`make lint-fix` or equivalent), commit, and re-check
+  - PR title invalid (Check 3) → `gh pr edit <number> --title "<corrected>"`
+- **Just report** — show the list and I'll fix manually
+
+**Non-fixable failures** (CI failures, test failures) are always reported without auto-fix
+— they require investigation, not automated patching.
+
+After auto-fix, re-run ONLY the checks that previously failed. If all now pass, proceed
+to mark as DONE. If any still fail, report the remaining failures.
 
 ---
 
@@ -417,6 +448,24 @@ Options:
 - **Merge (rebase)**: `gh pr merge <number> --rebase`
 - **Keep open**: Leave the PR for manual merge
 - **Close without merging**: `gh pr close <number>`
+
+**CRITICAL — Safety check for "Close without merging":** If the user chooses to close
+the PR without merging, the DONE status change (committed on the feature branch) will
+NOT be present on the default branch. Before closing, the agent MUST:
+1. Switch to the default branch: `git checkout <default_branch> && git pull`
+2. Cherry-pick ONLY the tasks.md DONE status commit from the feature branch:
+   ```bash
+   git cherry-pick <done-commit-sha> --no-commit
+   git checkout -- . ':!tasks.md'   # keep only tasks.md changes
+   git add tasks.md
+   git commit -m "chore(tasks): mark T-XXX as done"
+   git push
+   ```
+3. Then close the PR: `gh pr close <number>`
+4. Switch back to continue with branch cleanup
+
+This ensures the DONE status is preserved on the default branch even when the PR is
+not merged. Without this, deleting the branch would lose the status change entirely.
 
 ### Step 3.3: Check for Task Branch
 
@@ -498,9 +547,18 @@ git push
 
 - Run ALL 8 checks even if the first one fails — the user needs the full picture
 - Do NOT change task status unless ALL checks pass (SKIP counts as pass)
-- Do NOT fix issues found by the checklist — only report them
 - Do NOT skip checks because "they probably pass"
 - The agent NEVER decides to close a task without running the full checklist
 - After marking as done, always commit and push the status change
 - **Next step suggestion:** After the cleanup summary, inform the user: "Task T-XXX is done.
   Run `/optimus-cycle-report` to see updated project status and what to work on next."
+
+### Dry-Run Mode
+If the user requests a dry-run (e.g., "dry-run close T-012", "preview close"):
+- Run ALL 8 checks normally (Phase 1)
+- Present the full checklist results (Phase 2)
+- **Do NOT change task status** — skip marking as DONE
+- **Do NOT commit or push anything**
+- **Do NOT run cleanup** — skip Phase 3 entirely
+- Present the verdict (READY TO CLOSE / NOT READY) as information only
+- This allows the user to see what would happen before committing to a close

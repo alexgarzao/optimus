@@ -1,11 +1,12 @@
 ---
 name: optimus-cycle-impl-review-stage-3
 description: >
-  Stage 3 of the task lifecycle. Validates that a completed task was executed
+  Stage 3 of the task lifecycle. Validates that a completed task was implemented
   correctly: spec compliance, coding standards adherence, engineering best
   practices, test coverage, and production readiness. Uses parallel specialist
   agents for deep analysis, then presents findings interactively.
-  Runs AFTER optimus-cycle-impl-stage-2 finishes and BEFORE the final commit.
+  Runs AFTER optimus-cycle-impl-stage-2 finishes to validate code quality and
+  spec compliance before the task can proceed to PR review or close.
 trigger: >
   - After optimus-cycle-impl-stage-2 completes all phases and verification gates pass
   - When user requests validation of a completed task (e.g., "validate T-012")
@@ -13,10 +14,9 @@ trigger: >
 skip_when: >
   - Task is pure research or documentation (no code to validate)
   - Already inside a code review skill execution
-  - Changes have already been committed (validation must happen before commit)
 prerequisite: >
   - Task execution is complete (user provides ID or skill auto-detects last executed task)
-  - Changed files are uncommitted (validation happens before commit)
+  - Changed files exist (committed or uncommitted — both are supported)
   - Reference docs exist (task spec, coding standards)
   - Project has lint and test commands configured
 NOT_skip_when: >
@@ -82,15 +82,30 @@ verification:
 
 # Post-Task Validator
 
-Validates that a completed task was executed correctly: spec compliance, coding standards adherence, engineering best practices, test coverage, and production readiness. Uses parallel specialist agents for deep analysis, then presents findings interactively.
+Validates that a completed task was implemented correctly: spec compliance, coding standards
+adherence, engineering best practices, test coverage, and production readiness. Uses parallel
+specialist agents for deep analysis, then presents findings interactively.
 
-Runs AFTER optimus-cycle-impl-stage-2 finishes and BEFORE the final commit.
+Runs AFTER optimus-cycle-impl-stage-2 finishes. Validates both committed and uncommitted
+changes — it handles both cases (use `git diff` for uncommitted, `git diff base..HEAD`
+for committed code).
 
 ---
 
 ## Phase 0: Load Context
 
-### Step 0.0: Find and Validate tasks.md
+### Step 0.0: Verify GitHub CLI (HARD BLOCK)
+
+```bash
+gh auth status 2>/dev/null
+```
+
+If this command fails (exit code != 0), **STOP** immediately:
+```
+GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
+```
+
+### Step 0.0.1: Find and Validate tasks.md
 
 1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either, **STOP** and suggest `/optimus-cycle-migrate`.
 2. **Validate format (HARD BLOCK):**
@@ -939,6 +954,29 @@ make test-e2e                # E2E tests — if target exists
 
 ---
 
+## Phase 7.5: Push Commits (optional)
+
+After the validation summary, offer to push all local commits:
+
+```bash
+git log @{u}..HEAD --oneline 2>/dev/null
+```
+
+If there are unpushed commits, ask via `AskUser`:
+```
+There are N unpushed commits on this branch. Push now?
+```
+Options:
+- **Push now** — `git push` (or `git push -u origin $(git branch --show-current)` if no upstream)
+- **Skip** — I'll push manually later
+
+**Why push here:** Stages 1-3 commit status changes and fixes but never push. If the user
+proceeds to Stage-4 (PR review) or Stage-5 (close), those stages expect commits to be pushed.
+Offering a push here prevents Stage-5's "unpushed commits" check from failing with a long
+list of accumulated commits.
+
+---
+
 ## Phase 8: Offer PR Creation
 
 After the validation summary is presented and the verdict is APPROVED or APPROVED WITH CAVEATS,
@@ -1050,6 +1088,16 @@ When agents identify a missing test (from QA analyst, spec compliance, or any ot
 - Do NOT auto-skip, auto-dismiss, or auto-resolve any finding regardless of severity
 - Do NOT group LOW findings and decide they "don't need attention" — present them individually
 - If the convergence loop finds only LOW findings, still present each one to the user — do NOT stop the loop without user confirmation
+
+### Dry-Run Mode
+If the user requests a dry-run (e.g., "dry-run review T-012", "preview review"):
+- Run ALL analysis phases (Phase 0.5, Phase 1, Phase 2, Phase 3) normally
+- Present ALL findings in Phase 4 (interactive resolution)
+- **Do NOT apply any fixes** — skip Phase 5 (batch apply) entirely
+- **Do NOT change task status** — skip the status update in Step 0.0.2
+- **Do NOT run the convergence loop** — one pass is sufficient for estimation
+- Present a summary showing: total findings, severity breakdown, estimated fix effort
+- This allows the user to see what would happen before committing to a full review
 
 ### Communication
 - Be specific: "line 42 of file.tsx uses X, but coding standards section Y requires Z"

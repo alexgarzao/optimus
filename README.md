@@ -37,9 +37,8 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 |-------|-------------|---------|
 | `deep-doc-review` | Deep doc review with cross-referencing and interactive resolution | `/optimus-deep-doc-review` |
 | `deep-review` | Parallel code review with specialist agents and interactive resolution | `/optimus-deep-review` |
-
 | `coderabbit-review` | Code review with CodeRabbit CLI + TDD cycle + agent validation | `/optimus-coderabbit-review` |
-| `verify` | Two-phase code verification for Go (static analysis + tests) | `/optimus-verify-code` |
+| `verify` | Two-phase code verification (Go, TypeScript, Python, generic) | `/optimus-verify-code` |
 
 ## Install
 

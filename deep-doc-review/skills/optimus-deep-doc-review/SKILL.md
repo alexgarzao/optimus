@@ -81,6 +81,48 @@ Read the full content of each identified doc. Build a mental map of:
 
 ---
 
+## Phase 0.5: Parallel Agent Dispatch
+
+Dispatch specialist agents via `Task` tool to analyze the docs from different perspectives.
+Each agent receives the full content of all docs being reviewed.
+
+**Agent selection priority:**
+1. `ring-tw-team-docs-reviewer` — documentation quality, structure, completeness
+2. `ring-default-business-logic-reviewer` — business rules consistency across docs
+3. `ring-default-code-reviewer` — technical accuracy, architectural consistency
+4. `worker` with domain instructions — fallback (always available)
+
+**Dispatch at least 2 agents in parallel:**
+
+| # | Agent | Focus |
+|---|-------|-------|
+| 1 | **Documentation quality** | Structure, completeness, clarity, voice, tone |
+| 2 | **Cross-doc consistency** | Contradictions between docs, missing references, entity/field mismatches |
+
+**Agent prompt template:**
+```
+Goal: Documentation review — [your domain]
+
+Context:
+  - Docs to review: [full content of each doc with filename header]
+
+Your job:
+  Review the documentation for issues in your domain. Report issues ONLY — do NOT fix anything.
+
+Required output format:
+  For each issue found, provide:
+  - Type: ERROR / INCONSISTENCY / GAP / MISSING / IMPROVEMENT
+  - Severity: CRITICAL / HIGH / MEDIUM / LOW
+  - File(s): affected doc(s)
+  - Problem: what is wrong
+  - Suggested fix: concrete correction
+  If no issues: "PASS — no issues in [domain]"
+```
+
+Merge agent findings with the orchestrator's own analysis in Phase 1.
+
+---
+
 ## Phase 1: Analysis and Cross-Referencing
 
 ### Issue Types

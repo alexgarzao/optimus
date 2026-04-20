@@ -271,6 +271,15 @@ Examples: `chore(tasks): start T-003 — set status to Validando Spec`,
 | `**DONE**` | cycle-close-stage-5 | Completed |
 | `Cancelado` | cycle-crud | Task abandoned, will not be implemented |
 
+**Administrative status operations** (managed by cycle-crud, not by stage agents):
+- **Reopen:** `**DONE**` → `Pendente` (if branch deleted) or `Em Andamento` (if branch exists) — when a bug is found after close
+- **Advance:** move forward one stage — when work was done manually outside the pipeline
+- **Demote:** move backward one stage — when rework is needed after review
+- **Cancel:** any non-terminal → `Cancelado` — task will not be implemented
+
+These operations require explicit user confirmation and a justification that is logged
+in the commit message for audit trail.
+
 ### Dependency Rules
 
 1. **A task can only start if ALL its dependencies are `**DONE**`**. If any dependency
@@ -651,9 +660,111 @@ Skills dispatch specialist droids in parallel via Task tool:
 - Preferred: ring-default-* droids (code-reviewer, business-logic-reviewer, security-reviewer, etc.)
 - Fallback: worker droid with domain-specific instructions
 
+## GitHub CLI Prerequisite
+
+**All skills that use `gh` commands** (stages 2-5, cycle-pr-review-stage-4, cycle-crud cancel,
+cycle-close-stage-5) MUST validate that `gh` is installed and authenticated before running
+any `gh` command:
+
+```bash
+gh auth status 2>/dev/null
+```
+
+If this command fails (exit code != 0), **STOP** immediately with:
+```
+GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
+```
+
+Do NOT attempt `gh` commands without this check — they produce cryptic errors that confuse users.
+
 ## Known Issues and Decisions
 
 - `codacy:ignore` does NOT exist — use the underlying linter's syntax (biome-ignore, eslint-disable, //nolint)
 - DeepSource `// skipcq: <shortcode>` is the inline suppression syntax
 - Native app review threads (deepsource-io, codacy-production) cannot be replied to via REST API — use GraphQL `addPullRequestReviewThreadReply`
 - Biome has a known bug with JSX comments for `biome-ignore` (#8980, #9469, #7473) — exclude test files from Codacy instead
+
+## Known Limitations
+
+### Parallel Task Execution and tasks.md Conflicts
+When using git worktrees to work on multiple tasks in parallel, each stage commits
+status changes to `tasks.md` on its feature branch. When both branches are merged,
+`tasks.md` will have a merge conflict. Stages 3 and 5 include a "divergence warning"
+that detects this situation, but the conflict resolution is left to the user.
+
+**Mitigation strategies (in priority order):**
+1. **Merge PRs sequentially** — after merging one PR, pull the changes into the other
+   feature branch before merging its PR
+2. **Sync before close** — when Stage-3 or Stage-5 shows the divergence warning, choose
+   "Sync now" to merge the default branch into the feature branch, resolving conflicts early
+3. **Resolve conflicts in the PR** — if both PRs are already open, GitHub/GitLab will
+   show a merge conflict. Resolve `tasks.md` conflicts by keeping ALL status changes
+   from both branches (each task's row should reflect its own status independently)
+
+**Conflict resolution rule for tasks.md:** When resolving merge conflicts in `tasks.md`,
+keep the **most advanced status** for each task. Never revert a task's status backward
+during conflict resolution. Each task's row is independent — conflicts arise from
+concurrent edits to the same file, not from conflicting statuses on the same task.
+
+### Standalone Skills vs Ring Droid Dispatch
+The `deep-review` and `deep-doc-review` standalone skills apply fixes directly in their
+interactive resolution phase, rather than dispatching specialist ring droids. This is by
+design — standalone skills use a simplified model that does not require the ring droid
+ecosystem. The ring droid dispatch pattern (described in "Common Patterns Across Skills")
+applies only to cycle review skills (stages 1, 3, 4, and coderabbit-review).
+
+Both `deep-review` and `deep-doc-review` dispatch parallel review agents for analysis
+and include convergence loops to catch issues missed in the first pass.
+
+## Optional: Notification Hooks
+
+Projects can define a `tasks-hooks.sh` script in the project root or `docs/` directory
+to receive notifications when task status changes. Stage agents will look for this file
+and execute it if present.
+
+### Hook Interface
+
+```bash
+# Called by stage agents after a status change is committed
+# Arguments: <event> <task-id> <old-status> <new-status> [<extra>]
+#
+# Events:
+#   status-change   — task moved to a new status
+#   task-done       — task marked as DONE
+#   task-cancelled  — task cancelled
+#   task-blocked    — task became blocked (dependency not met)
+#
+# Example: ./tasks-hooks.sh status-change T-003 Pendente "Validando Spec"
+# Example: ./tasks-hooks.sh task-done T-003 "Revisando PR" "**DONE**"
+```
+
+### Example hooks
+
+```bash
+#!/bin/bash
+# tasks-hooks.sh — example Slack notification
+EVENT=$1 TASK=$2 OLD=$3 NEW=$4
+
+case "$EVENT" in
+  task-done)
+    curl -X POST "$SLACK_WEBHOOK" -d "{\"text\":\"Task $TASK completed ($OLD → $NEW)\"}" 2>/dev/null
+    ;;
+  task-blocked)
+    curl -X POST "$SLACK_WEBHOOK" -d "{\"text\":\"Task $TASK is blocked\"}" 2>/dev/null
+    ;;
+esac
+```
+
+### Agent Behavior
+
+Stage agents (1-5) and cycle-crud check for `tasks-hooks.sh` after committing a status change:
+
+```bash
+HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+  "$HOOKS_FILE" <event> <task-id> <old-status> <new-status> 2>/dev/null &
+fi
+```
+
+Hooks run in the background (`&`) and their failure does NOT block the pipeline.
+If `tasks-hooks.sh` does not exist, hooks are silently skipped.

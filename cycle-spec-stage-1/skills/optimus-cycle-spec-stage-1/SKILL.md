@@ -157,6 +157,36 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 
 **Anti-pulo:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`), refuse to proceed — the task has already passed this stage or was cancelled.
 
+### Step 0.0.2.5: Detect and Clean Abandoned Workspaces
+
+**If re-execution** (status is `Validando Spec`), check for orphaned workspaces from
+a previous run that was abandoned:
+
+1. Read the **Branch** column for this task
+2. If Branch is NOT `-`:
+   a. Check if the branch exists: `git branch --list "<branch>"`
+   b. Check if a worktree exists: `git worktree list | grep -i "<task-id>"`
+   c. If the workspace exists but the user is on the **default branch** (not on the task branch):
+      - Ask via `AskUser`:
+        ```
+        Task T-XXX has an existing workspace from a previous run:
+          Branch: <branch>
+          Worktree: <path> (if applicable)
+
+        What should I do?
+        ```
+        Options:
+        - **Reuse** — switch to the existing workspace and continue
+        - **Clean and recreate** — delete the old workspace and create a fresh one
+        - **Clean and reset to Pendente** — delete the workspace and reset the task to Pendente (abandon)
+
+      If the user chooses **Clean and reset to Pendente**:
+      1. Remove worktree if exists: `git worktree remove <path>`
+      2. Delete branch: `git branch -D <branch>` and `git push origin --delete <branch>` (if pushed)
+      3. Update tasks.md: set Status to `Pendente`, Branch to `-`
+      4. Commit: `chore(tasks): reset T-XXX — clean abandoned workspace`
+      5. **STOP** — task is back to Pendente, user can re-run stage-1 when ready
+
 ### Step 0.0.3: Create Workspace (if on default branch)
 
 Check if currently on the default/main branch:

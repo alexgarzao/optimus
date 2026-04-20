@@ -79,13 +79,37 @@ CodeRabbit-driven code review with TDD fix cycle, secondary agent validation for
 
 ### Step 0.2: Run CodeRabbit
 
-Execute the CodeRabbit CLI:
+Check if the CodeRabbit CLI is available:
+
+```bash
+which coderabbit 2>/dev/null || which coderabbit-cli 2>/dev/null
+```
+
+**If CodeRabbit CLI is available:** Execute the CLI:
 
 ```bash
 coderabbit review --prompt-only --base <base-branch> --plain --config <config-file>
 ```
 
 Capture the full output for parsing.
+
+**If CodeRabbit CLI is NOT available:** Inform the user and offer a fallback:
+
+```
+CodeRabbit CLI is not installed. To install it:
+  npm install -g coderabbit
+
+Alternatively, I can run a code review using specialist agents instead (same as /optimus-deep-review).
+```
+
+Ask via `AskUser`:
+- **Install CodeRabbit** — show installation instructions and retry
+- **Fall back to agent review** — proceed with a deep-review style agent dispatch (skip Phase 1 parsing, go directly to Phase 2 interactive resolution with parallel agent findings)
+- **Cancel** — stop the review
+
+If the user chooses the fallback, dispatch the same agents used by `optimus-deep-review`
+(code quality, business logic, security, test quality, cross-file consistency) and follow
+the same interactive resolution flow from Phase 2 onward.
 
 ### Step 0.3: Load Project Context
 

@@ -87,6 +87,19 @@ Unified PR review orchestrator. Fetches PR metadata, collects ALL review comment
 
 ---
 
+## Phase -1: Verify GitHub CLI (HARD BLOCK)
+
+```bash
+gh auth status 2>/dev/null
+```
+
+If this command fails (exit code != 0), **STOP** immediately:
+```
+GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
+```
+
+---
+
 ## CRITICAL: Every Invocation Starts From Scratch
 
 **HARD BLOCK:** Every time this skill is invoked, it MUST fetch ALL data fresh from the PR. There is NO state carried over from previous invocations.
@@ -172,9 +185,11 @@ When no task is referenced and no `tasks.md` exists, or the user explicitly want
 
 ### How to detect which mode:
 1. If the user mentions a task ID (T-XXX) → Task Mode
-2. Find `tasks.md` in `./tasks.md` or `./docs/tasks.md`. If found and has exactly ONE task in `Validando Impl` or `Revisando PR` → Task Mode (confirm with user via `AskUser`)
-3. If `tasks.md` exists but no task is in `Validando Impl` or `Revisando PR` → Standalone Mode
-4. If no `tasks.md` exists → Standalone Mode
+2. Find `tasks.md` in `./tasks.md` or `./docs/tasks.md`. If found:
+   a. If exactly ONE task is in `Validando Impl` or `Revisando PR` → Task Mode (confirm with user via `AskUser`)
+   b. If MULTIPLE tasks are in `Validando Impl` or `Revisando PR` → Task Mode, but ask the user which task to review via `AskUser` (list all candidates with ID, title, version, and branch)
+   c. If NO tasks are in `Validando Impl` or `Revisando PR` → Standalone Mode
+3. If no `tasks.md` exists → Standalone Mode
 
 ---
 
@@ -190,7 +205,27 @@ If no URL was provided, attempt to find the PR for the current branch:
 gh pr view --json url,number,title --jq '.url' 2>/dev/null
 ```
 
-If no PR is found, ask the user for the URL using `AskUser`.
+If no PR is found, offer to create one via `AskUser`:
+
+```
+No PR exists for the current branch (<branch>). What should I do?
+```
+Options:
+- **Create PR** — create a PR against the default branch with a Conventional Commits title derived from the task's Tipo and title (same logic as cycle-impl-review-stage-3 Phase 8)
+- **Provide URL** — I have a PR URL to use
+- **Cancel** — stop the review
+
+If the user chooses **Create PR**:
+1. Generate PR title from task Tipo + ID + title (e.g., `feat(T-003): add user registration API`)
+2. Generate PR body from the task's detail section (Objetivo + Critérios de Aceite)
+3. Push the branch if not yet pushed: `git push -u origin $(git branch --show-current)`
+4. Create the PR:
+   ```bash
+   gh pr create --title "<title>" --body "<body>" --base <default_branch> --assignee @me
+   ```
+5. Use the newly created PR for the rest of the review
+
+If the user chooses **Provide URL**, ask for the URL via `AskUser`.
 
 ### Step 0.2: Fetch PR Metadata
 
