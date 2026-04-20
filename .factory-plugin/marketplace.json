@@ -42,7 +42,7 @@
     },
     {
       "name": "cycle-close-stage-5",
-      "description": "Stage 5: Verifies all prerequisites (commits pushed, PR ready, tests passing) and marks the task as done. Does NOT merge the PR.",
+      "description": "Stage 5: Verifies all prerequisites (commits pushed, PR ready, tests passing) and marks the task as done. Offers to merge the PR during cleanup.",
       "source": "./cycle-close-stage-5"
     },
     {
