@@ -121,6 +121,11 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
      Cannot run cycle-pr-review-stage-4 on the default branch (<branch>).
      Switch to the task's feature branch first.
      ```
+3.1. **Branch-task cross-validation:** After confirming the task ID, check that the current branch matches the **Branch** column in `tasks.md` for this task:
+   - Read the Branch column for the confirmed task ID
+   - If Branch is `-` or empty → warn: "tasks.md shows no branch for T-XXX, but you are on `<current>`. Continue anyway?" (via `AskUser`)
+   - If Branch has a value AND it does not match `CURRENT_BRANCH` → warn: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?" (via `AskUser`)
+   - If Branch matches `CURRENT_BRANCH` → proceed silently
 4. **Validate status:** The task MUST be in status `Validando Impl` (set by cycle-impl-review-stage-3) or `Revisando PR` (re-execution). If not, STOP and tell the user which agent to run first.
 5. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)

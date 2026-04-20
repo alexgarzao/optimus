@@ -82,6 +82,12 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
      Switch to the task's feature branch first.
      ```
 
+4. **Branch-task cross-validation:** After confirming the task ID (Step 0.0.1), check that the current branch matches the **Branch** column in `tasks.md` for this task:
+   - Read the Branch column for the confirmed task ID
+   - If Branch is `-` or empty → warn: "tasks.md shows no branch for T-XXX, but you are on `<current>`. Continue anyway?" (via `AskUser`)
+   - If Branch has a value AND it does not match `CURRENT_BRANCH` → warn: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?" (via `AskUser`)
+   - If Branch matches `CURRENT_BRANCH` → proceed silently
+
 ### Step 0.0.1: Identify Task to Close
 
 **If the user specified a task ID** (e.g., "close T-012"):
@@ -203,12 +209,18 @@ gh pr list --head "$(git branch --show-current)" --json number,state,title,revie
 ```
 
 - **If no PR exists:** PASS (task went directly to default branch)
-- **If PR exists and state is OPEN with all checks passing:** PASS — "PR #X is ready to merge."
-- **If PR exists and state is OPEN with failing checks:** FAIL — "PR #X has failing checks."
 - **If PR exists and state is MERGED:** PASS
 - **If PR exists and state is CLOSED (not merged):** FAIL — "PR #X was closed without merging."
+- **If PR exists and state is OPEN:**
+  1. **Validate PR title (Conventional Commits):** The PR title MUST follow the **Conventional Commits 1.0.0** specification (https://www.conventionalcommits.org/en/v1.0.0/).
+     - Expected format: `<type>[optional scope]: <description>`
+     - Regex: `^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$`
+     - Cross-check the type against the task's **Tipo** column (Feature→`feat`, Fix→`fix`, etc.)
+     - **If title is invalid:** FAIL — "PR #X title does not follow Conventional Commits: `<current title>`. Expected: `<corrected title>`. Fix with: `gh pr edit <number> --title \"<corrected title>\"`"
+  2. **Check CI status:** If all checks passing → PASS — "PR #X is ready to merge."
+     If failing checks → FAIL — "PR #X has failing checks."
 
-**NOTE:** This check verifies the PR is READY to merge, but does NOT merge it. The user merges the PR manually after cycle-close-stage-5 completes.
+**NOTE:** This check verifies the PR is READY to merge, but does NOT merge it.
 
 #### Check 4: CI Passing (if PR exists)
 
@@ -283,7 +295,7 @@ make test-e2e
 |---|-------|-------------|--------|
 | 1 | Git | No uncommitted changes | PASS |
 | 2 | Git | No unpushed commits | PASS |
-| 3 | Git | PR ready to merge | PASS (PR #X) / PASS (no PR) |
+| 3 | Git | PR ready to merge (+ title) | PASS (PR #X) / PASS (no PR) |
 | 4 | Git | CI passing | PASS / SKIP (no PR) |
 | 5 | Quality | Lint (make lint) | PASS / SKIP |
 | 6 | Tests | Unit tests | PASS |
@@ -297,11 +309,14 @@ All prerequisites met. Marking task as **DONE**.
 
 Then:
 1. Update the Status column in `tasks.md` to `**DONE**` (from either `Validando Impl` or `Revisando PR`)
-2. Read the **Tipo** column for this task and map to conventional commit prefix:
-   - Feature → `feat`, Fix → `fix`, Refactor → `refactor`, Chore → `chore`, Docs → `docs`, Test → `test`
-3. Commit: `<prefix>: mark T-XXX as done` (e.g., `feat: mark T-003 as done`)
-4. Push the commit
-5. Proceed to Phase 3 (cleanup).
+2. Commit: `chore(tasks): mark T-XXX as done`
+3. Push the commit
+4. Proceed to Phase 3 (cleanup).
+
+**Why `chore(tasks):` and not the Tipo prefix:** Marking a task as DONE is an administrative
+status change in `tasks.md`, not a code change. The Tipo prefix (`feat`, `fix`, etc.) applies
+to PR titles and code commits, not to task management operations. All status change commits
+across stages 1-5 use `chore(tasks):` for consistency.
 
 ### If ANY check fails:
 
@@ -365,37 +380,7 @@ TASK_BRANCH=$(grep "T-XXX" tasks.md | ... extract Branch column ...)
 gh pr list --head "$TASK_BRANCH" --json number,state,title,url --jq '.[] | select(.state == "OPEN")'
 ```
 
-If an open PR is found:
-
-#### Step 3.2.1: Validate PR Title (Conventional Commits)
-
-**BEFORE offering merge options**, validate the PR title follows the **Conventional Commits 1.0.0**
-specification (https://www.conventionalcommits.org/en/v1.0.0/). This is critical because squash
-merges use the PR title as the merge commit message on the target branch.
-
-```bash
-PR_TITLE=$(gh pr view <number> --json title --jq '.title')
-```
-
-**Expected format:** `<type>[optional scope]: <description>`
-
-Validate:
-1. Title matches: `^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$`
-2. The type matches the task's **Tipo** column mapping (Feature→`feat`, Fix→`fix`, etc.)
-
-**If validation fails:** fix the title BEFORE merging:
-```bash
-gh pr edit <number> --title "<corrected title>"
-```
-
-Use the task's Tipo to derive the correct type. Use the task ID as scope if no other scope
-is obvious. Example: `feat(T-003): add user registration API`
-
-Inform the user of the correction.
-
-#### Step 3.2.2: Offer Merge Options
-
-Ask via `AskUser`:
+If an open PR is found, ask via `AskUser`:
 ```
 Task T-XXX is done. PR #N is still open. What should I do?
 ```
@@ -433,19 +418,23 @@ Options:
 - **Delete local only**: switch to default branch first, then delete local
 - **Keep**: Leave the branch as is
 
-**IMPORTANT:** You cannot delete a branch you are currently on. Before deleting, switch to the default branch:
+**IMPORTANT:** You cannot delete a branch you are currently on. Before deleting, switch to the default branch and sync with remote (the merge in Step 3.2 may have changed `tasks.md` on the remote):
 ```bash
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
 git checkout "$DEFAULT_BRANCH"
+git pull
 git branch -d <branch>
 # If also deleting remote:
 git push origin --delete <branch>
 ```
 
-**After branch deletion:** Update the Branch column in `tasks.md` to `-` (the branch no longer exists, keeping the old name would be misleading). Commit:
+**Why `git pull` after checkout:** If the PR was merged (especially squash merge), the remote `main` has a different version of `tasks.md` than the local `main`. Without pulling, the Branch column cleanup would operate on a stale version and could conflict or lose the DONE status change.
+
+**After branch deletion:** Update the Branch column in `tasks.md` to `-` (the branch no longer exists, keeping the old name would be misleading). Commit and push (this is an administrative commit directly on the default branch — acceptable because the feature branch no longer exists):
 ```bash
 git add tasks.md
 git commit -m "chore(tasks): clear branch for T-XXX after cleanup"
+git push
 ```
 
 ### Step 3.4: Cleanup Summary

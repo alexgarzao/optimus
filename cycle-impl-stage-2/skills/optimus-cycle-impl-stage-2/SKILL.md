@@ -180,6 +180,12 @@ CURRENT_BRANCH=$(git branch --show-current)
   ```
 - If on a feature branch → proceed
 
+**Branch-task cross-validation:** After confirming the task ID, check that the current branch matches the **Branch** column in `tasks.md` for this task:
+- Read the Branch column for the confirmed task ID
+- If Branch is `-` or empty → warn: "tasks.md shows no branch for T-XXX, but you are on `<current>`. Continue anyway?" (via `AskUser`)
+- If Branch has a value AND it does not match `CURRENT_BRANCH` → warn: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?" (via `AskUser`)
+- If Branch matches `CURRENT_BRANCH` → proceed silently
+
 ### Step 0.1: Discover Project Structure
 
 Before loading docs, discover the project's structure and tooling:

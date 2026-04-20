@@ -243,6 +243,12 @@ feat(api)!: change authentication response format
 title MUST match the task's Tipo mapping (Feature→`feat`, Fix→`fix`, etc.). If the PR
 covers multiple tasks, use the type of the primary/largest change.
 
+**Administrative commits (tasks.md status changes):** All status change commits across
+stages 1-5 use `chore(tasks):` regardless of the task's Tipo. The Tipo-derived prefix
+applies only to PR titles and code-change commits, not to task management operations.
+Examples: `chore(tasks): start T-003 — set status to Validando Spec`,
+`chore(tasks): mark T-003 as done`.
+
 **Reference:** Conventional Commits 1.0.0 — https://www.conventionalcommits.org/en/v1.0.0/
 
 ### Valid Status Values
@@ -375,6 +381,11 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
    # fallback: check if current branch is "main" or "master"
    ```
 
+9. **Branch-task cross-validation** — stages 2-5 verify that the current branch matches
+   the **Branch** column in `tasks.md` for the task being worked on. This prevents
+   working on the wrong branch without detection. If the branch does not match, the
+   agent warns the user and asks whether to continue or switch.
+
 ### Transition Table
 
 | Agent | Expects status | Changes to | Re-execution? |
@@ -391,14 +402,16 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 **NOTE:** cycle-pr-review-stage-4 also works in standalone mode (without a task). In standalone
 mode, it skips all task status logic. See its SKILL.md for detection rules.
 
-**NOTE:** Merge do PR é manual, feito pelo usuário DEPOIS do cycle-close-stage-5 marcar DONE.
+**NOTE:** O merge do PR pode ser feito pelo cycle-close-stage-5 durante a fase de cleanup
+(o agente pergunta ao usuário via AskUser com opções: merge commit, squash, rebase, keep open,
+close without merging), ou manualmente pelo usuário depois.
 
 ### cycle-close-stage-5 Checklist
 
 Before marking done, cycle-close-stage-5 runs 8 checks:
 1. No uncommitted changes (`git status --porcelain` = empty)
 2. No unpushed commits (`git log @{u}..HEAD` = empty)
-3. PR ready to merge (if PR exists) — does NOT merge, user merges manually after
+3. PR ready to merge (if PR exists) — includes PR title validation (Conventional Commits)
 4. CI passing (if PR exists)
 5. `make lint` passes (all quality checks — linter, vet, format, imports)
 6. `make test` passes (unit tests)

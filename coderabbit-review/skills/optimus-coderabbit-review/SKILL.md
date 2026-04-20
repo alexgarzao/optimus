@@ -244,7 +244,12 @@ Record the decision internally. Do NOT apply any fix yet — all fixes are appli
 
 **IMPORTANT:** This phase runs ONCE, after ALL findings have been presented and ALL decisions collected in Phase 2. No fix is applied during Phase 2.
 
-For each approved fix (skipped for ignored findings):
+Apply ALL approved fixes in a single pass (skipped for ignored findings). Group fixes by file
+to minimize I/O. The steps below apply to each fix within the batch — NOT sequentially
+one-at-a-time with full test cycles between each. Run the full test suite ONCE after all
+fixes are applied (Step 3.2 TDD covers individual fix verification, Step 3.3 handles failures).
+
+For each approved fix:
 
 ### Step 3.1: Secondary Agent Validation (for logic changes only)
 
