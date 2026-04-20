@@ -308,7 +308,16 @@ Extract: shortcode, severity, category, analyzer, title, explanation, file, line
 
 **CodeRabbit comments** (author: `coderabbitai[bot]`):
 - Inline review comments with suggestions
-- May include "Duplicated Comments" sections — parse each entry as a separate finding
+- **Duplicated Comments section:** CodeRabbit embeds a `<details>` block titled "Duplicate comments" in its review body listing findings it already reported in previous reviews but remain unresolved. Parse each entry as a separate finding and tag with `origin: duplicate` (see tagging rules below).
+- **Outside diff range section:** CodeRabbit embeds a `<details>` block titled `⚠️ Outside diff range comments` in its review body with suggestions about code OUTSIDE the PR diff. Parse each entry (file path, line, suggestion) as a separate finding and tag with `origin: outside-diff` (see tagging rules below).
+
+**CodeRabbit origin tagging rules:**
+When presenting findings from CodeRabbit, ALWAYS include the origin tag in the finding header:
+- `[CodeRabbit — DUPLICATE]` for findings from the "Duplicate comments" section. These are repeat findings from previous reviews that remain unaddressed.
+- `[CodeRabbit — OUTSIDE PR DIFF]` for findings from the "Outside diff range" section. These affect code not changed in this PR.
+- `[CodeRabbit]` for regular inline findings (no special tag needed).
+
+This tagging helps the user understand whether the finding is about code they changed in this PR, code outside their changes, or a recurring issue from a previous review.
 
 **Human reviewer comments:** All threads where the first comment author is not a known bot.
 
@@ -510,8 +519,14 @@ Existing PR Comments — evaluate ALL of these (validate or contest each one):
   DeepSource Issues:
   [paste all DeepSource findings with file, line, shortcode, severity, category, title, message]
 
-  CodeRabbit Comments:
-  [paste all CodeRabbit comments, including from "Duplicated Comments" sections]
+  CodeRabbit Comments (inline):
+  [paste all CodeRabbit inline review comments]
+
+  CodeRabbit Duplicate Comments:
+  [paste entries from "Duplicate comments" section — tag each as DUPLICATE]
+
+  CodeRabbit Outside Diff Range Comments:
+  [paste entries from "⚠️ Outside diff range comments" section — tag each as OUTSIDE-DIFF]
 
   Human Reviewer Comments:
   [paste all human reviewer comments]
@@ -578,6 +593,8 @@ Each finding MUST include its source(s):
 | Codacy finding validated by agent | `[Codacy + Agent: <agent-name>]` |
 | DeepSource finding validated by agent | `[DeepSource + Agent: <agent-name>]` |
 | CodeRabbit comment validated by agent | `[CodeRabbit + Agent: <agent-name>]` |
+| CodeRabbit duplicate comment | `[CodeRabbit — DUPLICATE + Agent: <agent-name>]` |
+| CodeRabbit outside-diff comment | `[CodeRabbit — OUTSIDE PR DIFF + Agent: <agent-name>]` |
 | Human review comment validated by agent | `[Reviewer: <username> + Agent: <agent-name>]` |
 | Existing comment contested by agent | `[Contested: <source> vs Agent: <agent-name>]` |
 
@@ -649,6 +666,8 @@ For EACH finding:
 
 Example: `## Finding 1 of 12 — [HIGH] F1 | Codacy + Agent | Security`
 Example: `## Finding 5 of 12 — [MEDIUM] F5 | DeepSource + Agent | Anti-pattern`
+Example: `## Finding 8 of 12 — [MEDIUM] F8 | CodeRabbit — DUPLICATE + Agent | Error handling`
+Example: `## Finding 10 of 12 — [LOW] F10 | CodeRabbit — OUTSIDE PR DIFF + Agent | Naming`
 Example: `## Finding 12 of 12 — [LOW] F12 | CodeRabbit + Agent | Style`
 
 #### Deep Research Before Presenting (MANDATORY)

@@ -113,7 +113,13 @@ TEST_INTEGRATION_CMD=<discovered integration test command>
 
 ### Step 1.1: Parse Findings
 
-Parse the CodeRabbit output and categorize each finding by severity:
+Parse the CodeRabbit output. The output may contain three types of findings:
+
+1. **Regular findings** — inline suggestions about code within the diff. Tag as `origin: inline`.
+2. **Duplicate comments** — findings CodeRabbit already reported in previous reviews that remain unresolved. Look for a `<details>` block titled "Duplicate comments" in the output. Parse each entry and tag as `origin: duplicate`.
+3. **Outside diff range comments** — suggestions about code OUTSIDE the reviewed diff. Look for a `<details>` block titled `⚠️ Outside diff range comments` in the output. Parse each entry (file path, line, suggestion) and tag as `origin: outside-diff`.
+
+Categorize ALL findings (regardless of origin) by severity:
 
 | Severity | Criteria |
 |----------|----------|
@@ -127,16 +133,22 @@ Parse the CodeRabbit output and categorize each finding by severity:
 ```markdown
 ## CodeRabbit Review — X findings
 
-| # | Severity | File | Line | Summary |
-|---|----------|------|------|---------|
-| 1 | CRITICAL | auth.go | 42 | ... |
-| 2 | HIGH | handler.go | 88 | ... |
+| # | Severity | Origin | File | Line | Summary |
+|---|----------|--------|------|------|---------|
+| 1 | CRITICAL | inline | auth.go | 42 | ... |
+| 2 | HIGH | DUPLICATE | handler.go | 88 | (reported in previous review) ... |
+| 3 | MEDIUM | OUTSIDE PR DIFF | config.go | 15 | (outside this PR's changes) ... |
 
 ### Summary by Severity
 - CRITICAL: X
 - HIGH: X
 - MEDIUM: X
 - LOW: X
+
+### Summary by Origin
+- Inline (within diff): X
+- Duplicate (from previous reviews): X
+- Outside PR diff: X
 ```
 
 ---
@@ -147,7 +159,10 @@ Parse the CodeRabbit output and categorize each finding by severity:
 
 Process ONE finding at a time, in severity order (CRITICAL first, LOW last). Collect ALL decisions first — do NOT apply any fix during this phase.
 
-For EACH finding, present with `"Finding X of N"` in the header:
+For EACH finding, present with `"Finding X of N"` in the header, including the origin tag:
+- Regular: `## Finding X of N — [SEVERITY] | CodeRabbit | Category`
+- Duplicate: `## Finding X of N — [SEVERITY] | CodeRabbit — DUPLICATE | Category`
+- Outside diff: `## Finding X of N — [SEVERITY] | CodeRabbit — OUTSIDE PR DIFF | Category`
 
 ### 1. Deep Research Before Presenting (MANDATORY)
 
