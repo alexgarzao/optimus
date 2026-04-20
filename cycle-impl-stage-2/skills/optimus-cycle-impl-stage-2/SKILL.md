@@ -178,6 +178,13 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
    git add tasks.md
    git commit -m "chore(tasks): set T-XXX status to Em Andamento"
    ```
+7. **Invoke notification hooks (if present):**
+   ```bash
+   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+   if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+     "$HOOKS_FILE" status-change T-XXX "Validando Spec" "Em Andamento" 2>/dev/null &
+   fi
+   ```
 
 **Why commit immediately:** If the session is interrupted or the agent crashes before any code changes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of what happens during implementation.
 
@@ -220,7 +227,7 @@ If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
 
 If no PR exists, skip this step.
 
-### Step 0.1: Discover Project Structure
+### Step 0.6: Discover Project Structure
 
 Before loading docs, discover the project's structure and tooling:
 
@@ -244,7 +251,7 @@ Before loading docs, discover the project's structure and tooling:
 
 4. **Identify reference docs:** Look for `docs/pre-dev/`, `docs/`, or project-specific locations for tasks, PRD, TRD, API design, data model.
 
-### Step 0.2: Load All Reference Documents
+### Step 0.7: Load All Reference Documents
 
 Read the discovered reference docs to build full context:
 - Tasks file — the task being executed (find the task by ID)
@@ -255,14 +262,14 @@ Read the discovered reference docs to build full context:
 - Coding standards / project rules
 - Dependency relationships
 
-### Step 0.3: Explore Existing Codebase
+### Step 0.8: Explore Existing Codebase
 
 Before planning, understand what already exists:
 - **Grep for existing patterns** in the relevant domain packages. Understand the handler/service/repository structure, error patterns, test patterns.
 - **Check for migrations** and identify the latest migration number.
 - **Check existing test files** for patterns (table-driven tests, testcontainers, Playwright fixtures, Vitest, etc.).
 
-### Step 0.4: Identify and Ask ALL Questions Upfront
+### Step 0.9: Identify and Ask ALL Questions Upfront
 
 Before writing a single line of code, analyze the task spec for:
 
@@ -402,6 +409,9 @@ Present a summary of what was implemented and ask for explicit approval via `Ask
 ---
 
 ## Phase 1.5: Update Acceptance Criteria Checkboxes
+
+After Phase 1 completes (via dev-cycle or built-in fallback), update the acceptance criteria
+checkboxes in tasks.md to reflect what was actually implemented.
 
 **IMPORTANT:** This step runs AFTER implementation and verification complete but BEFORE
 presenting the final summary. This ensures that when stage-3 (impl-review) runs, the

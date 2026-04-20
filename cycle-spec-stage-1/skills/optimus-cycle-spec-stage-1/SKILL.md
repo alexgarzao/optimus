@@ -75,7 +75,22 @@ Catches gaps, contradictions, and ambiguities that would cause rework.
 
 ## Phase 0: Discover and Load Context
 
-### Step 0.0: Find and Validate tasks.md
+### Step 0.0: Verify GitHub CLI (HARD BLOCK)
+
+```bash
+gh auth status 2>/dev/null
+```
+
+If this command fails (exit code != 0), **STOP** immediately:
+```
+GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
+```
+
+**Why check here:** Stage-1 dispatches ring droids (Step 3.1) that may use `gh`, and
+subsequent stages (2-5) all require `gh`. Failing early prevents the user from completing
+spec validation only to discover `gh` is not set up when they try to run Stage-2.
+
+### Step 0.0.1: Find and Validate tasks.md
 
 1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either, **STOP** and suggest `/optimus-cycle-migrate`.
 2. **Validate format (HARD BLOCK):**
@@ -94,7 +109,7 @@ Catches gaps, contradictions, and ambiguities that would cause rework.
 
 If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
 
-### Step 0.0.1: Identify Task to Validate
+### Step 0.0.2: Identify Task to Validate
 
 **If the user specified a task ID** (e.g., "validate T-006"):
 - Use the provided task ID
@@ -111,7 +126,7 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
 
-### Step 0.0.2: Validate Task Status (DO NOT modify yet)
+### Step 0.0.3: Validate Task Status (DO NOT modify yet)
 
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
@@ -153,11 +168,11 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
    - **If re-execution** (status is already `Validando Spec`) OR the user specified the task ID explicitly:
      - Skip expanded confirmation (user already has context)
 
-**IMPORTANT:** Do NOT modify tasks.md yet. Status and Branch updates happen in Step 0.0.4 AFTER the workspace is created. This ensures the modifications happen in the correct working directory (worktree or feature branch).
+**IMPORTANT:** Do NOT modify tasks.md yet. Status and Branch updates happen in Step 0.0.5 AFTER the workspace is created. This ensures the modifications happen in the correct working directory (worktree or feature branch).
 
 **Anti-pulo:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`), refuse to proceed — the task has already passed this stage or was cancelled.
 
-### Step 0.0.2.5: Detect and Clean Abandoned Workspaces
+### Step 0.0.3.5: Detect and Clean Abandoned Workspaces
 
 **If re-execution** (status is `Validando Spec`), check for orphaned workspaces from
 a previous run that was abandoned:
@@ -187,7 +202,7 @@ a previous run that was abandoned:
       4. Commit: `chore(tasks): reset T-XXX — clean abandoned workspace`
       5. **STOP** — task is back to Pendente, user can re-run stage-1 when ready
 
-### Step 0.0.3: Create Workspace (if on default branch)
+### Step 0.0.4: Create Workspace (if on default branch)
 
 Check if currently on the default/main branch:
 
@@ -196,7 +211,7 @@ DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@
 CURRENT_BRANCH=$(git branch --show-current)
 ```
 
-**If already on a feature branch** (not default/main/master): proceed to Step 0.0.4 (re-execution or workspace already exists).
+**If already on a feature branch** (not default/main/master): proceed to Step 0.0.5 (re-execution or workspace already exists).
 
 **If on default branch:** Create a workspace for the task. Ask the user via `AskUser`:
 
@@ -226,7 +241,7 @@ git checkout -b <tipo-prefix>/<task-id>-<keywords>
 
 **BLOCKING**: Do NOT proceed until the workspace is created.
 
-### Step 0.0.4: Update tasks.md (Status + Branch)
+### Step 0.0.5: Update tasks.md (Status + Branch)
 
 **IMPORTANT:** This step runs AFTER the workspace is created, so modifications happen in the feature branch's working directory — not on the default branch.
 
@@ -236,6 +251,14 @@ git checkout -b <tipo-prefix>/<task-id>-<keywords>
    ```bash
    git add tasks.md
    git commit -m "chore(tasks): start T-XXX — set status to Validando Spec"
+   ```
+
+4. **Invoke notification hooks (if present):**
+   ```bash
+   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+   if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+     "$HOOKS_FILE" status-change T-XXX Pendente "Validando Spec" 2>/dev/null &
+   fi
    ```
 
 **Why commit immediately:** Stage-1 is analysis-only — it may not produce any other file changes. If no findings are fixed (all skipped), Step 6 would not commit, leaving tasks.md changes uncommitted and at risk of being lost. Committing now ensures the status change is persisted regardless of the analysis outcome.

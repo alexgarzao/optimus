@@ -174,6 +174,13 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
    git add tasks.md
    git commit -m "chore(tasks): set T-XXX status to Revisando PR"
    ```
+9. **Invoke notification hooks (if present):**
+   ```bash
+   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+   if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+     "$HOOKS_FILE" status-change T-XXX "Validando Impl" "Revisando PR" 2>/dev/null &
+   fi
+   ```
 
    **Why commit immediately:** If the session is interrupted or the agent crashes before any review fixes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of the review outcome.
 9. At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes cycle-close-stage-5 next.
@@ -890,7 +897,6 @@ droids do NOT follow TDD — they apply the fix directly.
 2. `ring-dev-team-backend-engineer-typescript` — TypeScript backend
 3. `ring-dev-team-frontend-engineer` — React/Next.js frontend
 4. `ring-dev-team-qa-analyst` — test fixes
-5. `ring-dev-team-qa-analyst` — test fixes
 
 ### Step 6.3: Handle Test Failures (max 3 attempts)
 

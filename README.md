@@ -13,6 +13,7 @@ Skills are classified as **Administrative** (run anywhere) or **Execution** (req
 | `cycle-migrate` | Discovers and converts existing task files to optimus format | `/optimus-cycle-migrate` |
 | `cycle-report` | Task status dashboard with dependency graph and parallelization | `/optimus-cycle-report` |
 | `cycle-crud` | Create, edit, remove, and reorder tasks in tasks.md | `/optimus-cycle-crud` |
+| `help` | Lists all available skills with descriptions and situational guidance | `/optimus-help` |
 
 ### Execution Skills (stages 1-5)
 

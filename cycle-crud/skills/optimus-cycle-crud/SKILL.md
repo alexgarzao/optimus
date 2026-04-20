@@ -379,29 +379,9 @@ Show the new table order.
    Cancel anyway?
    ```
    **BLOCKING:** Do NOT proceed without user confirmation.
-4. **If task has a branch** (Branch column is not `-`):
-   a. **Check for open PR:**
-      ```bash
-      gh pr list --head "<branch>" --json number,state,url --jq '.[] | select(.state == "OPEN")'
-      ```
-      If an open PR exists, ask via `AskUser`:
-      ```
-      Task T-XXX has an open PR (#N). What should I do with it?
-      ```
-      Options:
-      - **Close PR without merging** — `gh pr close <number>`
-      - **Keep PR open** — leave it for manual handling
-   b. **Ask about branch cleanup** via `AskUser`:
-      ```
-      Task T-XXX has branch '<branch>'. What should I do with it?
-      ```
-      Options:
-      - **Delete local and remote** — clean up the branch
-      - **Keep** — leave the branch as is
-      **NOTE:** If an open PR was kept in step (a), skip branch deletion — deleting the branch would orphan the PR.
-5. **If task has a worktree**, check and offer to remove it:
+4. **If task has a worktree**, check and offer to remove it:
 
-   **IMPORTANT:** Worktree must be removed BEFORE attempting branch deletion (step 4b).
+   **IMPORTANT:** Worktree must be removed BEFORE attempting branch deletion (step 5b).
    Git refuses to delete a branch that is checked out in a worktree.
 
    ```bash
@@ -422,14 +402,39 @@ Show the new table order.
    2. Change working directory to the main repository: `cd <main-repo-path>`
    3. Then run `git worktree remove <worktree-path>`
 
-   **Ordering:** Remove worktree (step 5) BEFORE deleting branch (step 4b). If both are
-   requested, execute in this order: worktree removal → branch deletion.
+5. **If task has a branch** (Branch column is not `-`):
+   a. **Check for open PR:**
+      ```bash
+      gh pr list --head "<branch>" --json number,state,url --jq '.[] | select(.state == "OPEN")'
+      ```
+      If an open PR exists, ask via `AskUser`:
+      ```
+      Task T-XXX has an open PR (#N). What should I do with it?
+      ```
+      Options:
+      - **Close PR without merging** — `gh pr close <number>`
+      - **Keep PR open** — leave it for manual handling
+   b. **Ask about branch cleanup** via `AskUser`:
+      ```
+      Task T-XXX has branch '<branch>'. What should I do with it?
+      ```
+      Options:
+      - **Delete local and remote** — clean up the branch
+      - **Keep** — leave the branch as is
+      **NOTE:** If an open PR was kept in step (a), skip branch deletion — deleting the branch would orphan the PR.
 
 ### Step 5.2: Apply Cancellation
 
 1. Update the **Status** column to `Cancelado`
 2. Update the **Branch** column to `-` (if branch was deleted in Step 5.1)
 3. Save and commit: `chore(tasks): cancel T-XXX`
+4. **Invoke notification hooks (if present):**
+   ```bash
+   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+   if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+     "$HOOKS_FILE" task-cancelled T-XXX "<old status>" "Cancelado" 2>/dev/null &
+   fi
+   ```
 
 ### Step 5.3: Confirm
 
@@ -489,6 +494,13 @@ Cancelled task T-XXX: <title>
    - `Em Andamento` if the workspace/branch still exists
    - `Pendente` if the workspace/branch was deleted (so cycle-spec-stage-1 can create a new one)
 2. Save and commit: `chore(tasks): reopen T-XXX — <reason> (status: <target status>)`
+3. **Invoke notification hooks (if present):**
+   ```bash
+   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+   if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+     "$HOOKS_FILE" status-change T-XXX "**DONE**" "<target status>" 2>/dev/null &
+   fi
+   ```
 
 ### Step 5.5.3: Confirm
 
@@ -560,6 +572,13 @@ code manually without using stage-2).
 
 1. Update the **Status** column to the target status
 2. Save and commit: `chore(tasks): advance T-XXX to <target status> (manual override)`
+3. **Invoke notification hooks (if present):**
+   ```bash
+   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+   if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+     "$HOOKS_FILE" status-change T-XXX "<old status>" "<target status>" 2>/dev/null &
+   fi
+   ```
 
 ---
 
@@ -611,6 +630,13 @@ that significant rework is needed and the task should go back to implementation)
 
 1. Update the **Status** column to the target status
 2. Save and commit: `chore(tasks): demote T-XXX to <target status> — <reason>`
+3. **Invoke notification hooks (if present):**
+   ```bash
+   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+   if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+     "$HOOKS_FILE" status-change T-XXX "<old status>" "<target status>" 2>/dev/null &
+   fi
+   ```
 
 ---
 

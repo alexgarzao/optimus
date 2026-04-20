@@ -28,7 +28,8 @@ optimus/
 ├── deep-review/                       # Parallel code review (no PR context)
 ├── deep-doc-review/                   # Documentation review
 ├── coderabbit-review/                 # CodeRabbit CLI + TDD cycle
-└── verify/                            # Automated verification (lint/test/build)
+├── verify/                            # Automated verification (lint/test/build)
+└── help/                              # Skill discovery and help
 ```
 
 Each plugin follows the same layout:
@@ -668,7 +669,7 @@ installed, the skill MUST stop and list which droids need to be installed.
 
 ## GitHub CLI Prerequisite
 
-**All skills that use `gh` commands** (stages 2-5, cycle-pr-review-stage-4, cycle-crud cancel,
+**All skills that use `gh` commands** (stages 1-5, cycle-pr-review-stage-4, cycle-crud cancel,
 cycle-close-stage-5) MUST validate that `gh` is installed and authenticated before running
 any `gh` command:
 
@@ -714,12 +715,20 @@ concurrent edits to the same file, not from conflicting statuses on the same tas
 
 ### Standalone Skills vs Ring Droid Dispatch
 The `deep-review` and `deep-doc-review` standalone skills apply fixes directly in their
-interactive resolution phase, rather than dispatching specialist ring droids. This is by
-design — standalone skills use a simplified model that does not require the ring droid
-ecosystem. The ring droid dispatch pattern (described in "Common Patterns Across Skills")
-applies only to cycle review skills (stages 1, 3, 4, and coderabbit-review).
+interactive resolution phase, rather than dispatching specialist ring droids for fixes.
+However, both skills **require ring droids for analysis dispatch**:
 
-`deep-doc-review` dispatches parallel review agents for analysis.
+- `deep-review` dispatches ring review droids (code-reviewer, business-logic-reviewer,
+  security-reviewer, test-reviewer, consequences-reviewer) for parallel code analysis.
+- `deep-doc-review` dispatches ring documentation and review droids (docs-reviewer,
+  business-logic-reviewer, code-reviewer) for parallel documentation analysis.
+
+Ring droids are required for both skills — there is no fallback. If the required droids
+are not installed, the skill will stop and list which droids need to be installed.
+
+The ring droid **fix dispatch** pattern (TDD cycle via specialist droids, described in
+"Common Patterns Across Skills") applies only to cycle review skills (stages 1, 3, 4,
+and coderabbit-review). Standalone skills apply approved fixes directly.
 
 ## Optional: Notification Hooks
 

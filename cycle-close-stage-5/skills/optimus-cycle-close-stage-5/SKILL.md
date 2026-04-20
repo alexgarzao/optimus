@@ -104,7 +104,7 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
    - If Branch has a value AND it does not match `CURRENT_BRANCH` → warn: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?" (via `AskUser`)
    - If Branch matches `CURRENT_BRANCH` → proceed silently
 
-### Step 0.0.1: Identify Task to Close
+### Step 0.0.2: Identify Task to Close
 
 **If the user specified a task ID** (e.g., "close T-012"):
 - Use the provided task ID
@@ -244,34 +244,39 @@ git log @{u}..HEAD --oneline
 Check if a PR exists for the current branch or task branch:
 
 ```bash
-gh pr list --head "$(git branch --show-current)" --json number,state,title,reviewDecision --jq '.[]'
+PR_JSON=$(gh pr list --head "$(git branch --show-current)" --json number,state,title,reviewDecision --jq '.[0]' 2>/dev/null)
+PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number // empty')
+PR_STATE=$(echo "$PR_JSON" | jq -r '.state // empty')
+PR_TITLE=$(echo "$PR_JSON" | jq -r '.title // empty')
 ```
 
-- **If no PR exists:** PASS (task went directly to default branch)
+**Store `PR_NUMBER` for use in Check 4.**
+
+- **If no PR exists** (`PR_NUMBER` is empty): PASS (task went directly to default branch)
 - **If PR exists and state is MERGED:** PASS
-- **If PR exists and state is CLOSED (not merged):** FAIL — "PR #X was closed without merging."
+- **If PR exists and state is CLOSED (not merged):** FAIL — "PR #$PR_NUMBER was closed without merging."
 - **If PR exists and state is OPEN:**
   1. **Validate PR title (Conventional Commits):** The PR title MUST follow the **Conventional Commits 1.0.0** specification (https://www.conventionalcommits.org/en/v1.0.0/).
      - Expected format: `<type>[optional scope]: <description>`
      - Regex: `^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$`
      - Cross-check the type against the task's **Tipo** column (Feature→`feat`, Fix→`fix`, etc.)
-     - **If title is invalid:** FAIL — "PR #X title does not follow Conventional Commits: `<current title>`. Expected: `<corrected title>`. Fix with: `gh pr edit <number> --title \"<corrected title>\"`"
-  2. **If title is valid:** PASS — "PR #X title is valid. CI status checked in Check 4."
+     - **If title is invalid:** FAIL — "PR #$PR_NUMBER title does not follow Conventional Commits: `$PR_TITLE`. Expected: `<corrected title>`. Fix with: `gh pr edit $PR_NUMBER --title \"<corrected title>\"`"
+  2. **If title is valid:** PASS — "PR #$PR_NUMBER title is valid. CI status checked in Check 4."
 
 **NOTE:** This check validates PR state and title only. CI status is checked separately in Check 4.
 
 #### Check 4: CI Passing (if PR exists)
 
-If a PR was found in Check 3:
+If `PR_NUMBER` was set in Check 3 (a PR exists):
 
 ```bash
-gh pr checks <PR_NUMBER>
+gh pr checks "$PR_NUMBER"
 ```
 
 - **PASS:** All checks show "pass"
 - **FAIL:** List failing checks
 
-If no PR exists, skip this check.
+If no PR was found in Check 3 (`PR_NUMBER` is empty), skip this check.
 
 ### Group B: Code Quality
 
@@ -348,8 +353,15 @@ All prerequisites met. Marking task as **DONE**.
 Then:
 1. Update the Status column in `tasks.md` to `**DONE**` (from either `Validando Impl` or `Revisando PR`)
 2. Commit: `chore(tasks): mark T-XXX as done`
-3. Push the commit
-4. Proceed to Phase 3 (cleanup).
+3. **Invoke notification hooks (if present):**
+   ```bash
+   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+   if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+     "$HOOKS_FILE" task-done T-XXX "<previous status>" "**DONE**" 2>/dev/null &
+   fi
+   ```
+4. Push the commit
+5. Proceed to Phase 3 (cleanup).
 
 **Why `chore(tasks):` and not the Tipo prefix:** Marking a task as DONE is an administrative
 status change in `tasks.md`, not a code change. The Tipo prefix (`feat`, `fix`, etc.) applies

@@ -65,6 +65,11 @@
       "name": "verify",
       "description": "Two-phase code verification (Go, TypeScript, Python, generic): parallel static analysis + sequential tests with MERGE_READY/NEEDS_FIX verdict.",
       "source": "./verify"
+    },
+    {
+      "name": "help",
+      "description": "Lists all available Optimus skills with descriptions, usage commands, and situational guidance.",
+      "source": "./help"
     }
   ]
 }

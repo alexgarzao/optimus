@@ -168,7 +168,7 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
    - **If title is valid:** proceed silently
    - If no PR exists, skip.
 
-### Step 0.0.1: Identify Task to Validate
+### Step 0.0.2: Identify Task to Validate
 
 **If the user specified a task ID** (e.g., "validate T-012"):
 - Use the provided task ID
@@ -182,7 +182,7 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
 
-### Step 0.0.2: Validate and Update Task Status
+### Step 0.0.3: Validate and Update Task Status
 
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
@@ -226,6 +226,13 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
    ```bash
    git add tasks.md
    git commit -m "chore(tasks): set T-XXX status to Validando Impl"
+   ```
+7. **Invoke notification hooks (if present):**
+   ```bash
+   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+   if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+     "$HOOKS_FILE" status-change T-XXX "Em Andamento" "Validando Impl" 2>/dev/null &
+   fi
    ```
 
 **Why commit immediately:** If the session is interrupted or the agent crashes before any review fixes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of the review outcome.
