@@ -676,52 +676,81 @@ Required output format:
 
 ## Phase 6: Convergence Loop (MANDATORY — automatic re-validation with escalating scrutiny)
 
-After Phase 5 completes (whether fixes were applied or all findings were skipped), the validator MUST automatically re-run validation on the updated code. This catches new issues exposed by the fixes just applied.
+After Phase 5 completes (whether fixes were applied or all findings were skipped), the validator MUST automatically re-validate. This catches both new issues exposed by fixes AND issues missed in round 1 due to session bias.
 
-**CRITICAL — Escalating Scrutiny Per Round:**
+**CRITICAL — Why Fresh Sub-Agents:**
 
-The primary failure mode of convergence loops is that re-running the same analysis with the same depth produces the same results (minus already-seen findings), leading to false convergence. To prevent this, EACH round MUST escalate its level of scrutiny:
+The primary failure mode of convergence loops is **false convergence**: the orchestrator re-runs analysis in the same session, with the same mental model, and declares "zero new findings" — not because there are none, but because it can't see past its own prior reasoning. Escalating scrutiny via prose ("be more skeptical") does not reliably change LLM analysis depth.
 
-| Round | Scrutiny Level | Focus |
-|-------|---------------|-------|
-| **1** (initial) | Standard analysis | Normal validation across all domains |
-| **2** | Skeptical re-read | For each domain, ask: "What did I accept as correct in round 1 that I should question?" Re-read code with the assumption that something was missed. Check function-by-function, branch-by-branch instead of scanning |
-| **3** | Adversarial analysis | Actively try to break the code: invent edge cases, look for implicit assumptions, check what happens when inputs are nil/empty/zero, when concurrent requests hit the same path, when external services fail |
-| **4** | Cross-cutting deep dive | Focus on interactions BETWEEN domains: does the test coverage actually exercise the security-sensitive paths? Do the fixes from previous rounds introduce new consistency issues? Does spec compliance still hold after code changes? |
-| **5** | Final sweep | Review ALL previously skipped/deferred findings with fresh eyes — should any be reconsidered? Check the cumulative changes for internal consistency |
+The solution: **rounds 2+ are executed by a fresh sub-agent** dispatched via `Task` tool. The sub-agent has zero context from prior rounds, reads all files from scratch, and returns findings independently. The orchestrator then deduplicates against the cumulative ledger.
 
-**Agent re-dispatch with escalated prompts:**
+**Round structure:**
 
-When re-dispatching agents in rounds 2+, EACH agent MUST receive escalated instructions:
+| Round | Who analyzes | How |
+|-------|-------------|-----|
+| **1** (initial) | Orchestrator (this agent) | Phase 0.5 (static analysis) + Phase 1 (parallel agent dispatch) + Phase 2 (consolidate) — normal flow with full session context |
+| **2** (mandatory) | **Fresh sub-agent** via `Task` | Sub-agent reads all changed files from scratch, dispatches its own review agents, returns findings |
+| **3-5** | **Fresh sub-agent** via `Task` | Same as round 2 — only triggered if round 2+ found new findings |
+
+**Round 2 is MANDATORY.** The "zero new findings" stop condition can only trigger starting from round 3. This guarantees at least one fresh-eyes pass after the initial analysis.
+
+**Fresh sub-agent dispatch (rounds 2+):**
+
+Dispatch a single sub-agent via `Task` tool (use `worker` or any available review droid). The sub-agent receives:
+
+1. **All changed files** — full content, re-read fresh from disk (not from orchestrator's cache)
+2. **Task spec** — the full task section from tasks.md
+3. **Project rules and coding standards** — re-read fresh
+4. **The findings ledger** — list of ALL findings from previous rounds with their resolutions (fixed/skipped/deferred), used ONLY for deduplication
+5. **Analysis instructions** — the full validation domains from this skill
 
 ```
-This is re-validation round X of 5. In previous rounds, the following findings
-were already identified and resolved:
-[list of previous findings with resolutions]
+Goal: Independent post-task validation of T-XXX (convergence round X of 5)
 
-Your job NOW is to look DEEPER — not repeat what was already found.
-Specifically:
-- Question assumptions: what did round 1 accept that might be wrong?
-- Check interactions: do the fixes from previous rounds create new issues?
-- Look for subtle issues: off-by-one errors, race conditions, missing error
-  propagation, implicit type coercions, nil dereferences in rare paths
-- Examine what was NOT flagged: absence of validation, missing constraints,
-  undocumented behavior, untested error paths
-- Trace execution flows end-to-end: follow data from API entry to DB and back,
-  looking for transformations that lose information or corrupt state
+You are a FRESH reviewer with NO prior context. Review this implementation
+from scratch as if you've never seen it before.
 
-Do NOT report findings that match any previously identified finding.
-Only report genuinely NEW issues.
+Context:
+  - Task spec: [full task content — re-read from file]
+  - Changed files: [full content of each file — re-read from disk]
+  - Project rules: [full content — re-read from files]
+  - Test coverage data: [re-run coverage commands and include output]
+
+Analysis scope (execute ALL of these):
+  1. Code quality — architecture, patterns, SOLID, DRY, maintainability
+  2. Business logic — domain correctness, edge cases, business rules
+  3. Security — vulnerabilities, OWASP, input validation, secrets
+  4. Test quality — coverage gaps, missing error scenarios, flaky patterns
+  5. Spec compliance — verify each acceptance criterion is implemented
+  6. Cross-file consistency — duplication, shared constants, imports
+
+Previously identified findings (for DEDUP ONLY — do NOT let this bias your analysis):
+  [list of findings with IDs and descriptions]
+
+CRITICAL: Analyze INDEPENDENTLY. The previous findings list is ONLY for avoiding
+duplicate reports. Do NOT skip areas just because previous rounds "already covered" them.
+If you find the same issue, report it — the orchestrator will dedup.
+
+Required output:
+  For each finding: severity (CRITICAL/HIGH/MEDIUM/LOW), file, line, category,
+  rule violated, description, recommendation
+  If no issues found: "PASS — all validation domains clean"
 ```
+
+**Orchestrator deduplication after sub-agent returns:**
+
+1. Compare each sub-agent finding against the cumulative ledger (match by file + topic + description similarity)
+2. **Genuinely new findings** → add to ledger, present to user via Phase 3-4
+3. **Duplicates of already-resolved findings** → discard silently
+4. **Duplicates of user-skipped findings** → discard silently (user already decided)
 
 **Loop rules:**
 - **Maximum rounds:** 5 (the initial run counts as round 1)
-- **Progress indicator:** Show `"=== Re-validation round X of 5 (scrutiny: <level>) ==="` at the start of each re-run (e.g., "=== Re-validation round 2 of 5 (scrutiny: skeptical re-read) ===")
-- **Scope:** Re-execute Phase 1 (dispatch agents with escalated prompts) and Phase 2 (consolidate). Do NOT re-load context (Phase 0) — use the same task and docs, but re-read any files that were modified by fixes. Agents receive the UPDATED file contents
-- **Finding deduplication:** Maintain a ledger of ALL findings from ALL previous rounds (by ID and description). Only present findings that are NEW — not already seen, resolved, or skipped in a prior round. If a finding was skipped/discarded by the user in a prior round, do NOT re-present it
-- **If new findings exist:** Present them using Phase 3 (overview) and Phase 4 (interactive resolution), apply via Phase 5 (batch apply), then loop again
+- **Round 2 is MANDATORY** — always dispatch a fresh sub-agent regardless of round 1 results
+- **Progress indicator:** Show `"=== Re-validation round X of 5 (fresh sub-agent) ==="` at the start of each re-run
+- **If new findings exist:** Present them using Phase 3 (overview) and Phase 4 (interactive resolution), apply via Phase 5 (batch apply), then loop again (next round also uses fresh sub-agent)
 - **Stop conditions (any one triggers exit):**
-  1. Zero new findings in the current round (after escalated scrutiny — this is genuine convergence)
+  1. Zero new findings in the current round — **only valid from round 3 onward** (round 2 is mandatory)
   2. Round 5 completed (hard limit)
   3. User explicitly requests to stop (via AskUser response)
   
@@ -730,7 +759,7 @@ Only report genuinely NEW issues.
 **Round summary (show after each round):**
 
 ```markdown
-### Round X of 5 (scrutiny: <level>) — Summary
+### Round X of 5 (fresh sub-agent) — Summary
 - New findings this round: N (C critical, H high, M medium, L low)
 - Cumulative: X total findings across Y rounds
 - Fixed: A | Skipped: B | Deferred: C

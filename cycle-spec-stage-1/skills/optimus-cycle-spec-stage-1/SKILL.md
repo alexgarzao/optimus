@@ -409,20 +409,19 @@ For EACH new component:
 2. Verify new components follow them
 3. Flag missing logs and missing structured fields for metrics
 
-### Step 3.1: Dispatch Validation Agents (when available)
+### Step 3.1: Dispatch Validation Agents (MANDATORY)
 
-If specialist review droids are available in the environment, dispatch them in parallel to enrich the validation with expert analysis. Each agent receives the task spec, reference docs, and the gaps/findings identified so far.
+**HARD BLOCK:** Dispatch specialist agents in parallel to validate the task spec. Each agent receives the task spec, reference docs, and the gaps/findings identified so far. The `worker` droid is always available as fallback, so this step is never skipped.
 
 **Agent selection priority:**
 
-1. **Ring review droids (preferred when available):**
+1. **Ring review droids (preferred):**
    - `ring-default-business-logic-reviewer` — validate business rules completeness, edge cases, and domain correctness in the task spec
    - `ring-default-security-reviewer` — identify security gaps in the spec (missing auth, input validation, data exposure risks)
    - `ring-dev-team-qa-analyst` — validate testing strategy completeness, identify untested scenarios
    - `ring-default-code-reviewer` — assess architectural feasibility, identify patterns that may conflict with the codebase
 2. **Other available review droids:** If Ring droids are not available, use any other review droids
-3. **Worker droid with validation instructions:** Fall back to `worker` with domain-specific instructions
-4. **Skip:** If no droids are available, proceed with the findings from Steps 1-3 (the skill still works without agents)
+3. **Worker droid with domain instructions (fallback):** Fall back to `worker` with domain-specific instructions — always available
 
 **Agent prompt MUST include:**
 ```
@@ -475,52 +474,79 @@ If any corrections were applied in Step 5:
 
 If no corrections were applied (all findings skipped), skip this step.
 
-### Step 7: Convergence Loop (MANDATORY — automatic re-validation with escalating scrutiny)
+### Step 7: Convergence Loop (MANDATORY — fresh sub-agent re-validation)
 
-After Step 6 completes (whether changes were committed or all findings were skipped), the validator MUST automatically re-run validation on the updated state. This catches new gaps exposed by the corrections just applied.
+After Step 6 completes (whether changes were committed or all findings were skipped), the validator MUST automatically re-validate. This catches both new gaps exposed by corrections AND issues missed in round 1 due to session bias.
 
-**CRITICAL — Escalating Scrutiny Per Round:**
+**CRITICAL — Why Fresh Sub-Agents:**
 
-The primary failure mode of convergence loops is that re-running the same analysis with the same depth produces the same results (minus already-seen findings), leading to false convergence. To prevent this, EACH round MUST escalate its level of scrutiny:
+The primary failure mode of convergence loops is **false convergence**: the orchestrator re-runs analysis in the same session, with the same mental model, and declares "zero new findings" — not because there are none, but because it can't see past its own prior reasoning. Escalating scrutiny via prose ("be more skeptical") does not reliably change LLM analysis depth.
 
-| Round | Scrutiny Level | Focus |
-|-------|---------------|-------|
-| **1** (initial) | Standard analysis | Normal validation across all dimensions |
-| **2** | Skeptical re-read | For each dimension, ask: "What did I accept as correct in round 1 that I should question?" Re-read specs with the assumption that something was missed. Check field-by-field, line-by-line instead of scanning |
-| **3** | Adversarial analysis | Actively try to break the spec: invent edge cases, look for implicit assumptions, check what happens when optional fields are absent, when lists are empty, when IDs reference deleted entities |
-| **4** | Cross-cutting deep dive | Focus on interactions BETWEEN dimensions: does the test strategy actually cover the contradictions found? Do observability gaps hide the test gaps? Does the DoD match the actual test coverage? |
-| **5** | Final sweep | Review ALL previously skipped/deferred findings with fresh eyes — should any be reconsidered? Check the cumulative changes for internal consistency |
+The solution: **rounds 2+ are executed by a fresh sub-agent** dispatched via `Task` tool. The sub-agent has zero context from prior rounds, reads all files from scratch, and returns findings independently. The orchestrator then deduplicates against the cumulative ledger.
 
-**Re-dispatch agents in rounds 2+:**
+**Round structure:**
 
-If Step 3.1 dispatched specialist agents in round 1, re-dispatch them in subsequent rounds with escalated instructions:
+| Round | Who analyzes | How |
+|-------|-------------|-----|
+| **1** (initial) | Orchestrator (this agent) | Steps 1-3 + Step 3.1 (agent dispatch) — normal flow with full session context |
+| **2** (mandatory) | **Fresh sub-agent** via `Task` | Sub-agent reads all files from scratch, analyzes independently, returns findings |
+| **3-5** | **Fresh sub-agent** via `Task` | Same as round 2 — only triggered if round 2+ found new findings |
+
+**Round 2 is MANDATORY.** The "zero new findings" stop condition can only trigger starting from round 3. This guarantees at least one fresh-eyes pass after the initial analysis.
+
+**Fresh sub-agent dispatch (rounds 2+):**
+
+Dispatch a single sub-agent via `Task` tool (use `worker` or any available review droid). The sub-agent receives:
+
+1. **All relevant files** — task spec, reference docs, tasks.md, project rules (re-read fresh, not from cache)
+2. **The findings ledger** — list of ALL findings from previous rounds with their resolutions (fixed/skipped/deferred), used ONLY for deduplication
+3. **Analysis instructions** — the full validation dimensions (Steps 1-3) from this skill
 
 ```
-This is re-validation round X of 5. In previous rounds, the following findings
-were already identified and resolved:
-[list of previous findings with resolutions]
+Goal: Independent re-validation of task T-XXX spec (convergence round X of 5)
 
-Your job NOW is to look DEEPER — not repeat what was already found.
-Specifically:
-- Question assumptions: what did round 1 accept that might be wrong?
-- Check interactions: do the fixes from previous rounds create new gaps?
-- Look for subtle issues: field-level mismatches, implicit type coercions,
-  missing error paths, edge cases in boundary conditions
-- Examine what was NOT flagged: absence of validation, missing constraints,
-  undocumented behavior
+You are a FRESH reviewer with NO prior context. Analyze this task spec
+from scratch as if you've never seen it before.
 
-Do NOT report findings that match any previously identified finding.
-Only report genuinely NEW issues.
+Context:
+  - Task spec: [full task content — re-read from file]
+  - Reference docs: [full content — re-read from files]
+  - Project rules: [full content — re-read from files]
+
+Analysis scope (execute ALL of these):
+  1. Cross-reference task spec against all reference docs (fields, types, endpoints, error codes)
+  2. Analyze test coverage gaps (unit, integration, E2E, cross-cutting) — enumerate every function/flow
+  3. Analyze observability gaps (logging, metrics) — check against codebase patterns
+  4. Validate Definition of Done completeness
+  5. Check for ambiguities a developer would need to ask about
+
+Previously identified findings (for DEDUP ONLY — do NOT let this bias your analysis):
+  [list of findings with IDs and descriptions]
+
+CRITICAL: Analyze INDEPENDENTLY. The previous findings list is ONLY for avoiding
+duplicate reports. Do NOT skip areas just because previous rounds "already covered" them.
+If you find the same issue, report it — the orchestrator will dedup.
+
+Required output:
+  For each finding: severity (CRITICAL/HIGH/MEDIUM/LOW), category, description,
+  doc references, recommendation
+  If no issues found: "PASS — all validation dimensions clean"
 ```
+
+**Orchestrator deduplication after sub-agent returns:**
+
+1. Compare each sub-agent finding against the cumulative ledger (match by file + topic + description similarity)
+2. **Genuinely new findings** → add to ledger, present to user via Step 4
+3. **Duplicates of already-resolved findings** → discard silently
+4. **Duplicates of user-skipped findings** → discard silently (user already decided)
 
 **Loop rules:**
 - **Maximum rounds:** 5 (the initial run counts as round 1)
-- **Progress indicator:** Show `"=== Re-validation round X of 5 (scrutiny: <level>) ==="` at the start of each re-run (e.g., "=== Re-validation round 2 of 5 (scrutiny: skeptical re-read) ===")
-- **Scope:** Re-execute Steps 1 through 3 AND Step 3.1 (including agent re-dispatch with escalated prompts). Do NOT re-load context (Phase 0) — use the same task and docs, but re-read any files that were modified
-- **Finding deduplication:** Maintain a ledger of ALL findings from ALL previous rounds (by ID and description). Only present findings that are NEW — not already seen, resolved, or skipped in a prior round. If a finding was skipped/discarded by the user in a prior round, do NOT re-present it
-- **If new findings exist:** Present them using Step 4 (one at a time, collect decisions), apply via Step 5, commit via Step 6, then loop again
+- **Round 2 is MANDATORY** — always dispatch a fresh sub-agent regardless of round 1 results
+- **Progress indicator:** Show `"=== Re-validation round X of 5 (fresh sub-agent) ==="` at the start of each re-run
+- **If new findings exist:** Present them using Step 4 (one at a time, collect decisions), apply via Step 5, commit via Step 6, then loop again (next round also uses fresh sub-agent)
 - **Stop conditions (any one triggers exit):**
-  1. Zero new findings in the current round (after escalated scrutiny — this is genuine convergence)
+  1. Zero new findings in the current round — **only valid from round 3 onward** (round 2 is mandatory)
   2. Round 5 completed (hard limit)
   3. User explicitly requests to stop (via AskUser response)
   
@@ -529,7 +555,7 @@ Only report genuinely NEW issues.
 **Round summary (show after each round):**
 
 ```markdown
-### Round X of 5 (scrutiny: <level>) — Summary
+### Round X of 5 (fresh sub-agent) — Summary
 - New findings this round: N (C critical, H high, M medium, L low)
 - Cumulative: X total findings across Y rounds
 - Fixed: A | Skipped: B | Deferred: C

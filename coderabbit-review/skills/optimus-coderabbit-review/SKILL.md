@@ -339,48 +339,74 @@ Required output format:
 
 ## Phase 5: Convergence Loop (MANDATORY — automatic re-validation with escalating scrutiny)
 
-After Phase 4 completes, the reviewer MUST automatically re-run CodeRabbit and agent validation on the updated code. This catches new issues introduced by the fixes just applied.
+After Phase 4 completes, the reviewer MUST automatically re-validate using fresh sub-agents to eliminate session bias. This catches both new issues introduced by fixes AND issues missed in round 1.
 
-**CRITICAL — Escalating Scrutiny Per Round:**
+**CRITICAL — Why Fresh Sub-Agents:**
 
-The primary failure mode of convergence loops is that re-running the same analysis with the same depth produces the same results (minus already-seen findings), leading to false convergence. To prevent this, EACH round MUST escalate its level of scrutiny:
+The primary failure mode of convergence loops is **false convergence**: the orchestrator re-runs analysis in the same session, with the same mental model, and declares "zero new findings" — not because there are none, but because it can't see past its own prior reasoning.
 
-| Round | Scrutiny Level | Focus |
-|-------|---------------|-------|
-| **1** (initial) | Standard analysis | Normal CodeRabbit + agent validation |
-| **2** | Skeptical re-read | For each domain, ask: "What did I accept as correct in round 1 that I should question?" Re-read code with the assumption that something was missed. Check function-by-function, branch-by-branch instead of scanning |
-| **3** | Adversarial analysis | Actively try to break the code: invent edge cases, look for implicit assumptions, check what happens when inputs are nil/empty/zero, when concurrent requests hit the same path, when external services fail |
-| **4** | Cross-cutting deep dive | Focus on interactions BETWEEN domains: does the test coverage actually exercise the security-sensitive paths? Do the fixes from previous rounds introduce new consistency issues? |
-| **5** | Final sweep | Review ALL previously skipped/deferred findings with fresh eyes — should any be reconsidered? Check the cumulative changes for internal consistency |
+The solution: **rounds 2+ are executed by a fresh sub-agent** dispatched via `Task` tool. The sub-agent has zero context from prior rounds, reads all files from scratch, and returns findings independently. The orchestrator then deduplicates against the cumulative ledger.
 
-**Re-run CodeRabbit and re-dispatch agents with escalated prompts:**
+**Round structure:**
+
+| Round | Who analyzes | How |
+|-------|-------------|-----|
+| **1** (initial) | Orchestrator (this agent) | CodeRabbit CLI + parallel agent dispatch — normal flow |
+| **2** (mandatory) | **Fresh sub-agent** via `Task` | Sub-agent re-runs CodeRabbit CLI, reads all changed files from scratch, reviews independently, returns findings |
+| **3-5** | **Fresh sub-agent** via `Task` | Same as round 2 — only triggered if round 2+ found new findings |
+
+**Round 2 is MANDATORY.** The "zero new findings" stop condition can only trigger starting from round 3.
+
+**Fresh sub-agent dispatch (rounds 2+):**
+
+Dispatch a single sub-agent via `Task` tool (use `worker` or any available review droid). The sub-agent receives:
+
+1. **All changed files** — full content, re-read fresh from disk
+2. **Project rules and coding standards** — re-read fresh
+3. **The findings ledger** — for deduplication ONLY
+4. **CodeRabbit CLI command** — the sub-agent re-runs CodeRabbit CLI itself to get fresh analysis
 
 ```
-This is re-validation round X of 5. In previous rounds, the following findings
-were already identified and resolved:
-[list of previous findings with resolutions]
+Goal: Independent code review (convergence round X of 5)
 
-Your job NOW is to look DEEPER — not repeat what was already found.
-Specifically:
-- Question assumptions: what did round 1 accept that might be wrong?
-- Check interactions: do the fixes from previous rounds create new issues?
-- Look for subtle issues: off-by-one errors, race conditions, missing error
-  propagation, implicit type coercions, nil dereferences in rare paths
-- Examine what was NOT flagged: absence of validation, missing constraints,
-  undocumented behavior, untested error paths
+You are a FRESH reviewer with NO prior context. Review from scratch.
 
-Do NOT report findings that match any previously identified finding.
-Only report genuinely NEW issues.
+Steps:
+  1. Re-run CodeRabbit CLI: coderabbit-cli review --base origin/main
+  2. Parse CodeRabbit output for findings
+  3. Review all changed files for: code quality, business logic, security,
+     test quality, spec compliance
+  4. Return all findings
+
+Context:
+  - Changed files: [full content — re-read from disk]
+  - Project rules: [full content — re-read from files]
+
+Previously identified findings (for DEDUP ONLY):
+  [list of findings with IDs and descriptions]
+
+CRITICAL: Analyze INDEPENDENTLY. Do NOT skip areas because previous rounds
+"already covered" them. The orchestrator will dedup.
+
+Required output:
+  For each finding: severity, file, line, category, description, recommendation
+  If no issues: "PASS — all domains clean"
 ```
+
+**Orchestrator deduplication after sub-agent returns:**
+
+1. Compare each sub-agent finding against the cumulative ledger (match by file + topic + description similarity)
+2. **Genuinely new findings** → add to ledger, present to user via Phase 2
+3. **Duplicates** → discard silently
 
 **Loop rules:**
 - **Maximum rounds:** 5 (the initial run counts as round 1)
-- **Progress indicator:** Show `"=== Re-validation round X of 5 (scrutiny: <level>) ==="` at the start of each re-run
-- **Scope:** Re-run CodeRabbit CLI, re-dispatch agents with escalated prompts, re-measure coverage. Do NOT re-load project context (Phase 0)
-- **Finding deduplication:** Maintain a ledger of ALL findings from ALL previous rounds (by ID and description). Only present findings that are NEW — not already seen, resolved, or skipped in a prior round. If a finding was skipped/discarded by the user in a prior round, do NOT re-present it
+- **Round 2 is MANDATORY** — always dispatch a fresh sub-agent regardless of round 1 results
+- **Progress indicator:** Show `"=== Re-validation round X of 5 (fresh sub-agent) ==="` at the start of each re-run
+- **Scope:** Sub-agent re-runs CodeRabbit CLI, reviews files, and returns findings. Do NOT re-load project context (Phase 0) in the orchestrator
 - **If new findings exist:** Present them using Phase 2 (interactive resolution), fix via Phase 3 (TDD cycle), verify via Phase 4 (coverage), then loop again
 - **Stop conditions (any one triggers exit):**
-  1. Zero new findings in the current round (after escalated scrutiny — this is genuine convergence)
+  1. Zero new findings — **only valid from round 3 onward** (round 2 is mandatory)
   2. Round 5 completed (hard limit)
   3. User explicitly requests to stop (via AskUser response)
   
@@ -389,7 +415,7 @@ Only report genuinely NEW issues.
 **Round summary (show after each round):**
 
 ```markdown
-### Round X of 5 (scrutiny: <level>) — Summary
+### Round X of 5 (fresh sub-agent) — Summary
 - New findings this round: N (C critical, H high, M medium, L low)
 - Cumulative: X total findings across Y rounds
 - Fixed: A | Skipped: B | Deferred: C

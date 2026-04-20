@@ -895,31 +895,86 @@ HIGH priority gaps are presented as findings for user decision.
 
 ## Phase 6.7: Convergence Loop (MANDATORY)
 
-After Phase 6.6, automatically re-validate with escalating scrutiny:
+After Phase 6.6, automatically re-validate using fresh sub-agents to eliminate session bias.
 
-| Round | Scrutiny Level | Focus |
-|-------|---------------|-------|
-| **1** | Standard | Initial analysis |
-| **2** | Skeptical re-read | Question round 1 assumptions, function-by-function review |
-| **3** | Adversarial | Try to break the code: edge cases, nil/empty/zero, concurrency |
-| **4** | Cross-cutting | Interactions between domains, security + coverage overlap |
-| **5** | Final sweep | Revisit all skipped/deferred, check cumulative consistency |
+**CRITICAL — Why Fresh Sub-Agents:**
 
-**Re-dispatch agents with escalated prompts:**
+The primary failure mode of convergence loops is **false convergence**: the orchestrator re-runs analysis in the same session, with the same mental model, and declares "zero new findings" — not because there are none, but because it can't see past its own prior reasoning.
+
+The solution: **rounds 2+ are executed by a fresh sub-agent** dispatched via `Task` tool. The sub-agent has zero context from prior rounds, reads all files from scratch, and returns findings independently. The orchestrator then deduplicates against the cumulative ledger.
+
+**Round structure:**
+
+| Round | Who analyzes | How |
+|-------|-------------|-----|
+| **1** (initial) | Orchestrator (this agent) | Phase 2 (parallel agent dispatch) + Phase 3 (consolidate) — normal flow |
+| **2** (mandatory) | **Fresh sub-agent** via `Task` | Sub-agent reads all changed files from scratch, reviews independently, returns findings |
+| **3-5** | **Fresh sub-agent** via `Task` | Same as round 2 — only triggered if round 2+ found new findings |
+
+**Round 2 is MANDATORY.** The "zero new findings" stop condition can only trigger starting from round 3.
+
+**Fresh sub-agent dispatch (rounds 2+):**
+
+Dispatch a single sub-agent via `Task` tool (use `worker` or any available review droid). The sub-agent receives:
+
+1. **All changed files** — full content, re-read fresh from disk
+2. **PR context** — description, linked issues, base branch
+3. **Project rules and coding standards** — re-read fresh
+4. **The findings ledger** — for deduplication ONLY
+5. **Existing PR comments** — from Codacy, DeepSource, CodeRabbit, humans (do NOT re-fetch; use the data from Phase 0)
+
 ```
-This is re-validation round X of 5. Previously found and resolved:
-[list of findings with resolutions]
+Goal: Independent PR review of #<number> (convergence round X of 5)
 
-Look DEEPER — do NOT repeat previous findings.
-Question assumptions, check interactions between fixes, look for subtle issues.
+You are a FRESH reviewer with NO prior context. Review this PR from scratch.
+
+Context:
+  - PR: #<number> — <title>
+  - Changed files: [full content — re-read from disk]
+  - Project rules: [full content — re-read from files]
+  - Existing PR comments: [from all sources]
+
+Analysis scope: code quality, business logic, security, test quality,
+spec compliance, cross-file consistency.
+
+Previously identified findings (for DEDUP ONLY):
+  [list of findings with IDs and descriptions]
+
+CRITICAL: Analyze INDEPENDENTLY. Do NOT skip areas because previous rounds
+"already covered" them. The orchestrator will dedup.
+
+Required output:
+  For each finding: severity, file, line, category, description, recommendation
+  If no issues: "PASS — all domains clean"
 ```
+
+**Orchestrator deduplication after sub-agent returns:**
+
+1. Compare each sub-agent finding against the cumulative ledger (match by file + topic + description similarity)
+2. **Genuinely new findings** → add to ledger, present to user
+3. **Duplicates** → discard silently
 
 **Loop rules:**
 - Max 5 rounds (initial = round 1)
-- Show `"=== Re-validation round X of 5 (scrutiny: <level>) ==="` at start
+- **Round 2 is MANDATORY** — always dispatch a fresh sub-agent regardless of round 1 results
+- Show `"=== Re-validation round X of 5 (fresh sub-agent) ==="` at start
 - Do NOT re-fetch Codacy/DeepSource comments (they only update after push)
 - Maintain deduplication ledger across all rounds
-- **Stop when:** zero new findings, round 5 reached, or user stops. **LOW severity findings are NOT a reason to stop — ALL findings regardless of severity MUST be presented to the user for decision.**
+- **Stop conditions (any one triggers exit):**
+  1. Zero new findings — **only valid from round 3 onward** (round 2 is mandatory)
+  2. Round 5 completed (hard limit)
+  3. User explicitly requests to stop
+- **LOW severity findings are NOT a reason to stop** — ALL findings regardless of severity MUST be presented to the user for decision.
+
+**Round summary (show after each round):**
+
+```markdown
+### Round X of 5 (fresh sub-agent) — Summary
+- New findings this round: N (C critical, H high, M medium, L low)
+- Cumulative: X total findings across Y rounds
+- Fixed: A | Skipped: B | Deferred: C
+- Status: CONVERGED / CONTINUING / HARD LIMIT REACHED
+```
 
 ---
 

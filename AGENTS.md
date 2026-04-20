@@ -400,11 +400,17 @@ All review/validation skills follow this pattern:
 5. Batch apply approved fixes
 6. Present final summary
 
-### Convergence Loop
+### Convergence Loop (Fresh Sub-Agent Model)
 Used by: cycle-spec-stage-1, cycle-impl-review-stage-3, cycle-pr-review-stage-4, coderabbit-review
-- 5 rounds maximum (round 1 = initial analysis)
-- Escalating scrutiny: standard → skeptical → adversarial → cross-cutting → final sweep
-- Stop only when: zero new findings, round 5 reached, or user explicitly stops
+
+The convergence loop eliminates false convergence caused by session bias:
+- **Round 1:** Orchestrator performs initial analysis (with full session context)
+- **Rounds 2-5:** A **fresh sub-agent** (via `Task` tool) re-analyzes from scratch with zero prior context
+- **Round 2 is MANDATORY** — the "zero new findings" stop condition only applies from round 3 onward
+- The sub-agent receives the findings ledger for **deduplication only**, not to bias its analysis
+- The orchestrator deduplicates sub-agent findings against the cumulative ledger
+- Stop only when: zero new findings (round 3+), round 5 reached, or user explicitly stops
+- LOW severity findings are NOT a reason to stop — ALL findings are presented to the user
 
 ### Agent Dispatch
 Skills dispatch specialist droids in parallel via Task tool:
