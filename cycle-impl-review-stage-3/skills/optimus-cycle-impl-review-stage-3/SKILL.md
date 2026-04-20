@@ -425,9 +425,12 @@ Required output format:
 
 **Spec Compliance agent** must additionally:
 1. List every acceptance criterion from the task spec and mark PASS/FAIL/PARTIAL
-2. List every test ID and verify a corresponding test exists
-3. If the task has API endpoints, verify request/response format matches API contracts
-4. If the task has DB changes, verify column types/constraints match the data model
+2. **Validate checkboxes:** Verify that the `- [x]` checkboxes in tasks.md match reality.
+   If a criterion is marked `[x]` but the implementation doesn't satisfy it → flag as HIGH finding.
+   If a criterion is marked `[ ]` but the implementation satisfies it → flag as MEDIUM finding (checkbox not updated).
+3. List every test ID and verify a corresponding test exists
+4. If the task has API endpoints, verify request/response format matches API contracts
+5. If the task has DB changes, verify column types/constraints match the data model
 
 **Cross-File Consistency agent** must additionally:
 1. Check for values duplicated between files that should be a shared constant
@@ -1030,3 +1033,6 @@ When agents identify a missing test (from QA analyst, spec compliance, or any ot
 - Be specific: "line 42 of file.tsx uses X, but coding standards section Y requires Z"
 - Be constructive: always provide a concrete fix, not just criticism
 - Be honest about effort: don't say "trivial" for something that requires refactoring multiple files
+- **Next step suggestion:** After the validation summary (Phase 7) and optional PR creation (Phase 8),
+  inform the user: "Implementation review complete. Next step: run `/optimus-cycle-pr-review-stage-4`
+  for PR review (optional), or `/optimus-cycle-close-stage-5` to close this task."

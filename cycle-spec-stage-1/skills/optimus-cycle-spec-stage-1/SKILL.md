@@ -723,3 +723,6 @@ Components verified: [list each component checked]
 - ALL findings (CRITICAL, HIGH, MEDIUM, and LOW) MUST be presented to the user for decision
 - The agent may recommend an option, but MUST wait for user approval via AskUser before proceeding
 - Do NOT auto-skip, auto-dismiss, or auto-resolve any finding regardless of severity
+- **Next step suggestion:** After the convergence loop exits and the final report is presented,
+  inform the user: "Spec validation complete. Next step: run `/optimus-cycle-impl-stage-2` to
+  implement this task."

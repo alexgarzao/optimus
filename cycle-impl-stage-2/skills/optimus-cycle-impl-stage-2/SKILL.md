@@ -308,6 +308,27 @@ While dev-cycle executes:
 
 After dev-cycle completes all 6 gates (Gate 5 passes with user approval):
 
+### Step 2.0: Update Acceptance Criteria Checkboxes
+
+After implementation completes, update the **Critérios de Aceite** checkboxes in the task's
+H2 detail section (`## T-XXX: Title`) of `tasks.md` to reflect what was implemented.
+
+1. Read the task's detail section and list all acceptance criteria (`- [ ] ...`)
+2. For each criterion, verify whether the implementation satisfies it:
+   - Check if the code/tests/config for that criterion exist and work
+   - If satisfied → mark as `- [x]`
+   - If NOT satisfied → leave as `- [ ]` and warn the user
+3. Commit the updated checkboxes:
+   ```bash
+   git add tasks.md
+   git commit -m "chore(tasks): update acceptance criteria for T-XXX"
+   ```
+
+**Why now:** The acceptance criteria checkboxes are the developer-facing progress tracker.
+Updating them immediately after implementation ensures tasks.md accurately reflects what
+was delivered. Stage-3 (impl-review) will later validate that the checked criteria are
+actually correct.
+
 ### Step 2.1: Test Gap Cross-Reference
 
 Review any test gaps identified during dev-cycle execution:
@@ -357,3 +378,5 @@ Only after explicit user approval:
 - Update the todo list at Phase 0 completion and after dev-cycle finishes
 - Report dev-cycle gate results as they complete
 - Never go silent — if dev-cycle is running, inform the user of progress
+- **Next step suggestion:** After the final commit, inform the user: "Implementation
+  complete. Next step: run `/optimus-cycle-impl-review-stage-3` to validate this task."

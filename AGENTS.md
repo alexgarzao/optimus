@@ -283,6 +283,15 @@ Below the table, each task has an H2 section (`## T-NNN: Title`) containing:
 
 Agents read these sections to understand what to implement and validate.
 
+### Acceptance Criteria Tracking
+
+The checkboxes in **Critérios de Aceite** are updated by stage agents as the task progresses:
+- **cycle-impl-stage-2** marks criteria as `- [x]` as each is implemented
+- **cycle-impl-review-stage-3** validates that marked criteria are actually satisfied
+  (flags mismatches: `[x]` but not implemented → HIGH, `[ ]` but implemented → MEDIUM)
+
+This ensures tasks.md accurately reflects what was delivered at every point in the lifecycle.
+
 ### Format Validation
 
 Every stage agent (1-5) MUST validate the tasks.md format before operating:
@@ -448,8 +457,13 @@ source of truth for coding standards and must be passed to every dispatched sub-
 
 ## Common Patterns Across Skills
 
+The patterns below apply to **cycle review skills** (cycle-spec-stage-1, cycle-impl-review-stage-3,
+cycle-pr-review-stage-4, coderabbit-review). The standalone skills (deep-review, deep-doc-review)
+use a simplified model — they follow the same user-authority and finding presentation principles
+but do not require ring droid dispatch, convergence loops, or batch-apply.
+
 ### Finding Presentation (Unified Model)
-All review/validation skills follow this pattern:
+All cycle review skills follow this pattern:
 1. Collect findings from agents/tools
 2. Consolidate and deduplicate
 3. Announce total findings count: `"### Total findings to review: N"`
@@ -464,7 +478,7 @@ All review/validation skills follow this pattern:
 10. Run verification (see Verification Timing below)
 11. Present final summary
 
-### Fix Implementation (Ring Droids — MANDATORY for all review skills)
+### Fix Implementation (Ring Droids — MANDATORY for cycle review skills)
 
 ALL fixes MUST be implemented by dispatching specialist ring droids via `Task` tool — the
 orchestrator does NOT apply fixes directly. This ensures consistent code quality.
@@ -478,7 +492,7 @@ orchestrator does NOT apply fixes directly. This ensures consistent code quality
 - `ring-tw-team-functional-writer` (guides), `ring-tw-team-api-writer` (API docs),
   `ring-tw-team-docs-reviewer` (quality fixes), `worker` (fallback)
 
-### Verification Timing (all review skills)
+### Verification Timing (cycle review skills)
 
 Verification commands are expensive. The timing rules below optimize for fast feedback
 during development while ensuring full validation before push.
@@ -496,8 +510,8 @@ during development while ensuring full validation before push.
 - Integration/E2E tests are slow (seconds to minutes) — run once before push to avoid
   blocking the review loop. If targets don't exist, skip.
 
-### Deep Research Before Presenting (MANDATORY for all review skills)
-Used by: cycle-spec-stage-1, cycle-impl-review-stage-3, cycle-pr-review-stage-4, coderabbit-review
+### Deep Research Before Presenting (MANDATORY for cycle review skills)
+Applies to: cycle-spec-stage-1, cycle-impl-review-stage-3, cycle-pr-review-stage-4, coderabbit-review
 
 **BEFORE presenting any finding to the user, the agent MUST research it deeply.** This
 research is done SILENTLY — do not show the research process. Present only the conclusions.
@@ -532,7 +546,7 @@ research is done SILENTLY — do not show the research process. Present only the
 believes is correct based on the research. It must be backed by evidence (project patterns,
 best practice references, official documentation), not just a generic suggestion.
 
-### Finding Option Format (MANDATORY for all review skills)
+### Finding Option Format (MANDATORY for cycle review skills)
 
 Every finding must present 2-3 options with this structure:
 
@@ -558,7 +572,7 @@ Every finding must present 2-3 options with this structure:
 - **Very high:** Architectural change, many files, extensive testing, risk of regressions
 
 ### Convergence Loop (Fresh Sub-Agent Model)
-Used by: cycle-spec-stage-1, cycle-impl-review-stage-3, cycle-pr-review-stage-4, coderabbit-review
+Applies to: cycle-spec-stage-1, cycle-impl-review-stage-3, cycle-pr-review-stage-4, coderabbit-review
 
 The convergence loop eliminates false convergence caused by session bias:
 - **Round 1:** Orchestrator performs initial analysis (with full session context)

@@ -1384,3 +1384,5 @@ gh api graphql -f query='
 - ALL findings (CRITICAL, HIGH, MEDIUM, and LOW) MUST be presented to the user for decision
 - The agent may recommend an option, but MUST wait for user approval via AskUser before proceeding
 - Do NOT auto-skip, auto-dismiss, or auto-resolve any finding regardless of severity
+- **Next step suggestion (Task Mode only):** After the final summary, inform the user:
+  "PR review complete. Next step: run `/optimus-cycle-close-stage-5` to close this task."

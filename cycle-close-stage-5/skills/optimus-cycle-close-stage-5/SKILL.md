@@ -474,3 +474,5 @@ git push
 - Do NOT skip checks because "they probably pass"
 - The agent NEVER decides to close a task without running the full checklist
 - After marking as done, always commit and push the status change
+- **Next step suggestion:** After the cleanup summary, inform the user: "Task T-XXX is done.
+  Run `/optimus-cycle-report` to see updated project status and what to work on next."
