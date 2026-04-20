@@ -232,11 +232,11 @@ Present what was found to the user:
 | 3 | ./subtasks/ | Subtask files | 5 files |
 
 ### Tasks Extracted
-| ID | Title | Tipo (inferred?) | Status (inferred?) | Dependencies | Subtasks |
-|----|-------|-------------------|-------------------|-------------|----------|
-| T-001 | Setup auth module | Feature (default) | **DONE** (inferred from checkboxes) | - | 3 subtasks |
-| T-002 | User registration | Feature (default) | Pendente (no status found) | T-001 (explicit) | - |
-| T-003 | Login page | Feature (default) | Pendente (no status found) | T-001 (inferred) | 2 subtasks |
+| ID | Title | Tipo (inferred?) | Status (inferred?) | Dependencies | Version | Subtasks |
+|----|-------|-------------------|-------------------|-------------|---------|----------|
+| T-001 | Setup auth module | Feature (default) | **DONE** (inferred from checkboxes) | - | MVP (inferred) | 3 subtasks |
+| T-002 | User registration | Feature (default) | Pendente (no status found) | T-001 (explicit) | MVP (default) | - |
+| T-003 | Login page | Feature (default) | Pendente (no status found) | T-001 (inferred) | MVP (default) | 2 subtasks |
 | ... | ... | ... | ... | ... |
 
 ### Warnings
@@ -271,11 +271,11 @@ Generate the complete `tasks.md` in optimus format and present it to the user:
 ## Proposed tasks.md
 
 ### Table
-| ID | Title | Tipo | Status | Depends | Priority | Branch |
-|----|-------|------|--------|---------|----------|--------|
-| T-001 | Setup auth module | Feature | **DONE** | - | Alta | - |
-| T-002 | User registration | Feature | Pendente | T-001 | Alta | - |
-| ... | ... | ... | ... | ... | ... | ... |
+| ID | Title | Tipo | Status | Depends | Priority | Version | Branch |
+|----|-------|------|--------|---------|----------|---------|--------|
+| T-001 | Setup auth module | Feature | **DONE** | - | Alta | MVP | - |
+| T-002 | User registration | Feature | Pendente | T-001 | Alta | MVP | - |
+| ... | ... | ... | ... | ... | ... | ... | ... |
 
 ### Detail Sections (first 2 shown as preview)
 

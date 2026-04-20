@@ -89,6 +89,7 @@ Administrative CRUD operations for tasks in `tasks.md`.
    - A `## Versions` section exists with columns: Version, Status, Description
    - All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
    - Exactly one version has Status `Ativa`
+   - At most one version has Status `Próxima`
    - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
    - All task IDs match `T-NNN` pattern
    - All Tipo values are valid (`Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`)
@@ -357,6 +358,8 @@ Ask the user for:
 - If the name already exists in the Versions table → **STOP**: "Version '<name>' already exists."
 - If the user sets Status to `Ativa` and another version is already `Ativa` → ask via `AskUser`:
   "Version '<existing>' is currently Ativa. Change it to Próxima and set '<new>' as Ativa?"
+- If the user sets Status to `Próxima` and another version is already `Próxima` → ask via `AskUser`:
+  "Version '<existing>' is currently Próxima. Change it to Planejada and set '<new>' as Próxima?"
 
 Add the row to the Versions table and commit: `chore(tasks): create version <name>`
 
@@ -367,8 +370,22 @@ Editable fields:
 | Field | Notes |
 |-------|-------|
 | Name | Updates the Versions table AND all tasks referencing this version |
-| Status | Must be valid. If setting to `Ativa`, demote current `Ativa` to `Próxima` (ask user) |
+| Status | Must be valid. See validation rules below |
 | Description | Free text |
+
+**Status change validation:**
+- If setting to `Ativa` and another version is already `Ativa` → ask via `AskUser`:
+  "Version '<existing>' is currently Ativa. Change it to Próxima and set '<name>' as Ativa?"
+- If setting to `Próxima` and another version is already `Próxima` → ask via `AskUser`:
+  "Version '<existing>' is currently Próxima. Change it to Planejada and set '<name>' as Próxima?"
+- If setting to `Concluída` → check if ALL tasks in this version have status `**DONE**`:
+  - If all DONE → proceed
+  - If any are NOT DONE → warn via `AskUser`:
+    "Version '<name>' has N tasks that are not DONE:
+    - T-XXX: <title> (Status: <status>)
+    - T-YYY: <title> (Status: <status>)
+    Mark as Concluída anyway?"
+  - **BLOCKING:** Do NOT proceed without user confirmation
 
 Commit: `chore(tasks): update version <name>`
 

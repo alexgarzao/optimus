@@ -326,6 +326,8 @@ The `## Versions` section in tasks.md is **mandatory** and defines the available
 #### Version Rules
 
 1. **Exactly one `Ativa` version** at any time. Agents refuse to set two versions as `Ativa`.
+   **At most one `Próxima` version** at any time. If setting a new `Próxima`, the existing one
+   is demoted to `Planejada` (with user confirmation).
 2. **Version does NOT block execution** — a task in `Futuro` can be executed if the user wants.
    The version is organizational, not a gate.
 3. **Cross-version dependencies are allowed** — T-003 (v2) can depend on T-001 (MVP).
@@ -346,13 +348,14 @@ Every stage agent (1-5) MUST validate the tasks.md format before operating:
 2. A `## Versions` section exists with a table containing columns: Version, Status, Description
 3. All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
 4. Exactly one version has Status `Ativa`
-5. A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
-6. All task IDs follow the `T-NNN` pattern
-7. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
-8. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`
-9. All Depends values are either `-` or comma-separated valid task IDs
-10. All Version values reference a version name that exists in the Versions table
-11. No duplicate task IDs
+5. At most one version has Status `Próxima`
+6. A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
+7. All task IDs follow the `T-NNN` pattern
+8. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
+9. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`
+10. All Depends values are either `-` or comma-separated valid task IDs
+11. All Version values reference a version name that exists in the Versions table
+12. No duplicate task IDs
 
 If the format marker is missing or validation fails, the agent must **STOP** and suggest
 running `/optimus-cycle-migrate` to fix the format. Do NOT attempt to interpret malformed data.

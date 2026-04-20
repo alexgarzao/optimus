@@ -97,6 +97,7 @@ Runs AFTER optimus-cycle-impl-stage-2 finishes and BEFORE the final commit.
    - **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
    - A `## Versions` section exists with columns: Version, Status, Description
    - Exactly one version has Status `Ativa`
+   - At most one version has Status `Próxima`
    - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
    - All Version values reference a version name in the Versions table
    - All task IDs match `T-NNN` pattern
@@ -176,6 +177,7 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
        I'm about to change task T-XXX status from '<current>' to 'Validando Impl'.
 
        **T-XXX: [title]**
+       **Version:** [version from table]
        **Objetivo:** [objective from detail section]
        **Critérios de Aceite:**
        - [ ] [criterion 1]

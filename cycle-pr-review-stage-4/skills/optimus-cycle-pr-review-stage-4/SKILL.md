@@ -143,6 +143,7 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
        I'm about to change task T-XXX status from '<current>' to 'Revisando PR'.
 
        **T-XXX: [title]**
+       **Version:** [version from table]
        **Objetivo:** [objective from detail section]
        **Critérios de Aceite:**
        - [ ] [criterion 1]
