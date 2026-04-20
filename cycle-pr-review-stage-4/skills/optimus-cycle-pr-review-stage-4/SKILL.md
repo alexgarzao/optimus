@@ -615,7 +615,7 @@ Each finding MUST include its source(s):
 
 ---
 
-## Phase 5: Batched Finding Presentation and Resolution
+## Phase 5: Finding Presentation and Resolution
 
 Findings are presented ONE AT A TIME, decisions collected for ALL, then fixes applied ALL AT ONCE at the end.
 

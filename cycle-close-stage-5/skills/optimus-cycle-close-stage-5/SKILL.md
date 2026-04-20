@@ -336,6 +336,13 @@ Options:
 - **Remove worktree**: `git worktree remove <path>`
 - **Keep**: Leave the worktree as is
 
+**Edge case — running INSIDE the worktree:** If the agent's current working directory IS the worktree being removed, `git worktree remove` will fail. Before removing:
+1. Identify the main repository path from `git worktree list` (the entry WITHOUT `[branch]` suffix, or the first entry)
+2. Change working directory to the main repository: `cd <main-repo-path>`
+3. Then run `git worktree remove <worktree-path>`
+
+This also applies to Step 3.3 — if the agent is inside a worktree, `git checkout` changes the worktree's branch, not the main repo's. Always `cd` to the main repo first.
+
 ### Step 3.2: Check for Open PR
 
 **IMPORTANT:** PR must be merged BEFORE branch deletion. If the branch is deleted first, all commits on it (including the DONE status change) are lost.
@@ -390,6 +397,12 @@ git checkout "$DEFAULT_BRANCH"
 git branch -d <branch>
 # If also deleting remote:
 git push origin --delete <branch>
+```
+
+**After branch deletion:** Update the Branch column in `tasks.md` to `-` (the branch no longer exists, keeping the old name would be misleading). Commit:
+```bash
+git add tasks.md
+git commit -m "chore(tasks): clear branch for T-XXX after cleanup"
 ```
 
 ### Step 3.4: Cleanup Summary
