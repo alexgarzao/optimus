@@ -151,7 +151,7 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
    - If diff output is empty → proceed silently (files are in sync)
    - **NOTE:** This is a warning, not a HARD BLOCK. The user may choose to continue.
 
-5. **Branch-task cross-validation:** After confirming the task ID (Step 0.0.1), check that the current branch matches the **Branch** column in `tasks.md` for this task:
+5. **Branch-task cross-validation:** After confirming the task ID (Step 0.0.2), check that the current branch matches the **Branch** column in `tasks.md` for this task:
    - Read the Branch column for the confirmed task ID
    - If Branch is `-` or empty → warn: "tasks.md shows no branch for T-XXX, but you are on `<current>`. Continue anyway?" (via `AskUser`)
    - If Branch has a value AND it does not match `CURRENT_BRANCH` → warn: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?" (via `AskUser`)
@@ -1094,7 +1094,7 @@ If the user requests a dry-run (e.g., "dry-run review T-012", "preview review"):
 - Run ALL analysis phases (Phase 0.5, Phase 1, Phase 2, Phase 3) normally
 - Present ALL findings in Phase 4 (interactive resolution)
 - **Do NOT apply any fixes** — skip Phase 5 (batch apply) entirely
-- **Do NOT change task status** — skip the status update in Step 0.0.2
+- **Do NOT change task status** — skip the status update in Step 0.0.3
 - **Do NOT run the convergence loop** — one pass is sufficient for estimation
 - Present a summary showing: total findings, severity breakdown, estimated fix effort
 - This allows the user to see what would happen before committing to a full review

@@ -48,7 +48,7 @@ examples:
 related:
   complementary:
     - optimus-cycle-impl-stage-2
-    - optimus-pr-review
+    - optimus-cycle-pr-review-stage-4
     - optimus-verify-code
   differentiation:
     - name: optimus-cycle-impl-review-stage-3

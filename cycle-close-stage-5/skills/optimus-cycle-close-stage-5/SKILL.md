@@ -98,7 +98,7 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
      Switch to the task's feature branch first.
      ```
 
-4. **Branch-task cross-validation:** After confirming the task ID (Step 0.0.1), check that the current branch matches the **Branch** column in `tasks.md` for this task:
+4. **Branch-task cross-validation:** After confirming the task ID (Step 0.0.2), check that the current branch matches the **Branch** column in `tasks.md` for this task:
    - Read the Branch column for the confirmed task ID
    - If Branch is `-` or empty → warn: "tasks.md shows no branch for T-XXX, but you are on `<current>`. Continue anyway?" (via `AskUser`)
    - If Branch has a value AND it does not match `CURRENT_BRANCH` → warn: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?" (via `AskUser`)

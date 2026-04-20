@@ -53,7 +53,7 @@ related:
     - name: optimus-deep-review
       difference: >
         optimus-deep-review is a generic code review that works with any scope
-        (all files, git diff, directory). optimus-pr-review adds PR context
+        (all files, git diff, directory). optimus-cycle-pr-review-stage-4 adds PR context
         (description, linked issues, existing comments from ALL sources) and
         evaluates feedback from multiple sources (Codacy, DeepSource, CodeRabbit,
         human reviewers, agents).

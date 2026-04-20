@@ -2,7 +2,7 @@
 
 ## Description
 
-Two-phase code verification for Go projects. Phase 1 runs static analysis and unit tests in parallel. Phase 2 runs integration and E2E tests sequentially. Presents an executive summary with a MERGE_READY or NEEDS_FIX verdict.
+Two-phase code verification supporting Go, TypeScript, Python, and generic (Makefile) projects. Phase 1 runs static analysis and unit tests in parallel. Phase 2 runs integration and E2E tests sequentially. Presents an executive summary with a MERGE_READY or NEEDS_FIX verdict.
 
 ## Variables
 

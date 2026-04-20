@@ -246,7 +246,7 @@ git checkout -b <tipo-prefix>/<task-id>-<keywords>
 **IMPORTANT:** This step runs AFTER the workspace is created, so modifications happen in the feature branch's working directory — not on the default branch.
 
 1. Update the **Status** column to `Validando Spec` (if not already)
-2. Update the **Branch** column with the branch name created in Step 0.0.3 (if a new workspace was created)
+2. Update the **Branch** column with the branch name created in Step 0.0.4 (if a new workspace was created)
 3. Commit these changes immediately:
    ```bash
    git add tasks.md
