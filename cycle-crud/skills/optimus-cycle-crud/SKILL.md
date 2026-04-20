@@ -123,20 +123,51 @@ Ask the user for task details using `AskUser` (one question at a time or batch i
 
 If the user provided some of these in the initial request, use them and ask only for missing fields.
 
-### Step 1.1: Generate Task ID
+### Step 1.1: Check for Similar Tasks (duplicate detection)
+
+Before creating, search existing tasks for potential duplicates:
+
+1. **Compare by title:** For each existing task, check if the new title shares 2+ significant
+   keywords with an existing title (ignore articles, prepositions, and generic words like
+   "implement", "add", "create", "update", "fix")
+2. **Compare by objective:** If the user provided an objective, check if any existing task's
+   **Objetivo** section describes the same goal (semantic similarity — same entity, same action)
+
+If similar tasks are found, present them to the user via `AskUser`:
+
+```
+I found N existing tasks that look similar to your new task:
+
+| ID | Title | Status | Objetivo (excerpt) |
+|----|-------|--------|--------------------|
+| T-003 | User login page | Pendente | Implement login with JWT... |
+| T-008 | Auth login flow | Em Andamento | Create the login screen... |
+
+Your new task: "<new title>"
+
+Create anyway?
+```
+
+Options:
+- **Create anyway** — the new task is different enough
+- **Cancel** — one of the existing tasks already covers this
+
+If no similar tasks are found, proceed silently.
+
+### Step 1.2: Generate Task ID
 
 1. Parse all existing task IDs from the table
 2. Find the highest numeric value (e.g., if T-012 exists, next is T-013)
 3. Format as `T-NNN` with zero-padding to 3 digits
 
-### Step 1.2: Validate Dependencies
+### Step 1.3: Validate Dependencies
 
 If the user specified dependencies:
 1. Verify each dependency ID exists in the table
 2. Check for circular dependencies: if T-NEW depends on T-X, and T-X (directly or transitively) would depend on T-NEW → reject
 3. If any dependency ID is invalid → ask the user to correct it
 
-### Step 1.3: Add to tasks.md
+### Step 1.4: Add to tasks.md
 
 1. Add a new row to the table:
    ```
@@ -154,7 +185,7 @@ If the user specified dependencies:
    ```
 3. Save the file
 
-### Step 1.4: Confirm
+### Step 1.5: Confirm
 
 Show the user the added task:
 ```
