@@ -63,7 +63,7 @@ Stage 5 of the task lifecycle. Verifies all prerequisites before marking a task 
 
 ---
 
-## Phase 0: Identify and Validate Task
+## Phase 1: Identify and Validate Task
 
 ### Step 0.0: Verify GitHub CLI (HARD BLOCK)
 
@@ -94,7 +94,7 @@ Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`cycle-close-stage-5`, status=`**DONE**`.
 
-**On marking DONE** (Phase 2): delete the session file.
+**On marking DONE** (Phase 3): delete the session file.
 
 ### Step 0.1: Validate Task Status
 
@@ -170,7 +170,7 @@ git rev-parse --abbrev-ref @{u} 2>/dev/null
 
 ---
 
-## Phase 1: Close Checklist
+## Phase 2: Close Checklist
 
 Run ALL verifications. Do NOT stop at the first failure — run all of them and report the full picture.
 
@@ -308,7 +308,7 @@ make test-e2e
 
 ---
 
-## Phase 2: Present Results
+## Phase 3: Present Results
 
 ### If ALL checks pass:
 
@@ -337,7 +337,7 @@ Then:
 2. Commit: `chore(tasks): mark T-XXX as done`
 3. Invoke notification hooks (event=`task-done`) — see AGENTS.md Protocol: Notification Hooks.
 4. Push the commit
-5. Proceed to Phase 3 (cleanup).
+5. Proceed to Phase 4 (cleanup).
 
 **Why `chore(tasks):` and not the Tipo prefix:** Marking a task as DONE is an administrative
 status change in `tasks.md`, not a code change. The Tipo prefix (`feat`, `fix`, etc.) applies
@@ -399,7 +399,7 @@ to mark as DONE. If any still fail, report the remaining failures.
 
 ---
 
-## Phase 3: Cleanup (after marking DONE)
+## Phase 4: Cleanup (after marking DONE)
 
 This phase runs ONLY after the task has been marked as `**DONE**`. It checks for leftover
 resources and asks the user what to do. The agent NEVER cleans up automatically.
@@ -566,7 +566,7 @@ git push
 
 ### Force-Close Mode
 If the user requests a force close (e.g., "force close T-012", "force done T-012"):
-- **Skip most of the close checklist** (Phase 1) — skip checks 2-8
+- **Skip most of the close checklist** (Phase 2) — skip checks 2-8
 - **ALWAYS run Check 1 (uncommitted changes)** even in force-close mode. If uncommitted
   changes exist, warn via `AskUser`:
   ```
@@ -590,17 +590,17 @@ If the user requests a force close (e.g., "force close T-012", "force done T-012
   Type the task ID to confirm: T-XXX
   ```
   The user must type the exact task ID (not just "yes") to prevent accidental force-closes.
-- **If confirmed:** mark as `**DONE**`, commit, push, then run cleanup (Phase 3) normally
+- **If confirmed:** mark as `**DONE**`, commit, push, then run cleanup (Phase 4) normally
 - **Commit message:** `chore(tasks): force-close T-XXX as done (checklist skipped)`
 - **NOTE:** Force-close still validates task status (Step 0.1) and dependencies — it only
-  skips the quality/git checks in Phase 1
+  skips the quality/git checks in Phase 2
 
 ### Dry-Run Mode
 If the user requests a dry-run (e.g., "dry-run close T-012", "preview close"):
-- Run ALL 8 checks normally (Phase 1)
-- Present the full checklist results (Phase 2)
+- Run ALL 8 checks normally (Phase 2)
+- Present the full checklist results (Phase 3)
 - **Do NOT change task status** — skip marking as DONE
 - **Do NOT commit or push anything**
-- **Do NOT run cleanup** — skip Phase 3 entirely
+- **Do NOT run cleanup** — skip Phase 4 entirely
 - Present the verdict (READY TO CLOSE / NOT READY) as information only
 - This allows the user to see what would happen before committing to a close

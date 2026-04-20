@@ -1,9 +1,9 @@
 ---
 name: optimus-verify-code
 description: >
-  Two-phase code verification. Phase 1 runs static analysis in parallel
+  Two-phase code verification. Phase 2 runs static analysis in parallel
   (lint, format, unit tests -- commands auto-detected from project stack).
-  Phase 2 runs integration and E2E tests sequentially. Presents executive
+  Phase 3 runs integration and E2E tests sequentially. Presents executive
   summary with MERGE_READY or NEEDS_FIX verdict. Supports Go, TypeScript,
   Python, and any project with a Makefile.
 trigger: >
@@ -22,8 +22,8 @@ examples:
   - name: Full verification before merge
     invocation: "/optimus-verify-code"
     expected_flow: >
-      1. Run Phase 1 (6 commands in parallel)
-      2. If all pass, run Phase 2 (integration then E2E)
+      1. Run Phase 2 (6 commands in parallel)
+      2. If all pass, run Phase 3 (integration then E2E)
       3. Present executive summary with verdict
   - name: Verification after fixing a bug
     invocation: "Verify the code"
@@ -62,7 +62,7 @@ Two-phase code verification supporting multiple stacks.
 
 ---
 
-## Phase 0: Detect Project Stack
+## Phase 1: Detect Project Stack
 
 Before running any checks, detect the project stack and determine available commands.
 
@@ -111,7 +111,7 @@ Ask the user what to verify (or detect from invocation):
   ```
   No changes detected between your branch and <default_branch>. Nothing to verify.
   ```
-  **STOP** — do not proceed to Phase 1.
+  **STOP** — do not proceed to Phase 2.
 
   When scoped to changed files:
   - **Lint:** run lint only on changed files (if the linter supports file arguments)
@@ -143,7 +143,7 @@ as SKIP (not FAIL). Only report what is available.
 
 ---
 
-## Phase 1: Static Analysis + Unit Tests (parallel)
+## Phase 2: Static Analysis + Unit Tests (parallel)
 
 Run ALL detected commands simultaneously. Capture stdout, stderr, exit code, and duration for each.
 
@@ -154,13 +154,13 @@ Run ALL detected commands simultaneously. Capture stdout, stderr, exit code, and
 - If `make generate-docs` modifies files, report which files changed — this means docs were stale
 - Commands that are SKIP (tool not installed, target not found) do not count as failures
 
-**Phase 1 verdict:**
-- ALL commands pass (SKIP counts as pass) → proceed to Phase 2
-- ANY fails → still proceed to Phase 2, but final verdict will be NEEDS_FIX
+**Phase 2 verdict:**
+- ALL commands pass (SKIP counts as pass) → proceed to Phase 3
+- ANY fails → still proceed to Phase 3, but final verdict will be NEEDS_FIX
 
 ---
 
-## Phase 2: Integration + E2E Tests (sequential)
+## Phase 3: Integration + E2E Tests (sequential)
 
 Run sequentially, continue even if one fails:
 
@@ -193,9 +193,9 @@ Options:
 
 ---
 
-## Phase 2.5: Coverage Analysis
+## Phase 4: Coverage Analysis
 
-After Phase 2 completes, analyze test coverage from the generated profiles.
+After Phase 3 completes, analyze test coverage from the generated profiles.
 
 ### Step 1: Extract Coverage Percentages
 
@@ -269,7 +269,7 @@ If coverage profiles cannot be generated (command fails), report as SKIP with no
 
 ---
 
-## Phase 3: Test Scenario Gap Analysis
+## Phase 5: Test Scenario Gap Analysis
 
 After coverage measurement, dispatch an agent to systematically identify missing test scenarios. Coverage % tells you HOW MUCH is tested; this phase tells you WHAT is NOT tested.
 
@@ -358,7 +358,7 @@ TEST SCENARIO GAPS:
 
 ---
 
-## Phase 4: Executive Summary
+## Phase 6: Executive Summary
 
 After all phases complete, present the summary using the `<json-render>` format for rich terminal UI.
 
@@ -369,8 +369,8 @@ After all phases complete, present the summary using the `<json-render>` format 
   VERIFICATION SUMMARY
 ============================================
 
-Phase 1 — Static Analysis + Unit Tests: PASS / FAIL
-Phase 2 — Integration + E2E Tests:      PASS / FAIL
+Phase 2 — Static Analysis + Unit Tests: PASS / FAIL
+Phase 3 — Integration + E2E Tests:      PASS / FAIL
 Coverage — Unit / Integration:           PASS / FAIL
 Total time: Xs
 

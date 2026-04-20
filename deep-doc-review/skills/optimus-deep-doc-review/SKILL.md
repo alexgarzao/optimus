@@ -58,7 +58,7 @@ Deep review of project documentation. Finds errors, inconsistencies, gaps, missi
 
 ---
 
-## Phase 0: Discover and Load Docs
+## Phase 1: Discover and Load Docs
 
 ### Step 0.1: Identify Docs to Review
 
@@ -81,7 +81,7 @@ Read the full content of each identified doc. Build a mental map of:
 
 ---
 
-## Phase 0.5: Parallel Agent Dispatch
+## Phase 2: Parallel Agent Dispatch
 
 Dispatch specialist agents via `Task` tool to analyze the docs from different perspectives.
 Each agent receives the full content of all docs being reviewed.
@@ -125,11 +125,11 @@ Required output format:
   If no issues: "PASS — no issues in [domain]"
 ```
 
-Merge agent findings with the orchestrator's own analysis in Phase 1.
+Merge agent findings with the orchestrator's own analysis in Phase 3.
 
 ---
 
-## Phase 1: Analysis and Cross-Referencing
+## Phase 3: Analysis and Cross-Referencing
 
 ### Issue Types
 
@@ -162,7 +162,7 @@ For each doc, verify:
 
 ---
 
-## Phase 2: Present Overview
+## Phase 4: Present Overview
 
 Present the full findings table for a bird's-eye view:
 
@@ -184,7 +184,7 @@ Present the full findings table for a bird's-eye view:
 
 ---
 
-## Phase 3: Interactive Resolution (one by one)
+## Phase 5: Interactive Resolution (one by one)
 
 **=== MANDATORY — Progress Tracking (NEVER SKIP) ===**
 
@@ -250,7 +250,7 @@ If the user chose to fix:
 
 ---
 
-## Phase 4: Final Summary
+## Phase 6: Final Summary
 
 After processing all findings:
 

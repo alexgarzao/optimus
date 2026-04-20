@@ -101,7 +101,7 @@ Unified PR review orchestrator. Fetches PR metadata, collects ALL review comment
 - Do NOT skip fetching comments because "I already saw this PR"
 - Do NOT say "issues were already resolved" without fetching and verifying RIGHT NOW
 - New comments, new commits, new CI results may exist since the last run
-- Always run Phase 0 completely: fetch metadata, fetch ALL threads, fetch CI checks, fetch changed files
+- Always run Phase 1 completely: fetch metadata, fetch ALL threads, fetch CI checks, fetch changed files
 - The PR may have changed entirely since the last time you looked at it
 
 If you find yourself saying "these were already addressed" without having run `gh api` commands in THIS session, you are violating this rule.
@@ -129,7 +129,7 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
        ```
 5.1. **Check session state:** Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`cycle-pr-review-stage-4`, status=`Revisando PR`.
 
-   **On stage completion** (after Phase 9 final summary): delete the session file.
+   **On stage completion** (after Phase 14 final summary): delete the session file.
 6. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Revisando PR`) AND the user did NOT specify the task ID explicitly (auto-detect):
      - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
@@ -164,7 +164,7 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
 ### Standalone Mode (no task)
 When no task is referenced and no `tasks.md` exists, or the user explicitly wants to review a PR without a task context:
 - Skip all task status logic
-- Proceed directly to Phase 0
+- Proceed directly to Phase 1
 
 ### How to detect which mode:
 1. If the user mentions a task ID (T-XXX) → Task Mode
@@ -176,7 +176,7 @@ When no task is referenced and no `tasks.md` exists, or the user explicitly want
 
 ---
 
-## Phase 0: Fetch PR Context
+## Phase 1: Fetch PR Context
 
 ### Step 0.1: Obtain PR URL
 
@@ -194,7 +194,7 @@ If no PR is found, offer to create one via `AskUser`:
 No PR exists for the current branch (<branch>). What should I do?
 ```
 Options:
-- **Create PR** — create a PR against the default branch with a Conventional Commits title derived from the task's Tipo and title (same logic as cycle-impl-review-stage-3 Phase 8)
+- **Create PR** — create a PR against the default branch with a Conventional Commits title derived from the task's Tipo and title (same logic as cycle-impl-review-stage-3 Phase 12)
 - **Provide URL** — I have a PR URL to use
 - **Cancel** — stop the review
 
@@ -485,7 +485,7 @@ gh api repos/{owner}/{repo}/commits/${COMMIT_SHA}/check-runs \
    - Root cause analysis (what is causing the failure)
    - Proposed fix (what needs to change to make it pass)
 
-These CI failure findings are included in Phase 3 consolidation alongside agent findings, assigned sequential IDs (F1, F2...), and presented to the user for resolution in Phase 5 like any other finding.
+These CI failure findings are included in Phase 4 consolidation alongside agent findings, assigned sequential IDs (F1, F2...), and presented to the user for resolution in Phase 6 like any other finding.
 
 **IMPORTANT:** CI failures are NOT informational — they are actionable findings that block merge readiness. If you present a PR summary that says "everything is OK" while `gh pr checks` shows failing checks, you have violated this rule.
 
@@ -499,7 +499,7 @@ Read the full content of each changed file for the review agents.
 
 ---
 
-## Phase 1: Present PR Summary
+## Phase 2: Present PR Summary
 
 **HARD BLOCK:** If `gh pr checks` showed ANY failing checks, the summary MUST list every failing check name prominently. Do NOT present a summary without the CI Status section. If all checks pass, say so explicitly. If any fail, they MUST appear in bold with the word "FAILING".
 
@@ -534,7 +534,7 @@ Read the full content of each changed file for the review agents.
 
 ---
 
-## Phase 2: Parallel Agent Dispatch
+## Phase 3: Parallel Agent Dispatch
 
 ### Step 2.1: Discover Project Context
 
@@ -636,7 +636,7 @@ All agents MUST be dispatched in a SINGLE message with parallel Task calls.
 
 ---
 
-## Phase 3: Consolidation
+## Phase 4: Consolidation
 
 After ALL agents return:
 
@@ -666,7 +666,7 @@ Each finding MUST include its source(s):
 
 ---
 
-## Phase 4: Present Overview
+## Phase 5: Present Overview
 
 ```markdown
 ## PR Review: #<number> — X findings
@@ -698,7 +698,7 @@ Each finding MUST include its source(s):
 
 ---
 
-## Phase 5: Finding Presentation and Resolution
+## Phase 6: Finding Presentation and Resolution
 
 Findings are presented ONE AT A TIME, decisions collected for ALL, then fixes applied ALL AT ONCE at the end.
 
@@ -770,7 +770,7 @@ Record: finding ID, source(s), decision (fix/skip/defer), chosen option. Do NOT 
 
 ---
 
-## Phase 5.5: Recommend Rule Configuration (Codacy/DeepSource)
+## Phase 7: Recommend Rule Configuration (Codacy/DeepSource)
 
 If false positives were identified, present configuration recommendations:
 
@@ -798,9 +798,9 @@ Ask the user whether to apply config changes. If approved, edit the config files
 
 ---
 
-## Phase 6: Apply All Approved Fixes with TDD Cycle
+## Phase 8: Apply All Approved Fixes with TDD Cycle
 
-**IMPORTANT:** This phase runs ONCE, after ALL findings have been presented and ALL decisions collected in Phase 5. No fix is applied during Phase 5.
+**IMPORTANT:** This phase runs ONCE, after ALL findings have been presented and ALL decisions collected in Phase 6. No fix is applied during Phase 6.
 
 ### Step 6.1: Pre-Apply Summary
 
@@ -878,13 +878,13 @@ Codacy: X findings suppressed (via <linter> inline suppression)
 DeepSource: Y findings suppressed (skipcq)"
 ```
 
-Record the suppression commit SHA for use in Phase 8.
+Record the suppression commit SHA for use in Phase 13.
 
 ---
 
-## Phase 6.6: Coverage Verification and Test Gap Analysis
+## Phase 9: Coverage Verification and Test Gap Analysis
 
-**IMPORTANT:** This phase runs ONLY ONCE, after ALL fixes from Phase 6 have been applied.
+**IMPORTANT:** This phase runs ONLY ONCE, after ALL fixes from Phase 8 have been applied.
 
 ### Step 6.6.1: Coverage Measurement (Unit Tests)
 
@@ -904,7 +904,7 @@ If no coverage command is available, mark as SKIP.
 
 **Threshold:** Unit tests: 85% minimum
 
-**NOTE:** Integration test coverage is measured in Phase 7.1 (before push), not here.
+**NOTE:** Integration test coverage is measured in Phase 12 (before push), not here.
 
 ### Step 6.6.2: Test Gap Analysis
 
@@ -914,7 +914,7 @@ HIGH priority gaps are presented as findings for user decision.
 
 ---
 
-## Phase 6.7: Convergence Loop (MANDATORY)
+## Phase 10: Convergence Loop (MANDATORY)
 
 Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Loop".
 
@@ -924,15 +924,15 @@ Use any available ring review droid (e.g., `ring-default-code-reviewer`). The su
 2. PR context (description, linked issues, base branch)
 3. Project rules (re-read fresh)
 4. The findings ledger (for dedup only)
-5. Existing PR comments from all sources (reuse data from Phase 0 — do NOT re-fetch)
+5. Existing PR comments from all sources (reuse data from Phase 1 — do NOT re-fetch)
 
 **Do NOT re-fetch** Codacy/DeepSource comments — they only update after push.
 
-When the loop exits, proceed to Phase 7 (integration/E2E tests).
+When the loop exits, proceed to Phase 11 (integration/E2E tests).
 
 ---
 
-## Phase 7: Integration and E2E Tests (before push)
+## Phase 11: Integration and E2E Tests (before push)
 
 **Before pushing**, run integration and E2E tests. These are slow and expensive, so they
 run ONCE here — not during the fix/convergence cycle.
@@ -955,7 +955,7 @@ make test-e2e                # E2E tests — if target exists
 
 ---
 
-## Phase 7.1: Push Commits
+## Phase 12: Push Commits
 
 **HARD BLOCK:** Ask the user before pushing:
 
@@ -974,13 +974,13 @@ This triggers Codacy/DeepSource reanalysis automatically.
 
 ---
 
-## Phase 8: Respond to ALL PR Comments (MANDATORY)
+## Phase 13: Respond to ALL PR Comments (MANDATORY)
 
 **HARD BLOCK:** This phase is MANDATORY regardless of whether any fixes were applied. Every existing PR comment thread MUST receive a reply.
 
 ### Step 8.1: Response Rules (uniform for ALL sources)
 
-**IMPORTANT:** Use the `{finding_id} → {commit_sha}` mapping from Phase 6.
+**IMPORTANT:** Use the `{finding_id} → {commit_sha}` mapping from Phase 8.
 
 **Case 1 — Fix applied (ANY source: Codacy, DeepSource, CodeRabbit, human):**
 ```
@@ -1209,7 +1209,7 @@ gh api graphql -f query='
 
 ---
 
-## Phase 9: Final Summary
+## Phase 14: Final Summary
 
 ```markdown
 ## PR Review Summary: #<number> — <title>
@@ -1295,7 +1295,7 @@ gh api graphql -f query='
 - Only review files changed in the PR
 - ALWAYS announce total findings count (N) before presenting the first finding: `"### Total findings to review: N"`
 - Present findings ONE AT A TIME in severity order, ALWAYS showing "Finding X of N" in EVERY finding header
-- Collect ALL decisions first (Phase 5), then apply ALL approved fixes at once (Phase 6)
+- Collect ALL decisions first (Phase 6), then apply ALL approved fixes at once (Phase 8)
 - Coverage verification and convergence loop run ONLY after all fixes are applied
 - No changes without user approval
 - BEFORE presenting each finding: deep research is MANDATORY — project patterns, architectural decisions, existing codebase, task focus, user/consumer use cases, UX impact, API best practices, engineering best practices, language-specific idioms. Option A must be the correct approach backed by research evidence, regardless of effort
@@ -1316,12 +1316,12 @@ gh api graphql -f query='
 
 ### Dry-Run Mode
 If the user requests a dry-run (e.g., "dry-run pr-review", "preview PR review"):
-- Fetch ALL PR data normally (Phase 0)
-- Dispatch ALL review agents (Phase 2) and consolidate (Phase 3)
-- Present ALL findings in Phase 5 (interactive resolution)
+- Fetch ALL PR data normally (Phase 1)
+- Dispatch ALL review agents (Phase 3) and consolidate (Phase 4)
+- Present ALL findings in Phase 6 (interactive resolution)
 - **Do NOT change task status** — skip status update in Task Mode
-- **Do NOT apply fixes** — skip Phase 6 (TDD cycle)
-- **Do NOT push anything** — skip Phase 7.1
-- **Do NOT respond to PR comments** — skip Phase 8
+- **Do NOT apply fixes** — skip Phase 8 (TDD cycle)
+- **Do NOT push anything** — skip Phase 12
+- **Do NOT respond to PR comments** — skip Phase 13
 - **Do NOT run convergence loop** — one pass for preview
 - Present results as informational with estimated fix effort

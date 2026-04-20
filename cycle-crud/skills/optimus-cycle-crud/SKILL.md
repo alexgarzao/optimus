@@ -64,7 +64,7 @@ Administrative CRUD operations for tasks in `tasks.md`.
 
 **Classification:** Administrative skill — runs on any branch, never modifies code.
 
-## Phase 0: Initialize
+## Phase 1: Initialize
 
 ### Step 0.0: Verify GitHub CLI (conditional)
 
@@ -152,7 +152,7 @@ If unclear, ask the user via `AskUser`:
 - (h) Manage versions (create, edit, remove)
 - (i) Move tasks between versions
 
-## Phase 1: Create Task
+## Phase 2: Create Task
 
 ### Step 1.0: Gather Task Information
 
@@ -336,7 +336,7 @@ Created task T-NNN: <title>
   Status: Pendente
 ```
 
-## Phase 2: Edit Task
+## Phase 3: Edit Task
 
 ### Step 2.0: Identify Task and Field
 
@@ -384,7 +384,7 @@ Updated T-XXX:
   <field>: <old value> → <new value>
 ```
 
-## Phase 3: Remove Task
+## Phase 4: Remove Task
 
 ### Step 3.0: Identify Task
 
@@ -431,7 +431,7 @@ Use `AskUser` for confirmation.
 Removed task T-XXX: <title>
 ```
 
-## Phase 4: Reorder Tasks
+## Phase 5: Reorder Tasks
 
 ### Step 4.0: Determine New Order
 
@@ -453,7 +453,7 @@ Options:
 
 Show the new table order.
 
-## Phase 5: Cancel Task
+## Phase 6: Cancel Task
 
 ### Step 5.0: Identify Task
 
@@ -566,7 +566,7 @@ To resolve, run `/optimus-cycle-crud`:
   - "cancel T-YYY"
 ```
 
-## Phase 5.5: Reopen Task
+## Phase 7: Reopen Task
 
 ### Step 5.5.0: Identify Task
 
@@ -648,7 +648,7 @@ Reopened task T-XXX: <title>
 
 ---
 
-## Phase 5.6: Advance Status
+## Phase 8: Advance Status
 
 Manually advance a task's status to skip a stage (e.g., when the user implemented
 code manually without using stage-2).
@@ -716,7 +716,7 @@ code manually without using stage-2).
 
 ---
 
-## Phase 5.7: Demote Status
+## Phase 9: Demote Status
 
 Move a task back to a previous status (e.g., when stage-3 review identifies
 that significant rework is needed and the task should go back to implementation).
@@ -774,7 +774,7 @@ that significant rework is needed and the task should go back to implementation)
 
 ---
 
-## Phase 6: Batch Operations
+## Phase 10: Batch Operations
 
 If the user provides multiple tasks to create at once (e.g., a list of tasks), process them sequentially:
 
@@ -783,7 +783,7 @@ If the user provides multiple tasks to create at once (e.g., a list of tasks), p
 3. Add all rows and detail sections
 4. Show summary of all created tasks
 
-## Phase 7: Version Management
+## Phase 11: Version Management
 
 ### Step 7.0: Determine Version Operation
 
@@ -867,7 +867,7 @@ Commit: `chore(tasks): remove version <name>`
 
 Rearrange rows in the Versions table. Does NOT change any values — only visual order.
 
-## Phase 8: Move Tasks Between Versions
+## Phase 12: Move Tasks Between Versions
 
 Move one or more tasks from one version to another.
 

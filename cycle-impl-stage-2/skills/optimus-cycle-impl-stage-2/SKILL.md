@@ -85,7 +85,7 @@ Executes a validated task specification end-to-end: identifies the task, loads c
 
 ---
 
-## Phase 0: Load Context & Question Everything
+## Phase 1: Load Context & Question Everything
 
 ### Step 0.0: Verify GitHub CLI (HARD BLOCK)
 
@@ -116,7 +116,7 @@ Executes a validated task specification end-to-end: identifies the task, loads c
 
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`cycle-impl-stage-2`, status=`Em Andamento`.
 
-**On stage completion** (after Phase 2 post-execution): delete the session file.
+**On stage completion** (after Phase 4 post-execution): delete the session file.
 
 ### Step 0.3: Validate and Update Task Status
 
@@ -227,7 +227,7 @@ Use the `AskUser` tool to ask ALL questions at once (max 4 per call, multiple ca
 
 ---
 
-## Phase 1: Execute Implementation
+## Phase 2: Execute Implementation
 
 After context is loaded and all questions are answered, execute the implementation.
 
@@ -276,7 +276,7 @@ Pass the tasks file path that contains the confirmed task. The dev-cycle handles
 
 Provide to dev-cycle:
 - The tasks file path and confirmed task ID
-- All reference docs discovered in Phase 0
+- All reference docs discovered in Phase 1
 - Codebase patterns found in Step 0.3
 - Answers to all questions from Step 0.4
 - Any user preferences or constraints mentioned during questioning
@@ -376,9 +376,9 @@ Present a summary of what was implemented and ask for explicit approval via `Ask
 
 ---
 
-## Phase 1.5: Update Acceptance Criteria Checkboxes
+## Phase 3: Update Acceptance Criteria Checkboxes
 
-After Phase 1 completes (via dev-cycle or built-in fallback), update the acceptance criteria
+After Phase 2 completes (via dev-cycle or built-in fallback), update the acceptance criteria
 checkboxes in tasks.md to reflect what was actually implemented.
 
 **IMPORTANT:** This step runs AFTER implementation and verification complete but BEFORE
@@ -412,7 +412,7 @@ about mismatched checkbox state.
 
 ---
 
-## Phase 2: Post-Execution
+## Phase 4: Post-Execution
 
 After implementation completes (via dev-cycle or built-in fallback):
 
@@ -462,11 +462,11 @@ Offer to push commits — see AGENTS.md Protocol: Push Commits.
 - Do not add "nice to have" improvements
 
 ### Error Handling
-- If dev-cycle reports a blocker, present it to the user with context from Phase 0
-- If you discover a gap in the task spec during Phase 0, ask the user before invoking dev-cycle
+- If dev-cycle reports a blocker, present it to the user with context from Phase 1
+- If you discover a gap in the task spec during Phase 1, ask the user before invoking dev-cycle
 
 ### Communication
-- Update the todo list at Phase 0 completion and after dev-cycle finishes
+- Update the todo list at Phase 1 completion and after dev-cycle finishes
 - Report dev-cycle gate results as they complete
 - Never go silent — if dev-cycle is running, inform the user of progress
 - **Next step suggestion:** After the final commit, inform the user: "Implementation
@@ -474,10 +474,10 @@ Offer to push commits — see AGENTS.md Protocol: Push Commits.
 
 ### Dry-Run Mode
 If the user requests a dry-run (e.g., "dry-run impl T-003", "preview implementation"):
-- Run ALL discovery and context-loading phases (Phase 0) normally
+- Run ALL discovery and context-loading phases (Phase 1) normally
 - Present the implementation plan and all questions (Step 0.9)
 - **Do NOT change task status** — skip Step 0.3 (status update)
-- **Do NOT execute implementation** — skip Phase 1 entirely
-- **Do NOT update checkboxes** — skip Phase 1.5
-- **Do NOT commit or push anything** — skip Phase 2 commits
+- **Do NOT execute implementation** — skip Phase 2 entirely
+- **Do NOT update checkboxes** — skip Phase 3
+- **Do NOT commit or push anything** — skip Phase 4 commits
 - Present a summary of: what would be implemented, estimated effort, identified risks

@@ -69,7 +69,7 @@ CodeRabbit-driven code review with TDD fix cycle, secondary agent validation for
 
 ---
 
-## Phase 0: Execute CodeRabbit
+## Phase 1: Execute CodeRabbit
 
 ### Step 0.1: Discover Configuration
 
@@ -104,12 +104,12 @@ Alternatively, I can run a code review using specialist agents instead (same as 
 
 Ask via `AskUser`:
 - **Install CodeRabbit** — show installation instructions and retry
-- **Fall back to agent review** — proceed with a deep-review style agent dispatch (skip Phase 1 parsing, go directly to Phase 2 interactive resolution with parallel agent findings)
+- **Fall back to agent review** — proceed with a deep-review style agent dispatch (skip Phase 2 parsing, go directly to Phase 3 interactive resolution with parallel agent findings)
 - **Cancel** — stop the review
 
 If the user chooses the fallback, dispatch the same agents used by `optimus-deep-review`
 (code quality, business logic, security, test quality, cross-file consistency) and follow
-the same interactive resolution flow from Phase 2 onward.
+the same interactive resolution flow from Phase 3 onward.
 
 ### Step 0.3: Load Project Context
 
@@ -133,7 +133,7 @@ TEST_INTEGRATION_CMD=<discovered integration test command>
 
 ---
 
-## Phase 1: Triage
+## Phase 2: Triage
 
 ### Step 1.1: Parse Findings
 
@@ -177,7 +177,7 @@ Categorize ALL findings (regardless of origin) by severity:
 
 ---
 
-## Phase 2: Interactive Finding-by-Finding Resolution (collect decisions only)
+## Phase 3: Interactive Finding-by-Finding Resolution (collect decisions only)
 
 **BEFORE presenting the first finding:** Announce total findings count prominently: `"### Total findings to review: N"`
 
@@ -262,13 +262,13 @@ The user may:
 - Resolve differently (user describes approach)
 - Ignore this issue (proceed without fixing)
 
-Record the decision internally. Do NOT apply any fix yet — all fixes are applied in Phase 3.
+Record the decision internally. Do NOT apply any fix yet — all fixes are applied in Phase 4.
 
 ---
 
-## Phase 3: Apply All Approved Fixes with TDD + Agent Validation
+## Phase 4: Apply All Approved Fixes with TDD + Agent Validation
 
-**IMPORTANT:** This phase runs ONCE, after ALL findings have been presented and ALL decisions collected in Phase 2. No fix is applied during Phase 2.
+**IMPORTANT:** This phase runs ONCE, after ALL findings have been presented and ALL decisions collected in Phase 3. No fix is applied during Phase 3.
 
 Apply ALL approved fixes in a single pass (skipped for ignored findings). Group fixes by file
 to minimize I/O. The steps below apply to each fix within the batch — NOT sequentially
@@ -342,7 +342,7 @@ For PRs with many findings, independent fixes (in different modules/files) may b
 
 ---
 
-## Phase 4: Coverage Verification and Test Gap Analysis
+## Phase 5: Coverage Verification and Test Gap Analysis
 
 After all findings have been processed through the TDD cycle:
 
@@ -425,9 +425,9 @@ Required output format:
 
 ---
 
-## Phase 5: Convergence Loop (MANDATORY — automatic re-validation with escalating scrutiny)
+## Phase 6: Convergence Loop (MANDATORY — automatic re-validation with escalating scrutiny)
 
-After Phase 4 completes, the reviewer MUST automatically re-validate using fresh sub-agents to eliminate session bias. This catches both new issues introduced by fixes AND issues missed in round 1.
+After Phase 5 completes, the reviewer MUST automatically re-validate using fresh sub-agents to eliminate session bias. This catches both new issues introduced by fixes AND issues missed in round 1.
 
 **CRITICAL — Why Fresh Sub-Agents:**
 
@@ -484,15 +484,15 @@ Required output:
 **Orchestrator deduplication after sub-agent returns:**
 
 1. Compare each sub-agent finding against the cumulative ledger (match by file + topic + description similarity)
-2. **Genuinely new findings** → add to ledger, present to user via Phase 2
+2. **Genuinely new findings** → add to ledger, present to user via Phase 3
 3. **Duplicates** → discard silently
 
 **Loop rules:**
 - **Maximum rounds:** 5 (the initial run counts as round 1)
 - **Round 2 is MANDATORY** — always dispatch a fresh sub-agent regardless of round 1 results
 - **Progress indicator:** Show `"=== Re-validation round X of 5 (fresh sub-agent) ==="` at the start of each re-run
-- **Scope:** Sub-agent re-runs CodeRabbit CLI, reviews files, and returns findings. Do NOT re-load project context (Phase 0) in the orchestrator
-- **If new findings exist:** Present them using Phase 2 (interactive resolution), fix via Phase 3 (TDD cycle), verify via Phase 4 (coverage), then loop again
+- **Scope:** Sub-agent re-runs CodeRabbit CLI, reviews files, and returns findings. Do NOT re-load project context (Phase 1) in the orchestrator
+- **If new findings exist:** Present them using Phase 3 (interactive resolution), fix via Phase 4 (TDD cycle), verify via Phase 5 (coverage), then loop again
 - **Stop conditions (any one triggers exit):**
   1. Zero new findings — **only valid from round 3 onward** (round 2 is mandatory)
   2. Round 5 completed (hard limit)
@@ -514,7 +514,7 @@ Required output:
 
 ---
 
-## Phase 6: Final Summary
+## Phase 7: Final Summary
 
 After the convergence loop exits:
 

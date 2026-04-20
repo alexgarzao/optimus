@@ -29,7 +29,7 @@ Lists all available Optimus skills organized by category.
 
 ---
 
-## Phase 0: Present Skill Catalog
+## Phase 1: Present Skill Catalog
 
 Present the following catalog to the user. Use the `<json-render>` format for rich
 terminal display when available, otherwise use markdown tables.
@@ -73,7 +73,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 
 ---
 
-## Phase 1: Situational Guidance
+## Phase 2: Situational Guidance
 
 If the user asked for help choosing a skill (not just listing), provide guidance based
 on their situation:

@@ -78,7 +78,7 @@ Parallel code review with specialist agents, consolidation, deduplication, and i
 
 ---
 
-## Phase 0: Review Scope
+## Phase 1: Review Scope
 
 Before starting, determine the review parameters.
 
@@ -113,7 +113,7 @@ Ask the user what to review:
 
 ---
 
-## Phase 1: Parallel Agent Dispatch
+## Phase 2: Parallel Agent Dispatch
 
 Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives the files in scope plus any reference docs found.
 
@@ -175,7 +175,7 @@ Required output format:
 
 ---
 
-## Phase 2: Consolidation and Triage
+## Phase 3: Consolidation and Triage
 
 After ALL agents return:
 
@@ -196,7 +196,7 @@ After ALL agents return:
 
 ---
 
-## Phase 3: Present Overview
+## Phase 4: Present Overview
 
 Present the full findings table for a bird's-eye view:
 
@@ -218,9 +218,9 @@ Present the full findings table for a bird's-eye view:
 
 ---
 
-## Phase 4: Interactive Finding-by-Finding Resolution
+## Phase 5: Interactive Finding-by-Finding Resolution
 
-Findings are presented ONE AT A TIME, decisions collected for ALL, then fixes applied ALL AT ONCE in Phase 4.5.
+Findings are presented ONE AT A TIME, decisions collected for ALL, then fixes applied ALL AT ONCE in Phase 6.
 
 **=== MANDATORY — Progress Tracking (NEVER SKIP) ===**
 
@@ -279,7 +279,7 @@ The user may:
 
 ### 5. After Decision
 
-Record the decision internally. Do NOT apply any fix yet — all fixes are applied in Phase 4.5 after ALL decisions are collected.
+Record the decision internally. Do NOT apply any fix yet — all fixes are applied in Phase 6 after ALL decisions are collected.
 
 - **Approved:** Record finding ID, chosen option. Move to next finding.
 - **Discarded:** Record as discarded. Move to next finding.
@@ -295,10 +295,10 @@ If there are 3+ findings of the same nature (e.g., "inconsistent import path in 
 
 ---
 
-## Phase 4.5: Batch Apply All Approved Fixes
+## Phase 6: Batch Apply All Approved Fixes
 
 **IMPORTANT:** This phase runs ONCE, after ALL findings have been presented and ALL decisions
-collected in Phase 4. No fix is applied during Phase 4.
+collected in Phase 5. No fix is applied during Phase 5.
 
 ### Step 4.5.1: Present Pre-Apply Summary
 
@@ -334,9 +334,9 @@ If lint fails, fix formatting issues.
 
 ---
 
-## Phase 4.6: Convergence Loop (MANDATORY)
+## Phase 7: Convergence Loop (MANDATORY)
 
-After Phase 4.5, automatically re-validate using fresh sub-agents to eliminate session bias.
+After Phase 6, automatically re-validate using fresh sub-agents to eliminate session bias.
 
 **CRITICAL — Why Fresh Sub-Agents:**
 
@@ -352,7 +352,7 @@ findings independently. The orchestrator then deduplicates against the cumulativ
 
 | Round | Who analyzes | How |
 |-------|-------------|-----|
-| **1** (initial) | Orchestrator (this agent) | Phase 1 (parallel agent dispatch) + Phase 2 (consolidate) — normal flow |
+| **1** (initial) | Orchestrator (this agent) | Phase 2 (parallel agent dispatch) + Phase 3 (consolidate) — normal flow |
 | **2** (mandatory) | **Fresh sub-agent** via `Task` | Sub-agent reads all files from scratch, reviews independently, returns findings |
 | **3-5** | **Fresh sub-agent** via `Task` | Same as round 2 — only triggered if round 2+ found new findings |
 
@@ -391,14 +391,14 @@ Required output:
 **Orchestrator deduplication after sub-agent returns:**
 
 1. Compare each sub-agent finding against the cumulative ledger (match by file + topic + description similarity)
-2. **Genuinely new findings** → add to ledger, present to user via Phase 4 (interactive resolution)
+2. **Genuinely new findings** → add to ledger, present to user via Phase 5 (interactive resolution)
 3. **Duplicates** → discard silently
 
 **Loop rules:**
 - Max 5 rounds (initial = round 1)
 - **Round 2 is MANDATORY** — always dispatch a fresh sub-agent regardless of round 1 results
 - Show `"=== Re-validation round X of 5 (fresh sub-agent) ==="` at start
-- **If new findings exist:** Present them using Phase 4, fix via Phase 4.5, then loop again
+- **If new findings exist:** Present them using Phase 5, fix via Phase 6, then loop again
 - **Stop conditions (any one triggers exit):**
   1. Zero new findings — **only valid from round 3 onward** (round 2 is mandatory)
   2. Round 5 completed (hard limit)
@@ -417,7 +417,7 @@ Required output:
 
 ---
 
-## Phase 5: Final Summary
+## Phase 8: Final Summary
 
 After the convergence loop exits and all findings are processed:
 
@@ -459,7 +459,7 @@ After the convergence loop exits and all findings are processed:
 - After each fix, update the todo list to maintain progress visibility
 - If the codebase already does the same thing elsewhere without issue, it is NOT a finding
 - Ring droids are required — do not proceed without them
-- Do NOT fix anything during agent dispatch or consolidation — fixes happen only in Phase 4 after user approval
+- Do NOT fix anything during agent dispatch or consolidation — fixes happen only in Phase 5 after user approval
 - The agent NEVER decides whether a finding should be fixed or skipped — the USER always decides
 - ALL findings (CRITICAL, HIGH, MEDIUM, and LOW) MUST be presented to the user for decision
 - The agent may recommend an option, but MUST wait for user approval via AskUser before proceeding

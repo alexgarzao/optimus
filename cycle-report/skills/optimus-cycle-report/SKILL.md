@@ -55,7 +55,7 @@ Read-only agent that parses `tasks.md` and presents a comprehensive project stat
 
 ---
 
-## Phase 0: Find and Parse tasks.md
+## Phase 1: Find and Parse tasks.md
 
 ### Step 0.1: Locate tasks.md
 
@@ -139,12 +139,12 @@ For each task with dependencies:
 
 ---
 
-## Phase 0.5: Quick Status Mode Detection
+## Phase 2: Quick Status Mode Detection
 
 If the user's invocation matches quick status triggers ("quick status", "what am I working on?",
 "current task", "status rápido"):
 
-1. Parse tasks.md (Phase 0 still runs fully)
+1. Parse tasks.md (Phase 1 still runs fully)
 2. Find tasks with status other than `Pendente`, `**DONE**`, and `Cancelado` (active tasks)
 3. For each active task, read its detail section and count checked vs total acceptance criteria
 4. Present ONLY:
@@ -157,11 +157,11 @@ Quick Status:
 
 5. **STOP here** — do NOT run Phases 1-6 (dependency graph, parallelization, velocity, etc.)
 
-If the invocation does NOT match quick status triggers, proceed to Phase 1 normally.
+If the invocation does NOT match quick status triggers, proceed to Phase 3 normally.
 
 ---
 
-## Phase 1: Classify Tasks
+## Phase 3: Classify Tasks
 
 Classify each task into one of these categories:
 
@@ -189,7 +189,7 @@ should be removed or replaced).
 
 ---
 
-## Phase 1.5: Version Filtering
+## Phase 4: Version Filtering
 
 **Default behavior:** If a `## Versions` section exists and a version has Status `Ativa`,
 the dashboard shows **only tasks from the active version** by default.
@@ -204,7 +204,7 @@ the dashboard shows **only tasks from the active version** by default.
 
 ---
 
-## Phase 1.6: Version Progress Summary
+## Phase 5: Version Progress Summary
 
 Compute progress for each version, regardless of filtering.
 **Cancelled tasks are excluded from progress calculations** — they do not count toward
@@ -227,7 +227,7 @@ user the full project overview.
 
 ---
 
-## Phase 2: Compute Dependency Graph
+## Phase 6: Compute Dependency Graph
 
 Build a directed acyclic graph (DAG) from the Depends column.
 
@@ -257,7 +257,7 @@ For trees with depth > 3 levels, simplify by showing only the critical path and 
 
 ---
 
-## Phase 3: Identify Parallelization Opportunities
+## Phase 7: Identify Parallelization Opportunities
 
 ### Currently Parallelizable
 Tasks that are `Pendente` with all dependencies `**DONE**`. These can ALL start right now, in parallel.
@@ -268,7 +268,7 @@ Group by: "After T-XXX completes, these unlock: ..."
 
 ---
 
-## Phase 4: Present Dashboard
+## Phase 8: Present Dashboard
 
 Present the full dashboard using the format below. Use the `<json-render>` format when available for richer display, otherwise use the ASCII art format.
 
@@ -385,10 +385,10 @@ Present BOTH formats: the ASCII art first (always readable), then the json-rende
 
 ---
 
-## Phase 4.5: Velocity and History Metrics
+## Phase 9: Velocity and History Metrics
 
 After the dashboard, compute velocity metrics from git history. These provide trend
-data that a static snapshot (Phase 4) cannot show.
+data that a static snapshot (Phase 8) cannot show.
 
 ### Step 4.5.1: Compute Task Completion History
 
@@ -460,7 +460,7 @@ Average time per stage (from N completed tasks):
 
 ---
 
-## Phase 5: Warnings and Recommendations
+## Phase 10: Warnings and Recommendations
 
 After the dashboard, present any issues found:
 
@@ -538,7 +538,7 @@ If no orphaned worktrees are found, show: "Workspace Health: OK — no orphaned 
 
 ---
 
-## Phase 6: Export (optional)
+## Phase 11: Export (optional)
 
 If the user requests an export (e.g., "export report", "save report", "report to file"):
 

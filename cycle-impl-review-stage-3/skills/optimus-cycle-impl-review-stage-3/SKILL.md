@@ -92,7 +92,7 @@ for committed code).
 
 ---
 
-## Phase 0: Load Context
+## Phase 1: Load Context
 
 ### Step 0.0: Verify GitHub CLI (HARD BLOCK)
 Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
@@ -129,7 +129,7 @@ Validate PR title — see AGENTS.md Protocol: PR Title Validation.
 ### Step 0.0.2.1: Check Session State
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`cycle-impl-review-stage-3`, status=`Validando Impl`.
 
-**On stage completion** (after Phase 7 validation summary): delete the session file.
+**On stage completion** (after Phase 10 validation summary): delete the session file.
 
 ### Step 0.0.3: Validate and Update Task Status
 
@@ -224,11 +224,11 @@ Classify the task based on the file extensions of changed files:
 - **Frontend-only** — only frontend source files, styles, frontend tests, E2E tests changed
 - **Full-stack** — both backend and frontend files changed
 
-This determines which specialist agents to dispatch in Phase 1.
+This determines which specialist agents to dispatch in Phase 3.
 
 ---
 
-## Phase 0.5: Static Analysis and Coverage Profiling
+## Phase 2: Static Analysis and Coverage Profiling
 
 **MANDATORY.** Before dispatching review agents, run automated checks to collect concrete data. These results feed into agent prompts and become findings if they fail.
 
@@ -251,7 +251,7 @@ For each check that **fails**, create a finding:
 - Source: `[Static Analysis: <check-name>]`
 - Include the first 20 lines of error output
 
-For checks that **pass**, note them for the Phase 3 overview.
+For checks that **pass**, note them for the Phase 5 overview.
 
 Skip checks whose commands don't exist in the project (e.g., skip `go vet` in a pure JS project).
 
@@ -269,7 +269,7 @@ make test                    # Unit tests — MANDATORY
 **If unit tests fail:**
 1. Present the failure output (first 30 lines)
 2. Ask the user via `AskUser`: "Unit tests are failing. Fix before continuing, or skip cycle-impl-review-stage-3?"
-3. Do NOT proceed to Phase 1 until unit tests pass or user explicitly chooses to skip
+3. Do NOT proceed to Phase 3 until unit tests pass or user explicitly chooses to skip
 
 **If unit tests pass:** collect coverage data for analysis using the project's Makefile
 or `.optimus/config.json` commands:
@@ -286,7 +286,7 @@ make test-coverage 2>/dev/null
 
 If no coverage command is available, mark as SKIP.
 
-**NOTE:** Integration and E2E tests are NOT run here. They run only in Phase 6.5
+**NOTE:** Integration and E2E tests are NOT run here. They run only in Phase 9
 (after convergence loop, before summary) or when the user invokes them directly.
 This avoids slow test suites blocking the review loop.
 
@@ -322,16 +322,16 @@ For each public function changed/added by this task:
 Report: function, existing scenarios, missing scenarios, priority (HIGH/MEDIUM/LOW)
 ```
 
-HIGH priority gaps become findings in Phase 2 consolidation.
+HIGH priority gaps become findings in Phase 4 consolidation.
 
 ### Step 0.5.5: Collect Results
 
 Merge all static analysis findings and coverage gap findings into the findings list.
-These are presented alongside agent review findings in Phase 3 (overview) and Phase 4 (interactive resolution).
+These are presented alongside agent review findings in Phase 5 (overview) and Phase 6 (interactive resolution).
 
 ---
 
-## Phase 1: Parallel Agent Dispatch
+## Phase 3: Parallel Agent Dispatch
 
 Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives the full content of every changed file plus the task spec excerpt.
 
@@ -414,7 +414,7 @@ Required output format:
 
 ---
 
-## Phase 2: Consolidate and Deduplicate
+## Phase 4: Consolidate and Deduplicate
 
 After ALL agents return:
 
@@ -437,7 +437,7 @@ After ALL agents return:
 
 ---
 
-## Phase 3: Present Overview Table
+## Phase 5: Present Overview Table
 
 Show the user the full picture before diving into individual findings:
 
@@ -468,7 +468,7 @@ Security verdict: PASS / FAIL
 
 ---
 
-## Phase 4: Interactive Finding-by-Finding Resolution (collect decisions only)
+## Phase 6: Interactive Finding-by-Finding Resolution (collect decisions only)
 
 **BEFORE presenting the first finding:** Announce total findings count prominently: `"### Total findings to review: N"`
 
@@ -507,13 +507,13 @@ Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the u
 selects "Tell me more" or responds with free text: STOP, research and answer RIGHT NOW.
 **NEVER defer to the end of the findings loop.**
 
-Internally record every decision: finding ID, chosen option (or "skip"), and rationale if provided. Do NOT apply any fix yet — all fixes are applied in Phase 5.
+Internally record every decision: finding ID, chosen option (or "skip"), and rationale if provided. Do NOT apply any fix yet — all fixes are applied in Phase 7.
 
 ---
 
-## Phase 5: Batch Apply All Approved Fixes
+## Phase 7: Batch Apply All Approved Fixes
 
-**IMPORTANT:** This phase starts ONLY after ALL findings have been presented and ALL decisions collected. No fix is applied during Phase 4.
+**IMPORTANT:** This phase starts ONLY after ALL findings have been presented and ALL decisions collected. No fix is applied during Phase 6.
 
 ### Step 5.1: Present Pre-Apply Summary
 
@@ -553,7 +553,7 @@ make test                    # Unit tests — final regression check
 If lint fails, fix formatting issues and re-run. If unit tests fail after 3 attempts
 to fix, revert the offending fix and ask the user.
 
-**NOTE:** Integration and E2E tests do NOT run here — they run in Phase 6.5 (after convergence loop, before summary).
+**NOTE:** Integration and E2E tests do NOT run here — they run in Phase 9 (after convergence loop, before summary).
 
 ### Step 5.4: Coverage Verification
 
@@ -636,11 +636,11 @@ Required output format:
   |---|------|----------|--------------------|-------------------|----------|
 ```
 
-**Gap findings become part of Phase 4** (interactive resolution) — each HIGH gap is presented as a finding for user decision (fix now or defer).
+**Gap findings become part of Phase 6** (interactive resolution) — each HIGH gap is presented as a finding for user decision (fix now or defer).
 
 ---
 
-## Phase 6: Convergence Loop (MANDATORY)
+## Phase 8: Convergence Loop (MANDATORY)
 
 Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Loop".
 
@@ -652,11 +652,11 @@ Use any available ring review droid (e.g., `ring-default-code-reviewer`). The su
 4. The findings ledger (for dedup only)
 5. Analysis instructions: code quality, business logic, security, test quality, spec compliance, cross-file consistency
 
-When the loop exits, proceed to Phase 6.5 (integration/E2E tests).
+When the loop exits, proceed to Phase 9 (integration/E2E tests).
 
 ---
 
-## Phase 6.5: Integration and E2E Tests (before push)
+## Phase 9: Integration and E2E Tests (before push)
 
 **After the convergence loop exits**, run integration and E2E tests. These are slow and
 expensive, so they run ONCE at the end — not during the fix/convergence cycle.
@@ -681,7 +681,7 @@ make test-e2e                # E2E tests — if target exists
 
 ---
 
-## Phase 7: Validation Summary
+## Phase 10: Validation Summary
 
 ```markdown
 ## Post-Task Validation Summary: T-XXX
@@ -721,8 +721,8 @@ make test-e2e                # E2E tests — if target exists
 ### Verification
 - Lint: PASS
 - Unit tests: PASS (X tests)
-- Integration tests: PASS / SKIPPED (Phase 6.5)
-- E2E tests: PASS / SKIPPED (Phase 6.5)
+- Integration tests: PASS / SKIPPED (Phase 9)
+- E2E tests: PASS / SKIPPED (Phase 9)
 
 ### Test Coverage
 - Unit tests: XX.X% (threshold: 85%) — PASS / FAIL
@@ -731,12 +731,12 @@ make test-e2e                # E2E tests — if target exists
 
 ---
 
-## Phase 7.5: Push Commits (optional)
+## Phase 11: Push Commits (optional)
 Offer to push commits — see AGENTS.md Protocol: Push Commits.
 
 ---
 
-## Phase 8: Offer PR Creation
+## Phase 12: Offer PR Creation
 
 After the validation summary is presented and the verdict is APPROVED or APPROVED WITH CAVEATS,
 offer to create a PR for the task.
@@ -830,7 +830,7 @@ When agents identify a missing test (from QA analyst, spec compliance, or any ot
 2. **If planned in a future task (T-XXX):**
    - Include in the finding: "This test is planned in T-XXX: [task title]"
    - Provide your opinion on timing: should it be created now or deferred? Consider whether the current task introduced the code path being tested, and whether deferring creates a risk window (untested code in production between tasks)
-   - During interactive resolution (Phase 4), ask via `AskUser`: "Test for [scenario] is planned for T-XXX. I recommend [creating now / deferring] because [reason]. Do you want to anticipate this test?"
+   - During interactive resolution (Phase 6), ask via `AskUser`: "Test for [scenario] is planned for T-XXX. I recommend [creating now / deferring] because [reason]. Do you want to anticipate this test?"
 3. **If NOT planned in any future task:**
    - Flag as a standard finding — recommend adding the test now
 4. Do NOT silently downgrade test gap severity because a future task covers it — the user decides whether to anticipate or defer
@@ -850,9 +850,9 @@ When agents identify a missing test (from QA analyst, spec compliance, or any ot
 
 ### Dry-Run Mode
 If the user requests a dry-run (e.g., "dry-run review T-012", "preview review"):
-- Run ALL analysis phases (Phase 0.5, Phase 1, Phase 2, Phase 3) normally
-- Present ALL findings in Phase 4 (interactive resolution)
-- **Do NOT apply any fixes** — skip Phase 5 (batch apply) entirely
+- Run ALL analysis phases (Phase 2, Phase 3, Phase 4, Phase 5) normally
+- Present ALL findings in Phase 6 (interactive resolution)
+- **Do NOT apply any fixes** — skip Phase 7 (batch apply) entirely
 - **Do NOT change task status** — skip the status update in Step 0.0.3
 - **Do NOT run the convergence loop** — one pass is sufficient for estimation
 - Present a summary showing: total findings, severity breakdown, estimated fix effort
@@ -862,6 +862,6 @@ If the user requests a dry-run (e.g., "dry-run review T-012", "preview review"):
 - Be specific: "line 42 of file.tsx uses X, but coding standards section Y requires Z"
 - Be constructive: always provide a concrete fix, not just criticism
 - Be honest about effort: don't say "trivial" for something that requires refactoring multiple files
-- **Next step suggestion:** After the validation summary (Phase 7) and optional PR creation (Phase 8),
+- **Next step suggestion:** After the validation summary (Phase 10) and optional PR creation (Phase 12),
   inform the user: "Implementation review complete. Next step: run `/optimus-cycle-pr-review-stage-4`
   for PR review (optional), or `/optimus-cycle-close-stage-5` to close this task."

@@ -60,7 +60,7 @@ and leaves originals untouched. The user decides whether to remove them later.
 
 ---
 
-## Phase 0: Discovery
+## Phase 1: Discovery
 
 ### Step 0.1: Scan for Task Files
 
@@ -219,7 +219,7 @@ Store the default version for Step 1.1 (tasks without inferred version get this 
 
 ---
 
-## Phase 1: Present Inventory
+## Phase 2: Present Inventory
 
 ### Step 1.1: Show Discovery Summary
 
@@ -265,7 +265,7 @@ I found N tasks across M sources. Before converting:
 
 ---
 
-## Phase 2: Propose Conversion
+## Phase 3: Propose Conversion
 
 ### Step 2.1: Generate tasks.md Preview
 
@@ -317,7 +317,7 @@ Options:
 
 ---
 
-## Phase 3: Apply Conversion
+## Phase 4: Apply Conversion
 
 ### Step 3.1: Check for Existing .optimus/tasks.md
 

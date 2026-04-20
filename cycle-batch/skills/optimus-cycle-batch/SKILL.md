@@ -57,7 +57,7 @@ Chains stages 1-5 for one or more tasks with user checkpoints between stages.
 
 ---
 
-## Phase 0: Plan the Batch
+## Phase 1: Plan the Batch
 
 ### Step 0.1: Find and Validate tasks.md
 
@@ -137,7 +137,7 @@ starting the next task.
 
 ---
 
-## Phase 1: Execute Pipeline
+## Phase 2: Execute Pipeline
 
 For each task in the execution order:
 
@@ -225,7 +225,7 @@ After completing a task (all stages done), re-evaluate the remaining task pool:
 
 ---
 
-## Phase 2: Batch Summary
+## Phase 3: Batch Summary
 
 After all tasks are processed (or the user stops):
 

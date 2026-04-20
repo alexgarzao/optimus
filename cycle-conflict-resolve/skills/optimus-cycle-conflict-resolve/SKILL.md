@@ -58,7 +58,7 @@ always "most advanced status wins" for each task independently.
 
 ---
 
-## Phase 0: Detect and Parse Conflicts
+## Phase 1: Detect and Parse Conflicts
 
 ### Step 0.1: Verify Conflict Exists
 
@@ -104,11 +104,11 @@ For each conflict region containing task table rows:
 
 For tasks that appear on ONLY ONE side (no conflict for that row), keep as-is.
 
-For tasks that appear on BOTH sides with different values, proceed to Phase 1.
+For tasks that appear on BOTH sides with different values, proceed to Phase 2.
 
 ---
 
-## Phase 1: Resolve Using Most-Advanced-Status Rule
+## Phase 2: Resolve Using Most-Advanced-Status Rule
 
 ### Step 1.1: Define Status Ordering
 
@@ -172,7 +172,7 @@ For `## T-NNN:` detail sections that conflict:
 
 ---
 
-## Phase 2: Present Resolution
+## Phase 3: Present Resolution
 
 ### Step 2.1: Show Resolution Summary
 
@@ -220,7 +220,7 @@ Ask via `AskUser`:
 
 ---
 
-## Phase 3: Apply Resolution
+## Phase 4: Apply Resolution
 
 ### Step 3.1: Write Resolved File
 

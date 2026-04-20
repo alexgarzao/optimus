@@ -73,7 +73,7 @@ Catches gaps, contradictions, and ambiguities that would cause rework.
 
 ---
 
-## Phase 0: Discover and Load Context
+## Phase 1: Discover and Load Context
 
 ### Step 0.0: Verify GitHub CLI (HARD BLOCK)
 
@@ -657,7 +657,7 @@ Components verified: [list each component checked]
 
 ### Dry-Run Mode
 If the user requests a dry-run (e.g., "dry-run spec T-003", "preview spec"):
-- Run ALL analysis phases (Phase 0, Validation Dimensions, Steps 1-3, Step 3.1) normally
+- Run ALL analysis phases (Phase 1, Validation Dimensions, Steps 1-3, Step 3.1) normally
 - Present ALL findings in Step 4 (interactive resolution)
 - **Do NOT change task status** — skip Step 0.0.6 (status update)
 - **Do NOT create workspaces** — skip Step 0.0.5 (workspace creation)
