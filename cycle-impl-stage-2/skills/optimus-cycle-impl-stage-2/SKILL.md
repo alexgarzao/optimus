@@ -89,36 +89,11 @@ Executes a validated task specification end-to-end: identifies the task, loads c
 
 ### Step 0.0: Verify GitHub CLI (HARD BLOCK)
 
-```bash
-gh auth status 2>/dev/null
-```
-
-If this command fails (exit code != 0), **STOP** immediately:
-```
-GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
-```
+**HARD BLOCK:** Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
 ### Step 0.1: Find and Validate tasks.md
 
-1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either, **STOP** and suggest `/optimus-cycle-migrate`.
-2. **Validate format (HARD BLOCK):**
-   - **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
-   - A `## Versions` section exists with columns: Version, Status, Description
-   - Exactly one version has Status `Ativa`
-   - At most one version has Status `Próxima`
-   - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
-   - All Priority values are valid (`Alta`, `Media`, `Baixa`)
-   - All Version values reference a version name in the Versions table
-   - All task IDs match `T-NNN` pattern
-   - All Tipo values are valid (`Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`)
-   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`)
-   - All Depends values are `-` or comma-separated valid task IDs
-   - No duplicate task IDs
-   - All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
-   - No circular dependencies in the dependency graph
-   - No unescaped pipe characters (`|`) in task titles
-
-If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
+**HARD BLOCK:** Find and validate tasks.md — see AGENTS.md Protocol: tasks.md Validation.
 
 ### Step 0.2: Identify Task to Execute
 
@@ -139,45 +114,9 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 
 ### Step 0.2.1: Check Session State
 
-After identifying the task, check for a previous session:
+Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`cycle-impl-stage-2`, status=`Em Andamento`.
 
-```bash
-SESSION_FILE=".optimus/session-${TASK_ID}.json"
-if [ -f "$SESSION_FILE" ]; then
-  cat "$SESSION_FILE"
-fi
-```
-
-- If the file exists AND the task's status in `tasks.md` matches the session's `status`:
-  - Present via `AskUser`:
-    ```
-    Previous session found:
-      Task: T-XXX — [title]
-      Stage: cycle-impl-stage-2
-      Last active: <time since updated_at>
-      Progress: <phase from session>
-    Resume this session?
-    ```
-    Options: Resume / Start fresh / Ignore
-  - If **Resume**: skip to the phase indicated in the session file
-  - If **Start fresh**: delete the session file and proceed normally
-  - If **Ignore**: proceed normally
-- If the file is stale (>24h) or the task status has changed → delete and proceed normally
-- If no file exists → proceed normally
-
-**On stage progress:** Update the session file at key phase transitions:
-```bash
-mkdir -p .optimus
-grep -q '.optimus/' .gitignore 2>/dev/null || echo '.optimus/' >> .gitignore
-cat > ".optimus/session-${TASK_ID}.json" << EOF
-{"task_id":"${TASK_ID}","stage":"cycle-impl-stage-2","status":"Em Andamento","branch":"$(git branch --show-current)","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","phase":"<current-phase>","notes":"<progress>"}
-EOF
-```
-
-**On stage completion** (after Phase 2 post-execution): Delete the session file:
-```bash
-rm -f ".optimus/session-${TASK_ID}.json"
-```
+**On stage completion** (after Phase 2 post-execution): delete the session file.
 
 ### Step 0.3: Validate and Update Task Status
 
@@ -223,75 +162,23 @@ rm -f ".optimus/session-${TASK_ID}.json"
    git add tasks.md
    git commit -m "chore(tasks): set T-XXX status to Em Andamento"
    ```
-7. **Invoke notification hooks (if present):**
-   ```bash
-   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
-   if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-     "$HOOKS_FILE" status-change T-XXX "Validando Spec" "Em Andamento" 2>/dev/null &
-   fi
-   ```
+7. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
 
 **Why commit immediately:** If the session is interrupted or the agent crashes before any code changes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of what happens during implementation.
 
 ### Step 0.3.1: Check tasks.md Divergence (warning)
 
-Compare `tasks.md` on the current branch with the default branch to detect concurrent edits:
-
-```bash
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
-git diff "origin/$DEFAULT_BRANCH" -- tasks.md 2>/dev/null | head -20
-```
-
-- If diff output is non-empty → warn via `AskUser`:
-  ```
-  tasks.md has diverged between your branch and <default_branch>.
-  This may cause merge conflicts when the PR is merged.
-  ```
-  Options:
-  - **Sync now** — run `git merge origin/<default_branch>` to incorporate changes
-  - **Continue without syncing** — I'll handle conflicts later
-- If diff output is empty → proceed silently
-- **NOTE:** This is a warning, not a HARD BLOCK.
+Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 
 ### Step 0.4: Verify Workspace
 
-**HARD BLOCK:** The workspace (branch/worktree) should have been created by cycle-spec-stage-1. Verify:
+**HARD BLOCK:** Verify workspace — see AGENTS.md Protocol: Workspace Verification.
 
-```bash
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-CURRENT_BRANCH=$(git branch --show-current)
-```
-
-- If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`) → **STOP**:
-  ```
-  Cannot run cycle-impl-stage-2 on the default branch (<branch>).
-  The workspace should have been created by cycle-spec-stage-1.
-  Run cycle-spec-stage-1 first, or manually create a feature branch: git checkout -b feat/T-XXX
-  ```
-- If on a feature branch → proceed
-
-**Branch-task cross-validation:** After confirming the task ID, check that the current branch matches the **Branch** column in `tasks.md` for this task:
-- Read the Branch column for the confirmed task ID
-- If Branch is `-` or empty → warn: "tasks.md shows no branch for T-XXX, but you are on `<current>`. Continue anyway?" (via `AskUser`)
-- If Branch has a value AND it does not match `CURRENT_BRANCH` → warn: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?" (via `AskUser`)
-- If Branch matches `CURRENT_BRANCH` → proceed silently
+Branch-task cross-validation is part of the workspace protocol above.
 
 ### Step 0.5: Validate PR Title (if PR exists)
 
-Check if a PR already exists for the current branch:
-
-```bash
-gh pr view --json number,title --jq '{number, title}' 2>/dev/null
-```
-
-If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
-- Regex: `^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$`
-- Cross-check the type against the task's **Tipo** column (Feature→`feat`, Fix→`fix`, etc.)
-- **If title is invalid:** warn via `AskUser`: "PR #N title `<current>` does not follow Conventional Commits. Suggested: `<corrected>`. Fix now with `gh pr edit <number> --title \"<corrected>\"`?"
-- **If title is valid:** proceed silently
-
-If no PR exists, skip this step.
+Validate PR title — see AGENTS.md Protocol: PR Title Validation.
 
 ### Step 0.6: Discover Project Structure
 
@@ -299,21 +186,7 @@ Before loading docs, discover the project's structure and tooling:
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
 2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, test, integration test, and E2E test commands.
-3. **Identify project rules and AI instructions (MANDATORY):** Search for these files in order and read ALL that exist:
-   - `AGENTS.md` (repo root) — primary agent instructions
-   - `CLAUDE.md` (repo root) — Claude-specific rules
-   - `DROIDS.md` (repo root) — Droid-specific rules
-   - `.cursorrules` (repo root) — Cursor-specific rules
-   - `PROJECT_RULES.md` (repo root or `docs/`) — project coding standards
-   - `docs/PROJECT_RULES.md`
-   - `.editorconfig` — editor formatting rules
-   - `docs/coding-standards.md` or `docs/conventions.md`
-   - `.github/CONTRIBUTING.md` or `CONTRIBUTING.md`
-   - Linter configs: `.eslintrc*`, `biome.json`, `.golangci.yml`, `.prettierrc*`
-
-   **If NONE of these files exist**, warn the user: "No project rules or AI instructions found. Implementation will use generic best practices only. Consider creating an AGENTS.md or PROJECT_RULES.md."
-
-   **If any are found**, they become the **source of truth** for coding conventions. All generated code must follow these rules. Pass relevant sections to every agent dispatched.
+3. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
 
 4. **Identify reference docs:** Look for `docs/pre-dev/`, `docs/`, or project-specific locations for tasks, PRD, TRD, API design, data model.
 
@@ -576,23 +449,7 @@ Only after explicit user approval:
 
 ### Step 2.4: Push Commits (optional)
 
-After committing, offer to push all local commits:
-
-```bash
-git log @{u}..HEAD --oneline 2>/dev/null
-```
-
-If there are unpushed commits, ask via `AskUser`:
-```
-There are N unpushed commits on this branch. Push now?
-```
-Options:
-- **Push now** — `git push` (or `git push -u origin $(git branch --show-current)` if no upstream)
-- **Skip** — I'll push manually later
-
-**Why push here:** Stages 1-2 commit status changes and implementation code but never push.
-If the user's local machine fails before Stage-3 or Stage-5, all work is lost. Offering a
-push here protects against local data loss.
+Offer to push commits — see AGENTS.md Protocol: Push Commits.
 
 ---
 

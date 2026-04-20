@@ -532,22 +532,54 @@ All stage agents (1-5) support **dry-run mode**. When the user includes "dry-run
 
 This allows users to preview what a stage would do before committing to it.
 
-## Session State (cross-session resumption)
+## Reusable Protocols
 
-Stage agents (1-5) write a session state file to track progress. This enables resumption
+The protocols below are referenced by SKILL.md files with "Execute protocol X from AGENTS.md".
+Each SKILL.md specifies its stage-specific parameters (stage name, expected status, etc.)
+and delegates the common logic to these protocols. This avoids duplicating the same steps
+in every SKILL.md.
+
+### Protocol: tasks.md Validation (HARD BLOCK)
+
+**Referenced by:** all stage agents (1-5), cycle-crud, cycle-batch, cycle-conflict-resolve
+
+Every stage agent MUST validate tasks.md before operating. The full validation rules are
+defined in the "Format Validation" section above (items 1-15). This protocol is the
+executable version:
+
+1. **Find tasks.md:** Look in `./tasks.md`. If not found, look in `./docs/tasks.md`. If not found in either, **STOP** and suggest `/optimus-cycle-migrate`.
+2. **Validate format:** Execute all 15 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-cycle-migrate`.
+
+Skills reference this as: "Find and validate tasks.md (HARD BLOCK) — see AGENTS.md Protocol: tasks.md Validation."
+
+### Protocol: GitHub CLI Check (HARD BLOCK)
+
+**Referenced by:** all stage agents (1-5), cycle-pr-review-stage-4, cycle-crud
+
+```bash
+gh auth status 2>/dev/null
+```
+
+If this command fails (exit code != 0), **STOP** immediately:
+```
+GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
+```
+
+### Protocol: Session State
+
+**Referenced by:** all stage agents (1-5)
+
+Stage agents write a session state file to track progress. This enables resumption
 when a session is interrupted (agent crash, user closes terminal, context window limit).
 
-### Session File
-
-Location: `.optimus/session-<task-id>.json` (project root, gitignored). Each task gets
-its own session file (e.g., `.optimus/session-T-003.json`), enabling parallel execution
-across multiple worktrees without file conflicts.
+**Session file location:** `.optimus/session-<task-id>.json` (project root, gitignored).
+Each task gets its own file (e.g., `.optimus/session-T-003.json`).
 
 ```json
 {
   "task_id": "T-003",
-  "stage": "cycle-impl-stage-2",
-  "status": "Em Andamento",
+  "stage": "<stage-name>",
+  "status": "<stage-output-status>",
   "branch": "feat/t-003-user-auth",
   "started_at": "2025-01-15T10:30:00Z",
   "updated_at": "2025-01-15T11:45:00Z",
@@ -556,36 +588,195 @@ across multiple worktrees without file conflicts.
 }
 ```
 
-### Behavior
+**On stage start (after task ID is known):**
 
-**On stage start:** After identifying the task (task ID is known), check if
-`.optimus/session-<task-id>.json` exists:
-- If it exists AND the task's status in `tasks.md` matches the session's `status` →
-  offer to resume via `AskUser`:
-  ```
-  Previous session found:
-    Task: T-003 — [title]
-    Stage: cycle-impl-stage-2
-    Last active: 2h ago
-    Progress: Phase 1: Implementation
-  Resume this session?
-  ```
-  Options: Resume / Start fresh / Ignore
-- If the session file is stale (>24h) or the task status has changed → delete the file and proceed normally
-
-**On stage progress:** Update `.optimus/session-<task-id>.json` with the current phase and any progress notes.
-
-**On stage completion:** Delete `.optimus/session-<task-id>.json` (the stage is done, no resumption needed).
-
-**On cycle-close-stage-5 marking DONE:** Delete `.optimus/session-<task-id>.json` for that task.
-
-### Gitignore
-
-Stage agents that create session files should also ensure `.optimus/` is in
-`.gitignore` (session state is local, not shared):
 ```bash
-grep -q '.optimus/' .gitignore 2>/dev/null || echo '.optimus/' >> .gitignore
+SESSION_FILE=".optimus/session-${TASK_ID}.json"
+if [ -f "$SESSION_FILE" ]; then
+  cat "$SESSION_FILE"
+fi
 ```
+
+- If the file exists AND the task's status in `tasks.md` matches the session's `status`:
+  - Present via `AskUser`:
+    ```
+    Previous session found:
+      Task: T-XXX — [title]
+      Stage: <stage-name>
+      Last active: <time since updated_at>
+      Progress: <phase from session>
+    Resume this session?
+    ```
+    Options: Resume / Start fresh / Ignore
+  - If **Resume**: skip to the phase indicated in the session file
+  - If **Start fresh**: delete the session file and proceed normally
+  - If **Ignore**: proceed normally
+- If the file is stale (>24h) or the task status has changed → delete and proceed normally
+- If no file exists → proceed normally
+
+**On stage progress (at key phase transitions):**
+
+```bash
+mkdir -p .optimus
+grep -q '.optimus/' .gitignore 2>/dev/null || echo '.optimus/' >> .gitignore
+cat > ".optimus/session-${TASK_ID}.json" << EOF
+{"task_id":"${TASK_ID}","stage":"<stage-name>","status":"<status>","branch":"$(git branch --show-current)","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","phase":"<current-phase>","notes":"<progress>"}
+EOF
+```
+
+**On stage completion:** Delete the session file:
+```bash
+rm -f ".optimus/session-${TASK_ID}.json"
+```
+
+Skills reference this as: "Execute session state protocol from AGENTS.md using stage=`<name>`, status=`<status>`."
+
+### Protocol: Workspace Verification (HARD BLOCK)
+
+**Referenced by:** stages 2-5 (stage 1 creates the workspace instead of verifying)
+
+Execution stages (2-5) MUST verify they are NOT on the default branch:
+
+```bash
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+CURRENT_BRANCH=$(git branch --show-current)
+```
+
+- If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`) → **STOP**:
+  ```
+  Cannot run <stage-name> on the default branch (<branch>).
+  Switch to the task's feature branch first.
+  ```
+
+**Branch-task cross-validation:** After confirming the task ID, check that the current
+branch matches the **Branch** column in `tasks.md` for this task:
+- If Branch is `-` or empty → warn via `AskUser`: "tasks.md shows no branch for T-XXX, but you are on `<current>`. Continue anyway?"
+- If Branch has a value AND does not match `CURRENT_BRANCH` → warn via `AskUser`: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?"
+- If Branch matches `CURRENT_BRANCH` → proceed silently
+
+Skills reference this as: "Verify workspace (HARD BLOCK) — see AGENTS.md Protocol: Workspace Verification."
+
+### Protocol: Divergence Warning
+
+**Referenced by:** all stage agents (1-5)
+
+Compare `tasks.md` on the current branch with the default branch to detect concurrent
+edits that could cause merge conflicts later:
+
+```bash
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
+git diff "origin/$DEFAULT_BRANCH" -- tasks.md 2>/dev/null | head -20
+```
+
+- If diff output is non-empty → warn via `AskUser`:
+  ```
+  tasks.md has diverged between your branch and <default_branch>.
+  This may cause merge conflicts when the PR is merged.
+  ```
+  Options:
+  - **Sync now** — run `git merge origin/<default_branch>` to incorporate changes
+  - **Continue without syncing** — I'll handle conflicts later
+- If diff output is empty → proceed silently (files are in sync)
+- **NOTE:** This is a warning, not a HARD BLOCK. The user may choose to continue.
+
+Skills reference this as: "Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning."
+
+### Protocol: Notification Hooks
+
+**Referenced by:** all stage agents (1-5), cycle-crud
+
+After committing a status change, invoke notification hooks if present:
+
+```bash
+HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+  "$HOOKS_FILE" <event> <task-id> <old-status> <new-status> 2>/dev/null &
+fi
+```
+
+Events: `status-change`, `task-done`, `task-cancelled`, `task-blocked`.
+
+When a dependency check fails:
+```bash
+if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+  "$HOOKS_FILE" task-blocked <task-id> "<current-status>" "<current-status>" "blocked by <dep-id> (<dep-status>)" 2>/dev/null &
+fi
+```
+
+Hooks run in background (`&`) and their failure does NOT block the pipeline.
+If `tasks-hooks.sh` does not exist, hooks are silently skipped.
+
+Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol: Notification Hooks."
+
+### Protocol: PR Title Validation
+
+**Referenced by:** stages 2-5
+
+Check if a PR exists for the current branch:
+```bash
+gh pr view --json number,title --jq '{number, title}' 2>/dev/null
+```
+
+If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
+- Regex: `^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$`
+- Cross-check the type against the task's **Tipo** column (Feature→`feat`, Fix→`fix`, Refactor→`refactor`, Chore→`chore`, Docs→`docs`, Test→`test`)
+- **If title is invalid:** warn via `AskUser`: "PR #N title `<current>` does not follow Conventional Commits. Suggested: `<corrected>`. Fix now with `gh pr edit <number> --title \"<corrected>\"`?"
+- **If title is valid:** proceed silently
+- If no PR exists, skip.
+
+Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Title Validation."
+
+### Protocol: Project Rules Discovery
+
+**Referenced by:** all stage agents (1-5), deep-review, deep-doc-review, coderabbit-review
+
+Every skill that reviews, validates, or generates code MUST search for project rules
+and AI instruction files before starting. Search for these files in order and read ALL
+that exist:
+
+```
+AGENTS.md                    # Primary agent instructions
+CLAUDE.md                    # Claude-specific rules
+DROIDS.md                    # Droid-specific rules
+.cursorrules                 # Cursor-specific rules
+PROJECT_RULES.md             # Coding standards (root or docs/)
+docs/PROJECT_RULES.md
+.editorconfig                # Editor formatting rules
+docs/coding-standards.md     # Explicit coding conventions
+docs/conventions.md
+.github/CONTRIBUTING.md      # Contribution guidelines
+CONTRIBUTING.md
+.eslintrc*                   # Linter configs (implicit rules)
+biome.json
+.golangci.yml
+.prettierrc*
+```
+
+If NONE exist, warn the user. If any are found, they become the source of truth
+for coding standards and must be passed to every dispatched sub-agent.
+
+Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Project Rules Discovery."
+
+### Protocol: Push Commits (optional)
+
+**Referenced by:** all stage agents (1-5)
+
+After stage work is complete, offer to push all local commits:
+
+```bash
+git log @{u}..HEAD --oneline 2>/dev/null
+```
+
+If there are unpushed commits, ask via `AskUser`:
+```
+There are N unpushed commits on this branch. Push now?
+```
+Options:
+- **Push now** — `git push` (or `git push -u origin $(git branch --show-current)` if no upstream)
+- **Skip** — I'll push manually later
+
+Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Push Commits."
 
 ## Verification Command Configuration
 
@@ -617,32 +808,6 @@ commands. If the config file exists, use its commands instead of auto-detection.
 
 If a command key is missing from the config, fall back to auto-detection for that command.
 If a command key is present but empty (`""`), skip that check entirely.
-
-## Project Rules Discovery (all skills)
-
-Every skill that reviews, validates, or generates code MUST search for project rules
-and AI instruction files before starting. The checklist (in priority order):
-
-```
-AGENTS.md                    # Primary agent instructions
-CLAUDE.md                    # Claude-specific rules
-DROIDS.md                    # Droid-specific rules
-.cursorrules                 # Cursor-specific rules
-PROJECT_RULES.md             # Coding standards (root or docs/)
-docs/PROJECT_RULES.md
-.editorconfig                # Editor formatting rules
-docs/coding-standards.md     # Explicit coding conventions
-docs/conventions.md
-.github/CONTRIBUTING.md      # Contribution guidelines
-CONTRIBUTING.md
-.eslintrc*                   # Linter configs (implicit rules)
-biome.json
-.golangci.yml
-.prettierrc*
-```
-
-If NONE exist, the agent must warn the user. If any are found, they become the
-source of truth for coding standards and must be passed to every dispatched sub-agent.
 
 ## Common Patterns Across Skills
 
@@ -783,23 +948,6 @@ Skills dispatch specialist ring droids in parallel via Task tool:
 **Ring droids are REQUIRED** — there is no fallback. If the required droids are not
 installed, the skill MUST stop and list which droids need to be installed.
 
-## GitHub CLI Prerequisite
-
-**All skills that use `gh` commands** (stages 1-5, cycle-pr-review-stage-4, cycle-crud cancel,
-cycle-close-stage-5) MUST validate that `gh` is installed and authenticated before running
-any `gh` command:
-
-```bash
-gh auth status 2>/dev/null
-```
-
-If this command fails (exit code != 0), **STOP** immediately with:
-```
-GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
-```
-
-Do NOT attempt `gh` commands without this check — they produce cryptic errors that confuse users.
-
 ## Known Issues and Decisions
 
 - `codacy:ignore` does NOT exist — use the underlying linter's syntax (biome-ignore, eslint-disable, //nolint)
@@ -846,64 +994,4 @@ The ring droid **fix dispatch** pattern (TDD cycle via specialist droids, descri
 "Common Patterns Across Skills") applies only to cycle review skills (stages 1, 3, 4,
 and coderabbit-review). Standalone skills apply approved fixes directly.
 
-## Optional: Notification Hooks
 
-Projects can define a `tasks-hooks.sh` script in the project root or `docs/` directory
-to receive notifications when task status changes. Stage agents will look for this file
-and execute it if present.
-
-### Hook Interface
-
-```bash
-# Called by stage agents after a status change is committed
-# Arguments: <event> <task-id> <old-status> <new-status> [<extra>]
-#
-# Events:
-#   status-change   — task moved to a new status
-#   task-done       — task marked as DONE
-#   task-cancelled  — task cancelled
-#   task-blocked    — task became blocked (dependency not met)
-#
-# Example: ./tasks-hooks.sh status-change T-003 Pendente "Validando Spec"
-# Example: ./tasks-hooks.sh task-done T-003 "Revisando PR" "**DONE**"
-```
-
-### Example hooks
-
-```bash
-#!/bin/bash
-# tasks-hooks.sh — example Slack notification
-EVENT=$1 TASK=$2 OLD=$3 NEW=$4
-
-case "$EVENT" in
-  task-done)
-    curl -X POST "$SLACK_WEBHOOK" -d "{\"text\":\"Task $TASK completed ($OLD → $NEW)\"}" 2>/dev/null
-    ;;
-  task-blocked)
-    curl -X POST "$SLACK_WEBHOOK" -d "{\"text\":\"Task $TASK is blocked\"}" 2>/dev/null
-    ;;
-esac
-```
-
-### Agent Behavior
-
-Stage agents (1-5) and cycle-crud check for `tasks-hooks.sh` in two situations:
-
-**After committing a status change:**
-```bash
-HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
-if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" <event> <task-id> <old-status> <new-status> 2>/dev/null &
-fi
-```
-
-**When a dependency check fails (task is blocked):**
-```bash
-HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
-if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" task-blocked <task-id> "<current-status>" "<current-status>" "blocked by <dep-id> (<dep-status>)" 2>/dev/null &
-fi
-```
-
-Hooks run in the background (`&`) and their failure does NOT block the pipeline.
-If `tasks-hooks.sh` does not exist, hooks are silently skipped.

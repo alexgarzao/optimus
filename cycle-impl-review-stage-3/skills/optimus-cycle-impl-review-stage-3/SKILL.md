@@ -95,89 +95,22 @@ for committed code).
 ## Phase 0: Load Context
 
 ### Step 0.0: Verify GitHub CLI (HARD BLOCK)
-
-```bash
-gh auth status 2>/dev/null
-```
-
-If this command fails (exit code != 0), **STOP** immediately:
-```
-GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
-```
+Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
 ### Step 0.0.1: Find and Validate tasks.md
-
-1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either, **STOP** and suggest `/optimus-cycle-migrate`.
-2. **Validate format (HARD BLOCK):**
-   - **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
-   - A `## Versions` section exists with columns: Version, Status, Description
-   - Exactly one version has Status `Ativa`
-   - At most one version has Status `Próxima`
-   - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
-   - All Priority values are valid (`Alta`, `Media`, `Baixa`)
-   - All Version values reference a version name in the Versions table
-   - All task IDs match `T-NNN` pattern
-   - All Tipo values are valid (`Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`)
-   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`)
-   - All Depends values are `-` or comma-separated valid task IDs
-   - No duplicate task IDs
-   - All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
-   - No circular dependencies in the dependency graph
-   - No unescaped pipe characters (`|`) in task titles
-
-If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
+**HARD BLOCK:** Find and validate tasks.md — see AGENTS.md Protocol: tasks.md Validation.
 
 ### Step 0.0.1.2: Verify Workspace (HARD BLOCK)
-
-This agent modifies code. It MUST NOT run on the default/main branch.
-```bash
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-CURRENT_BRANCH=$(git branch --show-current)
-```
-- If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`) → **STOP**:
-  ```
-  Cannot run cycle-impl-review-stage-3 on the default branch (<branch>).
-  Switch to the task's feature branch first.
-  ```
+Verify workspace — see AGENTS.md Protocol: Workspace Verification.
 
 ### Step 0.0.1.3: Check tasks.md Divergence (warning)
-
-Compare `tasks.md` on the current branch with the default branch to detect concurrent edits that could cause merge conflicts later:
-```bash
-git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
-git diff "origin/$DEFAULT_BRANCH" -- tasks.md 2>/dev/null | head -20
-```
-- If diff output is non-empty → the file has diverged. Warn via `AskUser`:
-  ```
-  tasks.md has diverged between your branch and <default_branch>.
-  This may cause merge conflicts when the PR is merged.
-  ```
-  Options:
-  - **Sync now** — run `git merge origin/<default_branch>` to incorporate changes
-  - **Continue without syncing** — I'll handle conflicts later
-- If diff output is empty → proceed silently (files are in sync)
-- **NOTE:** This is a warning, not a HARD BLOCK. The user may choose to continue.
+Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 
 ### Step 0.0.1.4: Branch-Task Cross-Validation
-
-After confirming the task ID (Step 0.0.2), check that the current branch matches the **Branch** column in `tasks.md` for this task:
-- Read the Branch column for the confirmed task ID
-- If Branch is `-` or empty → warn: "tasks.md shows no branch for T-XXX, but you are on `<current>`. Continue anyway?" (via `AskUser`)
-- If Branch has a value AND it does not match `CURRENT_BRANCH` → warn: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?" (via `AskUser`)
-- If Branch matches `CURRENT_BRANCH` → proceed silently
+Branch-task cross-validation — included in AGENTS.md Protocol: Workspace Verification.
 
 ### Step 0.0.1.5: Validate PR Title (if PR exists)
-
-Check if a PR already exists for the current branch:
-```bash
-gh pr view --json number,title --jq '{number, title}' 2>/dev/null
-```
-If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
-- Regex: `^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$`
-- Cross-check the type against the task's **Tipo** column (Feature→`feat`, Fix→`fix`, etc.)
-- **If title is invalid:** warn via `AskUser`: "PR #N title `<current>` does not follow Conventional Commits. Suggested: `<corrected>`. Fix now with `gh pr edit <number> --title \"<corrected>\"`?"
-- **If title is valid:** proceed silently
-- If no PR exists, skip.
+Validate PR title — see AGENTS.md Protocol: PR Title Validation.
 
 ### Step 0.0.2: Identify Task to Validate
 
@@ -194,46 +127,9 @@ If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
 
 ### Step 0.0.2.1: Check Session State
+Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`cycle-impl-review-stage-3`, status=`Validando Impl`.
 
-After identifying the task, check for a previous session:
-
-```bash
-SESSION_FILE=".optimus/session-${TASK_ID}.json"
-if [ -f "$SESSION_FILE" ]; then
-  cat "$SESSION_FILE"
-fi
-```
-
-- If the file exists AND the task's status in `tasks.md` matches the session's `status`:
-  - Present via `AskUser`:
-    ```
-    Previous session found:
-      Task: T-XXX — [title]
-      Stage: cycle-impl-review-stage-3
-      Last active: <time since updated_at>
-      Progress: <phase from session>
-    Resume this session?
-    ```
-    Options: Resume / Start fresh / Ignore
-  - If **Resume**: skip to the phase indicated in the session file
-  - If **Start fresh**: delete the session file and proceed normally
-  - If **Ignore**: proceed normally
-- If the file is stale (>24h) or the task status has changed → delete and proceed normally
-- If no file exists → proceed normally
-
-**On stage progress:** Update the session file at key phase transitions:
-```bash
-mkdir -p .optimus
-grep -q '.optimus/' .gitignore 2>/dev/null || echo '.optimus/' >> .gitignore
-cat > ".optimus/session-${TASK_ID}.json" << EOF
-{"task_id":"${TASK_ID}","stage":"cycle-impl-review-stage-3","status":"Validando Impl","branch":"$(git branch --show-current)","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","phase":"<current-phase>","notes":"<progress>"}
-EOF
-```
-
-**On stage completion** (after Phase 7 validation summary): Delete the session file:
-```bash
-rm -f ".optimus/session-${TASK_ID}.json"
-```
+**On stage completion** (after Phase 7 validation summary): delete the session file.
 
 ### Step 0.0.3: Validate and Update Task Status
 
@@ -280,13 +176,7 @@ rm -f ".optimus/session-${TASK_ID}.json"
    git add tasks.md
    git commit -m "chore(tasks): set T-XXX status to Validando Impl"
    ```
-7. **Invoke notification hooks (if present):**
-   ```bash
-   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
-   if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-     "$HOOKS_FILE" status-change T-XXX "Em Andamento" "Validando Impl" 2>/dev/null &
-   fi
-   ```
+7. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
 
 **Why commit immediately:** If the session is interrupted or the agent crashes before any review fixes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of the review outcome.
 
@@ -296,21 +186,7 @@ Before loading docs, discover the project's structure and tooling (reuse discove
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
 2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, test, integration test, and E2E test commands.
-3. **Identify project rules and AI instructions (MANDATORY):** Search for these files in order and read ALL that exist:
-   - `AGENTS.md` (repo root) — primary agent instructions
-   - `CLAUDE.md` (repo root) — Claude-specific rules
-   - `DROIDS.md` (repo root) — Droid-specific rules
-   - `.cursorrules` (repo root) — Cursor-specific rules
-   - `PROJECT_RULES.md` (repo root or `docs/`) — project coding standards
-   - `docs/PROJECT_RULES.md`
-   - `.editorconfig` — editor formatting rules
-   - `docs/coding-standards.md` or `docs/conventions.md`
-   - `.github/CONTRIBUTING.md` or `CONTRIBUTING.md`
-   - Linter configs: `.eslintrc*`, `biome.json`, `.golangci.yml`, `.prettierrc*`
-
-   **If NONE of these files exist**, warn the user: "No project rules or AI instructions found. Validation will use generic best practices only. Consider creating an AGENTS.md or PROJECT_RULES.md."
-
-   **If any are found**, they become the **source of truth** for coding standards. Every finding must reference a rule from these files when applicable. Pass relevant sections to every agent dispatched.
+3. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
 
 4. **Identify reference docs:** Look for task specs, API design, data model, and architecture docs.
 
@@ -601,24 +477,7 @@ Process ONE finding at a time, starting from highest severity. Present ALL findi
 For EACH finding, present with `"Finding X of N"` in the header:
 
 ### Deep Research Before Presenting (MANDATORY)
-
-**BEFORE presenting any finding to the user, you MUST research it deeply.** This research
-is done SILENTLY — do not show the research process. Present only the conclusions.
-
-**Research checklist (ALL items, every finding):**
-
-1. **Project patterns:** Read the affected file(s) fully, understand the patterns used, check how similar cases are handled elsewhere in the codebase
-2. **Architectural decisions:** Review project rules (AGENTS.md, PROJECT_RULES.md, etc.) and architecture docs. Understand WHY the project is structured this way
-3. **Existing codebase:** Search for precedent — if the codebase already does the same thing in other places, that context changes the finding's weight
-4. **Current task focus:** Is this finding within the scope of the task being validated? Flag tangential findings as such
-5. **User/consumer use cases:** Who consumes this code — end users, other services, internal modules? Trace impact to real user scenarios
-6. **UX impact:** For user-facing changes, evaluate usability, accessibility, error messaging, and workflows
-7. **API best practices:** REST conventions, error handling, idempotency, status codes, pagination, versioning, backward compatibility
-8. **Engineering best practices:** SOLID principles, DRY, separation of concerns, error handling, resilience, observability, testability
-9. **Language-specific best practices:** Use `WebSearch` to research idioms for the specific language (Go, TypeScript, etc.) — official style guides, linter rules, community patterns
-10. **Correctness over convenience:** Always recommend the correct approach, regardless of effort
-
-**After research, form your recommendation:** Option A MUST be the approach you believe is correct based on all the research above, backed by evidence (project patterns, best practice references, official docs).
+Execute deep research before presenting each finding — see AGENTS.md "Common Patterns > Deep Research Before Presenting". All 10 checklist items apply.
 
 ### Problem Description
 - What is wrong (file, line, code snippet if relevant)
@@ -637,24 +496,7 @@ Evaluate the finding through all four perspectives:
 
 ### Proposed Solutions (2-3 options)
 
-**Option A MUST be your researched recommendation** — the approach you believe is correct based on the deep research above. Always prefer correctness over convenience.
-
-For each option:
-
-```
-**Option A: [name] (RECOMMENDED)**
-[Concrete steps — what to do, which files to change, what code to write]
-- Why recommended: [reference to research — best practice, project pattern, official docs]
-- Impact: UX / Task focus / Project focus / Engineering quality
-- Effort: low / medium / high / very high
-- Estimated time: < 5 min / 5-15 min / 15-60 min / 1-4h / > 4h
-
-**Option B: [name]**
-[Alternative approach]
-- Impact: UX / Task focus / Project focus / Engineering quality
-- Effort: low / medium / high / very high
-- Estimated time: < 5 min / 5-15 min / 15-60 min / 1-4h / > 4h
-```
+Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding Option Format".
 
 ### Ask for Decision
 
@@ -695,61 +537,11 @@ Before touching any code, show the user a summary of everything that will be cha
 ```
 
 ### Step 5.2: Apply All Fixes via Ring Droids
+Apply fixes using ring droids with TDD cycle — see AGENTS.md "Common Patterns > Fix Implementation".
 
-**IMPORTANT:** ALL fixes MUST be implemented by dispatching specialist ring droids via
-`Task` tool — the orchestrator does NOT apply fixes directly. This ensures consistent
-code quality and proper TDD methodology.
+**Droid selection for this stage:** Use the stack-appropriate droid (Go→`ring-dev-team-backend-engineer-golang`, TS→`ring-dev-team-backend-engineer-typescript`, React→`ring-dev-team-frontend-engineer`, tests→`ring-dev-team-qa-analyst`). Documentation fixes use ring-tw-team droids without TDD.
 
-**For code fixes (changes to source code, tests, configs):**
-
-Dispatch the appropriate ring droid for each fix (or group of related fixes):
-
-**Droid selection (based on fix domain):**
-1. `ring-dev-team-backend-engineer-golang` — Go code fixes
-2. `ring-dev-team-backend-engineer-typescript` — TypeScript backend fixes
-3. `ring-dev-team-frontend-engineer` — React/Next.js frontend fixes
-4. `ring-dev-team-qa-analyst` — test-only fixes
-
-**Each droid dispatch MUST include TDD instructions:**
-```
-Goal: Fix finding F<N> for task T-XXX
-
-Context:
-  - Finding: [description, file, line, what's wrong]
-  - Chosen option: [Option A/B description]
-  - Task spec: [relevant acceptance criteria]
-  - Coding standards: [relevant sections]
-
-TDD Cycle (MANDATORY for code changes):
-  1. RED: Write a failing test that exposes the problem
-  2. GREEN: Implement the minimal fix to make the test pass
-  3. REFACTOR: Improve without changing behavior
-  4. RUN UNIT TESTS: Execute `make test` to verify no regressions
-
-If tests fail after fix (max 3 attempts):
-  - Diagnose, adjust, retry
-  - After 3 failures, revert and report
-
-Return: files changed, test results, commit-ready status
-```
-
-**For documentation fixes (changes to docs, README, specs, tasks.md):**
-
-Dispatch a ring documentation droid:
-
-**Droid selection (based on doc type):**
-1. `ring-tw-team-functional-writer` — guides, conceptual docs
-2. `ring-tw-team-api-writer` — API reference docs
-3. `ring-tw-team-docs-reviewer` — doc quality fixes
-
-**Documentation droids do NOT follow TDD** — there are no tests to write for documentation.
-They apply the fix directly and return the result.
-
-**After each fix (code or docs):** run unit tests to verify no regressions:
-```bash
-make test
-```
-If unit tests fail, the droid must fix the regression (max 3 attempts) or revert.
+**After each fix:** run unit tests to verify no regressions.
 
 ### Step 5.3: Final Verification (Lint + Unit Tests)
 
@@ -850,99 +642,19 @@ Required output format:
 
 ---
 
-## Phase 6: Convergence Loop (MANDATORY — automatic re-validation with escalating scrutiny)
+## Phase 6: Convergence Loop (MANDATORY)
 
-After Phase 5 completes (whether fixes were applied or all findings were skipped), the validator MUST automatically re-validate. This catches both new issues exposed by fixes AND issues missed in round 1 due to session bias.
+Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Loop".
 
-**CRITICAL — Why Fresh Sub-Agents:**
+**Stage-specific scope for fresh sub-agent dispatch (rounds 2+):**
+Use any available ring review droid (e.g., `ring-default-code-reviewer`). The sub-agent receives:
+1. All changed files (re-read fresh from disk)
+2. Task spec (re-read from tasks.md)
+3. Project rules (re-read fresh)
+4. The findings ledger (for dedup only)
+5. Analysis instructions: code quality, business logic, security, test quality, spec compliance, cross-file consistency
 
-The primary failure mode of convergence loops is **false convergence**: the orchestrator re-runs analysis in the same session, with the same mental model, and declares "zero new findings" — not because there are none, but because it can't see past its own prior reasoning. Escalating scrutiny via prose ("be more skeptical") does not reliably change LLM analysis depth.
-
-The solution: **rounds 2+ are executed by a fresh sub-agent** dispatched via `Task` tool. The sub-agent has zero context from prior rounds, reads all files from scratch, and returns findings independently. The orchestrator then deduplicates against the cumulative ledger.
-
-**Round structure:**
-
-| Round | Who analyzes | How |
-|-------|-------------|-----|
-| **1** (initial) | Orchestrator (this agent) | Phase 0.5 (static analysis) + Phase 1 (parallel agent dispatch) + Phase 2 (consolidate) — normal flow with full session context |
-| **2** (mandatory) | **Fresh sub-agent** via `Task` | Sub-agent reads all changed files from scratch, dispatches its own review agents, returns findings |
-| **3-5** | **Fresh sub-agent** via `Task` | Same as round 2 — only triggered if round 2+ found new findings |
-
-**Round 2 is MANDATORY.** The "zero new findings" stop condition can only trigger starting from round 3. This guarantees at least one fresh-eyes pass after the initial analysis.
-
-**Fresh sub-agent dispatch (rounds 2+):**
-
-Dispatch a single sub-agent via `Task` tool (use any available ring review droid, e.g., `ring-default-code-reviewer`). The sub-agent receives:
-
-1. **All changed files** — full content, re-read fresh from disk (not from orchestrator's cache)
-2. **Task spec** — the full task section from tasks.md
-3. **Project rules and coding standards** — re-read fresh
-4. **The findings ledger** — list of ALL findings from previous rounds with their resolutions (fixed/skipped/deferred), used ONLY for deduplication
-5. **Analysis instructions** — the full validation domains from this skill
-
-```
-Goal: Independent post-task validation of T-XXX (convergence round X of 5)
-
-You are a FRESH reviewer with NO prior context. Review this implementation
-from scratch as if you've never seen it before.
-
-Context:
-  - Task spec: [full task content — re-read from file]
-  - Changed files: [full content of each file — re-read from disk]
-  - Project rules: [full content — re-read from files]
-  - Test coverage data: [re-run coverage commands and include output]
-
-Analysis scope (execute ALL of these):
-  1. Code quality — architecture, patterns, SOLID, DRY, maintainability
-  2. Business logic — domain correctness, edge cases, business rules
-  3. Security — vulnerabilities, OWASP, input validation, secrets
-  4. Test quality — coverage gaps, missing error scenarios, flaky patterns
-  5. Spec compliance — verify each acceptance criterion is implemented
-  6. Cross-file consistency — duplication, shared constants, imports
-
-Previously identified findings (for DEDUP ONLY — do NOT let this bias your analysis):
-  [list of findings with IDs and descriptions]
-
-CRITICAL: Analyze INDEPENDENTLY. The previous findings list is ONLY for avoiding
-duplicate reports. Do NOT skip areas just because previous rounds "already covered" them.
-If you find the same issue, report it — the orchestrator will dedup.
-
-Required output:
-  For each finding: severity (CRITICAL/HIGH/MEDIUM/LOW), file, line, category,
-  rule violated, description, recommendation
-  If no issues found: "PASS — all validation domains clean"
-```
-
-**Orchestrator deduplication after sub-agent returns:**
-
-1. Compare each sub-agent finding against the cumulative ledger (match by file + topic + description similarity)
-2. **Genuinely new findings** → add to ledger, present to user via Phase 3-4
-3. **Duplicates of already-resolved findings** → discard silently
-4. **Duplicates of user-skipped findings** → discard silently (user already decided)
-
-**Loop rules:**
-- **Maximum rounds:** 5 (the initial run counts as round 1)
-- **Round 2 is MANDATORY** — always dispatch a fresh sub-agent regardless of round 1 results
-- **Progress indicator:** Show `"=== Re-validation round X of 5 (fresh sub-agent) ==="` at the start of each re-run
-- **If new findings exist:** Present them using Phase 3 (overview) and Phase 4 (interactive resolution), apply via Phase 5 (batch apply), then loop again (next round also uses fresh sub-agent)
-- **Stop conditions (any one triggers exit):**
-  1. Zero new findings in the current round — **only valid from round 3 onward** (round 2 is mandatory)
-  2. Round 5 completed (hard limit)
-  3. User explicitly requests to stop (via AskUser response)
-  
-  **IMPORTANT:** LOW severity findings are NOT a reason to stop. ALL findings regardless of severity MUST be presented to the user for decision. The agent NEVER decides that LOW findings can be skipped.
-
-**Round summary (show after each round):**
-
-```markdown
-### Round X of 5 (fresh sub-agent) — Summary
-- New findings this round: N (C critical, H high, M medium, L low)
-- Cumulative: X total findings across Y rounds
-- Fixed: A | Skipped: B | Deferred: C
-- Status: CONVERGED / CONTINUING / HARD LIMIT REACHED
-```
-
-**When the loop exits**, proceed to Phase 6.5 (integration/E2E tests) then the Validation Summary.
+When the loop exits, proceed to Phase 6.5 (integration/E2E tests).
 
 ---
 
@@ -1022,25 +734,7 @@ make test-e2e                # E2E tests — if target exists
 ---
 
 ## Phase 7.5: Push Commits (optional)
-
-After the validation summary, offer to push all local commits:
-
-```bash
-git log @{u}..HEAD --oneline 2>/dev/null
-```
-
-If there are unpushed commits, ask via `AskUser`:
-```
-There are N unpushed commits on this branch. Push now?
-```
-Options:
-- **Push now** — `git push` (or `git push -u origin $(git branch --show-current)` if no upstream)
-- **Skip** — I'll push manually later
-
-**Why push here:** Stages 1-3 commit status changes and fixes but never push. If the user
-proceeds to Stage-4 (PR review) or Stage-5 (close), those stages expect commits to be pushed.
-Offering a push here prevents Stage-5's "unpushed commits" check from failing with a long
-list of accumulated commits.
+Offer to push commits — see AGENTS.md Protocol: Push Commits.
 
 ---
 

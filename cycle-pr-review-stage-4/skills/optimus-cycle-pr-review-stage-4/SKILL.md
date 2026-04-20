@@ -89,14 +89,7 @@ Unified PR review orchestrator. Fetches PR metadata, collects ALL review comment
 
 ## Pre-Check: Verify GitHub CLI (HARD BLOCK)
 
-```bash
-gh auth status 2>/dev/null
-```
-
-If this command fails (exit code != 0), **STOP** immediately:
-```
-GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
-```
+**HARD BLOCK:** Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
 ---
 
@@ -122,26 +115,9 @@ This skill operates in TWO modes:
 ### Task Mode (part of the stage pipeline)
 When the user references a task (e.g., "review PR for T-012") or a `tasks.md` exists with a task in status `Validando Impl` or `Revisando PR`:
 
-1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`.
-2. **Validate format:** First line must be `<!-- optimus:tasks-v1 -->`. If missing, **STOP** and suggest `/optimus-cycle-migrate`. Additionally validate:
-   - All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
-   - No circular dependencies in the dependency graph
-   - No unescaped pipe characters (`|`) in task titles
-3. **Verify workspace (HARD BLOCK):** This agent modifies code. It MUST NOT run on the default/main branch.
-   ```bash
-   DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-   CURRENT_BRANCH=$(git branch --show-current)
-   ```
-   - If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`) → **STOP**:
-     ```
-     Cannot run cycle-pr-review-stage-4 on the default branch (<branch>).
-     Switch to the task's feature branch first.
-     ```
-3.1. **Branch-task cross-validation:** After confirming the task ID, check that the current branch matches the **Branch** column in `tasks.md` for this task:
-   - Read the Branch column for the confirmed task ID
-   - If Branch is `-` or empty → warn: "tasks.md shows no branch for T-XXX, but you are on `<current>`. Continue anyway?" (via `AskUser`)
-   - If Branch has a value AND it does not match `CURRENT_BRANCH` → warn: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?" (via `AskUser`)
-   - If Branch matches `CURRENT_BRANCH` → proceed silently
+1. **Find and validate tasks.md** — see AGENTS.md Protocol: tasks.md Validation.
+3. **Verify workspace (HARD BLOCK):** See AGENTS.md Protocol: Workspace Verification.
+3.1. **Branch-task cross-validation:** Included in AGENTS.md Protocol: Workspace Verification.
 4. **Validate status:** The task MUST be in status `Validando Impl` (set by cycle-impl-review-stage-3) or `Revisando PR` (re-execution). If not, STOP and tell the user which agent to run first.
 5. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)
@@ -151,43 +127,9 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
        ```
        Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
        ```
-5.1. **Check session state:** After confirming the task, check for a previous session:
-   ```bash
-   SESSION_FILE=".optimus/session-${TASK_ID}.json"
-   if [ -f "$SESSION_FILE" ]; then
-     cat "$SESSION_FILE"
-   fi
-   ```
-   - If the file exists AND the task's status in `tasks.md` matches the session's `status`:
-     - Present via `AskUser`:
-       ```
-       Previous session found:
-         Task: T-XXX — [title]
-         Stage: cycle-pr-review-stage-4
-         Last active: <time since updated_at>
-         Progress: <phase from session>
-       Resume this session?
-       ```
-       Options: Resume / Start fresh / Ignore
-     - If **Resume**: skip to the phase indicated in the session file
-     - If **Start fresh**: delete the session file and proceed normally
-     - If **Ignore**: proceed normally
-   - If the file is stale (>24h) or the task status has changed → delete and proceed normally
-   - If no file exists → proceed normally
+5.1. **Check session state:** Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`cycle-pr-review-stage-4`, status=`Revisando PR`.
 
-   **On stage progress:** Update the session file at key phase transitions:
-   ```bash
-   mkdir -p .optimus
-   grep -q '.optimus/' .gitignore 2>/dev/null || echo '.optimus/' >> .gitignore
-   cat > ".optimus/session-${TASK_ID}.json" << EOF
-   {"task_id":"${TASK_ID}","stage":"cycle-pr-review-stage-4","status":"Revisando PR","branch":"$(git branch --show-current)","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","phase":"<current-phase>","notes":"<progress>"}
-   EOF
-   ```
-
-   **On stage completion** (after Phase 9 final summary): Delete the session file:
-   ```bash
-   rm -f ".optimus/session-${TASK_ID}.json"
-   ```
+   **On stage completion** (after Phase 9 final summary): delete the session file.
 6. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Revisando PR`) AND the user did NOT specify the task ID explicitly (auto-detect):
      - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
@@ -214,13 +156,7 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
    git add tasks.md
    git commit -m "chore(tasks): set T-XXX status to Revisando PR"
    ```
-9. **Invoke notification hooks (if present):**
-   ```bash
-   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
-   if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-     "$HOOKS_FILE" status-change T-XXX "Validando Impl" "Revisando PR" 2>/dev/null &
-   fi
-   ```
+9. **Invoke notification hooks** (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
 
    **Why commit immediately:** If the session is interrupted or the agent crashes before any review fixes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of the review outcome.
 **NOTE:** At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes cycle-close-stage-5 next.
@@ -313,6 +249,8 @@ The PR title MUST follow the **Conventional Commits 1.0.0** specification
 ```
 ^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$
 ```
+
+PR title validation follows AGENTS.md Protocol: PR Title Validation, with the addition that invalid titles become MEDIUM severity findings.
 
 **If validation fails:** add a finding (severity: MEDIUM) to the findings list with:
 - Current title
@@ -602,14 +540,7 @@ Read the full content of each changed file for the review agents.
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
 2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config
-3. **Identify project rules and AI instructions (MANDATORY):** Search for these files and read ALL that exist:
-   - `AGENTS.md`, `CLAUDE.md`, `DROIDS.md`, `.cursorrules` (repo root)
-   - `PROJECT_RULES.md` (repo root or `docs/`)
-   - `.editorconfig`, `docs/coding-standards.md`, `docs/conventions.md`
-   - `.github/CONTRIBUTING.md` or `CONTRIBUTING.md`
-   - Linter configs: `.eslintrc*`, `biome.json`, `.golangci.yml`, `.prettierrc*`
-
-   These are the **source of truth** for coding standards. Pass relevant sections to every agent dispatched.
+3. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
 4. **Identify reference docs:** Look for PRD, TRD, API design
 
 Store discovered commands:
@@ -807,23 +738,7 @@ Example: `## Finding 12 of 12 — [LOW] F12 | CodeRabbit + Agent | Style`
 
 #### Deep Research Before Presenting (MANDATORY)
 
-**BEFORE presenting any finding to the user, you MUST research it deeply.** This research
-is done SILENTLY — do not show the research process. Present only the conclusions.
-
-**Research checklist (ALL items, every finding):**
-
-1. **Project patterns:** Read the affected file(s) fully, understand the patterns used, check how similar cases are handled elsewhere in the codebase
-2. **Architectural decisions:** Review project rules (AGENTS.md, PROJECT_RULES.md, etc.) and architecture docs. Understand WHY the project is structured this way
-3. **Existing codebase:** Search for precedent — if the codebase already does the same thing in other places, that context changes the finding's weight
-4. **Current task focus:** Is this finding within the scope of the PR/task? Flag tangential findings as such
-5. **User/consumer use cases:** Who consumes this code — end users, other services, internal modules? Trace impact to real user scenarios
-6. **UX impact:** For user-facing changes, evaluate usability, accessibility, error messaging, and workflows
-7. **API best practices:** REST conventions, error handling, idempotency, status codes, pagination, versioning, backward compatibility
-8. **Engineering best practices:** SOLID principles, DRY, separation of concerns, error handling, resilience, observability, testability
-9. **Language-specific best practices:** Use `WebSearch` to research idioms for the specific language (Go, TypeScript, etc.) — official style guides, linter rules, community patterns
-10. **Correctness over convenience:** Always recommend the correct approach, regardless of effort
-
-**After research, form your recommendation:** Option A MUST be the approach you believe is correct based on all the research above, backed by evidence (project patterns, best practice references, official docs).
+Execute deep research before presenting each finding — see AGENTS.md "Common Patterns > Deep Research Before Presenting". All 10 checklist items apply.
 
 #### Deep Technical Analysis
 
@@ -840,23 +755,7 @@ is done SILENTLY — do not show the research process. Present only the conclusi
 
 #### Proposed Solutions
 
-**Option A MUST be your researched recommendation** — the approach you believe is correct based on best practices research, project context, and engineering principles. State clearly why this is the recommended option. Always prefer correctness over convenience.
-
-For each option:
-```
-**Option A: [name] (RECOMMENDED)**
-[Concrete steps — what to do, which files to change]
-- Why recommended: [reference to research — best practice, project pattern, official docs]
-- Impact: UX / Task focus / Project focus / Engineering quality
-- Effort: low / medium / high / very high
-- Estimated time: < 5 min / 5-15 min / 15-60 min / 1-4h / > 4h
-
-**Option B: [name]**
-[Alternative approach]
-- Impact: UX / Task focus / Project focus / Engineering quality
-- Effort: low / medium / high / very high
-- Estimated time: < 5 min / 5-15 min / 15-60 min / 1-4h / > 4h
-```
+Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding Option Format".
 
 #### Collect Decision
 
@@ -926,22 +825,9 @@ Ask the user whether to apply config changes. If approved, edit the config files
 
 ### Step 6.2: TDD Cycle for Each Fix
 
-For each approved fix, dispatch a specialist droid via `Task` tool:
+Apply fixes using ring droids with TDD cycle — see AGENTS.md "Common Patterns > Fix Implementation".
 
-1. **RED:** Write a failing test that exposes the problem
-2. **GREEN:** Implement the minimal fix to make the test pass
-3. **REFACTOR:** Improve without changing behavior
-4. **RUN UNIT TESTS:** Execute `make test` to verify no regressions
-
-**For documentation fixes (docs, README, specs):** dispatch ring documentation droids
-(`ring-tw-team-functional-writer`, `ring-tw-team-api-writer`). Documentation
-droids do NOT follow TDD — they apply the fix directly.
-
-**Droid selection priority (code fixes):**
-1. `ring-dev-team-backend-engineer-golang` — Go fixes
-2. `ring-dev-team-backend-engineer-typescript` — TypeScript backend
-3. `ring-dev-team-frontend-engineer` — React/Next.js frontend
-4. `ring-dev-team-qa-analyst` — test fixes
+**Droid selection:** Use the stack-appropriate droid. Documentation fixes use ring-tw-team droids without TDD.
 
 ### Step 6.3: Handle Test Failures (max 3 attempts)
 
@@ -1032,86 +918,19 @@ HIGH priority gaps are presented as findings for user decision.
 
 ## Phase 6.7: Convergence Loop (MANDATORY)
 
-After Phase 6.6, automatically re-validate using fresh sub-agents to eliminate session bias.
+Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Loop".
 
-**CRITICAL — Why Fresh Sub-Agents:**
+**Stage-specific scope for fresh sub-agent dispatch (rounds 2+):**
+Use any available ring review droid (e.g., `ring-default-code-reviewer`). The sub-agent receives:
+1. All changed files (re-read fresh from disk)
+2. PR context (description, linked issues, base branch)
+3. Project rules (re-read fresh)
+4. The findings ledger (for dedup only)
+5. Existing PR comments from all sources (reuse data from Phase 0 — do NOT re-fetch)
 
-The primary failure mode of convergence loops is **false convergence**: the orchestrator re-runs analysis in the same session, with the same mental model, and declares "zero new findings" — not because there are none, but because it can't see past its own prior reasoning.
+**Do NOT re-fetch** Codacy/DeepSource comments — they only update after push.
 
-The solution: **rounds 2+ are executed by a fresh sub-agent** dispatched via `Task` tool. The sub-agent has zero context from prior rounds, reads all files from scratch, and returns findings independently. The orchestrator then deduplicates against the cumulative ledger.
-
-**Round structure:**
-
-| Round | Who analyzes | How |
-|-------|-------------|-----|
-| **1** (initial) | Orchestrator (this agent) | Phase 2 (parallel agent dispatch) + Phase 3 (consolidate) — normal flow |
-| **2** (mandatory) | **Fresh sub-agent** via `Task` | Sub-agent reads all changed files from scratch, reviews independently, returns findings |
-| **3-5** | **Fresh sub-agent** via `Task` | Same as round 2 — only triggered if round 2+ found new findings |
-
-**Round 2 is MANDATORY.** The "zero new findings" stop condition can only trigger starting from round 3.
-
-**Fresh sub-agent dispatch (rounds 2+):**
-
-Dispatch a single sub-agent via `Task` tool (use any available ring review droid, e.g., `ring-default-code-reviewer`). The sub-agent receives:
-
-1. **All changed files** — full content, re-read fresh from disk
-2. **PR context** — description, linked issues, base branch
-3. **Project rules and coding standards** — re-read fresh
-4. **The findings ledger** — for deduplication ONLY
-5. **Existing PR comments** — from Codacy, DeepSource, CodeRabbit, humans (do NOT re-fetch; use the data from Phase 0)
-
-```
-Goal: Independent PR review of #<number> (convergence round X of 5)
-
-You are a FRESH reviewer with NO prior context. Review this PR from scratch.
-
-Context:
-  - PR: #<number> — <title>
-  - Changed files: [full content — re-read from disk]
-  - Project rules: [full content — re-read from files]
-  - Existing PR comments: [from all sources]
-
-Analysis scope: code quality, business logic, security, test quality,
-spec compliance, cross-file consistency.
-
-Previously identified findings (for DEDUP ONLY):
-  [list of findings with IDs and descriptions]
-
-CRITICAL: Analyze INDEPENDENTLY. Do NOT skip areas because previous rounds
-"already covered" them. The orchestrator will dedup.
-
-Required output:
-  For each finding: severity, file, line, category, description, recommendation
-  If no issues: "PASS — all domains clean"
-```
-
-**Orchestrator deduplication after sub-agent returns:**
-
-1. Compare each sub-agent finding against the cumulative ledger (match by file + topic + description similarity)
-2. **Genuinely new findings** → add to ledger, present to user
-3. **Duplicates** → discard silently
-
-**Loop rules:**
-- Max 5 rounds (initial = round 1)
-- **Round 2 is MANDATORY** — always dispatch a fresh sub-agent regardless of round 1 results
-- Show `"=== Re-validation round X of 5 (fresh sub-agent) ==="` at start
-- Do NOT re-fetch Codacy/DeepSource comments (they only update after push)
-- Maintain deduplication ledger across all rounds
-- **Stop conditions (any one triggers exit):**
-  1. Zero new findings — **only valid from round 3 onward** (round 2 is mandatory)
-  2. Round 5 completed (hard limit)
-  3. User explicitly requests to stop
-- **LOW severity findings are NOT a reason to stop** — ALL findings regardless of severity MUST be presented to the user for decision.
-
-**Round summary (show after each round):**
-
-```markdown
-### Round X of 5 (fresh sub-agent) — Summary
-- New findings this round: N (C critical, H high, M medium, L low)
-- Cumulative: X total findings across Y rounds
-- Fixed: A | Skipped: B | Deferred: C
-- Status: CONVERGED / CONTINUING / HARD LIMIT REACHED
-```
+When the loop exits, proceed to Phase 7 (integration/E2E tests).
 
 ---
 

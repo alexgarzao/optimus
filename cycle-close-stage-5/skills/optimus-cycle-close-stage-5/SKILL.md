@@ -67,53 +67,14 @@ Stage 5 of the task lifecycle. Verifies all prerequisites before marking a task 
 
 ### Step 0.0: Verify GitHub CLI (HARD BLOCK)
 
-```bash
-gh auth status 2>/dev/null
-```
-
-If this command fails (exit code != 0), **STOP** immediately:
-```
-GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
-```
+Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
 ### Step 0.0.1: Find and Validate tasks.md
 
-1. **Find tasks.md:** Look in `./tasks.md` (project root). If not found, look in `./docs/tasks.md`. If not found in either, **STOP** and suggest `/optimus-cycle-migrate`.
-2. **Validate format (HARD BLOCK):**
-   - **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
-   - A `## Versions` section exists with columns: Version, Status, Description
-   - Exactly one version has Status `Ativa`
-   - At most one version has Status `Próxima`
-   - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
-   - All Priority values are valid (`Alta`, `Media`, `Baixa`)
-   - All Version values reference a version name in the Versions table
-   - All task IDs match `T-NNN` pattern
-   - All Tipo values are valid (`Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`)
-   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`)
-   - All Depends values are `-` or comma-separated valid task IDs
-   - No duplicate task IDs
-   - All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
-   - No circular dependencies in the dependency graph
-   - No unescaped pipe characters (`|`) in task titles
+**HARD BLOCK:** Find and validate tasks.md — see AGENTS.md Protocol: tasks.md Validation.
 
-If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
-
-3. **Verify workspace (HARD BLOCK):** This agent runs verification checks. It MUST run on the task's feature branch, not the default/main branch.
-   ```bash
-   DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-   CURRENT_BRANCH=$(git branch --show-current)
-   ```
-   - If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`) → **STOP**:
-     ```
-     Cannot run cycle-close-stage-5 on the default branch (<branch>).
-     Switch to the task's feature branch first.
-     ```
-
-4. **Branch-task cross-validation:** After confirming the task ID (Step 0.0.2), check that the current branch matches the **Branch** column in `tasks.md` for this task:
-   - Read the Branch column for the confirmed task ID
-   - If Branch is `-` or empty → warn: "tasks.md shows no branch for T-XXX, but you are on `<current>`. Continue anyway?" (via `AskUser`)
-   - If Branch has a value AND it does not match `CURRENT_BRANCH` → warn: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?" (via `AskUser`)
-   - If Branch matches `CURRENT_BRANCH` → proceed silently
+3. **Verify workspace (HARD BLOCK):** See AGENTS.md Protocol: Workspace Verification.
+4. **Branch-task cross-validation:** Included in AGENTS.md Protocol: Workspace Verification.
 
 ### Step 0.0.2: Identify Task to Close
 
@@ -131,45 +92,9 @@ If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus for
 
 ### Step 0.0.2.1: Check Session State
 
-After identifying the task, check for a previous session:
+Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`cycle-close-stage-5`, status=`**DONE**`.
 
-```bash
-SESSION_FILE=".optimus/session-${TASK_ID}.json"
-if [ -f "$SESSION_FILE" ]; then
-  cat "$SESSION_FILE"
-fi
-```
-
-- If the file exists AND the task's status in `tasks.md` matches the session's `status`:
-  - Present via `AskUser`:
-    ```
-    Previous session found:
-      Task: T-XXX — [title]
-      Stage: cycle-close-stage-5
-      Last active: <time since updated_at>
-      Progress: <phase from session>
-    Resume this session?
-    ```
-    Options: Resume / Start fresh / Ignore
-  - If **Resume**: skip to the phase indicated in the session file
-  - If **Start fresh**: delete the session file and proceed normally
-  - If **Ignore**: proceed normally
-- If the file is stale (>24h) or the task status has changed → delete and proceed normally
-- If no file exists → proceed normally
-
-**On stage progress:** Update the session file at key phase transitions:
-```bash
-mkdir -p .optimus
-grep -q '.optimus/' .gitignore 2>/dev/null || echo '.optimus/' >> .gitignore
-cat > ".optimus/session-${TASK_ID}.json" << EOF
-{"task_id":"${TASK_ID}","stage":"cycle-close-stage-5","status":"**DONE**","branch":"$(git branch --show-current)","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","phase":"<current-phase>","notes":"<progress>"}
-EOF
-```
-
-**On marking DONE** (Phase 2, after marking task as `**DONE**`): Delete the session file:
-```bash
-rm -f ".optimus/session-${TASK_ID}.json"
-```
+**On marking DONE** (Phase 2): delete the session file.
 
 ### Step 0.1: Validate Task Status
 
@@ -217,24 +142,7 @@ rm -f ".optimus/session-${TASK_ID}.json"
 
 ### Step 0.2: Check tasks.md Divergence (warning)
 
-Compare `tasks.md` on the current branch with the default branch to detect concurrent edits that could cause merge conflicts when the PR is merged:
-
-```bash
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
-git diff "origin/$DEFAULT_BRANCH" -- tasks.md 2>/dev/null | head -20
-```
-
-- If diff output is non-empty → the file has diverged. Warn via `AskUser`:
-  ```
-  tasks.md has diverged between your branch and <default_branch>.
-  This may cause merge conflicts when the PR is merged.
-  ```
-  Options:
-  - **Sync now** — run `git merge origin/<default_branch>` to incorporate changes
-  - **Continue without syncing** — I'll handle conflicts later
-- If diff output is empty → proceed silently (files are in sync)
-- **NOTE:** This is a warning, not a HARD BLOCK. The user may choose to continue.
+Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 
 ### Step 0.3: Push Unpushed Commits (if any)
 
@@ -309,12 +217,8 @@ PR_TITLE=$(echo "$PR_JSON" | jq -r '.title // empty')
 - **If PR exists and state is MERGED:** PASS
 - **If PR exists and state is CLOSED (not merged):** FAIL — "PR #$PR_NUMBER was closed without merging."
 - **If PR exists and state is OPEN:**
-  1. **Validate PR title (Conventional Commits):** The PR title MUST follow the **Conventional Commits 1.0.0** specification (https://www.conventionalcommits.org/en/v1.0.0/).
-     - Expected format: `<type>[optional scope]: <description>`
-     - Regex: `^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$`
-     - Cross-check the type against the task's **Tipo** column (Feature→`feat`, Fix→`fix`, etc.)
-     - **If title is invalid:** FAIL — "PR #$PR_NUMBER title does not follow Conventional Commits: `$PR_TITLE`. Expected: `<corrected title>`. Fix with: `gh pr edit $PR_NUMBER --title \"<corrected title>\"`"
-  2. **If title is valid:** PASS — "PR #$PR_NUMBER title is valid. CI status checked in Check 4."
+  1. **Validate PR title:** See AGENTS.md Protocol: PR Title Validation. If invalid → FAIL.
+  2. **If title is valid:** PASS.
 
 **NOTE:** This check validates PR state and title only. CI status is checked separately in Check 4.
 
@@ -431,13 +335,7 @@ All prerequisites met. Marking task as **DONE**.
 Then:
 1. Update the Status column in `tasks.md` to `**DONE**` (from either `Validando Impl` or `Revisando PR`)
 2. Commit: `chore(tasks): mark T-XXX as done`
-3. **Invoke notification hooks (if present):**
-   ```bash
-   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
-   if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-     "$HOOKS_FILE" task-done T-XXX "<previous status>" "**DONE**" 2>/dev/null &
-   fi
-   ```
+3. Invoke notification hooks (event=`task-done`) — see AGENTS.md Protocol: Notification Hooks.
 4. Push the commit
 5. Proceed to Phase 3 (cleanup).
 
