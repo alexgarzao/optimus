@@ -301,8 +301,9 @@ go test -coverprofile=coverage-unit.out ./...
 # or: npm test -- --coverage
 ```
 
-**NOTE:** Integration and E2E tests are NOT run here. They run only before push (Phase 5.3)
-or when the user invokes them directly. This avoids slow test suites blocking the review loop.
+**NOTE:** Integration and E2E tests are NOT run here. They run only in Phase 6.5
+(after convergence loop, before summary) or when the user invokes them directly.
+This avoids slow test suites blocking the review loop.
 
 ### Step 0.5.3: Analyze Coverage
 
