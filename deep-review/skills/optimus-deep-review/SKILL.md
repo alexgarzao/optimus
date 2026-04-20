@@ -261,16 +261,18 @@ Include a recommendation when one option is clearly better.
 ### 4. Wait for User Decision
 
 Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
+**Every AskUser MUST include a "Tell me more" option** alongside the fix/skip options.
 
-**CRITICAL — If the user responds with a question or disagreement instead of a decision:**
-- STOP immediately — do NOT continue to the next finding
-- Research the user's question/concern RIGHT NOW using `WebSearch`, codebase analysis, or both
-- Provide a thorough answer with evidence
-- Only AFTER the user is satisfied, ask for their decision again
+**IMMEDIATE RESPONSE RULE:** If the user selects "Tell me more" or responds with free text
+(a question, disagreement, or request for clarification) instead of a decision:
+**STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
+Research the user's concern RIGHT NOW using `WebSearch`, codebase analysis, or both.
+Provide a thorough answer with evidence. Only AFTER the user is satisfied, re-present the
+options and ask for their decision again. **NEVER defer to the end of the findings loop.**
 
 The user may:
 - Approve an option (e.g., "A", "B")
-- Request more context
+- Select "Tell me more" for deeper analysis
 - Discard the finding
 - Defer to a future version
 - Group with the next finding if related

@@ -865,10 +865,18 @@ All cycle review skills follow this pattern:
 4. Present overview table with severity counts
 5. **Deep research BEFORE presenting each finding** (see research checklist below)
 6. Walk through findings ONE AT A TIME with `"Finding X of N"` header, severity order
-7. For each finding: present research-backed analysis + options, collect decision via AskUser
-8. **If the user responds with a question or disagreement** instead of a decision:
-   STOP immediately, research the concern RIGHT NOW (WebSearch, codebase analysis),
-   provide a thorough answer with evidence, then re-ask for decision. Do NOT advance.
+7. For each finding: present research-backed analysis + options, collect decision via AskUser.
+   **Every AskUser for a finding decision MUST include a "Tell me more" option.** This option
+   is always the **second-to-last** option (right before the free-text input that AskUser
+   provides automatically). This lets the user request deeper analysis with one click.
+8. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
+   (a question, disagreement, or request for clarification) instead of a decision:**
+   **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
+   Research the user's concern RIGHT NOW using `WebSearch`, codebase analysis, or both.
+   Provide a thorough answer with evidence (links, code references, best practice citations).
+   Only AFTER the user is satisfied, re-present the options and ask for their decision again.
+   This may go back and forth multiple times — that is expected and correct behavior.
+   **NEVER defer the response to the end of the findings loop.**
 9. After ALL N decisions collected: apply ALL approved fixes via ring droids (see below)
 10. Run verification (see Verification Timing below)
 11. Present final summary

@@ -225,14 +225,16 @@ Use `AskUser` with contextual options:
 - Fix as suggested
 - Fix with adjustment (user specifies)
 - Skip this item
+- Tell me more
 
 **BLOCKING**: Do NOT advance to the next item until the user decides.
 
-**CRITICAL — If the user responds with a question or disagreement instead of a decision:**
-- STOP immediately — do NOT continue to the next finding
-- Research the user's concern RIGHT NOW
-- Provide a thorough answer with evidence
-- Only AFTER the user is satisfied, ask for their decision again
+**IMMEDIATE RESPONSE RULE:** If the user selects "Tell me more" or responds with free text
+(a question, disagreement, or request for clarification) instead of a decision:
+**STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
+Research the user's concern RIGHT NOW using `WebSearch`, codebase analysis, or both.
+Provide a thorough answer with evidence. Only AFTER the user is satisfied, re-present the
+options and ask for their decision again. **NEVER defer to the end of the findings loop.**
 
 ### 4. Apply (if approved)
 

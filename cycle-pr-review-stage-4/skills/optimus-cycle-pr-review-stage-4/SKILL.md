@@ -760,13 +760,11 @@ Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding O
 #### Collect Decision
 
 Use `AskUser`. **BLOCKING** — do not advance until decided.
+**Every AskUser MUST include a "Tell me more" option** alongside the fix/skip options.
 
-**CRITICAL — If the user responds with a question or disagreement instead of a decision:**
-- STOP immediately — do NOT continue to the next finding
-- Research the user's question/concern RIGHT NOW using `WebSearch`, codebase analysis, or both
-- Provide a thorough answer with evidence (links, code references, best practice citations)
-- Only AFTER the user is satisfied, ask for their decision again
-- This may go back and forth multiple times — that is expected and correct behavior
+**IMMEDIATE RESPONSE RULE** — see AGENTS.md "Finding Presentation" item 8. If the user
+selects "Tell me more" or responds with free text: STOP, research and answer RIGHT NOW.
+**NEVER defer to the end of the findings loop.**
 
 Record: finding ID, source(s), decision (fix/skip/defer), chosen option. Do NOT apply any fix yet.
 
@@ -1301,7 +1299,7 @@ gh api graphql -f query='
 - Coverage verification and convergence loop run ONLY after all fixes are applied
 - No changes without user approval
 - BEFORE presenting each finding: deep research is MANDATORY — project patterns, architectural decisions, existing codebase, task focus, user/consumer use cases, UX impact, API best practices, engineering best practices, language-specific idioms. Option A must be the correct approach backed by research evidence, regardless of effort
-- If the user responds with a question or disagreement: STOP, research and answer thoroughly RIGHT NOW — do NOT defer to the fix phase or continue to the next finding
+- If the user selects "Tell me more" or responds with free text: STOP, research and answer thoroughly RIGHT NOW — do NOT defer to the fix phase or continue to the next finding. NEVER batch responses.
 - Ring droids are required — do not proceed without them
 - Fixes use TDD cycle (RED-GREEN-REFACTOR) with separate commits per finding
 - For won't-fix Codacy findings: use the underlying linter's suppression syntax (e.g., `biome-ignore` for Biome, `eslint-disable-next-line` for ESLint, `//nolint` for Go). `codacy:ignore` does NOT exist.

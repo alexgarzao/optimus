@@ -520,13 +520,11 @@ Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding O
 
 #### Collect Decision
 
-4. Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides
-5. **CRITICAL — If the user responds with a question or disagreement instead of a decision:**
-   - STOP immediately — do NOT continue to the next finding
-   - Research the user's question/concern RIGHT NOW using `WebSearch`, codebase analysis, or both
-   - Provide a thorough answer with evidence (links, code references, best practice citations)
-   - Only AFTER the user is satisfied, ask for their decision again
-   - This may go back and forth multiple times — that is expected and correct behavior
+4. Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
+   **Every AskUser MUST include a "Tell me more" option** alongside the fix/skip options.
+5. **IMMEDIATE RESPONSE RULE** — see AGENTS.md "Finding Presentation" item 8. If the user
+   selects "Tell me more" or responds with free text: STOP, research and answer RIGHT NOW.
+   **NEVER defer to the end of the findings loop.**
 6. **Track all decisions** internally. Do NOT apply any fix yet — all fixes are applied in Step 5.
 
 ### Step 5: Phase 2 — Apply ALL Approved Corrections
