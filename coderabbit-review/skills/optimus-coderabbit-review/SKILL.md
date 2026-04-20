@@ -295,7 +295,11 @@ For each approved fix:
 1. **RED:** Write a failing test (if one doesn't already exist for the scenario)
 2. **GREEN:** Implement the minimal fix
 3. **REFACTOR:** Improve if necessary
-4. **RUN ALL TESTS:** Execute unit + integration tests using discovered commands
+4. **RUN UNIT TESTS:** Execute `make test` to verify no regressions
+
+**For documentation fixes (docs, README, specs):** dispatch ring documentation droids
+(`ring-tw-team-functional-writer`, `ring-tw-team-api-writer`, or `worker`). Documentation
+droids do NOT follow TDD — they apply the fix directly.
 
 ### Step 3.3: Handle Test Failures
 
@@ -318,20 +322,18 @@ For PRs with many findings, independent fixes (in different modules/files) may b
 
 After all findings have been processed through the TDD cycle:
 
-### Step 4.1: Coverage Measurement
+### Step 4.1: Lint + Coverage Measurement
 
-Measure test coverage for the changed files:
+**Run lint ONCE** after all fixes are applied:
+```bash
+make lint
+```
+If lint fails, fix formatting issues and re-run.
 
-**Unit test coverage:**
+**Measure unit test coverage:**
 ```bash
 go test -coverprofile=coverage-unit.out ./...
 go tool cover -func=coverage-unit.out | tail -1
-```
-
-**Integration test coverage (if applicable):**
-```bash
-go test -tags=integration -coverprofile=coverage-integration.out ./...
-go tool cover -func=coverage-integration.out | tail -1
 ```
 
 **Untested functions:**
@@ -339,17 +341,13 @@ go tool cover -func=coverage-integration.out | tail -1
 go tool cover -func=coverage-unit.out | grep "0.0%"
 ```
 
-**Thresholds:**
-- Unit tests: 85% minimum
-- Integration tests: 70% minimum
+**Threshold:** Unit tests: 85% minimum
 
 If coverage is below threshold, flag as a finding:
 - **HIGH** severity for unit test coverage below 85%
-- **MEDIUM** severity for integration test coverage below 70%
 - List untested business-logic functions as individual **HIGH** findings
 
-**E2E tests:** If not configured, ask the user using `AskUser`:
-"E2E tests are not configured. Should they be implemented, or skip for now?"
+**NOTE:** Integration and E2E tests run only before push or when user invokes directly.
 
 ### Step 4.2: Test Scenario Gap Analysis
 
@@ -509,14 +507,13 @@ After the convergence loop exits:
 
 ### Test Coverage
 - Unit tests: XX.X% (threshold: 85%) — PASS / FAIL
-- Integration tests: XX.X% (threshold: 70%) — PASS / FAIL
 - Untested functions: X (Y business logic, Z infrastructure)
-- E2E tests: Configured / Not configured
 
 ### Test Results
 - Unit tests: PASS (X tests)
-- Integration tests: PASS / SKIPPED
-- E2E tests: PASS / SKIPPED
+- Lint: PASS
+- Integration tests: not run (run before push or invoke directly)
+- E2E tests: not run (run before push or invoke directly)
 - Skipped tests: X (with justification)
 
 ### Statistics

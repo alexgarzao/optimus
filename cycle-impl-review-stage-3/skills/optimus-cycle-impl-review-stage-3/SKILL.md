@@ -269,42 +269,29 @@ For checks that **pass**, note them for the Phase 3 overview.
 
 Skip checks whose commands don't exist in the project (e.g., skip `go vet` in a pure JS project).
 
-### Step 0.5.2: Run Tests (HARD BLOCK)
+### Step 0.5.2: Run Unit Tests (Baseline — HARD BLOCK)
 
-**HARD BLOCK:** ALL tests must pass before proceeding to agent dispatch. If any test fails, STOP and present the failures to the user. Do NOT continue to Phase 1 with failing tests.
-
-The project's `Makefile` defines the standard test targets:
+**HARD BLOCK:** Unit tests must pass before proceeding to agent dispatch. This establishes
+the baseline — if unit tests are already failing, review cannot proceed.
 
 ```bash
-# Preferred: runs all test types (unit + integration + e2e, skipping non-existent)
-make test-all
-
-# If test-all does not exist, run each individually:
-make test                    # Unit tests (MANDATORY — every project must have these)
-make test-integration        # Integration tests (SKIP if target does not exist)
-make test-e2e                # E2E tests (SKIP if target does not exist)
+make test                    # Unit tests — MANDATORY
 ```
 
-**Results:**
-
-| Test Type | Makefile Target | If target exists | If target missing |
-|-----------|----------------|-----------------|-------------------|
-| Unit | `make test` | **HARD BLOCK** if fails | **HARD BLOCK** — unit tests are mandatory |
-| Integration | `make test-integration` | **HARD BLOCK** if fails | SKIP (not all projects have integration tests) |
-| E2E | `make test-e2e` | **HARD BLOCK** if fails | SKIP (not all projects have E2E tests) |
-
-**If any test fails:**
+**If unit tests fail:**
 1. Present the failure output (first 30 lines)
-2. Ask the user via `AskUser`: "Tests are failing. Fix before continuing, or skip cycle-impl-review-stage-3?"
-3. Do NOT proceed to Phase 1 until tests pass or user explicitly chooses to skip
+2. Ask the user via `AskUser`: "Unit tests are failing. Fix before continuing, or skip cycle-impl-review-stage-3?"
+3. Do NOT proceed to Phase 1 until unit tests pass or user explicitly chooses to skip
 
-**If all tests pass (or non-existent targets are skipped):** collect coverage data for analysis:
+**If unit tests pass:** collect coverage data for analysis:
 
 ```bash
-# Re-run unit tests with coverage profiling (if not already captured)
 go test -coverprofile=coverage-unit.out ./...
 # or: npm test -- --coverage
 ```
+
+**NOTE:** Integration and E2E tests are NOT run here. They run only before push (Phase 5.3)
+or when the user invokes them directly. This avoids slow test suites blocking the review loop.
 
 ### Step 0.5.3: Analyze Coverage
 
@@ -594,52 +581,87 @@ Before touching any code, show the user a summary of everything that will be cha
 | F5 | [summary] | User: out of scope |
 ```
 
-### Step 5.2: Apply All Fixes
+### Step 5.2: Apply All Fixes via Ring Droids
 
-Apply ALL approved fixes in a single pass:
+**IMPORTANT:** ALL fixes MUST be implemented by dispatching specialist ring droids via
+`Task` tool — the orchestrator does NOT apply fixes directly. This ensures consistent
+code quality and proper TDD methodology.
 
-1. Group fixes by file to minimize file I/O
-2. Apply all changes
-3. Run lint — if format issues, fix and re-run
-4. Run unit tests — if failures, diagnose and fix (max 3 attempts per failure)
-5. If a fix causes test failures after 3 attempts, revert that specific fix, present the failure to the user, and ask for guidance
+**For code fixes (changes to source code, tests, configs):**
 
-### Step 5.3: Verification Gate (HARD BLOCK)
+Dispatch the appropriate ring droid for each fix (or group of related fixes):
 
-**HARD BLOCK:** After all fixes applied, ALL tests must pass again. Run:
+**Droid selection priority:**
+1. `ring-dev-team-backend-engineer-golang` — Go code fixes
+2. `ring-dev-team-backend-engineer-typescript` — TypeScript backend fixes
+3. `ring-dev-team-frontend-engineer` — React/Next.js frontend fixes
+4. `ring-dev-team-qa-analyst` — test-only fixes
+5. `worker` with domain instructions — fallback
 
-```bash
-make lint                    # Lint — MANDATORY
-make test-all                # Runs unit + integration + e2e (skips non-existent targets)
+**Each droid dispatch MUST include TDD instructions:**
+```
+Goal: Fix finding F<N> for task T-XXX
+
+Context:
+  - Finding: [description, file, line, what's wrong]
+  - Chosen option: [Option A/B description]
+  - Task spec: [relevant acceptance criteria]
+  - Coding standards: [relevant sections]
+
+TDD Cycle (MANDATORY for code changes):
+  1. RED: Write a failing test that exposes the problem
+  2. GREEN: Implement the minimal fix to make the test pass
+  3. REFACTOR: Improve without changing behavior
+  4. RUN UNIT TESTS: Execute `make test` to verify no regressions
+
+If tests fail after fix (max 3 attempts):
+  - Diagnose, adjust, retry
+  - After 3 failures, revert and report
+
+Return: files changed, test results, commit-ready status
 ```
 
-If `make test-all` target does not exist, fall back to running each individually:
+**For documentation fixes (changes to docs, README, specs, tasks.md):**
+
+Dispatch a ring documentation droid:
+
+**Droid selection priority:**
+1. `ring-tw-team-functional-writer` — guides, conceptual docs
+2. `ring-tw-team-api-writer` — API reference docs
+3. `ring-tw-team-docs-reviewer` — doc quality fixes
+4. `worker` with documentation instructions — fallback
+
+**Documentation droids do NOT follow TDD** — there are no tests to write for documentation.
+They apply the fix directly and return the result.
+
+**After each fix (code or docs):** run unit tests to verify no regressions:
+```bash
+make test
+```
+If unit tests fail, the droid must fix the regression (max 3 attempts) or revert.
+
+### Step 5.3: Final Verification (Lint + Unit Tests)
+
+**After ALL fixes are applied**, run lint and unit tests one final time:
 
 ```bash
-make test                    # Unit tests — MANDATORY
-make test-integration        # Integration — if target exists
-make test-e2e                # E2E — if target exists
+make lint                    # Lint — runs ONCE after all fixes
+make test                    # Unit tests — final regression check
 ```
 
-If ANY test or lint fails after fixes:
-1. Diagnose the failure (max 3 attempts to fix per failure)
-2. If unfixable after 3 attempts, revert that specific fix and ask the user
-3. Do NOT proceed to Phase 6 (convergence) with failing tests
+If lint fails, fix formatting issues and re-run. If unit tests fail after 3 attempts
+to fix, revert the offending fix and ask the user.
+
+**NOTE:** Integration and E2E tests do NOT run here — they run in Step 5.3.1 (before push).
 
 ### Step 5.4: Coverage Verification
 
-After the verification gate passes, measure test coverage:
+After the final verification passes, measure unit test coverage:
 
 **Unit test coverage:**
 ```bash
 go test -coverprofile=coverage-unit.out ./...
 go tool cover -func=coverage-unit.out | tail -1
-```
-
-**Integration test coverage (if applicable):**
-```bash
-go test -tags=integration -coverprofile=coverage-integration.out ./...
-go tool cover -func=coverage-integration.out | tail -1
 ```
 
 **Coverage gap analysis:**
@@ -648,13 +670,10 @@ go tool cover -func=coverage-integration.out | tail -1
 go tool cover -func=coverage-unit.out | grep "0.0%"
 ```
 
-**Thresholds:**
-- Unit tests: 85% minimum
-- Integration tests: 70% minimum
+**Threshold:** Unit tests: 85% minimum
 
 If coverage is below threshold, add findings to the results:
 - **HIGH** severity for unit test coverage below 85%
-- **MEDIUM** severity for integration test coverage below 70%
 - List untested business-logic functions as individual **HIGH** findings
 
 **E2E tests:**
@@ -804,7 +823,32 @@ Required output:
 - Status: CONVERGED / CONTINUING / HARD LIMIT REACHED
 ```
 
-**When the loop exits**, proceed to the Validation Summary with the cumulative results from ALL rounds.
+**When the loop exits**, proceed to Phase 6.5 (integration/E2E tests) then the Validation Summary.
+
+---
+
+## Phase 6.5: Integration and E2E Tests (before push)
+
+**After the convergence loop exits**, run integration and E2E tests. These are slow and
+expensive, so they run ONCE at the end — not during the fix/convergence cycle.
+
+```bash
+make test-integration        # Integration tests — if target exists
+make test-e2e                # E2E tests — if target exists
+```
+
+| Test Type | Makefile Target | If target exists | If target missing |
+|-----------|----------------|-----------------|-------------------|
+| Integration | `make test-integration` | **HARD BLOCK** if fails | SKIP |
+| E2E | `make test-e2e` | **HARD BLOCK** if fails | SKIP |
+
+**If any test fails:**
+1. Present the failure output (first 30 lines)
+2. Ask via `AskUser`: "Integration/E2E tests are failing. What should I do?"
+   - Fix the issue (dispatch ring droid)
+   - Skip and proceed to summary (user will handle later)
+
+**If all pass (or targets don't exist):** proceed to the Validation Summary.
 
 ---
 

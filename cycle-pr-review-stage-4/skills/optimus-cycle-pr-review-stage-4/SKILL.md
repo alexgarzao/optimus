@@ -834,9 +834,13 @@ For each approved fix, dispatch a specialist droid via `Task` tool:
 1. **RED:** Write a failing test that exposes the problem
 2. **GREEN:** Implement the minimal fix to make the test pass
 3. **REFACTOR:** Improve without changing behavior
-4. **RUN ALL TESTS:** Execute unit + integration tests
+4. **RUN UNIT TESTS:** Execute `make test` to verify no regressions
 
-**Droid selection priority:**
+**For documentation fixes (docs, README, specs):** dispatch ring documentation droids
+(`ring-tw-team-functional-writer`, `ring-tw-team-api-writer`, or `worker`). Documentation
+droids do NOT follow TDD — they apply the fix directly.
+
+**Droid selection priority (code fixes):**
 1. `ring-dev-team-backend-engineer-golang` — Go fixes
 2. `ring-dev-team-backend-engineer-typescript` — TypeScript backend
 3. `ring-dev-team-frontend-engineer` — React/Next.js frontend
@@ -853,15 +857,22 @@ For each approved fix, dispatch a specialist droid via `Task` tool:
 
 After each successful TDD cycle:
 
-1. Run lint
-2. Stage ONLY the files changed by this fix
-3. Commit with descriptive message:
+1. Stage ONLY the files changed by this fix
+2. Commit with descriptive message:
    ```bash
    git commit -m "fix: <concise description>
 
    Addresses review finding F<N> [<source>]"
    ```
-4. Record `{finding_id} → {commit_sha}` mapping
+3. Record `{finding_id} → {commit_sha}` mapping
+
+### Step 6.4.1: Final Lint Check
+
+**After ALL fixes are committed**, run lint once:
+```bash
+make lint
+```
+If lint fails, fix formatting issues, amend the last commit or create a `chore: fix lint` commit.
 
 ### Step 6.5: Suppress Won't-Fix Findings (Codacy/DeepSource)
 
@@ -895,20 +906,16 @@ Record the suppression commit SHA for use in Phase 8.
 
 **IMPORTANT:** This phase runs ONLY ONCE, after ALL fixes from Phase 6 have been applied.
 
-### Step 6.6.1: Coverage Measurement
+### Step 6.6.1: Coverage Measurement (Unit Tests)
 
 ```bash
-# Unit tests
 go test -coverprofile=coverage-unit.out ./...
 go tool cover -func=coverage-unit.out | tail -1
-
-# Integration tests (if applicable)
-go test -tags=integration -coverprofile=coverage-integration.out ./...
 ```
 
-**Thresholds:**
-- Unit tests: 85% minimum
-- Integration tests: 70% minimum
+**Threshold:** Unit tests: 85% minimum
+
+**NOTE:** Integration test coverage is measured in Phase 7.1 (before push), not here.
 
 ### Step 6.6.2: Test Gap Analysis
 
@@ -1003,7 +1010,30 @@ Required output:
 
 ---
 
-## Phase 7: Push Commits
+## Phase 7: Integration and E2E Tests (before push)
+
+**Before pushing**, run integration and E2E tests. These are slow and expensive, so they
+run ONCE here — not during the fix/convergence cycle.
+
+```bash
+make test-integration        # Integration tests — if target exists
+make test-e2e                # E2E tests — if target exists
+```
+
+| Test Type | Makefile Target | If target exists | If target missing |
+|-----------|----------------|-----------------|-------------------|
+| Integration | `make test-integration` | **HARD BLOCK** if fails | SKIP |
+| E2E | `make test-e2e` | **HARD BLOCK** if fails | SKIP |
+
+**If any test fails:**
+1. Present the failure output (first 30 lines)
+2. Ask via `AskUser`: "Integration/E2E tests are failing. What should I do?"
+   - Fix the issue (dispatch ring droid)
+   - Skip and push anyway (user will handle in CI)
+
+---
+
+## Phase 7.1: Push Commits
 
 **HARD BLOCK:** Ask the user before pushing:
 

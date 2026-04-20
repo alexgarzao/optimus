@@ -460,9 +460,41 @@ All review/validation skills follow this pattern:
 8. **If the user responds with a question or disagreement** instead of a decision:
    STOP immediately, research the concern RIGHT NOW (WebSearch, codebase analysis),
    provide a thorough answer with evidence, then re-ask for decision. Do NOT advance.
-9. After ALL N decisions collected: apply ALL approved fixes at once
-10. Run verification (lint + tests)
+9. After ALL N decisions collected: apply ALL approved fixes via ring droids (see below)
+10. Run verification (see Verification Timing below)
 11. Present final summary
+
+### Fix Implementation (Ring Droids — MANDATORY for all review skills)
+
+ALL fixes MUST be implemented by dispatching specialist ring droids via `Task` tool — the
+orchestrator does NOT apply fixes directly. This ensures consistent code quality.
+
+**Code fixes** → dispatch ring backend/frontend/QA droids with **TDD cycle** (RED-GREEN-REFACTOR):
+- `ring-dev-team-backend-engineer-golang` (Go), `ring-dev-team-backend-engineer-typescript` (TS),
+  `ring-dev-team-frontend-engineer` (React/Next.js), `ring-dev-team-qa-analyst` (tests),
+  `worker` with domain instructions (fallback)
+
+**Documentation fixes** → dispatch ring documentation droids **without TDD** (no tests for docs):
+- `ring-tw-team-functional-writer` (guides), `ring-tw-team-api-writer` (API docs),
+  `ring-tw-team-docs-reviewer` (quality fixes), `worker` (fallback)
+
+### Verification Timing (all review skills)
+
+Verification commands are expensive. The timing rules below optimize for fast feedback
+during development while ensuring full validation before push.
+
+| Check | When to run | Skills affected |
+|-------|-------------|----------------|
+| **Unit tests** (`make test`) | BEFORE review (baseline) + AFTER each fix (regression) | stages 3, 4, coderabbit |
+| **Lint** (`make lint`) | ONCE after ALL fixes applied | stages 3, 4, coderabbit |
+| **Integration tests** (`make test-integration`) | ONCE before push (or when user invokes directly) | stages 3, 4 |
+| **E2E tests** (`make test-e2e`) | ONCE before push (or when user invokes directly) | stages 3, 4 |
+
+**Rationale:**
+- Unit tests are fast and catch regressions immediately — run often
+- Lint is fast but only matters after all code is finalized — run once at end
+- Integration/E2E tests are slow (seconds to minutes) — run once before push to avoid
+  blocking the review loop. If targets don't exist, skip.
 
 ### Deep Research Before Presenting (MANDATORY for all review skills)
 Used by: cycle-spec-stage-1, cycle-impl-review-stage-3, cycle-pr-review-stage-4, coderabbit-review
