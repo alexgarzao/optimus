@@ -4,7 +4,7 @@ description: >
   Stage 5 of the task lifecycle. Verifies all prerequisites before marking
   a task as done: no uncommitted changes, no unpushed commits, PR ready to merge
   (if applicable), CI passing, tests and lint passing locally.
-  Does NOT merge the PR — the user merges manually after close.
+  During cleanup, offers to merge the PR (user chooses merge strategy via AskUser).
 trigger: >
   - After optimus-cycle-pr-review-stage-4 has completed for a task (optional), or after optimus-cycle-impl-review-stage-3
   - When user requests closing a task (e.g., "close T-012", "mark T-012 as done")
@@ -217,10 +217,9 @@ gh pr list --head "$(git branch --show-current)" --json number,state,title,revie
      - Regex: `^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$`
      - Cross-check the type against the task's **Tipo** column (Feature→`feat`, Fix→`fix`, etc.)
      - **If title is invalid:** FAIL — "PR #X title does not follow Conventional Commits: `<current title>`. Expected: `<corrected title>`. Fix with: `gh pr edit <number> --title \"<corrected title>\"`"
-  2. **Check CI status:** If all checks passing → PASS — "PR #X is ready to merge."
-     If failing checks → FAIL — "PR #X has failing checks."
+  2. **If title is valid:** PASS — "PR #X title is valid. CI status checked in Check 4."
 
-**NOTE:** This check verifies the PR is READY to merge, but does NOT merge it.
+**NOTE:** This check validates PR state and title only. CI status is checked separately in Check 4.
 
 #### Check 4: CI Passing (if PR exists)
 
@@ -409,7 +408,22 @@ git branch --list "$TASK_BRANCH"
 git branch -r --list "origin/$TASK_BRANCH"
 ```
 
-If a branch is found, ask via `AskUser`:
+**HARD BLOCK — Check for open PR before offering deletion:**
+
+Before asking the user about branch deletion, verify no open (unmerged) PR exists for this branch:
+
+```bash
+gh pr list --head "$TASK_BRANCH" --json number,state --jq '.[] | select(.state == "OPEN")'
+```
+
+**If an open PR still exists:** the branch CANNOT be deleted — deleting it would orphan the PR and lose all commits. Inform the user:
+```
+Branch '<branch>' cannot be deleted because PR #N is still open.
+Merge or close the PR first (Step 3.2), then re-run cleanup.
+```
+Skip branch deletion and proceed to Step 3.4.
+
+**If no open PR exists** (merged, closed, or never created), ask via `AskUser`:
 ```
 Task T-XXX is done. The branch '<branch>' still exists (local and/or remote). What should I do?
 ```

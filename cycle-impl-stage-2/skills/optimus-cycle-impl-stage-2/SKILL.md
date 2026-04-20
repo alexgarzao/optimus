@@ -186,6 +186,22 @@ CURRENT_BRANCH=$(git branch --show-current)
 - If Branch has a value AND it does not match `CURRENT_BRANCH` → warn: "tasks.md shows branch `<expected>` for T-XXX, but you are on `<current>`. Continue on current branch, or switch?" (via `AskUser`)
 - If Branch matches `CURRENT_BRANCH` → proceed silently
 
+### Step 0.0.4: Validate PR Title (if PR exists)
+
+Check if a PR already exists for the current branch:
+
+```bash
+gh pr view --json number,title --jq '{number, title}' 2>/dev/null
+```
+
+If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
+- Regex: `^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$`
+- Cross-check the type against the task's **Tipo** column (Feature→`feat`, Fix→`fix`, etc.)
+- **If title is invalid:** warn via `AskUser`: "PR #N title `<current>` does not follow Conventional Commits. Suggested: `<corrected>`. Fix now with `gh pr edit <number> --title \"<corrected>\"`?"
+- **If title is valid:** proceed silently
+
+If no PR exists, skip this step.
+
 ### Step 0.1: Discover Project Structure
 
 Before loading docs, discover the project's structure and tooling:
