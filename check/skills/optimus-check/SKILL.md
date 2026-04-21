@@ -788,8 +788,8 @@ The `--assignee @me` flag assigns the PR to the authenticated GitHub user automa
 
 The body should include:
 - Task ID and title
-- Objective (from `docs/tasks/T-XXX.md`)
-- Acceptance criteria summary
+- Objective (from Ring source via `## Fonte` in overlay)
+- Progresso summary
 - Link to the task section in tasks.md
 
 ### Step 12.4: Confirm

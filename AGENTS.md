@@ -350,7 +350,7 @@ in the commit message for audit trail.
    of rows in the table. Agents must compute the dependency graph to find which
    tasks are ready.
 
-### Task Detail Files
+### Task Overlay Files
 
 Each task has an overlay file at `docs/tasks/T-NNN.md` containing:
 - **H1 heading:** `# T-NNN: Title` (must match the table row)
@@ -706,7 +706,7 @@ Each task gets its own file (e.g., `.optimus/session-T-003.json`).
   "started_at": "2025-01-15T10:30:00Z",
   "updated_at": "2025-01-15T11:45:00Z",
   "phase": "Phase 1: Implementation",
-  "notes": "Implementation in progress, 3 of 5 acceptance criteria done"
+  "notes": "Implementation in progress, 3 of 5 progress items done"
 }
 ```
 

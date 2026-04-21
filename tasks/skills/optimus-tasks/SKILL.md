@@ -483,7 +483,7 @@ Options:
 
 1. Rearrange table rows according to the requested order
 2. Do NOT change any cell values (ID, Title, Tipo, Status, Depends, Priority, Branch stay the same)
-3. Detail files in `docs/tasks/` are not affected by reordering
+3. Overlay files in `docs/tasks/` are not affected by reordering
 4. Save the file
 
 ### Step 5.2: Confirm
@@ -650,7 +650,7 @@ To resolve, run `/optimus-tasks`:
    ```
    Options:
    - **Bug found** — implementation has a defect
-   - **Incomplete** — not all acceptance criteria were actually met
+   - **Incomplete** — not all progress items were actually met
    - **Requirements changed** — spec was updated after close
    - **Decision reversed** — cancellation decision was reconsidered (only for Cancelado)
    - **Cancel** — keep current status
