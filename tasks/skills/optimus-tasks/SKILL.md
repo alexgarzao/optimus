@@ -188,7 +188,7 @@ The user can then modify any field before confirming.
 4. **Estimate** (optional): Task size estimate (`S`, `M`, `L`, `XL`, `2h`, `1d`, etc.). Default: `-`
 5. **Version** (required): Must match a version in the Versions table. Default: the version with Status `Ativa`
 6. **Dependencies** (optional): Comma-separated task IDs (e.g., `T-001, T-003`) or `-` for none
-7. **Ring pre-dev reference** (optional): Link to Ring pre-dev task spec. If omitted, Ring pre-dev discovery (Step 2.3.1) will attempt to find a match.
+7. **Ring pre-dev reference** (required): Link to Ring pre-dev task spec. If not provided by the user, Ring pre-dev discovery (Step 2.3.1) will search for a match. A task cannot be created without a Ring reference.
 
 If the user provided some of these in the initial request, use them and ask only for missing fields.
 
@@ -285,15 +285,15 @@ Link to one of these?
 Options:
 - **[N] task_NNN.md** — link this ring task
 - **Show all ring tasks** — list every task for manual selection
-- **None** — create without Ring reference
 
-**If no matches found or `docs/pre-dev/tasks/` does not exist**, ask:
+**If no matches found**, show all ring tasks for manual selection.
+
+**If `docs/pre-dev/tasks/` does not exist or is empty** → **STOP**:
 ```
-No ring pre-dev tasks found. Create task without Ring reference?
+No Ring pre-dev artifacts found. Run Ring pre-dev workflow first
+(ring:pre-dev-full or ring:pre-dev-feature) to generate task specs.
+Tasks cannot be created without a Ring reference.
 ```
-Options:
-- **Show all ring tasks** — list every task for manual selection (if directory exists)
-- **Create without reference** — overlay with Fonte section only
 
 ### Step 2.4: Add to tasks.md and create overlay file
 
@@ -302,8 +302,6 @@ Options:
    | T-NNN | <title> | <tipo> | Pendente | <depends> | <priority> | <version> | - | <estimate or -> |
    ```
 2. Create the overlay file `docs/tasks/T-NNN.md`:
-
-   **If linked to Ring pre-dev:**
    ```markdown
    # T-NNN: <title>
 
@@ -311,11 +309,8 @@ Options:
    **Task spec:** `docs/pre-dev/tasks/task_NNN.md`
    **Subtasks:** `docs/pre-dev/subtasks/T-NNN/`
    ```
-
-   **If no Ring pre-dev linked:**
-   ```markdown
-   # T-NNN: <title>
-   ```
+   Omit the Subtasks line if no subtasks directory exists.
+   Omit the Plano line if no PARALLEL-PLAN.md exists.
 3. Save both files
 
 ### Step 2.5: Confirm
