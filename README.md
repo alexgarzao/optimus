@@ -17,7 +17,7 @@ Skills are classified as **Administrative** (run anywhere) or **Execution** (req
 | `tasks` | Create, edit, remove, reorder, and cancel tasks in tasks.md. Runs on any branch | `/optimus-tasks` |
 | `batch` | Pipeline orchestrator: chains stages 1-5 for one or more tasks with user checkpoints between stages | `/optimus-batch` |
 | `resolve` | Resolves merge conflicts in tasks.md caused by parallel task execution across feature branches | `/optimus-resolve` |
-| `quick-report` | Compact daily status dashboard. Shows version progress, active tasks with criteria progress, ready-to-start, and blocked tasks. Read-only | `/optimus-quick-report` |
+| `quick-report` | Compact daily status dashboard. Shows version progress, active tasks with Progresso status, ready-to-start, and blocked tasks. Read-only | `/optimus-quick-report` |
 | `help` | Lists all available Optimus skills with descriptions, usage commands, and when to use each one | `/optimus-help` |
 
 ### Execution Skills (stages 1-5)
@@ -42,7 +42,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 | Skill | Description | Command |
 |-------|-------------|---------|
 | `deep-doc-review` | Deep review of project documentation. Finds errors, inconsistencies, gaps, and improvements with interactive one-by-one resolution | `/optimus-deep-doc-review` |
-| `deep-review` | Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Supports initial (5 agents) and final (7 agents) review modes | `/optimus-deep-review` |
+| `deep-review` | Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Supports initial (8 agents) and final (10 agents) review modes | `/optimus-deep-review` |
 | `coderabbit-review` | CodeRabbit-driven code review with TDD fix cycle, secondary validation via review agents, and interactive finding resolution | `/optimus-coderabbit-review` |
 | `verify-code` | Two-phase code verification (Go, TypeScript, Python, generic): parallel static analysis + sequential test execution with executive summary | `/optimus-verify-code` |
 

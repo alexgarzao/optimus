@@ -62,7 +62,7 @@
     },
     {
       "name": "deep-review",
-      "description": "Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Supports initial (5 agents) and final (7 agents) review modes.",
+      "description": "Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Supports initial (8 agents) and final (10 agents) review modes.",
       "source": "./deep-review"
     },
 
@@ -83,7 +83,7 @@
     },
     {
       "name": "quick-report",
-      "description": "Compact daily status dashboard. Shows version progress, active tasks with criteria progress, ready-to-start, and blocked tasks. Read-only.",
+      "description": "Compact daily status dashboard. Shows version progress, active tasks with Progresso status, ready-to-start, and blocked tasks. Read-only.",
       "source": "./quick-report"
     }
   ]
