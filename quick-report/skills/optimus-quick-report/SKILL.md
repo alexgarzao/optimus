@@ -151,9 +151,9 @@ If ALL tasks are done:
 
 Each section uses a distinct ASCII symbol for instant visual recognition:
 
-- **Active:** `▶` (in progress)
-- **Ready:** `○` (open, available)
-- **Blocked:** `✗` (cannot proceed)
+- **Active:** `⚙` (work in progress)
+- **Ready:** `◇` (available, waiting to start)
+- **Blocked:** `⊘` (cannot proceed)
 - **Done:** `✓` (completed)
 
 ### Stage Progress Mini-Bar
@@ -173,18 +173,18 @@ Examples: `[█░░░░] 1/5`, `[██░░░] 2/5`, `[███░░] 3
 ### Section Format
 
 ```
-  ▶ ACTIVE (N)
+  ⚙ ACTIVE (N)
     T-NNN <status>       — <title>              [██░░░] 2/5
     T-NNN <status>       — <title>              [███░░] 3/5
 
-  ○ READY (N)
+  ◇ READY (N)
     T-NNN [<priority>]   <title>
     T-NNN [<priority>]   <title>
 
-  ✗ BLOCKED (N)
+  ⊘ BLOCKED (N)
     T-NNN <title>
-        ├── T-XXX [▶ <dep-status>]
-        └── T-YYY [○ <dep-status>]
+        ├── T-XXX [⚙ <dep-status>]
+        └── T-YYY [◇ <dep-status>]
     T-NNN <title>
         └── T-XXX [✓ DONE pending refresh]
 
@@ -208,7 +208,7 @@ Examples: `[█░░░░] 1/5`, `[██░░░] 2/5`, `[███░░] 3
 
 5. **Blocked tasks** render dependencies as a tree using box-drawing characters.
    Each dependency appears on its own line with the appropriate status indicator symbol
-   (`▶` active, `○` pending, `✓` done, `✗` blocked, `—` cancelled).
+   (`⚙` active, `◇` pending, `✓` done, `⊘` blocked, `—` cancelled).
    Use `├──` for intermediate dependencies and `└──` for the last one.
    If a blocker has status `Cancelado`, show as `[— Cancelado — remove dep via /optimus-tasks]`.
    If a dependency is from another version, append the version: `[▶ Em Andamento, v2]`.
