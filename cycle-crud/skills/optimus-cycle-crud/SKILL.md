@@ -105,22 +105,7 @@ For operations that do not use `gh` (create, edit, remove, reorder, version mana
    ```
    Then commit: `chore(tasks): initialize tasks.md`
 
-2. **Validate format (HARD BLOCK):**
-   - **First line** must be `<!-- optimus:tasks-v1 -->` (format marker). If missing → **STOP**.
-   - A `## Versions` section exists with columns: Version, Status, Description
-   - All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
-   - Exactly one version has Status `Ativa`
-   - At most one version has Status `Próxima`
-   - A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch
-   - All task IDs match `T-NNN` pattern
-   - All Tipo values are valid (`Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`)
-   - All Status values are valid (`Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`)
-   - All Depends values are `-` or comma-separated valid task IDs
-   - All Priority values are valid (`Alta`, `Media`, `Baixa`)
-   - All Version values reference a version name in the Versions table
-   - No duplicate task IDs
-
-If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
+2. **Validate format (HARD BLOCK):** See AGENTS.md Protocol: tasks.md Validation.
 
 ### Step 1.1: Determine Operation
 

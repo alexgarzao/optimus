@@ -522,10 +522,10 @@ Before marking done, cycle-close-stage-5 runs 8 checks:
 2. No unpushed commits (`git log @{u}..HEAD` = empty)
 3. PR ready to merge (if PR exists) — includes PR title validation (Conventional Commits)
 4. CI passing (if PR exists)
-5. `make lint` passes (all quality checks — linter, vet, format, imports)
-6. `make test` passes (unit tests)
-7. `make test-integration` passes (if target exists)
-8. `make test-e2e` passes (if target exists)
+5. `make lint` passes (or command from `.optimus/config.json`)
+6. `make test` passes (or command from `.optimus/config.json`)
+7. `make test-integration` passes (if target exists, or from config.json)
+8. `make test-e2e` passes (if target exists, or from config.json)
 
 ALL must pass (SKIP counts as pass). If any fails, status stays unchanged.
 

@@ -65,7 +65,7 @@ always "most advanced status wins" for each task independently.
 Check if `tasks.md` has merge conflict markers:
 
 ```bash
-grep -c '<<<<<<<' tasks.md 2>/dev/null
+grep -c '<<<<<<<' .optimus/tasks.md 2>/dev/null
 ```
 
 If no conflict markers found:
