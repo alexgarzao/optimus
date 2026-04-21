@@ -191,15 +191,40 @@ should be removed or replaced).
 
 ## Phase 4: Version Filtering
 
-**Default behavior:** If a `## Versions` section exists and a version has Status `Ativa`,
-the dashboard shows **only tasks from the active version** by default.
+### Step 4.1: Determine Version Scope
 
-**Override:** If the user specifies a version (e.g., "show status for v2") or asks for
-"all tasks", show accordingly. If the user says "show all", display all versions.
+**If the user specified a scope in the invocation** (e.g., "report ativa", "report all",
+"report v2", "report upcoming"), use that scope directly — skip the AskUser prompt.
 
-**When filtering by a specific version:**
+**If the user did NOT specify a scope** (e.g., just "report" or "show project status"),
+ask via `AskUser`:
+
+```
+Which version scope do you want to see?
+```
+Options:
+- **Ativa** — only tasks from the active version (<active_version_name>)
+- **Upcoming** — active + planned versions (Ativa, Próxima, Planejada — excludes Backlog and Concluída)
+- **All** — all tasks across all versions
+- **Specific version** — pick one version by name
+
+If the user selects **Specific version**, follow up with `AskUser` listing available
+version names as options.
+
+### Step 4.2: Apply Filter
+
+**Scope mapping:**
+
+| Scope | Versions included |
+|-------|-------------------|
+| `ativa` | Only the version with Status `Ativa` |
+| `upcoming` | Versions with Status `Ativa`, `Próxima`, or `Planejada` |
+| `all` | All versions |
+| `<version_name>` | Only the named version |
+
+**When filtering:**
 - All subsequent phases (dependency graph, parallelization, dashboard tables) only include
-  tasks from that version
+  tasks from the selected version(s)
 - Cross-version dependencies are shown as external references (e.g., "depends on T-001 [MVP, DONE]")
 
 ---

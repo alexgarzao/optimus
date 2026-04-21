@@ -77,19 +77,46 @@ For each task with status other than `Pendente`, `DONE`, and `Cancelado`:
 
 ## Phase 2: Filter by Version and Classify Tasks
 
-### Step 2.1: Filter by Active Version
+### Step 2.1: Determine Version Scope
 
-**Default behavior:** Show only tasks from the `Ativa` version. If the user specifies a
-version (e.g., "quick report for v2") or asks for "all tasks", show accordingly.
+**If the user specified a scope in the invocation** (e.g., "quick report ativa",
+"quick report all", "quick report v2", "quick report upcoming"), use that scope
+directly — skip the AskUser prompt.
 
-Filter the task list to include only tasks whose **Version** column matches the `Ativa`
-version name. Tasks from other versions are excluded from the ACTIVE, READY, BLOCKED,
+**If the user did NOT specify a scope** (e.g., just "quick report" or "resumo rapido"),
+ask via `AskUser`:
+
+```
+Which version scope do you want to see?
+```
+Options:
+- **Ativa** — only tasks from the active version (<active_version_name>)
+- **Upcoming** — active + planned versions (Ativa, Próxima, Planejada — excludes Backlog and Concluída)
+- **All** — all tasks across all versions
+- **Specific version** — pick one version by name
+
+If the user selects **Specific version**, follow up with `AskUser` listing available
+version names as options.
+
+### Step 2.2: Apply Filter
+
+**Scope mapping:**
+
+| Scope | Versions included |
+|-------|-------------------|
+| `ativa` | Only the version with Status `Ativa` |
+| `upcoming` | Versions with Status `Ativa`, `Próxima`, or `Planejada` |
+| `all` | All versions |
+| `<version_name>` | Only the named version |
+
+Filter the task list to include only tasks whose **Version** column matches the selected
+scope. Tasks from other versions are excluded from the ACTIVE, READY, BLOCKED,
 and DONE sections below.
 
 **Cross-version dependencies:** When a filtered task depends on a task from another version,
 show the dependency with its version in brackets (e.g., `T-001 [MVP, DONE]`).
 
-### Step 2.2: Classify Filtered Tasks
+### Step 2.3: Classify Filtered Tasks
 
 For each task **in the filtered set**:
 
@@ -176,8 +203,7 @@ If a task has no criteria section (0 checkboxes), show `--` instead.
    The progress bar counts only tasks from the active version.
 
 2. **All sections (ACTIVE, READY, BLOCKED, DONE)** show only tasks from the filtered
-   version (Step 2.1). Tasks from other versions are never shown unless the user
-   explicitly asks for "all tasks" or a specific version.
+   version(s) selected in Step 2.2.
 
 3. **Active tasks** are sorted by status advancement (Revisando PR first, then Validando Impl,
    Em Andamento, Validando Spec). Show criteria mini-bar from Step 1.3.
