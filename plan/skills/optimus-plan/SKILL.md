@@ -289,9 +289,14 @@ Before loading docs, discover the project's structure:
 
 ### Step 1.2: Load Documents
 
-Read ALL discovered reference docs:
-- Task spec (find the task being validated by ID)
-- **Ring pre-dev references** (see Step 1.2.1 below)
+Read the task's overlay file (`docs/tasks/T-XXX.md`) and follow the `## Fonte` links
+to load all Ring pre-dev artifacts:
+- **Task spec** (`docs/pre-dev/tasks/task_NNN.md`) — objective, acceptance criteria,
+  API contracts, and data model
+- **Subtask files** (`docs/pre-dev/subtasks/T-NNN/*.md`) — implementation details,
+  code examples, and step-by-step instructions
+
+Also load other project reference docs:
 - API contracts
 - DB schema / data model
 - Technical architecture
@@ -299,20 +304,8 @@ Read ALL discovered reference docs:
 - Coding standards (source of truth)
 - Dependency relationships
 
-### Step 1.2.1: Load Ring Pre-Dev References
-
-Check the task's detail file (`docs/tasks/T-XXX.md`) for a `## Referencia Pre-Dev` section.
-If present, follow the links and read ALL referenced artifacts:
-
-1. **Task spec** (`docs/pre-dev/tasks/task_NNN.md`) — contains the validated task
-   specification with objective, acceptance criteria, API contracts, and data model.
-2. **Subtask files** (`docs/pre-dev/subtasks/T-NNN/*.md`) — contain implementation
-   details, code examples, and step-by-step instructions.
-
-**Why this matters for spec validation:** Without reading ring pre-dev references, the
-validator may raise false findings about "incomplete spec" or "missing details" when the
-information exists in the referenced artifacts. These documents are part of the task's
-specification — not just implementation guidance.
+Ring pre-dev artifacts are the primary specification source. The validator uses them
+to assess completeness — not the overlay file (which only tracks progress).
 
 ### Step 1.3: Verify Existing Code
 

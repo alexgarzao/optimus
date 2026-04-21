@@ -1,43 +1,34 @@
 ---
 name: optimus-import
-description: "Import external task artifacts into optimus format. Discovers existing task files, ring pre-dev artifacts (task specs, subtasks), and converts/links them. Re-runnable — only imports what's new. Never deletes original files."
+description: "Import Ring pre-dev artifacts into optimus format. Reads task specs and subtasks from Ring's pre-dev output, creates tracking overlays (tasks.md + T-NNN.md). Re-runnable — only imports what's new. Never deletes original files."
 trigger: >
-  - When user wants to adopt the optimus task pipeline on an existing project
-  - When user says "import tasks", "import pre-dev", "migrate tasks", "convert tasks", "setup task pipeline"
+  - When user wants to adopt the optimus task pipeline on a project with Ring pre-dev output
+  - When user says "import tasks", "import pre-dev", "migrate tasks", "setup task pipeline"
   - When plan can't find a valid tasks.md
 skip_when: >
-  - Project already has a valid tasks.md AND no new external artifacts to import
-  - User wants to create tasks from scratch (just create the file manually)
+  - Project already has a valid tasks.md AND no new Ring pre-dev artifacts to import
+  - No Ring pre-dev output exists (run Ring pre-dev first)
 prerequisite: >
-  - Project has some form of task tracking (files, markdown, etc.)
+  - Ring pre-dev has been run (docs/pre-dev/tasks/ exists with task specs)
 NOT_skip_when: >
   - "The project is small" -- Even small projects benefit from standardized task tracking.
-  - "I'll just create tasks.md manually" -- This agent handles edge cases you'd miss.
-  - "Tasks are already in markdown" -- Markdown != optimus format. Columns, dependencies, and status need standardizing.
+  - "I'll just create tasks.md manually" -- Use /optimus-tasks for ad-hoc tasks; this skill is for Ring pre-dev import.
 examples:
-  - name: Import from index-only tasks.md
-    invocation: "Import tasks to optimus format"
-    expected_flow: >
-      1. Discover tasks.md is an index (links to other files)
-      2. Follow links, read individual task files
-      3. Present inventory
-      4. Propose consolidated tasks.md
-      5. Apply after approval
-  - name: Import from tasks/ directory with subtasks
-    invocation: "Setup task pipeline"
-    expected_flow: >
-      1. Discover tasks/ directory with individual task files
-      2. Discover subtasks/ directory
-      3. Present inventory with subtask mapping
-      4. Propose tasks.md with ring pre-dev references
-      5. Apply after approval
-  - name: Import ring pre-dev artifacts
+  - name: Import Ring pre-dev artifacts
     invocation: "Import pre-dev"
     expected_flow: >
       1. Discover docs/pre-dev/tasks/ and docs/pre-dev/subtasks/
-      2. Match ring tasks to optimus tasks by keyword similarity
-      3. Present matches for user confirmation
-      4. Add Referencia Pre-Dev sections to detail files
+      2. Present inventory of Ring tasks found
+      3. User confirms and chooses version assignment
+      4. Create tasks.md + overlay T-NNN.md files
+      5. Commit after approval
+  - name: Re-run to import new Ring tasks
+    invocation: "Import tasks"
+    expected_flow: >
+      1. Detect existing tasks.md in optimus format
+      2. Discover new Ring pre-dev tasks not yet imported
+      3. Present only new tasks
+      4. Add to existing tasks.md
       5. Commit after approval
 related:
   complementary:
@@ -52,20 +43,21 @@ related:
       - optimus-plan
 verification:
   manual:
-    - All existing tasks discovered and presented
-    - Conversion proposal shown before any changes
+    - All Ring pre-dev tasks discovered and presented
+    - Proposal shown before any changes
     - tasks.md generated in correct optimus format
-    - Original files NOT deleted
+    - Overlay T-NNN.md files created with Fonte + Progresso
+    - Original Ring files NOT deleted
 ---
 
-# Task Importer
+# Ring Pre-Dev Importer
 
-Discovers existing task files and ring pre-dev artifacts, converts them to the standard
-optimus `tasks.md` format, and links rich pre-dev references (task specs, subtasks,
-execution plans). Re-runnable — only imports what's new.
+Reads Ring pre-dev artifacts (`docs/pre-dev/tasks/`, `docs/pre-dev/subtasks/`) and creates
+the optimus tracking layer: `tasks.md` (status table) + `T-NNN.md` overlay files (Fonte
+links + Progresso checkboxes). Never copies content from Ring — only references it.
 
 **CRITICAL:** This agent NEVER deletes original files. It creates/updates tasks.md
-and leaves originals untouched. The user decides whether to remove them later.
+and overlay files, leaving Ring pre-dev artifacts untouched.
 
 **NOTE:** The output location is configurable. If `.optimus.json` has a `tasksFile` key,
 use that path. Otherwise, default to `docs/tasks.md`. After import, register the
@@ -75,265 +67,69 @@ chosen path in `.optimus.json` so all agents find it.
 
 ## Phase 1: Discovery
 
-### Step 1.1: Scan for Task Files
+### Step 1.1: Scan for Ring Pre-Dev Artifacts
 
-Search the project for any form of task tracking. First check `.optimus.json` for a
-configured path, then scan known locations, then search recursively.
+Check for Ring pre-dev output:
 
-**Step 1 — Check configured path:**
 ```bash
-CONFIGURED=$(cat .optimus.json 2>/dev/null | jq -r '.tasksFile // empty')
-```
-If `CONFIGURED` is set and the file exists with the optimus format marker, note it as
-the target file. Do NOT stop — continue scanning for new external artifacts (ring
-pre-dev refs, unlinked subtasks) that can be imported into the existing tasks.md.
-If after full discovery no new artifacts are found, inform the user:
-"Found configured tasks.md at `<path>`. No new artifacts to import." and **STOP**.
-
-**Step 2 — Check known locations (in order):**
-```
-docs/tasks.md
-./tasks.md
-./docs/pre-dev/tasks.md
-./TODO.md
-./TASKS.md
-./backlog.md
+ls docs/pre-dev/tasks/*.md 2>/dev/null
+ls docs/pre-dev/subtasks/ 2>/dev/null
 ```
 
-**Step 3 — Recursive search for any tasks.md:**
-```bash
-find . -name "tasks.md" -not -path "*/.git/*" -not -path "*/node_modules/*" -not -path "*/.optimus/*" 2>/dev/null
-```
+**If `docs/pre-dev/tasks/` does not exist or is empty:**
+**STOP** — "No Ring pre-dev artifacts found. Run Ring pre-dev workflow first
+(`ring:pre-dev-full` or `ring:pre-dev-feature`) to generate task specs."
 
-If multiple `tasks.md` files are found, present ALL to the user via `AskUser`:
-```
-Multiple tasks.md files found:
-  1. docs/tasks.md (optimus format detected)
-  2. project/tasks.md (plain markdown)
-  3. src/tasks.md (checklist format)
+**If found**, scan all task files in `docs/pre-dev/tasks/`:
+1. Read each `.md` file
+2. Extract the title from the first heading (`### T-NNN: <title>` or `# T-NNN: <title>`)
+3. Extract acceptance criteria (checklist items)
+4. Check if a subtasks directory exists at `docs/pre-dev/subtasks/T-NNN/`
+5. If subtasks exist, list all `.md` files and read their headings
 
-Which one should be the primary tasks.md? (The others will be treated as import sources)
-```
+### Step 1.2: Check Existing tasks.md
 
-**Step 4 — Check known directories:**
-```
-./tasks/
-./docs/tasks/
-./docs/pre-dev/tasks/
-./subtasks/
-./docs/subtasks/
-./docs/pre-dev/subtasks/
-```
+Read `.optimus.json` for configured path, fallback to `docs/tasks.md`.
 
-For each file/directory found, read its contents and classify it.
+**If tasks.md exists in optimus format** (first line is `<!-- optimus:tasks-v1 -->`):
+- Read existing task IDs from the table
+- Filter out Ring pre-dev tasks that are already imported (match by Fonte link
+  in existing `T-NNN.md` files, not by title or ID)
+- If ALL Ring tasks are already imported → "No new Ring artifacts to import." and **STOP**
+- If some are new → continue with only the new tasks
 
-### Step 1.2: Classify Each Source
+**If tasks.md does not exist** → continue (will create from scratch)
 
-For each discovered file, determine its type:
+### Step 1.3: Build Task Inventory
 
-| Type | How to detect | Example |
-|------|--------------|---------|
-| **Index-only** | tasks.md with links/references to other files but no task details inline | `- [T-001](./tasks/t-001.md)` |
-| **Inline tasks** | tasks.md with full task descriptions (objectives, criteria) inside | H2 sections with content (legacy format) |
-| **Table-only** | tasks.md with a markdown table but no detail sections | Just a table, no detail files |
-| **Individual files** | tasks/ directory with one .md file per task | `tasks/t-001.md`, `tasks/t-002.md` |
-| **Subtask files** | subtasks/ directory with subtask .md files | `subtasks/t-001-subtasks.md` |
-| **YAML frontmatter** | Task files with YAML frontmatter (taskmd format) | `---\nid: "001"\nstatus: pending\n---` |
-| **Checklist** | Simple TODO list with checkboxes | `- [ ] Implement auth\n- [x] Setup DB` |
-| **Optimus format** | First line is `<!-- optimus:tasks-v1 -->` with standard table + `docs/tasks/T-NNN.md` detail files | Valid optimus tasks.md |
+For each Ring pre-dev task not yet imported:
 
-### Step 1.3: Extract Task Data
+| Field | Source | Default |
+|-------|--------|---------|
+| **ID** | Generate next available `T-NNN` | Sequential |
+| **Title** | From Ring task spec heading | Required |
+| **Tipo** | Infer from title prefix (`feat:` → Feature, `fix:` → Fix, etc.) | `Feature` |
+| **Status** | `Pendente` | Always |
+| **Depends** | `-` (user adjusts after import) | `-` |
+| **Priority** | `Media` (user adjusts after import) | `Media` |
+| **Version** | User-chosen (see Step 1.4) | Required |
+| **Branch** | `-` | `-` |
+| **Estimate** | `-` | `-` |
 
-For each task found (regardless of format), extract:
+### Step 1.4: Version Setup
 
-| Field | How to find it | If missing |
-|-------|---------------|------------|
-| **ID** | Explicit ID (T-001), filename (001-task.md), heading number | Generate: T-001, T-002, ... |
-| **Title** | H1/H2 heading, YAML `title:`, filename | Use first line of content |
-| **Tipo** | YAML `type:`, labels, title prefix ("fix:", "feat:"), file naming | Default: `Feature` (see inference rules below) |
-| **Status** | YAML `status:`, column in table, checkbox state | Default: `Pendente` |
-| **Dependencies** | YAML `dependencies:`, "Depends on" text, "After T-XXX" | Default: `-` (none) |
-| **Priority** | YAML `priority:`, explicit mention, position in file | Default: `Media` |
-| **Version** | YAML `milestone:`, `version:`, labels, folder structure | Default: user-chosen version (see Step 1.5) |
-| **Branch** | YAML `branch:`, git branch naming convention | Default: `-` |
-| **Estimate** | YAML `estimate:`, `size:`, `effort:`, or explicit mention | Default: `-` |
-| **Objective** | H2/H3 "Objetivo", "Objective", "Description" section | Use title as fallback |
-| **Acceptance Criteria** | Checklist items, "Criteria", "Tasks" section | Leave empty, warn user |
-| **Subtasks** | Files in subtasks/ referencing this task, nested checklists | Merge into criteria |
-
-#### Status Inference Rules
-
-When no explicit status exists, infer from available signals:
-
-| Signal | Inferred status |
-|--------|----------------|
-| All checkboxes checked (`- [x]`) | `DONE` |
-| Some checkboxes checked | `Em Andamento` |
-| No checkboxes checked | `Pendente` |
-| File mentions "completed", "done", "finished" | `DONE` |
-| File mentions "in progress", "working on" | `Em Andamento` |
-| YAML `status: done/completed/closed` | `DONE` |
-| YAML `status: in_progress/active/started` | `Em Andamento` |
-| YAML `status: pending/todo/backlog` | `Pendente` |
-| File mentions "cancelled", "abandoned", "won't do" | `Cancelado` |
-| YAML `status: cancelled/abandoned/wontfix/wont_do` | `Cancelado` |
-
-#### Tipo Inference Rules
-
-When no explicit type exists, infer from available signals:
-
-| Signal | Inferred Tipo |
-|--------|--------------|
-| Title starts with "fix:", "bug:", "corrigir" | `Fix` |
-| Title starts with "feat:", "add:", "implement" | `Feature` |
-| Title starts with "refactor:", "refatorar", "melhorar" | `Refactor` |
-| Title starts with "chore:", "config:", "ci:", "infra" | `Chore` |
-| Title starts with "docs:", "documentar", "doc:" | `Docs` |
-| Title starts with "test:", "testes", "e2e:" | `Test` |
-| YAML `type: feature/feat/new` | `Feature` |
-| YAML `type: bug/fix/hotfix` | `Fix` |
-| YAML `type: refactor/improvement` | `Refactor` |
-| YAML `type: chore/infra/ci/config` | `Chore` |
-| YAML `type: docs/documentation` | `Docs` |
-| YAML `type: test/testing` | `Test` |
-| No signal found | `Feature` (default) |
-
-#### Dependency Inference
-
-When no explicit dependencies exist, look for implicit signals:
-- "After T-001", "Requires T-003", "Blocked by T-002"
-- Sequential numbering (T-001 before T-002) is NOT a dependency — don't infer from order
-- If nothing found, set to `-` and let the user add dependencies manually
-
-### Step 1.4: Handle Subtasks
-
-Classification depends on **origin**, not size:
-
-- **Ring pre-dev subtasks** (from `docs/pre-dev/subtasks/`): ALWAYS referenced via
-  `## Referencia Pre-Dev` — never inlined, regardless of size. Ring is the source of
-  truth; copying even 5 lines creates duplication and drift risk.
-- **Non-Ring subtasks** (from generic `subtasks/` directories or other sources):
-  inline as checklist items in the parent task's acceptance criteria section. These
-  have no authoritative source to reference back to.
-
-**Non-Ring subtasks example:**
-
-**Before (subtasks/t-001-subtasks.md):**
-```markdown
-## Subtasks for T-001
-- [ ] Define tables
-- [ ] Add migrations
-- [ ] Setup ORM
-```
-
-**After (inside detail file T-001.md):**
-```markdown
-**Critérios de Aceite:**
-- [ ] Define tables
-- [ ] Add migrations
-- [ ] Setup ORM
-```
-
-### Step 1.4.1: Discover Ring Pre-Dev Artifacts
-
-For each task discovered, search for rich pre-dev artifacts from the ring ecosystem:
-
-**Step A — Search for matching ring task specs:**
-
-1. Scan `docs/pre-dev/tasks/*.md` for task files
-2. For each ring task file, extract the title from the first heading (`### T-NNN: <title>`)
-3. Extract 3-5 significant keywords from the optimus task title (ignore articles,
-   prepositions, and generic verbs like "criar", "implementar", "resolver", "add", "create")
-4. Calculate keyword overlap between the optimus title and each ring title
-5. Sort by number of matching keywords (descending)
-
-**Step B — Present matches to user:**
-
-If matches found (1+ keyword in common):
-```
-Task T-NNN: "<optimus title>"
-
-Found ring pre-dev tasks that may be related:
-  [1] task_020.md — "Painel UI Redesign (Sidebar + Topbar)" (3 keywords)
-      Subtasks: 13 files in docs/pre-dev/subtasks/T-020/
-  [2] task_022.md — "Formularios Responsivos com Abas" (1 keyword)
-
-Link to one of these?
-```
-Options via `AskUser`:
-- **[N] task_NNN.md** — link this ring task
-- **Show all ring tasks** — list every task in docs/pre-dev/tasks/ for manual selection
-- **None** — create without ring reference
-
-If no matches found:
-```
-No ring pre-dev tasks found with similar title.
-Link to an existing ring task?
-```
-Options:
-- **Show all ring tasks** — list every task for manual selection
-- **None** — create without ring reference
-
-**Step C — "Show all" flow:**
-
-If the user chooses "Show all ring tasks", present the complete list:
-```
-Ring pre-dev tasks (docs/pre-dev/tasks/):
-
-  [ 1] task_001.md — "Database & Migration Foundation"
-  [ 2] task_002.md — "Backend API Framework Setup"
-  ...
-  [35] task_035.md — "Resolver Issues Pendentes do DeepSource"
-
-Which task to link? (number or "none")
-```
-
-**Step D — Generate reference section:**
-
-When a ring task is linked:
-1. Read the selected ring task file for title and metadata
-2. Check if a subtasks directory exists at `docs/pre-dev/subtasks/T-NNN/`
-3. If subtasks exist, read the heading (`# ST-NNN-NN: ...`) of each `.md` file
-4. Check if `PARALLEL-PLAN.md` exists in the subtasks directory
-5. Add a `## Referencia Pre-Dev` section to the detail file:
-
-```markdown
-## Referencia Pre-Dev
-
-**Task spec:** `docs/pre-dev/tasks/task_NNN.md`
-**Subtasks:** `docs/pre-dev/subtasks/T-NNN/`
-**Plano de execucao:** `docs/pre-dev/subtasks/T-NNN/PARALLEL-PLAN.md`
-
-| Fase | Arquivo | Descricao |
-|------|---------|-----------|
-| 0 | ST-NNN-01-design-tokens.md | Design Tokens — Brand + Severidade |
-| 1 | ST-NNN-02-counter-card.md | CounterCard variantes |
-| ... | ... | ... |
-```
-
-If no subtasks directory exists, omit the Subtasks and table lines.
-If no PARALLEL-PLAN.md exists, omit that line.
-
-**IMPORTANT:** IDs between optimus and ring are independent. Optimus T-038 may
-reference ring T-020. The match is by keyword similarity, never by ID.
-
-### Step 1.5: Version Setup
-
-Since the Versions table is mandatory, ask the user for the default version to assign to imported tasks:
+If creating tasks.md from scratch, ask the user:
 
 ```
-The optimus format requires a Versions table. What version should I assign to the imported tasks?
+What version should I assign to the imported tasks?
 ```
 
 Options via `AskUser`:
 - **User-provided name** (e.g., "MVP", "v1") — creates it as `Ativa`
 - **Backlog** — creates a "Backlog" version with Status `Backlog`
 
-If the source tasks have labels, milestones, or folder-based grouping that suggest version
-assignments, infer them and present to the user for confirmation. Create a version for each
-distinct group found.
-
-Store the default version for Step 2.1 (tasks without inferred version get this default).
+If tasks.md already exists, use the `Ativa` version by default. Ask via `AskUser`
+if the user wants a different version.
 
 ---
 
@@ -341,240 +137,142 @@ Store the default version for Step 2.1 (tasks without inferred version get this 
 
 ### Step 2.1: Show Discovery Summary
 
-Present what was found to the user:
-
 ```markdown
-## Task Discovery Summary
+## Ring Pre-Dev Discovery
 
-### Sources Found
-| # | Location | Type | Tasks Found |
-|---|----------|------|-------------|
-| 1 | docs/tasks.md | Index-only | 8 links |
-| 2 | ./tasks/ | Individual files | 8 files |
-| 3 | ./subtasks/ | Subtask files | 5 files |
+### Tasks Found
+| # | Ring Source | Title | Subtasks |
+|---|-----------|-------|----------|
+| 1 | task_001.md | Database & Migration Foundation | 5 files in T-001/ |
+| 2 | task_002.md | Backend API Framework Setup | 8 files in T-002/ |
+| 3 | task_003.md | User Authentication | 3 files in T-003/ |
+| ... | ... | ... | ... |
 
-### Tasks Extracted
-| ID | Title | Tipo (inferred?) | Status (inferred?) | Dependencies | Version | Estimate | Subtasks |
-|----|-------|-------------------|-------------------|-------------|---------|----------|
-| T-001 | Setup auth module | Feature (default) | DONE (inferred from checkboxes) | - | MVP (inferred) | 3 subtasks |
-| T-002 | User registration | Feature (default) | Pendente (no status found) | T-001 (explicit) | MVP (default) | - |
-| T-003 | Login page | Feature (default) | Pendente (no status found) | T-001 (inferred) | MVP (default) | 2 subtasks |
-| ... | ... | ... | ... | ... | ... | ... |
-
-### Warnings
-- T-004: No acceptance criteria found — section will be empty
-- T-006: Duplicate title with T-003 — please review
-- subtasks/t-007-subtasks.md: References T-007 which doesn't exist
+### Summary
+- **Ring tasks found:** N
+- **Already imported:** M
+- **New to import:** N-M
 ```
 
-### Step 2.2: Ask for Adjustments
+### Step 2.2: Confirm
 
-Use `AskUser` to confirm:
+Use `AskUser`:
 
 ```
-I found N tasks across M sources. Before converting:
-
-1. Are the inferred statuses correct? (I can list them for review)
-2. Should I attempt to infer dependencies from context, or set all to "-"?
-3. Any tasks that should be excluded from migration?
+I found N new Ring pre-dev tasks to import. Proceed?
 ```
 
-**BLOCKING:** Wait for user confirmation before proceeding.
+Options:
+- **Import all** — create tracking entries for all tasks
+- **Select specific** — let me choose which tasks to import
+- **Cancel** — don't import anything
+
+**BLOCKING:** Do NOT write any file until the user approves.
 
 ---
 
-## Phase 3: Propose Conversion
+## Phase 3: Create Tracking Layer
 
-### Step 3.1: Generate tasks.md Preview
+### Step 3.1: Choose Output Location (first run only)
 
-Generate the complete `tasks.md` in optimus format and present it to the user:
-
-```markdown
-## Proposed tasks.md
-
-### Table
-| ID | Title | Tipo | Status | Depends | Priority | Version | Branch |
-|----|-------|------|--------|---------|----------|---------|--------|
-| T-001 | Setup auth module | Feature | DONE | - | Alta | MVP | - |
-| T-002 | User registration | Feature | Pendente | T-001 | Alta | MVP | - |
-| ... | ... | ... | ... | ... | ... | ... | ... |
-
-### Detail Sections (first 2 shown as preview)
-
-## T-001: Setup auth module
-
-**Objetivo:** [extracted content]
-
-**Critérios de Aceite:**
-- [x] JWT middleware configurado
-- [x] Testes unitários passando
-
-## T-002: User registration
-
-**Objetivo:** [extracted content]
-
-**Critérios de Aceite:**
-- [ ] Endpoint POST /api/users
-- [ ] Email validation
-```
-
-### Step 3.2: Choose Output Location
-
-Ask via `AskUser` where to write the tasks.md:
+If tasks.md does not exist yet, ask via `AskUser`:
 
 ```
 Where should I create tasks.md?
 ```
 
 Options:
-- **docs/tasks.md** (default) — standard location
-- **Custom path** — specify a different location (e.g., `project/tasks.md`)
-- If a source tasks.md was found during discovery, offer: **Keep at current location** (`<source-path>`)
+- **docs/tasks.md** (default)
+- **Custom path** — user specifies
 
 Store the chosen path as `TASKS_FILE`. Derive `TASKS_DIR = dirname(TASKS_FILE) + "/tasks/"`.
 
-### Step 3.3: Confirm Before Applying
-
-Use `AskUser`:
-
-```
-Here's the proposed tasks.md with N tasks.
-  Location: <TASKS_FILE>
-  Detail files: <TASKS_DIR>/T-NNN.md
-
-What should I do?
-```
-
-Options:
-- **Apply**: Create/update tasks.md with this content
-- **Edit first**: Let me adjust specific tasks before applying
-- **Cancel**: Don't create anything
-
-**BLOCKING:** Do NOT write any file until the user explicitly approves.
-
----
-
-## Phase 4: Apply Conversion
-
-### Step 4.1: Check for Existing tasks.md
-
-If `TASKS_FILE` already exists in optimus format:
-- Ask via `AskUser`: "`<TASKS_FILE>` already exists. Merge new tasks into it, or replace entirely?"
-- If merge: add only tasks that don't already exist (match by ID or title)
-- If replace: backup the existing file content (show it to the user first)
-
-If `TASKS_FILE` exists in non-optimus format:
-- Rename to `<TASKS_FILE>.bak` before creating the new one
-- Inform the user: "Backed up original to `<TASKS_FILE>.bak`"
-
-### Step 4.2: Write tasks.md and detail files
+### Step 3.2: Write tasks.md
 
 First initialize the tasks directory (see AGENTS.md Protocol: Initialize Tasks Directory).
+
+**If creating from scratch:**
 
 Create `TASKS_FILE` with:
 1. Format marker: `<!-- optimus:tasks-v1 -->` (MUST be the first line)
 2. H1 heading: `# Tasks`
-3. `## Versions` section with the versions table (from Step 1.5)
-4. The tasks table (all columns including Version)
+3. `## Versions` section with the versions table (from Step 1.4)
+4. The tasks table with all imported tasks
 
-Create individual detail files `TASKS_DIR/T-NNN.md` for each task with:
-1. H1 heading: `# T-NNN: <title>`
-2. Objective and acceptance criteria (extracted content)
+**If appending to existing:**
 
-### Step 4.3: Register in .optimus.json
+Add new rows to the existing table. Do not modify existing rows.
 
-If `TASKS_FILE` is NOT the default (`docs/tasks.md`), register it in `.optimus.json`:
+### Step 3.3: Create Overlay Files
+
+For each imported task, create `TASKS_DIR/T-NNN.md`:
+
+```markdown
+# T-NNN: <title from Ring task spec>
+
+## Fonte
+**Task spec:** `docs/pre-dev/tasks/task_NNN.md`
+**Subtasks:** `docs/pre-dev/subtasks/T-NNN/`
+**Plano:** `docs/pre-dev/subtasks/T-NNN/PARALLEL-PLAN.md`
+
+| Arquivo | Descricao |
+|---------|-----------|
+| ST-NNN-01-xxx.md | <heading from subtask file> |
+| ST-NNN-02-yyy.md | <heading from subtask file> |
+| ... | ... |
+
+## Progresso
+- [ ] <subtask 1 short title>
+- [ ] <subtask 2 short title>
+- [ ] <subtask 3 short title>
+```
+
+**Rules for overlay creation:**
+- `## Fonte` links to Ring source files — paths are relative to project root
+- If no subtasks directory exists, omit the Subtasks line and table
+- If no PARALLEL-PLAN.md exists, omit that line
+- `## Progresso` items are derived from subtask headings (short titles)
+- If no subtasks exist, derive Progresso from the Ring task spec's acceptance criteria
+- All checkboxes start as `- [ ]`
+
+**IMPORTANT:** The overlay does NOT contain Objetivo or Critérios de Aceite. Agents
+read those from the Ring source via the Fonte links.
+
+### Step 3.4: Register in .optimus.json
+
+If `TASKS_FILE` is NOT the default (`docs/tasks.md`), register it:
 
 ```bash
 if [ ! -f .optimus.json ]; then
   echo '{}' > .optimus.json
 fi
-# Add or update tasksFile key
 jq --arg path "$TASKS_FILE" '.tasksFile = $path' .optimus.json > .optimus.json.tmp && mv .optimus.json.tmp .optimus.json
 ```
 
-If `TASKS_FILE` IS the default (`docs/tasks.md`), registration is optional (the default
-is used when `tasksFile` is absent). Still register it if `.optimus.json` already exists
-to be explicit.
-
-### Step 4.4: Commit
+### Step 3.5: Commit
 
 ```bash
 git add "$TASKS_FILE" "$TASKS_DIR/" .optimus.json
-git commit -m "chore: import tasks to optimus format (import)
+git commit -m "chore: import Ring pre-dev tasks to optimus format
 
-Imported N tasks from [sources list].
+Imported N tasks from docs/pre-dev/tasks/.
 Tasks file: $TASKS_FILE
-Ring pre-dev references: [linked/none]
-Ring sync: [N tasks synced/no drift detected/skipped]
-Original files preserved."
+Original Ring files preserved."
 ```
 
-### Step 4.5: Sync Existing References (re-run mode)
-
-When tasks.md already exists in optimus format (re-run), after importing new tasks/artifacts,
-check existing tasks for drift between their `T-NNN.md` content and the Ring source.
-
-**For each task with a `## Referencia Pre-Dev` section:**
-
-1. Read the Ring task spec path from the reference section
-2. Extract the objective and acceptance criteria from the Ring source file
-3. Compare with the `**Objetivo:**` and `**Critérios de Aceite:**` in `T-NNN.md`
-4. **If identical** → skip silently
-5. **If different** → record the drift
-
-**After scanning all tasks, if any drift found:**
-
-```
-Ring source has changed for N tasks:
-
-T-038: "User Registration API"
-  Objetivo: changed (Ring updated description)
-  Critérios: 1 added, 1 modified in Ring source
-
-T-041: "Dashboard Metrics"
-  Critérios: 2 criteria reworded in Ring source
-
-Sync these tasks?
-```
-
-Options via `AskUser`:
-- **Sync all** — update all drifted tasks
-- **Review one by one** — show diff for each task and decide individually
-- **Skip sync** — keep current content, I'll handle it manually
-
-**When syncing:**
-- Overwrite `**Objetivo:**` with the Ring source version
-- For `**Critérios de Aceite:**`:
-  - **Unchanged criteria:** preserve the existing `[x]`/`[ ]` state
-  - **Modified criteria:** match by position and keyword similarity. If confident
-    match (>50% words overlap) → preserve `[x]` state. If uncertain → reset to `[ ]`
-    and warn the user
-  - **New criteria (added in Ring):** add as `- [ ]`
-  - **Removed criteria (deleted in Ring):** ask via `AskUser` per removal:
-    "Ring removed criterion '<text>' (currently `[x]`). Remove from tracking?"
-- Commit synced changes:
-  ```bash
-  git add "$TASKS_DIR/"
-  git commit -m "chore(tasks): sync T-NNN criteria with Ring source"
-  ```
-
-**If no drift found** → inform: "All Ring references are in sync."
-
-### Step 4.6: Final Summary
+### Step 3.6: Final Summary
 
 ```markdown
 ## Import Complete
 
-- **Tasks imported:** N (new) / M (synced)
-- **Sources processed:** [list]
-- **tasks.md created/updated:** <TASKS_FILE> + <TASKS_DIR>/T-NNN.md files
-- **Ring sync:** N tasks synced / no drift detected / skipped
-- **Registered in:** .optimus.json (tasksFile: <TASKS_FILE>)
-- **Original files:** NOT deleted (remove manually if desired)
+- **Tasks imported:** N
+- **Ring source:** docs/pre-dev/tasks/ (N task specs, M subtask files)
+- **Tracking created:** <TASKS_FILE> + <TASKS_DIR>/T-NNN.md overlays
+- **Registered in:** .optimus.json
+- **Ring files:** NOT modified
 
 ### Next Steps
-1. Review tasks.md and adjust dependencies/priorities
+1. Run `/optimus-tasks` to adjust dependencies and priorities
 2. Run `/optimus-report` to see the dashboard
 3. Run `/optimus-plan` on the first pending task
 ```
@@ -583,13 +281,11 @@ Options via `AskUser`:
 
 ## Rules
 
-- **NEVER delete original files** — only create/update tasks.md and task detail files at the configured location
+- **NEVER delete or modify Ring pre-dev files** — only create optimus tracking files
+- **NEVER copy content from Ring into overlay files** — only reference via Fonte links
 - **NEVER apply changes without user approval** — always present and confirm first
-- **NEVER invent task content** — only extract what exists in the source files
-- **NEVER assume dependencies from task order** — sequential IDs don't imply dependency
-- If a task has no content (just a title), create `TASKS_DIR/T-NNN.md` with empty Objetivo and Critérios de Aceite, and warn the user
-- If status inference is uncertain, mark as `Pendente` and flag as "(inferred)" in the inventory
-- If the project already has a valid tasks.md at the configured/default path (first line is `<!-- optimus:tasks-v1 -->`), inform the user and stop (nothing to import)
-- Ring pre-dev subtasks (from `docs/pre-dev/subtasks/`) are ALWAYS linked via `## Referencia Pre-Dev` — never inlined, regardless of size
-- Non-Ring subtasks (generic sources) become checklist items in the parent task — never separate entries in the table
+- **NEVER invent task content** — only extract titles and subtask headings from Ring source
+- Ring pre-dev is the ONLY import source — generic formats (YAML, checklist, index) are not supported
+- If a Ring task has no subtasks, derive Progresso from the task spec's acceptance criteria
+- IDs between optimus and Ring are independent — Optimus T-038 may reference Ring T-020
 - Task IDs must be unique — if duplicates found, warn the user before proceeding

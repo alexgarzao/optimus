@@ -299,16 +299,13 @@ If the user specified dependencies:
 2. Check for circular dependencies: if T-NEW depends on T-X, and T-X (directly or transitively) would depend on T-NEW → reject
 3. If any dependency ID is invalid → ask the user to correct it
 
-### Step 2.3.1: Discover Ring Pre-Dev Artifacts
+### Step 2.3.1: Link Ring Pre-Dev Artifacts
 
-Before creating the detail file, check if ring pre-dev artifacts exist for this task:
+Search for Ring pre-dev artifacts to link to this task:
 
-1. Check if `docs/pre-dev/tasks/` directory exists. If not, skip this step.
-2. Scan `docs/pre-dev/tasks/*.md` for task files
-3. Extract the title from the first heading of each ring task file
-4. Extract 3-5 significant keywords from the new task's title (ignore articles,
-   prepositions, and generic verbs like "criar", "implementar", "resolver", "add", "create")
-5. Calculate keyword overlap and sort by relevance
+1. Scan `docs/pre-dev/tasks/*.md` for task files
+2. Extract 3-5 significant keywords from the new task's title
+3. Calculate keyword overlap and sort by relevance
 
 **If matches found** (1+ keyword in common), present via `AskUser`:
 ```
@@ -323,37 +320,42 @@ Link to one of these?
 Options:
 - **[N] task_NNN.md** — link this ring task
 - **Show all ring tasks** — list every task for manual selection
-- **None** — create without ring reference
+- **None** — create without Ring reference (overlay will have empty Progresso)
 
-**If no matches found**, ask:
+**If no matches found or `docs/pre-dev/tasks/` does not exist**, ask:
 ```
-No ring pre-dev tasks found with similar title.
-Link to an existing ring task?
+No ring pre-dev tasks found. Create task without Ring reference?
 ```
 Options:
-- **Show all ring tasks** — list every task for manual selection
-- **None** — create without ring reference
+- **Show all ring tasks** — list every task for manual selection (if directory exists)
+- **Create without reference** — overlay with empty Progresso
 
-**If linked**, append a `## Referencia Pre-Dev` section to the detail file content
-(generated in Step 2.4) with the ring task spec path, subtasks directory path,
-PARALLEL-PLAN.md path (if exists), and a table listing each subtask file with
-its heading as description. See `optimus-import` Step 1.4.1 for the exact format.
-
-### Step 2.4: Add to tasks.md and create detail file
+### Step 2.4: Add to tasks.md and create overlay file
 
 1. Add a new row to the table in `docs/tasks.md`:
    ```
    | T-NNN | <title> | <tipo> | Pendente | <depends> | <priority> | <version> | - | <estimate or -> |
    ```
-2. Create the detail file `docs/tasks/T-NNN.md`:
+2. Create the overlay file `docs/tasks/T-NNN.md`:
+
+   **If linked to Ring pre-dev:**
    ```markdown
    # T-NNN: <title>
 
-   **Objetivo:** <objective>
+   ## Fonte
+   **Task spec:** `docs/pre-dev/tasks/task_NNN.md`
+   **Subtasks:** `docs/pre-dev/subtasks/T-NNN/`
 
-   **Critérios de Aceite:**
-   - [ ] <criterion 1>
-   - [ ] <criterion 2>
+   ## Progresso
+   - [ ] <subtask 1 short title>
+   - [ ] <subtask 2 short title>
+   ```
+
+   **If no Ring pre-dev linked:**
+   ```markdown
+   # T-NNN: <title>
+
+   ## Progresso
    ```
 3. Save both files
 
