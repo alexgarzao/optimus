@@ -987,6 +987,21 @@ Options:
 - **Push now** — `git push` (or `git push -u origin $(git branch --show-current)` if no upstream)
 - **Skip** — I'll push manually later
 
+**After a successful push**, check if the current repo is the Optimus plugin repository
+and update installed plugins to pick up the changes just pushed:
+
+```bash
+if jq -e '.name == "optimus"' .factory-plugin/marketplace.json &>/dev/null; then
+  echo "Optimus repo detected — updating installed plugins..."
+  for skill in $(droid plugin list 2>&1 | grep optimus | awk '{print $1}'); do
+    droid plugin update "$skill" 2>/dev/null
+  done
+fi
+```
+
+This ensures that agents running in the Optimus repo itself always use the latest
+skill versions after pushing changes.
+
 Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Push Commits."
 
 ### Protocol: Active Version Guard
