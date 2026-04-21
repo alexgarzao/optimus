@@ -61,13 +61,13 @@ Read-only agent that parses `tasks.md` and presents a comprehensive project stat
 
 Resolve the tasks.md path: read `tasksFile` from `.optimus.json` (fallback: `docs/tasks.md`).
 
-If not found, inform the user and suggest: "No tasks.md found. Run `/optimus-migrate` to create one from existing task files, or create it manually following the optimus format."
+If not found, inform the user and suggest: "No tasks.md found. Run `/optimus-import` to create one from existing task files, or create it manually following the optimus format."
 
 ### Step 1.1.1: Validate Format Marker
 
 Check that the **first line** of `tasks.md` is `<!-- optimus:tasks-v1 -->`.
 
-If missing, warn the user: "tasks.md exists but is not in optimus format (missing `<!-- optimus:tasks-v1 -->` marker). Run `/optimus-migrate` to convert it."
+If missing, warn the user: "tasks.md exists but is not in optimus format (missing `<!-- optimus:tasks-v1 -->` marker). Run `/optimus-import` to convert it."
 
 The report agent still ATTEMPTS to parse and display data even without the marker (best effort), but shows the warning prominently.
 
@@ -607,6 +607,6 @@ an artifact in `.optimus/` (gitignored), not a project file.
 - **NEVER change task status** — only report current state
 - **NEVER invoke other stage agents** — only recommend
 - Present the full dashboard even if there's only 1 task
-- If tasks.md has no table or invalid format, suggest running `/optimus-migrate` to convert it to the standard format
-- If tasks.md does not exist, suggest running `/optimus-migrate` to create one from existing task files
+- If tasks.md has no table or invalid format, suggest running `/optimus-import` to convert it to the standard format
+- If tasks.md does not exist, suggest running `/optimus-import` to create one from existing task files
 - Always show the dependency graph, even for small projects — it reveals parallelization opportunities

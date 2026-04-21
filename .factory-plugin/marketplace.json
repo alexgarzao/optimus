@@ -6,9 +6,9 @@
   },
   "plugins": [
     {
-      "name": "migrate",
-      "description": "Discovers existing task files in any format and converts them to the standard optimus tasks.md format. Runs once per project.",
-      "source": "./migrate"
+      "name": "import",
+      "description": "Import external task artifacts into optimus format. Discovers task files and ring pre-dev artifacts (task specs, subtasks). Re-runnable — only imports what's new.",
+      "source": "./import"
     },
     {
       "name": "report",

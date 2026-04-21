@@ -10,7 +10,7 @@ Skills are classified as **Administrative** (run anywhere) or **Execution** (req
 
 | Skill | Description | Command |
 |-------|-------------|---------|
-| `migrate` | Discovers existing task files in any format and converts them to the standard optimus tasks.md format. Runs once per project | `/optimus-migrate` |
+| `import` | Import external task artifacts into optimus format. Discovers task files and ring pre-dev artifacts. Re-runnable | `/optimus-import` |
 | `report` | Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only | `/optimus-report` |
 | `tasks` | Create, edit, remove, reorder, and cancel tasks in tasks.md. Runs on any branch | `/optimus-tasks` |
 | `batch` | Pipeline orchestrator: chains stages 1-5 for one or more tasks with user checkpoints between stages | `/optimus-batch` |

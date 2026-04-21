@@ -184,7 +184,7 @@ The **first line** of `tasks.md` MUST be the format marker:
 
 This marker tells agents that the file is in valid optimus format. Agents check this
 line FIRST — if it's missing, the file is treated as non-optimus format and the agent
-suggests running `/optimus-migrate`.
+suggests running `/optimus-import`.
 
 ### Format:
 
@@ -422,7 +422,7 @@ Every stage agent (1-5) MUST validate the `docs/tasks.md` format before operatin
 14. No circular dependencies in the dependency graph (e.g., T-001 → T-002 → T-001)
 
 If the format marker is missing or validation fails, the agent must **STOP** and suggest
-running `/optimus-migrate` to fix the format. Do NOT attempt to interpret malformed data.
+running `/optimus-import` to fix the format. Do NOT attempt to interpret malformed data.
 
 15. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
 16. Every task ID in the table has a corresponding detail file at `docs/tasks/T-NNN.md`
@@ -601,8 +601,8 @@ executable version:
    - Read `.optimus.json` at project root. If `tasksFile` key exists, use that path.
    - If `.optimus.json` does not exist or `tasksFile` is not set, use `docs/tasks.md` (default).
    - Store the resolved path as `TASKS_FILE` and derive `TASKS_DIR = dirname(TASKS_FILE) + "/tasks/"`.
-2. **Find tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus-migrate`.
-3. **Validate format:** Execute all 16 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-migrate`.
+2. **Find tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus-import`.
+3. **Validate format:** Execute all 16 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-import`.
 
 **All subsequent references to `tasks.md` and `docs/tasks/T-NNN.md` in the skill use the
 resolved `TASKS_FILE` and `TASKS_DIR` paths** — never hardcoded paths.

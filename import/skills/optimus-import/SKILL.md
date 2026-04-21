@@ -1,9 +1,9 @@
 ---
-name: optimus-migrate
-description: "Task format migrator. Discovers existing task files in any format (index-only, inline tasks, individual files, subtask folders) and converts them to the standard optimus tasks.md format. Presents the current state, proposes the conversion, and only applies after user approval. Never deletes original files."
+name: optimus-import
+description: "Import external task artifacts into optimus format. Discovers existing task files, ring pre-dev artifacts (task specs, subtasks), and converts/links them. Re-runnable — only imports what's new. Never deletes original files."
 trigger: >
   - When user wants to adopt the optimus task pipeline on an existing project
-  - When user says "migrate tasks", "convert tasks", "setup task pipeline"
+  - When user says "import tasks", "import pre-dev", "migrate tasks", "convert tasks", "setup task pipeline"
   - When plan can't find a valid tasks.md
 skip_when: >
   - Project already has a valid tasks.md in optimus format
@@ -15,27 +15,38 @@ NOT_skip_when: >
   - "I'll just create tasks.md manually" -- This agent handles edge cases you'd miss.
   - "Tasks are already in markdown" -- Markdown != optimus format. Columns, dependencies, and status need standardizing.
 examples:
-  - name: Migrate from index-only tasks.md
-    invocation: "Migrate tasks to optimus format"
+  - name: Import from index-only tasks.md
+    invocation: "Import tasks to optimus format"
     expected_flow: >
       1. Discover tasks.md is an index (links to other files)
       2. Follow links, read individual task files
       3. Present inventory
       4. Propose consolidated tasks.md
       5. Apply after approval
-  - name: Migrate from tasks/ directory with subtasks
+  - name: Import from tasks/ directory with subtasks
     invocation: "Setup task pipeline"
     expected_flow: >
       1. Discover tasks/ directory with individual task files
       2. Discover subtasks/ directory
       3. Present inventory with subtask mapping
-      4. Propose tasks.md with subtasks as checklist items
+      4. Propose tasks.md with ring pre-dev references
       5. Apply after approval
+  - name: Import ring pre-dev artifacts
+    invocation: "Import pre-dev"
+    expected_flow: >
+      1. Discover docs/pre-dev/tasks/ and docs/pre-dev/subtasks/
+      2. Match ring tasks to optimus tasks by keyword similarity
+      3. Present matches for user confirmation
+      4. Add Referencia Pre-Dev sections to detail files
+      5. Commit after approval
 related:
   complementary:
     - optimus-report
     - optimus-plan
   sequence:
+    after:
+      - ring:pre-dev-full
+      - ring:pre-dev-feature
     before:
       - optimus-report
       - optimus-plan
@@ -47,15 +58,17 @@ verification:
     - Original files NOT deleted
 ---
 
-# Task Format Migrator
+# Task Importer
 
-Discovers existing task files and converts them to the standard optimus `tasks.md` format.
+Discovers existing task files and ring pre-dev artifacts, converts them to the standard
+optimus `tasks.md` format, and links rich pre-dev references (task specs, subtasks,
+execution plans). Re-runnable — only imports what's new.
 
 **CRITICAL:** This agent NEVER deletes original files. It creates/updates tasks.md
 and leaves originals untouched. The user decides whether to remove them later.
 
 **NOTE:** The output location is configurable. If `.optimus.json` has a `tasksFile` key,
-use that path. Otherwise, default to `docs/tasks.md`. After migration, register the
+use that path. Otherwise, default to `docs/tasks.md`. After import, register the
 chosen path in `.optimus.json` so all agents find it.
 
 ---
@@ -191,37 +204,113 @@ When no explicit dependencies exist, look for implicit signals:
 
 ### Step 1.4: Handle Subtasks
 
-Subtasks become checklist items in the parent task's acceptance criteria section:
+Classify each subtask file by richness:
 
-**Before (subtasks/t-001-subtasks.md):**
+- **Simple subtasks** (< 20 lines, only titles/checkboxes): merge as checklist items
+  in the parent task's acceptance criteria section (inline).
+- **Rich subtasks** (>= 20 lines, with code, steps, API contracts, file paths):
+  do NOT inline. These are handled in Step 1.4.1 as ring pre-dev references.
+
+**Simple subtasks example:**
+
+**Before (subtasks/t-001-subtasks.md, 8 lines):**
 ```markdown
 ## Subtasks for T-001
-
-### S-001-1: Create database schema
 - [ ] Define tables
 - [ ] Add migrations
-
-### S-001-2: Setup ORM
-- [ ] Install Prisma
-- [ ] Generate client
-```
-
-**After (inside tasks.md, section ## T-001):**
-```markdown
-## T-001: Setup database
-
-**Objetivo:** ...
-
-**Critérios de Aceite:**
-- [ ] Create database schema
-  - [ ] Define tables
-  - [ ] Add migrations
 - [ ] Setup ORM
-  - [ ] Install Prisma
-  - [ ] Generate client
 ```
 
-Nested subtasks become indented checklist items.
+**After (inside detail file T-001.md):**
+```markdown
+**Critérios de Aceite:**
+- [ ] Define tables
+- [ ] Add migrations
+- [ ] Setup ORM
+```
+
+### Step 1.4.1: Discover Ring Pre-Dev Artifacts
+
+For each task discovered, search for rich pre-dev artifacts from the ring ecosystem:
+
+**Step A — Search for matching ring task specs:**
+
+1. Scan `docs/pre-dev/tasks/*.md` for task files
+2. For each ring task file, extract the title from the first heading (`### T-NNN: <title>`)
+3. Extract 3-5 significant keywords from the optimus task title (ignore articles,
+   prepositions, and generic verbs like "criar", "implementar", "resolver", "add", "create")
+4. Calculate keyword overlap between the optimus title and each ring title
+5. Sort by number of matching keywords (descending)
+
+**Step B — Present matches to user:**
+
+If matches found (1+ keyword in common):
+```
+Task T-NNN: "<optimus title>"
+
+Found ring pre-dev tasks that may be related:
+  [1] task_020.md — "Painel UI Redesign (Sidebar + Topbar)" (3 keywords)
+      Subtasks: 13 files in docs/pre-dev/subtasks/T-020/
+  [2] task_022.md — "Formularios Responsivos com Abas" (1 keyword)
+
+Link to one of these?
+```
+Options via `AskUser`:
+- **[N] task_NNN.md** — link this ring task
+- **Show all ring tasks** — list every task in docs/pre-dev/tasks/ for manual selection
+- **None** — create without ring reference
+
+If no matches found:
+```
+No ring pre-dev tasks found with similar title.
+Link to an existing ring task?
+```
+Options:
+- **Show all ring tasks** — list every task for manual selection
+- **None** — create without ring reference
+
+**Step C — "Show all" flow:**
+
+If the user chooses "Show all ring tasks", present the complete list:
+```
+Ring pre-dev tasks (docs/pre-dev/tasks/):
+
+  [ 1] task_001.md — "Database & Migration Foundation"
+  [ 2] task_002.md — "Backend API Framework Setup"
+  ...
+  [35] task_035.md — "Resolver Issues Pendentes do DeepSource"
+
+Which task to link? (number or "none")
+```
+
+**Step D — Generate reference section:**
+
+When a ring task is linked:
+1. Read the selected ring task file for title and metadata
+2. Check if a subtasks directory exists at `docs/pre-dev/subtasks/T-NNN/`
+3. If subtasks exist, read the heading (`# ST-NNN-NN: ...`) of each `.md` file
+4. Check if `PARALLEL-PLAN.md` exists in the subtasks directory
+5. Add a `## Referencia Pre-Dev` section to the detail file:
+
+```markdown
+## Referencia Pre-Dev
+
+**Task spec:** `docs/pre-dev/tasks/task_NNN.md`
+**Subtasks:** `docs/pre-dev/subtasks/T-NNN/`
+**Plano de execucao:** `docs/pre-dev/subtasks/T-NNN/PARALLEL-PLAN.md`
+
+| Fase | Arquivo | Descricao |
+|------|---------|-----------|
+| 0 | ST-NNN-01-design-tokens.md | Design Tokens — Brand + Severidade |
+| 1 | ST-NNN-02-counter-card.md | CounterCard variantes |
+| ... | ... | ... |
+```
+
+If no subtasks directory exists, omit the Subtasks and table lines.
+If no PARALLEL-PLAN.md exists, omit that line.
+
+**IMPORTANT:** IDs between optimus and ring are independent. Optimus T-038 may
+reference ring T-020. The match is by keyword similarity, never by ID.
 
 ### Step 1.5: Version Setup
 
@@ -407,10 +496,11 @@ to be explicit.
 
 ```bash
 git add "$TASKS_FILE" "$TASKS_DIR/" .optimus.json
-git commit -m "chore: migrate tasks to optimus format (migrate)
+git commit -m "chore: import tasks to optimus format (import)
 
-Migrated N tasks from [sources list].
+Imported N tasks from [sources list].
 Tasks file: $TASKS_FILE
+Ring pre-dev references: [linked/none]
 Original files preserved."
 ```
 
@@ -442,5 +532,6 @@ Original files preserved."
 - If a task has no content (just a title), create `TASKS_DIR/T-NNN.md` with empty Objetivo and Critérios de Aceite, and warn the user
 - If status inference is uncertain, mark as `Pendente` and flag as "(inferred)" in the inventory
 - If the project already has a valid tasks.md at the configured/default path (first line is `<!-- optimus:tasks-v1 -->`), inform the user and stop (nothing to migrate)
-- Subtasks always become checklist items in the parent task — never separate entries in the table
+- Simple subtasks (< 20 lines) become checklist items in the parent task — never separate entries in the table
+- Rich subtasks (>= 20 lines, with code/steps/contracts) are linked via `## Referencia Pre-Dev` section — never inlined
 - Task IDs must be unique — if duplicates found, warn the user before proceeding

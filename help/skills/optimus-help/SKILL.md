@@ -35,7 +35,7 @@ terminal display when available, otherwise use markdown tables.
 
 | Skill | Command | When to Use |
 |-------|---------|-------------|
-| **migrate** | `/optimus-migrate` | Setting up Optimus on a project for the first time. Converts existing task files to the standard `tasks.md` format. |
+| **import** | `/optimus-import` | Import external task artifacts into optimus format. Discovers task files and ring pre-dev artifacts. Re-runnable. |
 | **report** | `/optimus-report` | Checking project status — shows progress, active/blocked/ready tasks, dependency graph, parallelization opportunities, and velocity metrics. Read-only. |
 | **tasks** | `/optimus-tasks` | Creating, editing, removing, reordering, cancelling, or reopening tasks. Managing versions. Any administrative task management. |
 | **resolve** | `/optimus-resolve` | Resolving merge conflicts in `tasks.md` caused by parallel task execution across feature branches. |

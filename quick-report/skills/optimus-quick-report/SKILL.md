@@ -55,7 +55,7 @@ and blocked tasks.
 
 ### Step 1.1: Locate and Validate
 
-Resolve the tasks.md path: read `tasksFile` from `.optimus.json` (fallback: `docs/tasks.md`). If not found, inform the user and suggest `/optimus-migrate`.
+Resolve the tasks.md path: read `tasksFile` from `.optimus.json` (fallback: `docs/tasks.md`). If not found, inform the user and suggest `/optimus-import`.
 
 Check the first line for `<!-- optimus:tasks-v1 -->`. If missing, warn but attempt best-effort parsing.
 
@@ -237,4 +237,4 @@ If a task has no criteria section (0 checkboxes), show `--` instead.
 - **NEVER run git commands** — this skill avoids git operations for speed
 - **NEVER invoke other skills** — only report
 - Present the dashboard even if there's only 1 task
-- If tasks.md has no table or invalid format, suggest `/optimus-migrate`
+- If tasks.md has no table or invalid format, suggest `/optimus-import`
