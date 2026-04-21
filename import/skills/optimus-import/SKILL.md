@@ -6,7 +6,7 @@ trigger: >
   - When user says "import tasks", "import pre-dev", "migrate tasks", "convert tasks", "setup task pipeline"
   - When plan can't find a valid tasks.md
 skip_when: >
-  - Project already has a valid tasks.md in optimus format
+  - Project already has a valid tasks.md AND no new external artifacts to import
   - User wants to create tasks from scratch (just create the file manually)
 prerequisite: >
   - Project has some form of task tracking (files, markdown, etc.)
@@ -84,8 +84,11 @@ configured path, then scan known locations, then search recursively.
 ```bash
 CONFIGURED=$(cat .optimus.json 2>/dev/null | jq -r '.tasksFile // empty')
 ```
-If `CONFIGURED` is set and the file exists with the optimus format marker, inform the
-user: "Found configured tasks.md at `<path>`. Nothing to import." and **STOP**.
+If `CONFIGURED` is set and the file exists with the optimus format marker, note it as
+the target file. Do NOT stop — continue scanning for new external artifacts (ring
+pre-dev refs, unlinked subtasks) that can be imported into the existing tasks.md.
+If after full discovery no new artifacts are found, inform the user:
+"Found configured tasks.md at `<path>`. No new artifacts to import." and **STOP**.
 
 **Step 2 — Check known locations (in order):**
 ```
@@ -109,7 +112,7 @@ Multiple tasks.md files found:
   2. project/tasks.md (plain markdown)
   3. src/tasks.md (checklist format)
 
-Which one should be the primary tasks.md? (The others will be treated as migration sources)
+Which one should be the primary tasks.md? (The others will be treated as import sources)
 ```
 
 **Step 4 — Check known directories:**
@@ -206,10 +209,12 @@ When no explicit dependencies exist, look for implicit signals:
 
 Classify each subtask file by richness:
 
-- **Simple subtasks** (< 20 lines, only titles/checkboxes): merge as checklist items
+- **Simple subtasks** (< 20 lines AND no code blocks): merge as checklist items
   in the parent task's acceptance criteria section (inline).
-- **Rich subtasks** (>= 20 lines, with code, steps, API contracts, file paths):
+- **Rich subtasks** (>= 20 lines OR contains code blocks/fenced blocks `` ``` ``):
   do NOT inline. These are handled in Step 1.4.1 as ring pre-dev references.
+
+A file with code blocks (`` ``` ``) is always treated as rich regardless of line count.
 
 **Simple subtasks example:**
 
@@ -532,6 +537,6 @@ Original files preserved."
 - If a task has no content (just a title), create `TASKS_DIR/T-NNN.md` with empty Objetivo and Critérios de Aceite, and warn the user
 - If status inference is uncertain, mark as `Pendente` and flag as "(inferred)" in the inventory
 - If the project already has a valid tasks.md at the configured/default path (first line is `<!-- optimus:tasks-v1 -->`), inform the user and stop (nothing to import)
-- Simple subtasks (< 20 lines) become checklist items in the parent task — never separate entries in the table
-- Rich subtasks (>= 20 lines, with code/steps/contracts) are linked via `## Referencia Pre-Dev` section — never inlined
+- Simple subtasks (< 20 lines AND no code blocks) become checklist items in the parent task — never separate entries in the table
+- Rich subtasks (>= 20 lines OR contains code blocks) are linked via `## Referencia Pre-Dev` section — never inlined
 - Task IDs must be unique — if duplicates found, warn the user before proceeding

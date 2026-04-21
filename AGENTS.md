@@ -346,6 +346,10 @@ Each task has an individual detail file at `docs/tasks/T-NNN.md` containing:
 - **H1 heading:** `# T-NNN: Title` (must match the table row)
 - **Objetivo:** What the task achieves
 - **Critérios de Aceite:** Checklist of acceptance criteria (use `- [ ]` / `- [x]`)
+- **Referencia Pre-Dev** (optional): Links to ring pre-dev artifacts (task spec, subtask
+  files, execution plan). Added by `import` or `tasks` when ring pre-dev artifacts are
+  discovered. When present, stage agents (build, plan) MUST follow these links and read
+  the referenced files as part of the task's full specification.
 - Any additional context: API specs, data model, references, etc.
 
 Agents read these files to understand what to implement and validate. This split
