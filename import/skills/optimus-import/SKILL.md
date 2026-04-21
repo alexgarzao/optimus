@@ -98,7 +98,43 @@ Read `.optimus.json` for configured path, fallback to `docs/tasks.md`.
 - If ALL Ring tasks are already imported → "No new Ring artifacts to import." and **STOP**
 - If some are new → continue with only the new tasks
 
-**If tasks.md does not exist** → continue (will create from scratch)
+**If tasks.md does not exist at the configured/default path**, scan the entire project
+for any file named `tasks.md`:
+
+```bash
+find . -name tasks.md -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null
+```
+
+For each file found, check the first line for the optimus format marker
+(`<!-- optimus:tasks-v1 -->`). Present ALL results to the user:
+
+```
+I found N tasks.md files in this project:
+
+| # | Path | Optimus format? | Tasks |
+|---|------|-----------------|-------|
+| 1 | .optimus/tasks.md | Yes | 42 tasks (27 done, 15 pending) |
+| 2 | docs/pre-dev/tasks.md | No | (Ring Gate 7 output) |
+
+How should I proceed?
+```
+
+Options (via `AskUser`):
+- **Use #N** — adopt the optimus-format file as the source for existing task data
+- **Ignore all** — create from scratch (all tasks start as Pendente with no dependencies, version will be asked in Step 1.4)
+
+**Only optimus-format files are selectable.** Non-optimus files are shown for
+transparency but cannot be selected.
+
+**If the user chooses "Use #N":**
+- Parse the selected file's task table and overlay files into a lookup map keyed by Ring source: `{ring_task_spec_path → {ID, Status, Depends, Priority, Version, Branch, Estimate}}`
+  - For each task in the table, read its overlay file and extract the `## Fonte` → `Task spec` path
+  - Tasks without an overlay or without a Fonte link are keyed by their ID as fallback
+- Parse the Versions table and carry it over to the new tasks.md
+- Store this as `EXISTING_DATA` for use in Step 1.3
+- The existing file is NOT modified or deleted — only read
+
+**If no tasks.md files are found**, continue (will create from scratch).
 
 ### Step 1.3: Build Task Inventory
 
@@ -109,16 +145,33 @@ For each Ring pre-dev task not yet imported:
 | **ID** | Generate next available `T-NNN` | Sequential |
 | **Title** | From Ring task spec heading | Required |
 | **Tipo** | Infer from title prefix (`feat:` → Feature, `fix:` → Fix, etc.) | `Feature` |
-| **Status** | `Pendente` | Always |
-| **Depends** | `-` (user adjusts after import) | `-` |
-| **Priority** | `Media` (user adjusts after import) | `Media` |
-| **Version** | User-chosen (see Step 1.4) | Required |
-| **Branch** | `-` | `-` |
-| **Estimate** | `-` | `-` |
+| **Status** | From `EXISTING_DATA` if available, else `Pendente` | `Pendente` |
+| **Depends** | From `EXISTING_DATA` if available, else `-` | `-` |
+| **Priority** | From `EXISTING_DATA` if available, else `Media` | `Media` |
+| **Version** | From `EXISTING_DATA` if available, else user-chosen (Step 1.4) | Required |
+| **Branch** | From `EXISTING_DATA` if available, else `-` | `-` |
+| **Estimate** | From `EXISTING_DATA` if available, else `-` | `-` |
+
+**When `EXISTING_DATA` is available** (from Step 1.2), match Ring pre-dev tasks to
+existing tasks by Fonte link — the Ring task spec path referenced in the overlay's
+`## Fonte` section (e.g., `docs/pre-dev/tasks/task_001.md`). For matched tasks,
+carry over Status, Depends, Priority, Version, Branch, and Estimate. For unmatched
+tasks (new in Ring but not in existing data), use defaults.
+
+**IMPORTANT:** Do NOT match by task ID. IDs between Optimus and Ring are independent
+(Optimus T-038 may reference Ring T-020). Always match by the Ring source file path.
+
+**Note:** Tasks that exist in `EXISTING_DATA` but NOT in Ring pre-dev are carried over
+as-is (they may have been created manually via `/optimus-tasks`). Present these to the
+user in the discovery summary as "Additional tasks (not in Ring pre-dev)" so the user
+can decide whether to include them.
 
 ### Step 1.4: Version Setup
 
-If creating tasks.md from scratch, ask the user:
+**If `EXISTING_DATA` provides a Versions table**, carry it over — skip the version
+question. All tasks inherit their Version from the existing data.
+
+**If creating from scratch (no `EXISTING_DATA`)**, ask the user:
 
 ```
 What version should I assign to the imported tasks?
