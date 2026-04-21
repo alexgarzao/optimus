@@ -2,6 +2,8 @@
 
 Skills marketplace for Droid (Factory) and Claude Code.
 
+**Requires the Ring ecosystem** (droids + pre-dev workflow).
+
 ## Task Lifecycle
 
 Skills are classified as **Administrative** (run anywhere) or **Execution** (require feature branch).
@@ -10,7 +12,7 @@ Skills are classified as **Administrative** (run anywhere) or **Execution** (req
 
 | Skill | Description | Command |
 |-------|-------------|---------|
-| `import` | Import external task artifacts into optimus format. Discovers task files and ring pre-dev artifacts. Re-runnable | `/optimus-import` |
+| `import` | Import Ring pre-dev artifacts into optimus tracking format. Creates overlay files. Re-runnable | `/optimus-import` |
 | `report` | Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only | `/optimus-report` |
 | `tasks` | Create, edit, remove, reorder, and cancel tasks in tasks.md. Runs on any branch | `/optimus-tasks` |
 | `batch` | Pipeline orchestrator: chains stages 1-5 for one or more tasks with user checkpoints between stages | `/optimus-batch` |

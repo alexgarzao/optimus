@@ -141,10 +141,9 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 
        **T-XXX: [title]**
        **Version:** [version from table]
-       **Objetivo:** [objective from docs/tasks/T-XXX.md]
-       **Critérios de Aceite:**
-       - [ ] [criterion 1]
-       - [ ] [criterion 2]
+       **Progresso:**
+       - [ ] [item 1]
+       - [ ] [item 2]
        ...
 
        Confirm status change?
@@ -188,9 +187,16 @@ Before loading docs, discover the project's structure and tooling:
 
 ### Step 1.7: Load All Reference Documents
 
-Read the discovered reference docs to build full context:
-- Tasks file — the task being executed (find the task by ID)
-- **Ring pre-dev references** (see Step 1.7.1 below)
+Read the task's overlay file (`docs/tasks/T-XXX.md`) and follow the `## Fonte` links
+to load all Ring pre-dev artifacts:
+
+- **Task spec** (`docs/pre-dev/tasks/task_NNN.md`) — objective, acceptance criteria,
+  API contracts, data model, and implementation guidance
+- **Subtask files** (`docs/pre-dev/subtasks/T-NNN/*.md`) — step-by-step implementation
+  instructions with exact code examples, file paths, and commands. Read ALL files.
+- **Execution plan** (`PARALLEL-PLAN.md`) — parallelization strategy and phase ordering
+
+Also load other project reference docs:
 - API contracts
 - DB schema / data model
 - Technical architecture (TRD)
@@ -198,26 +204,10 @@ Read the discovered reference docs to build full context:
 - Coding standards / project rules
 - Dependency relationships
 
-### Step 1.7.1: Load Ring Pre-Dev References
-
-Check the task's detail file (`docs/tasks/T-XXX.md`) for a `## Referencia Pre-Dev` section.
-If present, follow the links and read ALL referenced artifacts:
-
-1. **Task spec** (`docs/pre-dev/tasks/task_NNN.md`) — contains the validated task
-   specification with objective, acceptance criteria, API contracts, data model, and
-   implementation guidance produced by the ring pre-dev workflow.
-2. **Subtask files** (`docs/pre-dev/subtasks/T-NNN/*.md`) — contain step-by-step
-   implementation instructions with exact code examples, file paths, and commands.
-   Read ALL subtask files listed in the reference table.
-3. **Execution plan** (`PARALLEL-PLAN.md`) — if referenced, contains the parallelization
-   strategy and phase ordering for subtask execution.
-
-**These artifacts are the primary implementation guide.** When ring pre-dev references
-exist, they take precedence over generic inference from the acceptance criteria alone.
-The subtask files contain validated code examples and exact implementation steps that
-were reviewed by multiple AI agents during pre-dev — use them as the source of truth
-for HOW to implement, while the acceptance criteria remain the source of truth for
-WHAT to validate.
+**Ring pre-dev artifacts are the primary implementation guide.** The subtask files
+contain validated code examples and exact implementation steps reviewed by multiple
+AI agents during pre-dev — use them as the source of truth for HOW to implement.
+The task spec's acceptance criteria are the source of truth for WHAT to validate.
 
 ### Step 1.8: Explore Existing Codebase
 
@@ -261,19 +251,9 @@ execution strategy, check the task's **Tipo** column and adapt:
 | `Docs` | Gate 1 (DevOps), Gate 2 (SRE), Gate 3 (Testing) | No production code — skip TDD, coverage, observability |
 | `Test` | Gate 1 (DevOps), Gate 2 (SRE) | Tests ARE the deliverable — skip DevOps and SRE but run Gate 3 for coverage |
 
-When using the built-in fallback (Step 2.2), skip irrelevant steps based on the table above.
-When using dev-cycle (Step 2.1), pass the Tipo so dev-cycle can adapt its gate execution.
+Pass the Tipo so dev-cycle can adapt its gate execution.
 
-Check if the `dev-cycle` skill is available in the current environment:
-
-1. **If `dev-cycle` is available** → use it (preferred path, Step 2.1)
-2. **If `dev-cycle` is NOT available** → use the built-in fallback (Step 2.2).
-   **NOTE:** The built-in fallback covers Implementation (TDD), Code Review, Verification,
-   and User Validation. It does NOT include DevOps (Docker/IaC), SRE (observability validation),
-   or dedicated testing gates — those are only available via `dev-cycle`. This is acceptable
-   for most tasks; install `dev-cycle` for full gate coverage.
-
-### Step 2.1: Execute via dev-cycle (preferred)
+### Step 2.1: Execute via dev-cycle
 
 Use the `Skill` tool to load and execute the dev-cycle:
 
@@ -294,7 +274,7 @@ Pass the tasks file path that contains the confirmed task. The dev-cycle handles
 
 Provide to dev-cycle:
 - The tasks file path and confirmed task ID
-- All reference docs discovered in Phase 1
+- All Ring pre-dev artifacts loaded in Step 1.7
 - Codebase patterns found in Step 1.8
 - Answers to all questions from Step 1.9
 - Any user preferences or constraints mentioned during questioning
@@ -304,129 +284,28 @@ While dev-cycle executes:
 - If dev-cycle encounters a blocker or needs user input, it will handle it through its own flow
 - Do NOT interfere with dev-cycle's gate execution — let it run its full pipeline
 
-### Step 2.2: Built-in Fallback (when dev-cycle is unavailable)
-
-When `dev-cycle` is not installed, execute implementation directly using the following
-simplified pipeline. Each step dispatches specialist droids via `Task` tool.
-
-#### Step 2.2.0: Detect Re-Execution (existing implementation)
-
-**If this is a re-execution** (status was already `Em Andamento` when the skill started),
-check if implementation files already exist from a previous run:
-
-```bash
-git diff --name-only $(git merge-base HEAD origin/$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'))..HEAD
-```
-
-If changed files exist, ask via `AskUser`:
-```
-Previous implementation detected — N files were already changed on this branch.
-How should I proceed?
-```
-Options:
-- **Continue from current state** — review existing changes and build on them
-- **Start fresh** — revert all changes and re-implement from scratch (`git reset --hard origin/<default>`)
-
-If the user chooses "Continue from current state", pass the existing file list and their
-content to the implementation droid with instructions: "These files already exist from a
-previous run. Review, update, and complete them rather than creating from scratch."
-
-#### Step 2.2.1: Implementation (TDD)
-
-Dispatch a specialist droid to implement the task using TDD methodology:
-
-**Droid selection (based on project stack):**
-1. `ring-dev-team-backend-engineer-golang` — Go projects
-2. `ring-dev-team-backend-engineer-typescript` — TypeScript projects
-3. `ring-dev-team-frontend-engineer` — React/Next.js projects
-
-**If no matching ring droid is available for the project stack, STOP:**
-```
-No ring implementation droid available for this stack. Install the appropriate droid:
-  - Go: ring-dev-team-backend-engineer-golang
-  - TypeScript: ring-dev-team-backend-engineer-typescript
-  - React/Next.js: ring-dev-team-frontend-engineer
-```
-
-**The droid MUST:**
-1. Follow TDD: write failing tests first, implement to pass, refactor
-2. Follow project coding standards (from Step 1.6)
-3. Implement EXACTLY what the task spec says — no more, no less
-4. Run `make test` (or equivalent) to verify all tests pass
-
-#### Step 2.2.2: Code Review
-
-Dispatch parallel ring review droids via `Task` tool:
-
-1. `ring-default-code-reviewer` — architecture, patterns, SOLID, DRY
-2. `ring-default-business-logic-reviewer` — domain correctness, edge cases
-3. `ring-default-security-reviewer` — vulnerabilities, OWASP, input validation
-
-Present findings to the user ONE AT A TIME. For each finding:
-- Show problem, impact, and 2-3 options
-- Collect decision via `AskUser`
-- Apply approved fixes via specialist droids
-
-#### Step 2.2.3: Verification
-
-Check for custom commands in `.optimus.json` first. If found, use configured
-commands. If a command key is present but empty (`""`), skip that check entirely.
-If not found or key is missing, fall back to Makefile:
-
-Run all available verification commands:
-
-```bash
-make lint                    # Lint — if target exists
-make test                   # Unit tests — MANDATORY
-make test-integration       # Integration tests — if target exists
-make test-e2e               # E2E tests — if target exists
-```
-
-If any MANDATORY check fails, fix and retry (max 3 attempts). If optional checks fail,
-warn the user but do not block.
-
-#### Step 2.2.4: User Validation
-
-Present a summary of what was implemented and ask for explicit approval via `AskUser`:
-- Files created/modified
-- Tests added
-- Acceptance criteria coverage
-- Verification results
-
 ---
 
-## Phase 3: Update Acceptance Criteria Checkboxes
+## Phase 3: Update Progress Checkboxes
 
-After Phase 2 completes (via dev-cycle or built-in fallback), update the acceptance criteria
-checkboxes in tasks.md to reflect what was actually implemented.
+After Phase 2 completes, update the `## Progresso` checkboxes in the overlay file
+to reflect what was actually implemented.
 
 **IMPORTANT:** This step runs AFTER implementation and verification complete but BEFORE
 presenting the final summary. This ensures that when stage-3 (impl-review) runs, the
-checkboxes in tasks.md already reflect what was implemented, preventing false findings
-about mismatched checkbox state.
-
-### Step 3.0: Reset Checkboxes on Re-Execution
-
-**If this is a re-execution** (status was already `Em Andamento` when the skill started):
-1. Read `docs/tasks/T-XXX.md`
-2. **If the user chose "Start fresh" in Step 2.2.0:** Reset ALL checkboxes to unchecked
-   (`- [ ]`) before re-evaluating. This prevents stale `[x]` marks from a previous
-   partial run from persisting.
-3. **If the user chose "Continue from current state" in Step 2.2.0:** Do NOT reset
-   checkboxes. The existing `[x]` marks reflect work already completed in the previous
-   run. Only evaluate and mark the remaining `[ ]` criteria.
+checkboxes already reflect what was implemented, preventing false findings.
 
 ### Step 3.1: Evaluate and Mark Checkboxes
 
-1. Read `docs/tasks/T-XXX.md` and list all acceptance criteria (`- [ ] ...`)
-2. For each criterion, verify whether the implementation satisfies it:
-   - Check if the code/tests/config for that criterion exist and work
+1. Read `docs/tasks/T-XXX.md` and list all items in `## Progresso` (`- [ ] ...`)
+2. For each item, read the corresponding Ring source (subtask file or acceptance criterion)
+   and verify whether the implementation satisfies it:
    - If satisfied → mark as `- [x]`
    - If NOT satisfied → leave as `- [ ]` and warn the user
-3. Commit the updated checkboxes:
+3. Commit the updated progress:
    ```bash
    git add "$TASKS_DIR/T-XXX.md"
-   git commit -m "chore(tasks): update acceptance criteria for T-XXX"
+   git commit -m "chore(tasks): update progress for T-XXX"
    ```
 
 ---

@@ -54,6 +54,13 @@ into the agent's context as instructions.
 
 ## Design Principles
 
+### 0. Ring Ecosystem Required
+Optimus requires the Ring ecosystem (droids + pre-dev workflow). All tasks flow
+through Ring's pre-dev for specification, and Ring droids for execution. There is
+no standalone mode. Ring pre-dev artifacts (`docs/pre-dev/tasks/`, `docs/pre-dev/subtasks/`)
+are the source of truth for task content. Optimus only tracks operational state
+(status, progress, dependencies, branches).
+
 ### 1. User Authority Over Decisions
 The agent NEVER decides whether a finding should be fixed or skipped. ALL findings
 (CRITICAL, HIGH, MEDIUM, LOW) MUST be presented to the user for decision. The agent
@@ -146,7 +153,7 @@ path using this priority:
 }
 ```
 
-**Task detail files** (objectives, acceptance criteria) are stored as individual files
+**Task overlay files** (progress tracking, Ring source links) are stored as individual files
 in a `tasks/` directory **derived from the tasksFile path**:
 
 ```
@@ -209,13 +216,15 @@ suggests running `/optimus-import`.
 | T-005 | E2E auth tests | Test | Pendente | T-002, T-003 | Media | MVP | - | S |
 ```
 
-**docs/tasks/T-001.md** (individual detail file):
+**docs/tasks/T-001.md** (overlay file):
 ```markdown
 # T-001: Setup auth module
 
-**Objetivo:** Configurar o módulo de autenticação...
+## Fonte
+**Task spec:** `docs/pre-dev/tasks/task_001.md`
+**Subtasks:** `docs/pre-dev/subtasks/T-001/`
 
-**Critérios de Aceite:**
+## Progresso
 - [x] JWT middleware configurado
 - [x] Testes unitários passando
 ```
@@ -224,9 +233,10 @@ suggests running `/optimus-import`.
 ```markdown
 # T-002: User registration API
 
-**Objetivo:** ...
+## Fonte
+**Task spec:** `docs/pre-dev/tasks/task_002.md`
 
-**Critérios de Aceite:**
+## Progresso
 - [ ] Endpoint POST /api/users
 - [ ] Validação de email
 ```
@@ -342,28 +352,44 @@ in the commit message for audit trail.
 
 ### Task Detail Files
 
-Each task has an individual detail file at `docs/tasks/T-NNN.md` containing:
+Each task has an overlay file at `docs/tasks/T-NNN.md` containing:
 - **H1 heading:** `# T-NNN: Title` (must match the table row)
-- **Objetivo:** What the task achieves
-- **Critérios de Aceite:** Checklist of acceptance criteria (use `- [ ]` / `- [x]`)
-- **Referencia Pre-Dev** (optional): Links to ring pre-dev artifacts (task spec, subtask
-  files, execution plan). Added by `import` or `tasks` when ring pre-dev artifacts are
-  discovered. When present, stage agents (build, plan) MUST follow these links and read
-  the referenced files as part of the task's full specification.
-- Any additional context: API specs, data model, references, etc.
+- **Fonte:** Links to Ring pre-dev source (task spec, subtasks, execution plan).
+  Stage agents (build, plan, check) MUST follow these links and read the referenced
+  files for objective, acceptance criteria, and implementation details.
+- **Progresso:** Checkboxes tracking implementation progress (`- [x]` / `- [ ]`)
 
-Agents read these files to understand what to implement and validate. This split
-prevents merge conflicts when multiple worktrees work on different tasks — each
-worktree only modifies its own `docs/tasks/T-NNN.md` file.
+Agents read objective and acceptance criteria from the Ring source (via Fonte links).
+The overlay only tracks operational state — it does NOT duplicate content from Ring.
+Tasks without Ring pre-dev artifacts have an empty `## Progresso` section until
+Ring pre-dev is run.
 
-### Acceptance Criteria Tracking
+This split prevents merge conflicts when multiple worktrees work on different tasks —
+each worktree only modifies its own `docs/tasks/T-NNN.md` file.
 
-The checkboxes in **Critérios de Aceite** (in `docs/tasks/T-NNN.md`) are updated by stage agents as the task progresses:
-- **build** marks criteria as `- [x]` as each is implemented
-- **check** validates that marked criteria are actually satisfied
+Example overlay:
+```markdown
+# T-038: User Registration API
+
+## Fonte
+**Task spec:** `docs/pre-dev/tasks/task_020.md`
+**Subtasks:** `docs/pre-dev/subtasks/T-020/`
+**Plano:** `docs/pre-dev/subtasks/T-020/PARALLEL-PLAN.md`
+
+## Progresso
+- [x] ST-020-01: Database schema
+- [ ] ST-020-02: API endpoints
+- [ ] ST-020-03: Input validation
+```
+
+### Progress Tracking
+
+The checkboxes in **Progresso** (in `docs/tasks/T-NNN.md`) are updated by stage agents:
+- **build** marks items as `- [x]` as each is implemented
+- **check** validates that marked items are actually satisfied by reading the Ring source
   (flags mismatches: `[x]` but not implemented → HIGH, `[ ]` but implemented → MEDIUM)
 
-This ensures the task detail files accurately reflect what was delivered at every point in the lifecycle.
+This ensures the overlay accurately reflects what was delivered at every point in the lifecycle.
 
 ### Version Management
 
@@ -480,9 +506,9 @@ Any status → Cancelado  (via tasks cancel operation)
    Consider removing this dependency via `/optimus-tasks`." This helps the user
    understand the blocker requires a dependency edit, not waiting for completion.
 7. **Expanded confirmation on status change** — when a stage agent is about to change
-   a task's status, it shows the task description (from `docs/tasks/T-NNN.md`: Objetivo + Critérios de Aceite) and
-   asks for explicit confirmation via `AskUser`. This prevents accidental status changes
-   on the wrong task, especially during auto-detect.
+   a task's status, it shows the task summary (title, version, and Progresso from
+   `docs/tasks/T-NNN.md`) and asks for explicit confirmation via `AskUser`. This
+   prevents accidental status changes on the wrong task, especially during auto-detect.
 
    **Show expanded confirmation when:**
    - The status will actually change (not re-execution), AND
