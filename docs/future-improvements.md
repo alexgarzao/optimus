@@ -53,4 +53,58 @@ Implement optimizations if:
 - An optimization (delta-only, selective dispatch) reduces cost by > 50% without
   increasing false convergence rate
 
+---
+
+## I2: Weighted Version Progress by Task Estimate
+
+**Status:** Open
+**Affects:** report, quick-report
+**Priority:** Low
+
+### Context
+
+After removing per-task Progresso checkboxes (PR #4), version progress is calculated
+as a simple binary count: `Done / (Total - Cancelled)`. This means a version with
+3 XL tasks DONE out of 10 S tasks pending shows 30% — even though the bulk of the
+effort is already delivered.
+
+### Idea
+
+Weight each task's contribution to version progress by its Estimate column
+(S=1, M=2, L=3, XL=5, or similar). Progress becomes:
+`Sum(weight of DONE tasks) / Sum(weight of all non-cancelled tasks)`.
+
+The Estimate column already exists in tasks.md and comes from Ring pre-dev, so
+no extra data collection is needed.
+
+### Analysis
+
+**Arguments for:**
+- Better reflects actual effort delivered, especially in versions with mixed-size tasks.
+- Data already available — no user overhead.
+- Simple to implement — a mapping table and a weighted sum.
+
+**Arguments against:**
+- Estimates are guesses. Weighting guesses with guesses adds false precision.
+- Estimate is optional (can be `-`). Tasks without estimates need a fallback (default
+  weight of 1? exclude from weighted calc?). Mixed presence makes the number unreliable.
+- Free-text format (`S`, `M`, `L`, `XL`, `2h`, `1d`, `3d`) requires normalization.
+  Non-standard values need heuristics or a strict allowlist.
+- Harder to interpret at a glance. "50%" today means "5 of 10 tasks". "50% weighted"
+  requires the user to remember the weighting scheme.
+- The full task table in report already shows every task with its status and estimate —
+  users who want effort-aware assessment can read it directly.
+
+### Recommendation
+
+**Do not implement.** The complexity-to-benefit ratio is unfavorable. Simple binary
+counting is predictable, easy to understand, and does not depend on estimate quality.
+Users needing finer granularity can inspect the task table directly.
+
+If revisited in the future, consider:
+1. Only activate weighted progress when ALL tasks have estimates (no `-` values).
+2. Restrict Estimate to a fixed enum (`S`, `M`, `L`, `XL`) to avoid normalization issues.
+3. Show both values: `50% (5/10 tasks) | 72% (weighted by estimate)` — let the user
+   choose which to trust.
+
 
