@@ -1024,8 +1024,11 @@ All cycle review skills follow this pattern:
    grouped entries — a group of 5 same-nature findings counts as 1)
 5. Present overview table with severity counts
 6. **Deep research BEFORE presenting each finding** (see research checklist below)
-7. Walk through findings ONE AT A TIME with `"Finding X of N"` header, severity order.
-   For grouped entries, list all affected files/locations within the single presentation.
+7. Walk through findings ONE AT A TIME with `"Finding X of N"` header, ordered by severity
+   (CRITICAL first, then HIGH, MEDIUM, LOW). **ALL findings MUST be presented regardless of
+   severity** — the agent NEVER skips, filters, or auto-resolves any finding. The decision to
+   fix or skip is ALWAYS the user's. For grouped entries, list all affected files/locations
+   within the single presentation.
 8. For each finding: present research-backed analysis + options, collect decision via AskUser.
    **Every AskUser for a finding decision MUST include a "Tell me more" option.** This option
    is always the **second-to-last** option (right before the free-text input that AskUser
