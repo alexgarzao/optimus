@@ -87,7 +87,7 @@ For operations that do not use `gh` (create, edit, remove, reorder, version mana
    "No tasks.md found. What should I do?"
    - **(a) Create at docs/tasks.md** (default location)
    - **(b) Create at a custom path** — user specifies (e.g., `project/tasks.md`)
-   - **(c) Run migrate** — use this if you already have task files in another format
+   - **(c) Run import** — use this if you already have task files in another format
 
    If the user chooses to create:
    1. Determine the path (`TASKS_FILE`) — default or custom

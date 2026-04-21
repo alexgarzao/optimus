@@ -15,7 +15,7 @@ optimus/
 ├── catalog/                           # Skill reference cards (read-only docs)
 │   ├── analysis/                      # Review/analysis skill cards
 │   └── system/                        # Orchestration skill cards
-├── migrate/                   # Admin: Task format migrator (one-time)
+├── import/                    # Admin: Import external task artifacts (re-runnable)
 ├── report/                    # Admin: Task status dashboard (read-only)
 ├── tasks/                      # Admin: Create, edit, remove, reorder tasks
 ├── batch/                     # Execution: Pipeline orchestrator (stages 1-5)
@@ -138,7 +138,7 @@ path using this priority:
 
 1. **Read `.optimus.json`** at the project root. If `tasksFile` is set, use that path.
 2. **Fallback:** `docs/tasks.md` (default when no config exists).
-3. **If not found:** **STOP** and suggest running `migrate` to create one.
+3. **If not found:** **STOP** and suggest running `import` to create one.
 
 ```json
 {
@@ -498,7 +498,7 @@ Any status → Cancelado  (via tasks cancel operation)
 
    | Type | Agent | Allowed on main/default? | Reason |
    |------|-------|-------------------------|--------|
-   | Admin | migrate | Yes | Only creates/modifies tasks.md |
+   | Admin | import | Yes | Only creates/modifies tasks.md |
    | Admin | report | Yes | Read-only, no modifications |
    | Admin | quick-report | Yes | Read-only, no modifications |
    | Admin | tasks | Yes | Only creates/edits/removes tasks in tasks.md |

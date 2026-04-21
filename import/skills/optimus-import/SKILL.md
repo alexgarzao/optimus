@@ -85,7 +85,7 @@ configured path, then scan known locations, then search recursively.
 CONFIGURED=$(cat .optimus.json 2>/dev/null | jq -r '.tasksFile // empty')
 ```
 If `CONFIGURED` is set and the file exists with the optimus format marker, inform the
-user: "Found configured tasks.md at `<path>`. Nothing to migrate." and **STOP**.
+user: "Found configured tasks.md at `<path>`. Nothing to import." and **STOP**.
 
 **Step 2 — Check known locations (in order):**
 ```
@@ -314,10 +314,10 @@ reference ring T-020. The match is by keyword similarity, never by ID.
 
 ### Step 1.5: Version Setup
 
-Since the Versions table is mandatory, ask the user for the default version to assign to migrated tasks:
+Since the Versions table is mandatory, ask the user for the default version to assign to imported tasks:
 
 ```
-The optimus format requires a Versions table. What version should I assign to the migrated tasks?
+The optimus format requires a Versions table. What version should I assign to the imported tasks?
 ```
 
 Options via `AskUser`:
@@ -507,9 +507,9 @@ Original files preserved."
 ### Step 4.5: Final Summary
 
 ```markdown
-## Migration Complete
+## Import Complete
 
-- **Tasks migrated:** N
+- **Tasks imported:** N
 - **Sources processed:** [list]
 - **tasks.md created:** <TASKS_FILE> + <TASKS_DIR>/T-NNN.md files
 - **Registered in:** .optimus.json (tasksFile: <TASKS_FILE>)
@@ -531,7 +531,7 @@ Original files preserved."
 - **NEVER assume dependencies from task order** — sequential IDs don't imply dependency
 - If a task has no content (just a title), create `TASKS_DIR/T-NNN.md` with empty Objetivo and Critérios de Aceite, and warn the user
 - If status inference is uncertain, mark as `Pendente` and flag as "(inferred)" in the inventory
-- If the project already has a valid tasks.md at the configured/default path (first line is `<!-- optimus:tasks-v1 -->`), inform the user and stop (nothing to migrate)
+- If the project already has a valid tasks.md at the configured/default path (first line is `<!-- optimus:tasks-v1 -->`), inform the user and stop (nothing to import)
 - Simple subtasks (< 20 lines) become checklist items in the parent task — never separate entries in the table
 - Rich subtasks (>= 20 lines, with code/steps/contracts) are linked via `## Referencia Pre-Dev` section — never inlined
 - Task IDs must be unique — if duplicates found, warn the user before proceeding

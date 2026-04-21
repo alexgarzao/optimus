@@ -190,12 +190,34 @@ Before loading docs, discover the project's structure and tooling:
 
 Read the discovered reference docs to build full context:
 - Tasks file — the task being executed (find the task by ID)
+- **Ring pre-dev references** (see Step 1.7.1 below)
 - API contracts
 - DB schema / data model
 - Technical architecture (TRD)
 - Business requirements (PRD)
 - Coding standards / project rules
 - Dependency relationships
+
+### Step 1.7.1: Load Ring Pre-Dev References
+
+Check the task's detail file (`docs/tasks/T-XXX.md`) for a `## Referencia Pre-Dev` section.
+If present, follow the links and read ALL referenced artifacts:
+
+1. **Task spec** (`docs/pre-dev/tasks/task_NNN.md`) — contains the validated task
+   specification with objective, acceptance criteria, API contracts, data model, and
+   implementation guidance produced by the ring pre-dev workflow.
+2. **Subtask files** (`docs/pre-dev/subtasks/T-NNN/*.md`) — contain step-by-step
+   implementation instructions with exact code examples, file paths, and commands.
+   Read ALL subtask files listed in the reference table.
+3. **Execution plan** (`PARALLEL-PLAN.md`) — if referenced, contains the parallelization
+   strategy and phase ordering for subtask execution.
+
+**These artifacts are the primary implementation guide.** When ring pre-dev references
+exist, they take precedence over generic inference from the acceptance criteria alone.
+The subtask files contain validated code examples and exact implementation steps that
+were reviewed by multiple AI agents during pre-dev — use them as the source of truth
+for HOW to implement, while the acceptance criteria remain the source of truth for
+WHAT to validate.
 
 ### Step 1.8: Explore Existing Codebase
 
