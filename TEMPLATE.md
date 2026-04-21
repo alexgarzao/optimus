@@ -8,8 +8,9 @@ Brief description of what this skill does.
 
 ## Variables
 
-- `{{variable_1}}`: Variable description
-- `{{variable_2}}`: Variable description
+- `{{variable_name}}`: Variable description
+
+Use `None — automatically detects ...` if the skill has no user-provided variables.
 
 ## Skill
 

@@ -91,6 +91,7 @@ Each agent receives the full content of all docs being reviewed.
 Required ring droids are not installed. Install them before running this skill:
   - ring-tw-team-docs-reviewer
   - ring-default-business-logic-reviewer
+  - ring-default-code-reviewer
 ```
 
 **Droids to dispatch:**

@@ -31,7 +31,9 @@ optimus/
 ├── deep-doc-review/                   # Documentation review
 ├── coderabbit-review/                 # CodeRabbit CLI + TDD cycle
 ├── verify/                            # Automated verification (lint/test/build)
-└── help/                              # Skill discovery and help
+├── help/                              # Skill discovery and help
+└── docs/                              # Project documentation
+    └── future-improvements.md         # Tracked improvements not yet prioritized
 ```
 
 Each plugin follows the same layout:
