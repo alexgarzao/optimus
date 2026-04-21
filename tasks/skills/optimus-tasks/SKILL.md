@@ -351,7 +351,7 @@ Determine which field(s) to edit. Editable fields:
 | Status | **No** | Status is managed ONLY by stage agents |
 | Branch | **No** | Branch is managed ONLY by stage-1 and close |
 | ID | **No** | IDs are immutable |
-| Ring reference | No | Updates `## Fonte` in `docs/tasks/T-NNN.md` |
+| Ring reference | **No** | Managed by import and task creation only |
 
 **HARD BLOCK:** If the user tries to change Status or Branch, refuse:
 ```
@@ -366,8 +366,7 @@ task, use "reopen T-XXX".
 1. Update the relevant column(s) in the table row in `docs/tasks.md`
 2. If Title changed, also update the heading in `docs/tasks/T-NNN.md`
 3. If Depends changed, validate all references exist and no circular dependencies
-4. If Ring reference changed, update `## Fonte` in `docs/tasks/T-NNN.md`
-5. Save the file(s)
+4. Save the file(s)
 
 ### Step 3.2: Confirm
 
