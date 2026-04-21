@@ -283,6 +283,10 @@ Gather the following for the agent:
 
 ### Step 5.2: Dispatch Test Gap Analyzer
 
+**NOTE:** This step requires ring droids (`ring-default-ring-test-reviewer` or
+`ring-dev-team-qa-analyst`). If neither is available, mark this phase as SKIP
+and note in the executive summary: "Test gap analysis skipped — ring droids not installed."
+
 Dispatch a single agent via `Task` tool to analyze gaps:
 
 ```

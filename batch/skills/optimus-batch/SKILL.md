@@ -150,13 +150,13 @@ For each task in the execution order:
 Invoke each stage sequentially. **CRITICAL:** Always pass the task ID explicitly to each
 stage to prevent auto-detect from picking the wrong task.
 
-| Stage | Invocation | Status After |
-|-------|-----------|-------------|
-| 1 | "spec T-XXX" (via Skill tool) | Validando Spec |
-| 2 | "execute T-XXX" (via Skill tool) | Em Andamento |
-| 3 | "validate T-XXX" (via Skill tool) | Validando Impl |
-| 4 (optional) | "review PR for T-XXX" (via Skill tool) | Revisando PR |
-| 5 | "close T-XXX" (via Skill tool) | **DONE** |
+| Stage | Skill | Invocation | Status After |
+|-------|-------|-----------|-------------|
+| 1 | `optimus-plan` | "spec T-XXX" (via Skill tool) | Validando Spec |
+| 2 | `optimus-build` | "execute T-XXX" (via Skill tool) | Em Andamento |
+| 3 | `optimus-check` | "validate T-XXX" (via Skill tool) | Validando Impl |
+| 4 (optional) | `optimus-pr-check` | "review PR for T-XXX" (via Skill tool) | Revisando PR |
+| 5 | `optimus-done` | "close T-XXX" (via Skill tool) | **DONE** |
 
 **Worktree context switch:** Before invoking stages 2-5, switch to the task's worktree
 directory (from Step 1.5 tracking). Stage-1 may create the worktree — capture its output

@@ -100,19 +100,19 @@ Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 ### Step 1.0.1: Find and Validate tasks.md
 **HARD BLOCK:** Find and validate tasks.md — see AGENTS.md Protocol: tasks.md Validation.
 
-### Step 1.0.1.2: Verify Workspace (HARD BLOCK)
+### Step 1.0.2: Verify Workspace (HARD BLOCK)
 Resolve workspace — see AGENTS.md Protocol: Workspace Auto-Navigation.
 
-### Step 1.0.1.3: Check tasks.md Divergence (warning)
+### Step 1.0.3: Check tasks.md Divergence (warning)
 Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 
-### Step 1.0.1.4: Branch-Task Cross-Validation
+### Step 1.0.4: Branch-Task Cross-Validation
 Branch-task cross-validation — included in AGENTS.md Protocol: Workspace Auto-Navigation.
 
-### Step 1.0.1.5: Validate PR Title (if PR exists)
+### Step 1.0.5: Validate PR Title (if PR exists)
 Validate PR title — see AGENTS.md Protocol: PR Title Validation.
 
-### Step 1.0.2: Identify Task to Validate
+### Step 1.0.6: Identify Task to Validate
 
 **If the user specified a task ID** (e.g., "validate T-012"):
 - Use the provided task ID
@@ -126,12 +126,12 @@ Validate PR title — see AGENTS.md Protocol: PR Title Validation.
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
 
-### Step 1.0.2.1: Check Session State
+### Step 1.0.7: Check Session State
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`check`, status=`Validando Impl`.
 
 **On stage completion** (after Phase 10 validation summary): delete the session file.
 
-### Step 1.0.3: Validate and Update Task Status
+### Step 1.0.8: Validate and Update Task Status
 
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
@@ -406,11 +406,13 @@ Required output format:
 4. If the task has API endpoints, verify request/response format matches API contracts
 5. If the task has DB changes, verify column types/constraints match the data model
 
-**Cross-File Consistency agent** must additionally:
+**Ripple Effects agent** (`ring-default-ring-consequences-reviewer`) must additionally:
 1. Check for values duplicated between files that should be a shared constant
 2. Verify imports follow the project's layer architecture (no circular deps, no backwards imports)
 3. Check that new code follows the same patterns as existing code in the same domain
-4. Look for dead code (unused imports, unreachable branches, commented-out code)
+
+**Dead Code agent** (`ring-default-ring-dead-code-reviewer`) must additionally:
+1. Look for dead code (unused imports, unreachable branches, commented-out code)
 
 ---
 
