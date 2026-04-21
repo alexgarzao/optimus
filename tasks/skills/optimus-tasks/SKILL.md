@@ -291,9 +291,25 @@ If too long, ask the user to shorten it.
 
 ### Step 2.2: Generate Task ID
 
-1. Parse all existing task IDs from the table
-2. Find the highest numeric value (e.g., if T-012 exists, next is T-013)
-3. Format as `T-NNN` with zero-padding to 3 digits
+Collect IDs from ALL sources to avoid collisions with parallel branches:
+
+1. **Local:** Parse all existing task IDs from the current branch's tasks.md table
+2. **Remote:** Fetch and parse IDs from the default branch on origin:
+   ```bash
+   DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+   git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
+   git show "origin/$DEFAULT_BRANCH:$TASKS_FILE" 2>/dev/null | grep -oE 'T-[0-9]+'
+   ```
+   If fetch fails (no network), warn the user: "Could not reach remote — ID may
+   collide with tasks created on other branches. Continuing with local IDs only."
+3. **Worktrees:** Scan parallel worktrees for IDs:
+   ```bash
+   git worktree list --porcelain 2>/dev/null | grep "^worktree " | while read _ path; do
+     cat "$path/$TASKS_FILE" 2>/dev/null | grep -oE 'T-[0-9]+'
+   done
+   ```
+4. **Next ID:** `max(local, remote, worktrees) + 1`
+5. Format as `T-NNN` with zero-padding to 3 digits
 
 ### Step 2.3: Validate Dependencies
 
