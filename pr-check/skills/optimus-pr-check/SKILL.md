@@ -763,12 +763,7 @@ selects "Tell me more" or responds with free text: STOP, research and answer RIG
 
 Record: finding ID, source(s), decision (fix/skip/defer), chosen option. Do NOT apply any fix yet.
 
-### Batch Processing
-
-If there are 3+ findings of the same nature (e.g., "missing error handling in 5 handlers",
-"inconsistent import path in 4 files"), group them and present as a single batch entry with
-the list of affected files. Ask via `AskUser` if all can be applied at once. This avoids
-repetitive one-by-one decisions for identical issues.
+**Same-nature grouping:** applied automatically per AGENTS.md "Finding Presentation" item 3.
 
 ---
 

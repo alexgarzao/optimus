@@ -1015,15 +1015,22 @@ directly rather than via ring droid TDD cycle.
 All cycle review skills follow this pattern:
 1. Collect findings from agents/tools
 2. Consolidate and deduplicate
-3. Announce total findings count: `"### Total findings to review: N"`
-4. Present overview table with severity counts
-5. **Deep research BEFORE presenting each finding** (see research checklist below)
-6. Walk through findings ONE AT A TIME with `"Finding X of N"` header, severity order
-7. For each finding: present research-backed analysis + options, collect decision via AskUser.
+3. **Group same-nature findings** — after deduplication, identify findings that share the
+   same root cause or fix pattern (e.g., "missing error handling" in 5 handlers, "inconsistent
+   import path" in 4 files). If 2+ findings are of the same nature, merge them into a **single
+   grouped entry** listing all affected files/locations. Each group counts as ONE item in the
+   "Finding X of N" sequence. The user makes ONE decision for the entire group.
+4. Announce total findings count: `"### Total findings to review: N"` (where N reflects
+   grouped entries — a group of 5 same-nature findings counts as 1)
+5. Present overview table with severity counts
+6. **Deep research BEFORE presenting each finding** (see research checklist below)
+7. Walk through findings ONE AT A TIME with `"Finding X of N"` header, severity order.
+   For grouped entries, list all affected files/locations within the single presentation.
+8. For each finding: present research-backed analysis + options, collect decision via AskUser.
    **Every AskUser for a finding decision MUST include a "Tell me more" option.** This option
    is always the **second-to-last** option (right before the free-text input that AskUser
    provides automatically). This lets the user request deeper analysis with one click.
-8. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
+9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
    (a question, disagreement, or request for clarification) instead of a decision:**
    **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
    Research the user's concern RIGHT NOW using `WebSearch`, codebase analysis, or both.
@@ -1031,9 +1038,9 @@ All cycle review skills follow this pattern:
    Only AFTER the user is satisfied, re-present the options and ask for their decision again.
    This may go back and forth multiple times — that is expected and correct behavior.
    **NEVER defer the response to the end of the findings loop.**
-9. After ALL N decisions collected: apply ALL approved fixes (see below)
-10. Run verification (see Verification Timing below)
-11. Present final summary
+10. After ALL N decisions collected: apply ALL approved fixes (see below)
+11. Run verification (see Verification Timing below)
+12. Present final summary
 
 ### Fix Implementation (Complexity-Based Dispatch)
 

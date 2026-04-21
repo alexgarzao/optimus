@@ -284,9 +284,7 @@ Record the decision internally. Do NOT apply any fix yet — all fixes are appli
 
 For findings with a direct, unambiguous fix: present the problem + proposed fix + "Accept?" in a single block to speed up the flow.
 
-### Batch Processing
-
-If there are 3+ findings of the same nature (e.g., "inconsistent import path in 5 files"), group them and present as a batch with the list of affected files. Ask if all can be applied at once.
+**Same-nature grouping:** applied automatically per AGENTS.md "Finding Presentation" item 3.
 
 ---
 

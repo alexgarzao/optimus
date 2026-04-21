@@ -253,12 +253,7 @@ The user may:
 
 Record the decision internally. Do NOT apply any fix yet — all fixes are applied in Phase 4.
 
-### Batch Processing
-
-If there are 3+ findings of the same nature (e.g., "missing error handling in 5 handlers",
-"inconsistent import path in 4 files"), group them and present as a single batch entry with
-the list of affected files. Ask via `AskUser` if all can be applied at once. This avoids
-repetitive one-by-one decisions for identical issues.
+**Same-nature grouping:** applied automatically per AGENTS.md "Finding Presentation" item 3.
 
 ---
 
