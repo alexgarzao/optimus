@@ -121,13 +121,15 @@ How should I proceed?
 
 Options (via `AskUser`):
 - **Use #N** — adopt the optimus-format file as the source for existing task data
-- **Ignore all** — create from scratch (all tasks start as Pendente with no dependencies)
+- **Ignore all** — create from scratch (all tasks start as Pendente with no dependencies, version will be asked in Step 1.4)
 
 **Only optimus-format files are selectable.** Non-optimus files are shown for
 transparency but cannot be selected.
 
 **If the user chooses "Use #N":**
-- Parse the selected file's task table into a lookup map: `{task_id → {Status, Depends, Priority, Version, Branch, Estimate}}`
+- Parse the selected file's task table and overlay files into a lookup map keyed by Ring source: `{ring_task_spec_path → {ID, Status, Depends, Priority, Version, Branch, Estimate}}`
+  - For each task in the table, read its overlay file and extract the `## Fonte` → `Task spec` path
+  - Tasks without an overlay or without a Fonte link are keyed by their ID as fallback
 - Parse the Versions table and carry it over to the new tasks.md
 - Store this as `EXISTING_DATA` for use in Step 1.3
 - The existing file is NOT modified or deleted — only read
@@ -151,9 +153,13 @@ For each Ring pre-dev task not yet imported:
 | **Estimate** | From `EXISTING_DATA` if available, else `-` | `-` |
 
 **When `EXISTING_DATA` is available** (from Step 1.2), match Ring pre-dev tasks to
-existing tasks by ID (e.g., Ring's T-001 matches existing T-001). For matched tasks,
+existing tasks by Fonte link — the Ring task spec path referenced in the overlay's
+`## Fonte` section (e.g., `docs/pre-dev/tasks/task_001.md`). For matched tasks,
 carry over Status, Depends, Priority, Version, Branch, and Estimate. For unmatched
 tasks (new in Ring but not in existing data), use defaults.
+
+**IMPORTANT:** Do NOT match by task ID. IDs between Optimus and Ring are independent
+(Optimus T-038 may reference Ring T-020). Always match by the Ring source file path.
 
 **Note:** Tasks that exist in `EXISTING_DATA` but NOT in Ring pre-dev are carried over
 as-is (they may have been created manually via `/optimus-tasks`). Present these to the
