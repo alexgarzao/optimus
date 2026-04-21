@@ -72,7 +72,7 @@
       "source": "./coderabbit-review"
     },
     {
-      "name": "verify",
+      "name": "verify-code",
       "description": "Two-phase code verification (Go, TypeScript, Python, generic): parallel static analysis + sequential test execution with executive summary.",
       "source": "./verify"
     },

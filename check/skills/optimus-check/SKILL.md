@@ -55,9 +55,11 @@ examples:
       5. Apply fixes, verify
 related:
   complementary:
+    - optimus-plan
     - optimus-build
-    - requesting-code-review
-    - dev-validation
+    - optimus-deep-doc-review
+    - requesting-code-review  # external: ring ecosystem
+    - dev-validation  # external: ring ecosystem
   differentiation:
     - name: requesting-code-review
       difference: >
@@ -305,7 +307,7 @@ Create findings for coverage issues:
 
 ### Step 2.4: Test Scenario Gap Analysis
 
-Dispatch a test gap analyzer via `Task` tool (use `ring-default-ring-test-reviewer`).
+Dispatch a test gap analyzer via `Task` tool. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
 
 The agent receives: source files, test files, and coverage output (if available).
 
@@ -855,7 +857,7 @@ If the user requests a dry-run (e.g., "dry-run review T-012", "preview review"):
 - Run ALL analysis phases (Phase 2, Phase 3, Phase 4, Phase 5) normally
 - Present ALL findings in Phase 6 (interactive resolution)
 - **Do NOT apply any fixes** — skip Phase 7 (batch apply) entirely
-- **Do NOT change task status** — skip the status update in Step 1.0.3
+- **Do NOT change task status** — skip the status update in Step 1.0.8
 - **Do NOT run the convergence loop** — one pass is sufficient for estimation
 - Present a summary showing: total findings, severity breakdown, estimated fix effort
 - This allows the user to see what would happen before committing to a full review

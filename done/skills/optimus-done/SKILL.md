@@ -251,12 +251,12 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 ```
 
-- If config.json exists, use its commands for checks 5-8 (empty string means skip)
-- If config.json does not exist or a key is missing, fall back to Makefile targets
+- If .optimus.json exists, use its commands for checks 5-8 (empty string means skip)
+- If .optimus.json does not exist or a key is missing, fall back to Makefile targets
 
 #### Check 5: Lint Passes
 
-Run `$LINT_CMD` (from config.json) or `make lint` (fallback).
+Run `$LINT_CMD` (from .optimus.json) or `make lint` (fallback).
 
 ```bash
 make lint
@@ -273,7 +273,7 @@ The Makefile is responsible for knowing which tools apply to the stack.
 
 #### Check 6: Unit Tests Pass
 
-Run `$TEST_CMD` (from config.json) or `make test` (fallback).
+Run `$TEST_CMD` (from .optimus.json) or `make test` (fallback).
 
 ```bash
 make test
@@ -284,7 +284,7 @@ make test
 
 #### Check 7: Integration Tests Pass (if Makefile target exists)
 
-Run `$TEST_INT_CMD` (from config.json) or `make test-integration` (fallback).
+Run `$TEST_INT_CMD` (from .optimus.json) or `make test-integration` (fallback).
 
 ```bash
 make test-integration
@@ -296,7 +296,7 @@ make test-integration
 
 #### Check 8: E2E Tests Pass (if Makefile target exists)
 
-Run `$TEST_E2E_CMD` (from config.json) or `make test-e2e` (fallback).
+Run `$TEST_E2E_CMD` (from .optimus.json) or `make test-e2e` (fallback).
 
 ```bash
 make test-e2e

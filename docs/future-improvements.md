@@ -53,14 +53,4 @@ Implement optimizations if:
 - An optimization (delta-only, selective dispatch) reduces cost by > 50% without
   increasing false convergence rate
 
----
 
-## I5: Evaluate Convergence Loop for deep-review
-
-**Status:** Closed (implemented)
-**Affects:** deep-review
-**Priority:** N/A
-
-**Resolution:** deep-review now includes a mandatory convergence loop (Phase 7) using
-the fresh sub-agent model, same as cycle review skills. The loop uses round 2 mandatory
-with up to 5 rounds total. Closed as implemented.

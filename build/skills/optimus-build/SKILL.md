@@ -48,11 +48,11 @@ examples:
       2. dev-cycle resumes from last completed gate
 related:
   complementary:
-    - dev-cycle
-    - dev-implementation
-    - dev-testing
-    - requesting-code-review
-    - dev-validation
+    - dev-cycle  # external: ring ecosystem
+    - dev-implementation  # external: ring ecosystem
+    - dev-testing  # external: ring ecosystem
+    - requesting-code-review  # external: ring ecosystem
+    - dev-validation  # external: ring ecosystem
   differentiation:
     - name: dev-cycle
       difference: >
@@ -64,10 +64,10 @@ related:
   sequence:
     after:
       - optimus-plan
-      - pre-dev-task-breakdown
-      - pre-dev-subtask-creation
+      - pre-dev-task-breakdown  # external: ring ecosystem
+      - pre-dev-subtask-creation  # external: ring ecosystem
     before:
-      - dev-feedback-loop
+      - dev-feedback-loop  # external: ring ecosystem
 verification:
   automated:
     - command: "cat docs/dev-cycle/current-cycle.json 2>/dev/null | jq '.status'"

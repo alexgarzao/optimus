@@ -2,8 +2,8 @@
 name: optimus-deep-review
 description: >
   Parallel code review with consolidation, deduplication, and interactive
-  finding-by-finding resolution. Supports initial (5 agents, critical gaps)
-  and final (7 agents, full coverage including stack idiomaticity) review modes.
+  finding-by-finding resolution. Supports initial (8 agents, critical gaps)
+  and final (10 agents, full coverage including stack idiomaticity) review modes.
   Flexible scope: entire project, git diff, or specific directory.
 trigger: >
   - When user requests code review (e.g., "review the code", "code review")
@@ -26,7 +26,7 @@ examples:
     invocation: "Review the code (initial)"
     expected_flow: >
       1. Ask scope (all files, git diff, directory)
-      2. Dispatch 5 agents in parallel
+      2. Dispatch 8 agents in parallel
       3. Consolidate and deduplicate findings
       4. Present overview table
       5. Walk through findings one by one
@@ -36,7 +36,7 @@ examples:
     invocation: "Final code review before merge"
     expected_flow: >
       1. Ask scope
-      2. Dispatch 7 agents in parallel (includes stack-specific agents)
+      2. Dispatch 10 agents in parallel (includes stack-specific agents)
       3. Consolidate, present, resolve findings
       4. Apply fixes, present summary
   - name: Review specific directory
@@ -86,8 +86,8 @@ Before starting, determine the review parameters.
 
 Ask the user which type of review:
 
-- **Initial** (recurring review during development): 5 agents, focused on correctness and critical gaps
-- **Final** (review before merge/deployment): 7 agents, full coverage including stack idiomaticity
+- **Initial** (recurring review during development): 8 agents, focused on correctness and critical gaps
+- **Final** (review before merge/deployment): 10 agents, full coverage including stack idiomaticity
 
 ### Step 1.2: Determine Scope
 
@@ -117,9 +117,12 @@ Required ring droids are not installed. Install them before running this skill:
   - ring-default-business-logic-reviewer
   - ring-default-security-reviewer
   - ring-default-ring-test-reviewer
+  - ring-default-ring-nil-safety-reviewer
+  - ring-default-ring-dead-code-reviewer
+  - ring-dev-team-qa-analyst
 ```
 
-### Initial Review (5 agents)
+### Initial Review (8 agents)
 
 | # | Agent | Focus | Ring Droid |
 |---|-------|-------|------------|
@@ -128,13 +131,16 @@ Required ring droids are not installed. Install them before running this skill:
 | 3 | **Security reviewer** | Vulnerabilities, authentication, input validation, OWASP, secrets | `ring-default-security-reviewer` |
 | 4 | **Test quality analyst** | Test coverage gaps (unit, integration, E2E), error scenario coverage, flaky patterns | `ring-default-ring-test-reviewer` |
 | 5 | **Cross-file consistency** | Interfaces vs implementations, DTOs, imports, registered routes, shared constants, dead code | `ring-default-ring-consequences-reviewer` |
+| 6 | **Nil/Null safety reviewer** | Nil pointer risks, unsafe dereferences, missing guards, panic paths | `ring-default-ring-nil-safety-reviewer` |
+| 7 | **Dead code reviewer** | Orphaned code, unreachable branches, unused imports, commented-out code, zombie test infrastructure | `ring-default-ring-dead-code-reviewer` |
+| 8 | **QA analyst** | Test strategy validation, scenario coverage, edge case identification, error path verification | `ring-dev-team-qa-analyst` |
 
-### Final Review (7 agents — includes the 5 above plus)
+### Final Review (10 agents — includes the 8 above plus)
 
 | # | Agent | Focus | Ring Droid |
 |---|-------|-------|------------|
-| 6 | **Backend specialist** | Language idiomaticity, performance, concurrency, ecosystem patterns | `ring-dev-team-backend-engineer-golang` (Go) / `ring-dev-team-backend-engineer-typescript` (TS) |
-| 7 | **Frontend specialist** | Framework patterns, hooks, components, accessibility, responsive design, performance | `ring-dev-team-frontend-engineer` |
+| 9 | **Backend specialist** | Language idiomaticity, performance, concurrency, ecosystem patterns | `ring-dev-team-backend-engineer-golang` (Go) / `ring-dev-team-backend-engineer-typescript` (TS) |
+| 10 | **Frontend specialist** | Framework patterns, hooks, components, accessibility, responsive design, performance | `ring-dev-team-frontend-engineer` |
 
 ### Agent Prompt Template
 
@@ -317,10 +323,24 @@ For each approved fix, apply the change. After each fix, confirm what changed in
 For fixes that alter execution flow, conditions, or observable behavior, run unit tests
 after the fix to verify no regressions.
 
+Check `.optimus.json` for custom commands before running any verification:
+
+```bash
+CONFIG_FILE=".optimus.json"
+if [ -f "$CONFIG_FILE" ]; then
+  LINT_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands.lint // empty')
+  TEST_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands.test // empty')
+fi
+```
+
+Use configured commands if present (empty string means skip that check). Fall back to
+`make lint` / `make test` if `.optimus.json` is missing or the key is absent.
+
 ### Step 6.3: Final Lint Check
 
 After ALL fixes are applied, run lint once (if available):
 ```bash
+$LINT_CMD   # from .optimus.json, or fallback:
 make lint
 ```
 If lint fails, fix formatting issues.

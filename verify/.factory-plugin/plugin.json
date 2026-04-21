@@ -1,5 +1,5 @@
 {
-  "name": "verify",
+  "name": "verify-code",
   "description": "Two-phase code verification (Go, TypeScript, Python, generic): parallel static analysis + sequential test execution with executive summary.",
   "version": "1.0.0",
   "author": {

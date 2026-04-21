@@ -14,9 +14,7 @@ optimus/
 ├── TEMPLATE.md                        # Template for catalog entries
 ├── catalog/                           # Skill reference cards (read-only docs)
 │   ├── analysis/                      # Review/analysis skill cards
-│   ├── coding/                        # Coding skill cards
-│   ├── system/                        # Orchestration skill cards
-│   └── writing/                       # Writing skill cards
+│   └── system/                        # Orchestration skill cards
 ├── migrate/                   # Admin: Task format migrator (one-time)
 ├── report/                    # Admin: Task status dashboard (read-only)
 ├── tasks/                      # Admin: Create, edit, remove, reorder tasks
@@ -788,10 +786,12 @@ Skills reference this as: "Check tasks.md divergence — see AGENTS.md Protocol:
 
 After committing a status change, invoke notification hooks if present:
 
+**IMPORTANT:** Always quote all arguments to prevent shell injection from user-derived values.
+
 ```bash
 HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
 if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" <event> <task-id> <old-status> <new-status> 2>/dev/null &
+  "$HOOKS_FILE" "$event" "$task_id" "$old_status" "$new_status" 2>/dev/null &
 fi
 ```
 
@@ -800,7 +800,7 @@ Events: `status-change`, `task-done`, `task-cancelled`, `task-blocked`.
 When a dependency check fails:
 ```bash
 if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" task-blocked <task-id> "<current-status>" "<current-status>" "blocked by <dep-id> (<dep-status>)" 2>/dev/null &
+  "$HOOKS_FILE" "task-blocked" "$task_id" "$current_status" "$current_status" "blocked by $dep_id ($dep_status)" 2>/dev/null &
 fi
 ```
 
@@ -808,6 +808,40 @@ Hooks run in background (`&`) and their failure does NOT block the pipeline.
 If `tasks-hooks.sh` does not exist, hooks are silently skipped.
 
 Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol: Notification Hooks."
+
+### Protocol: Ring Droid Requirement Check
+
+**Referenced by:** check, pr-check, deep-review, deep-doc-review, coderabbit-review, plan, build
+
+Before dispatching ring droids, verify the required droids are available. If any required
+droid is not installed, **STOP** and list missing droids.
+
+**Core review droids** (required by check, pr-check, deep-review, coderabbit-review):
+- `ring-default-code-reviewer`
+- `ring-default-business-logic-reviewer`
+- `ring-default-security-reviewer`
+- `ring-default-ring-test-reviewer`
+
+**Extended review droids** (required by check, pr-check):
+- `ring-default-ring-nil-safety-reviewer`
+- `ring-default-ring-consequences-reviewer`
+- `ring-default-ring-dead-code-reviewer`
+
+**Documentation droids** (required by deep-doc-review):
+- `ring-tw-team-docs-reviewer`
+
+**Implementation droids** (required by build):
+- `ring-dev-team-backend-engineer-golang` (Go)
+- `ring-dev-team-backend-engineer-typescript` (TypeScript)
+- `ring-dev-team-frontend-engineer` (React/Next.js)
+
+**Spec validation droids** (required by plan):
+- `ring-default-business-logic-reviewer`
+- `ring-default-security-reviewer`
+- `ring-dev-team-qa-analyst`
+- `ring-default-code-reviewer`
+
+Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check."
 
 ### Protocol: PR Title Validation
 
@@ -975,6 +1009,16 @@ during development while ensuring full validation before push.
 - Lint is fast but only matters after all code is finalized — run once at end
 - Integration/E2E tests are slow (seconds to minutes) — run once before push to avoid
   blocking the review loop. If targets don't exist, skip.
+
+### Coverage Thresholds
+
+| Test Type | Threshold | Verdict if Below |
+|-----------|-----------|-----------------|
+| Unit tests | 85% | NEEDS_FIX / HIGH finding |
+| Integration tests | 70% | NEEDS_FIX / HIGH finding |
+
+All skills that measure coverage MUST use these thresholds. If coverage profiles cannot
+be generated (command fails or tool missing), report as SKIP — do not fail the verification.
 
 ### Deep Research Before Presenting (MANDATORY for cycle review skills)
 Applies to: plan, check, pr-check, coderabbit-review

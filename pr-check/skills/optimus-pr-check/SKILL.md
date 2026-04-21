@@ -910,6 +910,40 @@ If no coverage command is available, mark as SKIP.
 
 Dispatch a test gap analyzer via `Task` tool. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
 
+The agent receives:
+1. **Changed source files** -- full content (non-test files only)
+2. **Test files for changed source** -- full content
+3. **Coverage profile** -- coverage command output (if available)
+
+```
+Goal: Cross-reference implemented tests with source code to find missing scenarios.
+
+Context:
+  - Source files changed: [full content]
+  - Test files: [full content]
+  - Coverage profile: [coverage command output]
+
+Your job:
+  For each public function changed/added:
+  1. Unit tests: check for happy path, error paths, edge cases, validation failures
+  2. Integration tests: check for DB failure, timeout, retry, rollback scenarios
+  3. Report what EXISTS and what is MISSING
+
+Required output format:
+  ## Unit Test Gaps
+  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
+  |---|------|----------|--------------------|-------------------|----------|
+
+  ## Integration Test Gaps
+  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
+  |---|------|----------|--------------------|-------------------|----------|
+
+  ## Summary
+  - Functions analyzed: X
+  - Fully covered: X | Partial: X | No tests: X
+  - Missing scenarios: X HIGH, Y MEDIUM, Z LOW
+```
+
 HIGH priority gaps are presented as findings for user decision.
 
 ---
@@ -1250,7 +1284,7 @@ gh api graphql -f query='
 ### Verification
 - Lint: PASS
 - Unit tests: PASS (X tests) — Coverage: XX.X% (threshold: 85%)
-- Integration tests: PASS/SKIPPED — Coverage: XX.X% (threshold: 70%)
+- Integration tests: PASS/SKIPPED
 - E2E tests: PASS/SKIPPED
 
 ### Configuration Changes
