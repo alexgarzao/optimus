@@ -53,11 +53,15 @@ verification:
 
 Chains stages 1-5 for one or more tasks with user checkpoints between stages.
 
-**Classification:** Execution skill — creates/uses workspaces, modifies code.
+**Classification:** Administrative skill — orchestrates execution stages, delegates workspace creation and code modification to stage skills.
 
 ---
 
 ## Phase 1: Plan the Batch
+
+### Step 1.0: Verify GitHub CLI (HARD BLOCK)
+
+**HARD BLOCK:** Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
 ### Step 1.1: Find and Validate tasks.md
 

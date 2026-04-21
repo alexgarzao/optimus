@@ -37,7 +37,7 @@
     },
     {
       "name": "cycle-pr-review-stage-4",
-      "description": "Stage 4 (optional): Unified PR review orchestrator. Collects findings from Codacy, DeepSource, CodeRabbit, human reviewers, resolves threads. Runs between cycle-impl-review-stage-3 and cycle-close-stage-5.",
+      "description": "Stage 4 (optional): Unified PR review orchestrator. Collects PR metadata and existing comments (Codacy, DeepSource, CodeRabbit, human), dispatches agents, applies fixes, resolves threads.",
       "source": "./cycle-pr-review-stage-4"
     },
     {
@@ -57,28 +57,28 @@
     },
     {
       "name": "deep-doc-review",
-      "description": "Deep review of project documentation. Finds errors, inconsistencies, gaps, and improvements with interactive resolution.",
+      "description": "Deep review of project documentation. Finds errors, inconsistencies, gaps, and improvements with interactive one-by-one resolution.",
       "source": "./deep-doc-review"
     },
     {
       "name": "deep-review",
-      "description": "Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution.",
+      "description": "Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Supports initial (5 agents) and final (7 agents) review modes.",
       "source": "./deep-review"
     },
 
     {
       "name": "coderabbit-review",
-      "description": "CodeRabbit-driven code review with TDD fix cycle and secondary agent validation.",
+      "description": "CodeRabbit-driven code review with TDD fix cycle, secondary validation via review agents, and interactive finding resolution.",
       "source": "./coderabbit-review"
     },
     {
       "name": "verify",
-      "description": "Two-phase code verification (Go, TypeScript, Python, generic): parallel static analysis + sequential tests with MERGE_READY/NEEDS_FIX verdict.",
+      "description": "Two-phase code verification (Go, TypeScript, Python, generic): parallel static analysis + sequential test execution with executive summary.",
       "source": "./verify"
     },
     {
       "name": "help",
-      "description": "Lists all available Optimus skills with descriptions, usage commands, and situational guidance.",
+      "description": "Lists all available Optimus skills with descriptions, usage commands, and when to use each one.",
       "source": "./help"
     }
   ]

@@ -73,8 +73,8 @@ Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
 **HARD BLOCK:** Find and validate tasks.md — see AGENTS.md Protocol: tasks.md Validation.
 
-3. **Resolve workspace (HARD BLOCK):** See AGENTS.md Protocol: Workspace Auto-Navigation.
-4. **Branch-task cross-validation:** Included in AGENTS.md Protocol: Workspace Auto-Navigation.
+### Step 1.0.1.2: Resolve Workspace (HARD BLOCK)
+Resolve workspace — see AGENTS.md Protocol: Workspace Auto-Navigation. Branch-task cross-validation is included in this protocol.
 
 ### Step 1.0.2: Identify Task to Close
 
@@ -113,10 +113,10 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:
      - If ALL dependencies have status `**DONE**` → proceed
-     - If ANY dependency is NOT `**DONE**` → **STOP**:
-       ```
-       Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
-       ```
+     - If ANY dependency is NOT `**DONE**`:
+       - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
+       - If the dependency has status `Cancelado` → **STOP**: `"T-YYY was cancelled (Cancelado). Consider removing this dependency via /optimus-cycle-crud."`
+       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first."`
 4. **Expanded confirmation before status change:**
    - **If the user did NOT specify the task ID explicitly** (auto-detect):
      - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
@@ -335,9 +335,10 @@ All prerequisites met. Marking task as **DONE**.
 Then:
 1. Update the Status column in `tasks.md` to `**DONE**` (from either `Validando Impl` or `Revisando PR`)
 2. Commit: `chore(tasks): mark T-XXX as done`
-3. Invoke notification hooks (event=`task-done`) — see AGENTS.md Protocol: Notification Hooks.
-4. Push the commit
-5. Proceed to Phase 4 (cleanup).
+3. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
+4. Invoke notification hooks (event=`task-done`) — see AGENTS.md Protocol: Notification Hooks.
+5. Push the commit
+6. Proceed to Phase 4 (cleanup).
 
 **Why `chore(tasks):` and not the Tipo prefix:** Marking a task as DONE is an administrative
 status change in `tasks.md`, not a code change. The Tipo prefix (`feat`, `fix`, etc.) applies
@@ -525,7 +526,7 @@ Options:
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
 git checkout "$DEFAULT_BRANCH"
 git pull
-git branch -d <branch>
+git branch -d <branch> 2>/dev/null || git branch -D <branch>
 # If also deleting remote:
 git push origin --delete <branch>
 ```

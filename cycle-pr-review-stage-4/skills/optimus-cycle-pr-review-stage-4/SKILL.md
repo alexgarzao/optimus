@@ -116,21 +116,20 @@ This skill operates in TWO modes:
 When the user references a task (e.g., "review PR for T-012") or a `tasks.md` exists with a task in status `Validando Impl` or `Revisando PR`:
 
 1. **Find and validate tasks.md** — see AGENTS.md Protocol: tasks.md Validation.
-3. **Resolve workspace (HARD BLOCK):** See AGENTS.md Protocol: Workspace Auto-Navigation.
-3.1. **Branch-task cross-validation:** Included in AGENTS.md Protocol: Workspace Auto-Navigation.
-4. **Validate status:** The task MUST be in status `Validando Impl` (set by cycle-impl-review-stage-3) or `Revisando PR` (re-execution). If not, STOP and tell the user which agent to run first.
-5. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
+2. **Resolve workspace (HARD BLOCK):** See AGENTS.md Protocol: Workspace Auto-Navigation. Branch-task cross-validation is included in this protocol.
+3. **Validate status:** The task MUST be in status `Validando Impl` (set by cycle-impl-review-stage-3) or `Revisando PR` (re-execution). If not, STOP and tell the user which agent to run first.
+4. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:
      - If ALL dependencies have status `**DONE**` → proceed
-     - If ANY dependency is NOT `**DONE**` → **STOP**:
-       ```
-       Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
-       ```
-5.1. **Check session state:** Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`cycle-pr-review-stage-4`, status=`Revisando PR`.
+     - If ANY dependency is NOT `**DONE**`:
+       - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
+       - If the dependency has status `Cancelado` → **STOP**: `"T-YYY was cancelled (Cancelado). Consider removing this dependency via /optimus-cycle-crud."`
+       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first."`
+4.1. **Check session state:** Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`cycle-pr-review-stage-4`, status=`Revisando PR`.
 
    **On stage completion** (after Phase 14 final summary): delete the session file.
-6. **Expanded confirmation before status change:**
+5. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Revisando PR`) AND the user did NOT specify the task ID explicitly (auto-detect):
      - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
      - Present to the user via `AskUser`:
@@ -150,13 +149,14 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
      - **BLOCKING:** Do NOT change status until the user confirms
    - **If re-execution** (status is already `Revisando PR`) OR the user specified the task ID explicitly:
      - Skip expanded confirmation (user already has context)
-7. **Update status:** Change the task status in `tasks.md` to `Revisando PR` (if not already).
-8. Commit the status change immediately:
+6. **Update status:** Change the task status in `tasks.md` to `Revisando PR` (if not already).
+7. Commit the status change immediately:
    ```bash
    git add .optimus/tasks.md
    git commit -m "chore(tasks): set T-XXX status to Revisando PR"
    ```
-9. **Invoke notification hooks** (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
+8. **Invoke notification hooks** (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
+9. **Check tasks.md divergence (warning):** Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 
    **Why commit immediately:** If the session is interrupted or the agent crashes before any review fixes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of the review outcome.
 **NOTE:** At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes cycle-close-stage-5 next.
@@ -904,7 +904,7 @@ If no coverage command is available, mark as SKIP.
 
 **Threshold:** Unit tests: 85% minimum
 
-**NOTE:** Integration test coverage is measured in Phase 12 (before push), not here.
+**NOTE:** Integration test coverage is measured in Phase 11 (before push), not here.
 
 ### Step 9.2: Test Gap Analysis
 

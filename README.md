@@ -56,6 +56,8 @@ Skill reference cards organized by category:
 
 - `catalog/system/` — Orchestration and task execution skills
 - `catalog/analysis/` — Analysis and review skills
+- `catalog/coding/` — Coding skill cards
+- `catalog/writing/` — Writing skill cards
 
 ## How it works
 

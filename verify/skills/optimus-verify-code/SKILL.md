@@ -197,7 +197,7 @@ Options:
 
 After Phase 3 completes, analyze test coverage from the generated profiles.
 
-### Step 1: Extract Coverage Percentages
+### Step 4.1: Extract Coverage Percentages
 
 **Go:**
 ```bash
@@ -210,7 +210,7 @@ go tool cover -func=coverage-integration.out | tail -1 2>/dev/null
 
 **Python:** Parse the coverage summary from `pytest --cov` output (look for "TOTAL" line).
 
-### Step 2: Identify Coverage Gaps
+### Step 4.2: Identify Coverage Gaps
 
 For each coverage profile, identify packages/files with low coverage:
 
@@ -227,7 +227,7 @@ Flag files/packages below thresholds:
 - **MEDIUM:** < 70% coverage
 - **LOW:** < 85% coverage
 
-### Step 3: Identify Untested Functions
+### Step 4.3: Identify Untested Functions
 
 Extract functions with 0% coverage — these are potential test gaps:
 
@@ -240,7 +240,7 @@ For each untested function, classify:
 - **Infrastructure** (config, bootstrap, wiring) → MEDIUM priority gap
 - **Generated code** (mocks, protobuf) → can be excluded
 
-### Step 4: Coverage Summary
+### Step 4.4: Coverage Summary
 
 Include in the executive summary:
 
@@ -273,7 +273,7 @@ If coverage profiles cannot be generated (command fails), report as SKIP with no
 
 After coverage measurement, dispatch an agent to systematically identify missing test scenarios. Coverage % tells you HOW MUCH is tested; this phase tells you WHAT is NOT tested.
 
-### Step 1: Collect Inputs
+### Step 5.1: Collect Inputs
 
 Gather the following for the agent:
 1. **Source files:** Read all non-test source files in `internal/` (or equivalent) — handlers, services, repositories, domain models
@@ -281,7 +281,7 @@ Gather the following for the agent:
 3. **Coverage profile:** The output of `go tool cover -func=coverage-unit.out` (full output, not just total)
 4. **Integration test files:** Read all integration test files (tagged or in separate directories)
 
-### Step 2: Dispatch Test Gap Analyzer
+### Step 5.2: Dispatch Test Gap Analyzer
 
 Dispatch a single agent via `Task` tool to analyze gaps:
 
@@ -332,7 +332,7 @@ Use the appropriate ring droid:
 1. `ring-default-ring-test-reviewer` (preferred)
 2. `ring-dev-team-qa-analyst`
 
-### Step 3: Present Gap Summary
+### Step 5.3: Present Gap Summary
 
 Include in the executive summary after the coverage section:
 

@@ -132,10 +132,10 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:
      - If ALL dependencies have status `**DONE**` → proceed
-     - If ANY dependency is NOT `**DONE**` → **STOP**:
-       ```
-       Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
-       ```
+     - If ANY dependency is NOT `**DONE**`:
+       - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
+       - If the dependency has status `Cancelado` → **STOP**: `"T-YYY was cancelled (Cancelado). Consider removing this dependency via /optimus-cycle-crud."`
+       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first."`
 4. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Em Andamento`) AND the user did NOT specify the task ID explicitly (auto-detect):
      - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
@@ -277,8 +277,8 @@ Pass the tasks file path that contains the confirmed task. The dev-cycle handles
 Provide to dev-cycle:
 - The tasks file path and confirmed task ID
 - All reference docs discovered in Phase 1
-- Codebase patterns found in Step 1.3
-- Answers to all questions from Step 1.4
+- Codebase patterns found in Step 1.8
+- Answers to all questions from Step 1.9
 - Any user preferences or constraints mentioned during questioning
 
 While dev-cycle executes:
@@ -332,7 +332,7 @@ No ring implementation droid available for this stack. Install the appropriate d
 
 **The droid MUST:**
 1. Follow TDD: write failing tests first, implement to pass, refactor
-2. Follow project coding standards (from Step 1.1)
+2. Follow project coding standards (from Step 1.6)
 3. Implement EXACTLY what the task spec says — no more, no less
 4. Run `make test` (or equivalent) to verify all tests pass
 
@@ -352,7 +352,8 @@ Present findings to the user ONE AT A TIME. For each finding:
 #### Step 2.2.3: Verification
 
 Check for custom commands in `.optimus/config.json` first. If found, use configured
-commands. If not found or key is missing, fall back to Makefile:
+commands. If a command key is present but empty (`""`), skip that check entirely.
+If not found or key is missing, fall back to Makefile:
 
 Run all available verification commands:
 

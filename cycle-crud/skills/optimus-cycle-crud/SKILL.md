@@ -518,7 +518,7 @@ Show the new table order.
    fi
    ```
 5. **Fire `task-blocked` hook for affected dependents:** For each non-cancelled task that
-   depends on T-XXX (identified in Step 6.1.3), fire the `task-blocked` hook:
+   depends on T-XXX (identified in Step 6.1, item 3), fire the `task-blocked` hook:
    ```bash
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
      "$HOOKS_FILE" task-blocked T-YYY "<dep-status>" "<dep-status>" "blocked by T-XXX (Cancelado)" 2>/dev/null &
@@ -534,7 +534,7 @@ Cancelled task T-XXX: <title>
 ```
 
 **Proactive dependent notification:** If any non-cancelled tasks depend on T-XXX
-(identified in Step 6.1.3), display them with resolution guidance:
+(identified in Step 6.1, item 3), display them with resolution guidance:
 
 ```markdown
 ### Affected Dependents (now blocked)
@@ -613,7 +613,7 @@ To resolve, run `/optimus-cycle-crud`:
 2. If reopening from `Cancelado`, also clear the **Branch** column to `-` (any previous
    branch is stale and should not be reused)
 3. Save and commit: `chore(tasks): reopen T-XXX — <reason> (from <previous status>, now <target status>)`
-3. **Invoke notification hooks (if present):**
+4. **Invoke notification hooks (if present):**
    ```bash
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
@@ -659,6 +659,9 @@ code manually without using stage-2).
 ### Step 8.1: Validate Advance
 
 1. **If status is `**DONE**` or `Cancelado`** → **STOP**: "Task T-XXX is in terminal status '<status>'. Use 'reopen' for DONE tasks."
+1b. **If target status is `**DONE**`** → **STOP**: "Cannot advance to DONE manually. Use `/optimus-cycle-close-stage-5` which runs the verification checklist."
+1c. **If target status is `Cancelado`** → **STOP**: "Cannot advance to Cancelado. Use the cancel operation (`cancel T-XXX`) which handles cleanup."
+1d. **If current status is `Revisando PR` and no target was specified** → **STOP**: "Task T-XXX is in 'Revisando PR'. The next step is `/optimus-cycle-close-stage-5`, not manual advance."
 2. **Check dependencies (HARD BLOCK):** same rules as stage agents — all dependencies must be `**DONE**`.
 3. **Workspace check (warning):** If the target status is `Em Andamento` or later, verify
    that a workspace exists for this task:

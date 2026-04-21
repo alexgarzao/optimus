@@ -155,7 +155,7 @@ Quick Status:
   Next up: T-YYY — [title] (Pendente, ready to start)
 ```
 
-5. **STOP here** — do NOT run Phases 1-6 (dependency graph, parallelization, velocity, etc.)
+5. **STOP here** — do NOT proceed to the remaining phases (dependency graph, parallelization, velocity, etc.)
 
 If the invocation does NOT match quick status triggers, proceed to Phase 3 normally.
 

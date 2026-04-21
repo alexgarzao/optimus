@@ -452,7 +452,7 @@ After the convergence loop exits and all findings are processed:
 - After each fix, update the todo list to maintain progress visibility
 - If the codebase already does the same thing elsewhere without issue, it is NOT a finding
 - Ring droids are required — do not proceed without them
-- Do NOT fix anything during agent dispatch or consolidation — fixes happen only in Phase 5 after user approval
+- Do NOT fix anything during agent dispatch or consolidation — fixes happen only in Phase 6 after user approval
 - The agent NEVER decides whether a finding should be fixed or skipped — the USER always decides
 - ALL findings (CRITICAL, HIGH, MEDIUM, and LOW) MUST be presented to the user for decision
 - The agent may recommend an option, but MUST wait for user approval via AskUser before proceeding

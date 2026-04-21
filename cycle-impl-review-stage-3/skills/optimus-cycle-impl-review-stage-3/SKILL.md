@@ -146,10 +146,10 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:
      - If ALL dependencies have status `**DONE**` → proceed
-     - If ANY dependency is NOT `**DONE**` → **STOP**:
-       ```
-       Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
-       ```
+     - If ANY dependency is NOT `**DONE**`:
+       - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
+       - If the dependency has status `Cancelado` → **STOP**: `"T-YYY was cancelled (Cancelado). Consider removing this dependency via /optimus-cycle-crud."`
+       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first."`
 4. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Validando Impl`) AND the user did NOT specify the task ID explicitly (auto-detect):
      - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
@@ -236,7 +236,7 @@ This determines which specialist agents to dispatch in Phase 3.
 
 Run ALL applicable checks simultaneously. Capture stdout, stderr, exit code for each.
 
-Check `.optimus/config.json` for custom commands first. If `commands.lint` exists, use it. If missing, fall back to auto-detection below.
+Check `.optimus/config.json` for custom commands first. If `commands.lint` exists, use it. If a command key is present but empty (`""`), skip that check entirely. If missing, fall back to auto-detection below.
 
 | # | Check | Command (discover from project) | What it detects |
 |---|-------|---------------------------------|-----------------|

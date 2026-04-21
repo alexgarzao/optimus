@@ -565,7 +565,7 @@ Skills reference this as: "Find and validate tasks.md (HARD BLOCK) — see AGENT
 
 ### Protocol: GitHub CLI Check (HARD BLOCK)
 
-**Referenced by:** all stage agents (1-5), cycle-pr-review-stage-4, cycle-crud
+**Referenced by:** all stage agents (1-5), cycle-crud, cycle-batch
 
 ```bash
 gh auth status 2>/dev/null
@@ -770,7 +770,7 @@ Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Titl
 
 ### Protocol: Project Rules Discovery
 
-**Referenced by:** all stage agents (1-5), deep-review, deep-doc-review, coderabbit-review
+**Referenced by:** stages 1-4, deep-review, coderabbit-review
 
 Every skill that reviews, validates, or generates code MUST search for project rules
 and AI instruction files before starting. Search for these files in order and read ALL
@@ -853,9 +853,11 @@ If a command key is present but empty (`""`), skip that check entirely.
 ## Common Patterns Across Skills
 
 The patterns below apply to **cycle review skills** (cycle-spec-stage-1, cycle-impl-review-stage-3,
-cycle-pr-review-stage-4, coderabbit-review). The standalone skills (deep-review, deep-doc-review)
-use a simplified model — they follow the same user-authority and finding presentation principles
-but do not require ring droid dispatch, convergence loops, or batch-apply.
+cycle-pr-review-stage-4, coderabbit-review). `deep-doc-review` uses a simplified model — it
+follows the same user-authority and finding presentation principles but applies fixes inline
+without convergence loops or batch-apply. `deep-review` requires ring droids for analysis,
+has its own convergence loop (Phase 7), and uses batch-apply (Phase 6) — but applies fixes
+directly rather than via ring droid TDD cycle.
 
 ### Finding Presentation (Unified Model)
 All cycle review skills follow this pattern:

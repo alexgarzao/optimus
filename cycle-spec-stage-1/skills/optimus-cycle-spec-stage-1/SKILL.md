@@ -127,10 +127,10 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:
      - If ALL dependencies have status `**DONE**` → proceed
-     - If ANY dependency is NOT `**DONE**` → **STOP**:
-       ```
-       Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first.
-       ```
+     - If ANY dependency is NOT `**DONE**`:
+       - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
+       - If the dependency has status `Cancelado` → **STOP**: `"T-YYY was cancelled (Cancelado). Consider removing this dependency via /optimus-cycle-crud."`
+       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first."`
 4. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Validando Spec`) AND the user did NOT specify the task ID explicitly (auto-detect):
      - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
