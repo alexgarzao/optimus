@@ -7,7 +7,7 @@ Tracked improvements that are not yet prioritized for implementation.
 ## I1: Optimize Convergence Loop Token Cost
 
 **Status:** Open
-**Affects:** cycle-spec-stage-1, cycle-impl-review-stage-3, cycle-pr-review-stage-4, coderabbit-review
+**Affects:** plan, check, pr-check, coderabbit-review
 **Priority:** Medium
 
 ### Problem
