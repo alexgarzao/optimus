@@ -10,10 +10,10 @@ None — receives PR URL as input or detects the current branch's PR automatical
 
 ## Skill
 
-See the full installable version at [`cycle-pr-review-stage-4/skills/optimus-cycle-pr-review-stage-4/SKILL.md`](../../cycle-pr-review-stage-4/skills/optimus-cycle-pr-review-stage-4/SKILL.md).
+See the full installable version at [`pr-check/skills/optimus-pr-check/SKILL.md`](../../pr-check/skills/optimus-pr-check/SKILL.md).
 
 ## Example
 
 ```
-/optimus-cycle-pr-review-stage-4 — collects comments from all sources, evaluates with agents, resolves interactively.
+/optimus-pr-check — collects comments from all sources, evaluates with agents, resolves interactively.
 ```

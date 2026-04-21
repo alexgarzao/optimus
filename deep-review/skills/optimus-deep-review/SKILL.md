@@ -11,7 +11,7 @@ trigger: >
   - After completing a feature and wanting quality validation
 skip_when: >
   - Reviewing documentation only (use optimus-deep-doc-review instead)
-  - Validating a specific task against its spec (use optimus-cycle-impl-review-stage-3 instead)
+  - Validating a specific task against its spec (use optimus-check instead)
   - Running automated checks only (use optimus-verify-code instead)
 prerequisite: >
   - Project has source code to review
@@ -47,13 +47,13 @@ examples:
       3. Standard flow
 related:
   complementary:
-    - optimus-cycle-impl-stage-2
-    - optimus-cycle-pr-review-stage-4
+    - optimus-build
+    - optimus-pr-check
     - optimus-verify-code
   differentiation:
-    - name: optimus-cycle-impl-review-stage-3
+    - name: optimus-check
       difference: >
-        optimus-cycle-impl-review-stage-3 validates a completed task against its spec
+        optimus-check validates a completed task against its spec
         (acceptance criteria, test IDs, spec compliance). optimus-deep-review is
         a generic code review without task/spec context -- focused on code quality,
         security, and best practices.
@@ -101,7 +101,7 @@ Ask the user what to review:
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
 2. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
-3. **Identify reference docs:** Look for PRD, TRD, API design, data model — these provide context but are not the primary validation target (unlike optimus-cycle-impl-review-stage-3)
+3. **Identify reference docs:** Look for PRD, TRD, API design, data model — these provide context but are not the primary validation target (unlike optimus-check)
 4. **Read all files in scope:** Load the full content of every file that will be reviewed
 
 ---

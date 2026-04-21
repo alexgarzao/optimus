@@ -1,0 +1,8 @@
+{
+  "name": "resolve",
+  "description": "Administrative: Resolves merge conflicts in tasks.md caused by parallel task execution across feature branches.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Alex Garzao"
+  }
+}

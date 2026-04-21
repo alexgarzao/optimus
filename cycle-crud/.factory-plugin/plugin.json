@@ -1,8 +1,0 @@
-{
-  "name": "cycle-crud",
-  "description": "Administrative: Create, edit, remove, and reorder tasks in tasks.md. Runs on any branch.",
-  "version": "1.0.0",
-  "author": {
-    "name": "Alex Garzao"
-  }
-}

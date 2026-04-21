@@ -6,54 +6,54 @@
   },
   "plugins": [
     {
-      "name": "cycle-migrate",
-      "description": "Stage 0: Discovers existing task files in any format and converts them to the standard optimus tasks.md format. Runs once per project.",
-      "source": "./cycle-migrate"
+      "name": "migrate",
+      "description": "Discovers existing task files in any format and converts them to the standard optimus tasks.md format. Runs once per project.",
+      "source": "./migrate"
     },
     {
-      "name": "cycle-report",
-      "description": "Stage 0: Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only.",
-      "source": "./cycle-report"
+      "name": "report",
+      "description": "Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only.",
+      "source": "./report"
     },
     {
-      "name": "cycle-crud",
+      "name": "tasks",
       "description": "Administrative: Create, edit, remove, and reorder tasks in tasks.md. Runs on any branch.",
-      "source": "./cycle-crud"
+      "source": "./tasks"
     },
     {
-      "name": "cycle-spec-stage-1",
+      "name": "plan",
       "description": "Stage 1: Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes.",
-      "source": "./cycle-spec-stage-1"
+      "source": "./plan"
     },
     {
-      "name": "cycle-impl-stage-2",
+      "name": "build",
       "description": "Stage 2: End-to-end task implementation with verification gates, code review, and commit approval.",
-      "source": "./cycle-impl-stage-2"
+      "source": "./build"
     },
     {
-      "name": "cycle-impl-review-stage-3",
+      "name": "check",
       "description": "Stage 3: Validates completed task implementation against spec, coding standards, and best practices using parallel specialist agents.",
-      "source": "./cycle-impl-review-stage-3"
+      "source": "./check"
     },
     {
-      "name": "cycle-pr-review-stage-4",
+      "name": "pr-check",
       "description": "Stage 4 (optional): Unified PR review orchestrator. Collects PR metadata and existing comments (Codacy, DeepSource, CodeRabbit, human), dispatches agents, applies fixes, resolves threads.",
-      "source": "./cycle-pr-review-stage-4"
+      "source": "./pr-check"
     },
     {
-      "name": "cycle-close-stage-5",
+      "name": "done",
       "description": "Stage 5: Verifies all prerequisites (commits pushed, PR ready, tests passing) and marks the task as done. Offers to merge the PR during cleanup.",
-      "source": "./cycle-close-stage-5"
+      "source": "./done"
     },
     {
-      "name": "cycle-batch",
+      "name": "batch",
       "description": "Pipeline orchestrator: chains stages 1-5 for one or more tasks with user checkpoints between stages.",
-      "source": "./cycle-batch"
+      "source": "./batch"
     },
     {
-      "name": "cycle-conflict-resolve",
+      "name": "resolve",
       "description": "Administrative: Resolves merge conflicts in tasks.md caused by parallel task execution across feature branches.",
-      "source": "./cycle-conflict-resolve"
+      "source": "./resolve"
     },
     {
       "name": "deep-doc-review",

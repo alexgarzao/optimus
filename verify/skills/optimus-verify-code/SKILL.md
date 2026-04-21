@@ -32,8 +32,8 @@ examples:
       2. Present summary showing what passed/failed
 related:
   complementary:
-    - optimus-cycle-impl-stage-2
-    - optimus-cycle-impl-review-stage-3
+    - optimus-build
+    - optimus-check
   differentiation:
     - name: optimus-deep-review
       difference: >

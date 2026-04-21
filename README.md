@@ -10,11 +10,11 @@ Skills are classified as **Administrative** (run anywhere) or **Execution** (req
 
 | Skill | Description | Command |
 |-------|-------------|---------|
-| `cycle-migrate` | Discovers existing task files in any format and converts them to the standard optimus tasks.md format. Runs once per project | `/optimus-cycle-migrate` |
-| `cycle-report` | Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only | `/optimus-cycle-report` |
-| `cycle-crud` | Create, edit, remove, reorder, and cancel tasks in tasks.md. Runs on any branch | `/optimus-cycle-crud` |
-| `cycle-batch` | Pipeline orchestrator: chains stages 1-5 for one or more tasks with user checkpoints between stages | `/optimus-cycle-batch` |
-| `cycle-conflict-resolve` | Resolves merge conflicts in tasks.md caused by parallel task execution across feature branches | `/optimus-cycle-conflict-resolve` |
+| `migrate` | Discovers existing task files in any format and converts them to the standard optimus tasks.md format. Runs once per project | `/optimus-migrate` |
+| `report` | Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only | `/optimus-report` |
+| `tasks` | Create, edit, remove, reorder, and cancel tasks in tasks.md. Runs on any branch | `/optimus-tasks` |
+| `batch` | Pipeline orchestrator: chains stages 1-5 for one or more tasks with user checkpoints between stages | `/optimus-batch` |
+| `resolve` | Resolves merge conflicts in tasks.md caused by parallel task execution across feature branches | `/optimus-resolve` |
 | `quick-report` | Compact daily status dashboard. Shows version progress, active tasks with criteria progress, ready-to-start, and blocked tasks. Read-only | `/optimus-quick-report` |
 | `help` | Lists all available Optimus skills with descriptions, usage commands, and when to use each one | `/optimus-help` |
 
@@ -24,16 +24,16 @@ Stage-1 creates the workspace (worktree). Stages 2-5 auto-navigate to the task's
 
 ```
 Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando PR] → **DONE**
-           (stage-1)          (stage-2)       (stage-3)        (stage-4)       (stage-5)
+           (plan)            (build)         (check)          (pr-check)      (done)
 ```
 
 | Skill | Stage | Description | Command |
 |-------|-------|-------------|---------|
-| `cycle-spec-stage-1` | 1 | Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes | `/optimus-cycle-spec-stage-1` |
-| `cycle-impl-stage-2` | 2 | End-to-end task implementation with verification gates, code review, and commit approval | `/optimus-cycle-impl-stage-2` |
-| `cycle-impl-review-stage-3` | 3 | Validates completed task implementation against spec, coding standards, and best practices using parallel specialist agents | `/optimus-cycle-impl-review-stage-3` |
-| `cycle-pr-review-stage-4` | 4 | (Optional) Unified PR review orchestrator. Collects PR metadata and existing comments, dispatches agents, applies fixes, resolves threads | `/optimus-cycle-pr-review-stage-4` |
-| `cycle-close-stage-5` | 5 | Verifies all prerequisites (commits pushed, PR ready, tests passing) and marks the task as done. Offers to merge the PR during cleanup | `/optimus-cycle-close-stage-5` |
+| `plan` | 1 | Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes | `/optimus-plan` |
+| `build` | 2 | End-to-end task implementation with verification gates, code review, and commit approval | `/optimus-build` |
+| `check` | 3 | Validates completed task implementation against spec, coding standards, and best practices using parallel specialist agents | `/optimus-check` |
+| `pr-check` | 4 | (Optional) Unified PR review orchestrator. Collects PR metadata and existing comments, dispatches agents, applies fixes, resolves threads | `/optimus-pr-check` |
+| `done` | 5 | Verifies all prerequisites (commits pushed, PR ready, tests passing) and marks the task as done. Offers to merge the PR during cleanup | `/optimus-done` |
 
 ## Review & Verification Skills
 

@@ -10,7 +10,7 @@ AI agent prompt that validates development tasks after execution. Checks spec co
 
 ## Skill
 
-See the full installable version at [`cycle-impl-review-stage-3/skills/optimus-cycle-impl-review-stage-3/SKILL.md`](../../cycle-impl-review-stage-3/skills/optimus-cycle-impl-review-stage-3/SKILL.md).
+See the full installable version at [`check/skills/optimus-check/SKILL.md`](../../check/skills/optimus-check/SKILL.md).
 
 ## Example
 

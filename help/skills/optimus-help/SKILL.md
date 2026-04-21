@@ -38,10 +38,10 @@ terminal display when available, otherwise use markdown tables.
 
 | Skill | Command | When to Use |
 |-------|---------|-------------|
-| **cycle-migrate** | `/optimus-cycle-migrate` | Setting up Optimus on a project for the first time. Converts existing task files to the standard `tasks.md` format. |
-| **cycle-report** | `/optimus-cycle-report` | Checking project status — shows progress, active/blocked/ready tasks, dependency graph, parallelization opportunities, and velocity metrics. Read-only. |
-| **cycle-crud** | `/optimus-cycle-crud` | Creating, editing, removing, reordering, cancelling, or reopening tasks. Managing versions. Any administrative task management. |
-| **cycle-conflict-resolve** | `/optimus-cycle-conflict-resolve` | Resolving merge conflicts in `tasks.md` caused by parallel task execution across feature branches. |
+| **migrate** | `/optimus-migrate` | Setting up Optimus on a project for the first time. Converts existing task files to the standard `tasks.md` format. |
+| **report** | `/optimus-report` | Checking project status — shows progress, active/blocked/ready tasks, dependency graph, parallelization opportunities, and velocity metrics. Read-only. |
+| **tasks** | `/optimus-tasks` | Creating, editing, removing, reordering, cancelling, or reopening tasks. Managing versions. Any administrative task management. |
+| **resolve** | `/optimus-resolve` | Resolving merge conflicts in `tasks.md` caused by parallel task execution across feature branches. |
 | **help** | `/optimus-help` | This skill — discovering what's available. |
 
 ### Execution Skills (task lifecycle, stages 1-5)
@@ -55,12 +55,12 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 
 | Skill | Command | When to Use |
 |-------|---------|-------------|
-| **cycle-spec-stage-1** | `/optimus-cycle-spec-stage-1` | Before implementing a task — validates the spec against project docs, catches gaps and contradictions. Creates the workspace (branch/worktree). |
-| **cycle-impl-stage-2** | `/optimus-cycle-impl-stage-2` | After spec validation — implements the task end-to-end with TDD, verification gates, and code review. |
-| **cycle-impl-review-stage-3** | `/optimus-cycle-impl-review-stage-3` | After implementation — validates code quality, spec compliance, and test coverage using parallel specialist agents. |
-| **cycle-pr-review-stage-4** | `/optimus-cycle-pr-review-stage-4` | (Optional) After impl review — orchestrates PR review collecting findings from Codacy, DeepSource, CodeRabbit, and human reviewers. Also works standalone without a task. |
-| **cycle-close-stage-5** | `/optimus-cycle-close-stage-5` | Final step — verifies all prerequisites (tests, lint, PR ready) and marks the task as DONE. Offers to merge the PR. Supports force-close for tasks done outside the pipeline. |
-| **cycle-batch** | `/optimus-cycle-batch` | Pipeline orchestrator — chains stages 1-5 for one or more tasks with user checkpoints between stages. Handles dependency ordering. |
+| **plan** | `/optimus-plan` | Before implementing a task — validates the spec against project docs, catches gaps and contradictions. Creates the workspace (branch/worktree). |
+| **build** | `/optimus-build` | After spec validation — implements the task end-to-end with TDD, verification gates, and code review. |
+| **check** | `/optimus-check` | After implementation — validates code quality, spec compliance, and test coverage using parallel specialist agents. |
+| **pr-check** | `/optimus-pr-check` | (Optional) After impl review — orchestrates PR review collecting findings from Codacy, DeepSource, CodeRabbit, and human reviewers. Also works standalone without a task. |
+| **done** | `/optimus-done` | Final step — verifies all prerequisites (tests, lint, PR ready) and marks the task as DONE. Offers to merge the PR. Supports force-close for tasks done outside the pipeline. |
+| **batch** | `/optimus-batch` | Pipeline orchestrator — chains stages 1-5 for one or more tasks with user checkpoints between stages. Handles dependency ordering. |
 
 ### Review & Verification Skills (standalone, no task required)
 
@@ -79,34 +79,34 @@ If the user asked for help choosing a skill (not just listing), provide guidance
 on their situation:
 
 ### "I want to review code"
-- **For a PR:** Use `/optimus-cycle-pr-review-stage-4` (collects all review sources)
+- **For a PR:** Use `/optimus-pr-check` (collects all review sources)
 - **For code without a PR:** Use `/optimus-deep-review` (parallel agent review)
 - **Using CodeRabbit:** Use `/optimus-coderabbit-review` (CodeRabbit + TDD cycle)
 - **Quick pass/fail check:** Use `/optimus-verify-code` (automated checks only)
 
 ### "I want to start working on a task"
-1. First: `/optimus-cycle-report` to see what's ready
-2. Then: `/optimus-cycle-spec-stage-1` to validate and create workspace
-3. Then: `/optimus-cycle-impl-stage-2` to implement
-4. Or use `/optimus-cycle-batch` to run all stages in sequence with checkpoints
+1. First: `/optimus-report` to see what's ready
+2. Then: `/optimus-plan` to validate and create workspace
+3. Then: `/optimus-build` to implement
+4. Or use `/optimus-batch` to run all stages in sequence with checkpoints
 
 ### "I want a quick status check"
-- Use `/optimus-cycle-report` with "quick status" — shows only current task and next-up
+- Use `/optimus-report` with "quick status" — shows only current task and next-up
 
 ### "I have a merge conflict in tasks.md"
-- Use `/optimus-cycle-conflict-resolve` to auto-resolve using most-advanced-status rule
+- Use `/optimus-resolve` to auto-resolve using most-advanced-status rule
 
 ### "I completed a task outside the pipeline"
-- Use `/optimus-cycle-close-stage-5` with "force close T-XXX" to skip the checklist
+- Use `/optimus-done` with "force close T-XXX" to skip the checklist
 
 ### "I want to preview what a stage would do"
 - Add "dry-run" to any stage command (e.g., "dry-run spec T-003", "preview review T-012")
 
 ### "I want to check project status"
-- Use `/optimus-cycle-report` for the full dashboard
+- Use `/optimus-report` for the full dashboard
 
 ### "I want to manage tasks"
-- Use `/optimus-cycle-crud` for create/edit/remove/cancel/reopen
+- Use `/optimus-tasks` for create/edit/remove/cancel/reopen
 
 ### "I want to review documentation"
 - Use `/optimus-deep-doc-review` for cross-doc analysis
@@ -117,4 +117,4 @@ on their situation:
 
 - This skill is read-only — it NEVER modifies any files
 - Present the full catalog even if the user asked about a specific category
-- If the user's situation doesn't match any guidance, suggest `/optimus-cycle-report` as a starting point
+- If the user's situation doesn't match any guidance, suggest `/optimus-report` as a starting point

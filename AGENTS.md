@@ -17,16 +17,16 @@ optimus/
 │   ├── coding/                        # Coding skill cards
 │   ├── system/                        # Orchestration skill cards
 │   └── writing/                       # Writing skill cards
-├── cycle-migrate/                   # Admin: Task format migrator (one-time)
-├── cycle-report/                    # Admin: Task status dashboard (read-only)
-├── cycle-crud/                      # Admin: Create, edit, remove, reorder tasks
-├── cycle-batch/                     # Execution: Pipeline orchestrator (stages 1-5)
-├── cycle-conflict-resolve/          # Admin: Resolve tasks.md merge conflicts
-├── cycle-spec-stage-1/              # Execution Stage 1: Spec validation + workspace creation
-├── cycle-impl-stage-2/              # Execution Stage 2: Task implementation
-├── cycle-impl-review-stage-3/       # Execution Stage 3: Implementation review
-├── cycle-pr-review-stage-4/         # Execution Stage 4 (optional): PR review orchestrator
-├── cycle-close-stage-5/             # Execution Stage 5: Close task (verify & mark done)
+├── migrate/                   # Admin: Task format migrator (one-time)
+├── report/                    # Admin: Task status dashboard (read-only)
+├── tasks/                      # Admin: Create, edit, remove, reorder tasks
+├── batch/                     # Execution: Pipeline orchestrator (stages 1-5)
+├── resolve/          # Admin: Resolve tasks.md merge conflicts
+├── plan/              # Execution Stage 1: Spec validation + workspace creation
+├── build/              # Execution Stage 2: Task implementation
+├── check/       # Execution Stage 3: Implementation review
+├── pr-check/         # Execution Stage 4 (optional): PR review orchestrator
+├── done/             # Execution Stage 5: Close task (verify & mark done)
 ├── deep-review/                       # Parallel code review (no PR context)
 ├── deep-doc-review/                   # Documentation review
 ├── coderabbit-review/                 # CodeRabbit CLI + TDD cycle
@@ -142,7 +142,7 @@ All agents look for `tasks.md` in a single fixed location:
 ```
 
 There are no fallback locations. If `.optimus/tasks.md` does not exist, the agent must
-inform the user and suggest running `cycle-migrate` to create one.
+inform the user and suggest running `migrate` to create one.
 
 The `.optimus/` directory is also used for `config.json` and session state files.
 The `.gitignore` should be configured to commit `tasks.md` and `config.json` but
@@ -163,7 +163,7 @@ The **first line** of `tasks.md` MUST be the format marker:
 
 This marker tells agents that the file is in valid optimus format. Agents check this
 line FIRST — if it's missing, the file is treated as non-optimus format and the agent
-suggests running `/optimus-cycle-migrate`.
+suggests running `/optimus-migrate`.
 
 ### Format:
 
@@ -282,14 +282,14 @@ Examples: `chore(tasks): start T-003 — set status to Validando Spec`,
 | Status | Set by | Meaning |
 |--------|--------|---------|
 | `Pendente` | Initial | Not started |
-| `Validando Spec` | cycle-spec-stage-1 | Spec being validated |
-| `Em Andamento` | cycle-impl-stage-2 | Implementation in progress |
-| `Validando Impl` | cycle-impl-review-stage-3 | Implementation being reviewed |
-| `Revisando PR` | cycle-pr-review-stage-4 | PR being reviewed (optional stage) |
-| `**DONE**` | cycle-close-stage-5 | Completed |
-| `Cancelado` | cycle-crud | Task abandoned, will not be implemented |
+| `Validando Spec` | plan | Spec being validated |
+| `Em Andamento` | build | Implementation in progress |
+| `Validando Impl` | check | Implementation being reviewed |
+| `Revisando PR` | pr-check | PR being reviewed (optional stage) |
+| `**DONE**` | done | Completed |
+| `Cancelado` | tasks | Task abandoned, will not be implemented |
 
-**Administrative status operations** (managed by cycle-crud, not by stage agents):
+**Administrative status operations** (managed by tasks, not by stage agents):
 - **Reopen:** `**DONE**` → `Pendente` (if branch deleted) or `Em Andamento` (if branch exists) — when a bug is found after close. Also accepts `Cancelado` → `Pendente` — when a cancellation decision is reversed.
 - **Advance:** move forward one stage — when work was done manually outside the pipeline
 - **Demote:** move backward one stage — when rework is needed after review
@@ -324,8 +324,8 @@ Agents read these sections to understand what to implement and validate.
 ### Acceptance Criteria Tracking
 
 The checkboxes in **Critérios de Aceite** are updated by stage agents as the task progresses:
-- **cycle-impl-stage-2** marks criteria as `- [x]` as each is implemented
-- **cycle-impl-review-stage-3** validates that marked criteria are actually satisfied
+- **build** marks criteria as `- [x]` as each is implemented
+- **check** validates that marked criteria are actually satisfied
   (flags mismatches: `[x]` but not implemented → HIGH, `[ ]` but implemented → MEDIUM)
 
 This ensures tasks.md accurately reflects what was delivered at every point in the lifecycle.
@@ -333,7 +333,7 @@ This ensures tasks.md accurately reflects what was delivered at every point in t
 ### Version Management
 
 The `## Versions` section in tasks.md is **mandatory** and defines the available versions
-(milestones) for the project. It is managed by `cycle-crud` (version operations).
+(milestones) for the project. It is managed by `tasks` (version operations).
 
 #### Versions Table
 
@@ -364,8 +364,8 @@ The `## Versions` section in tasks.md is **mandatory** and defines the available
    The dependency system already validates that dependencies are `**DONE**`.
 4. **Moving tasks between versions** does not alter Status, Branch, Depends, or any other field.
 5. **Tasks keep their version when DONE** — they are not moved automatically.
-6. **Version lifecycle is manual** — the user changes version status via `cycle-crud`.
-   `cycle-report` shows progress but never alters version status.
+6. **Version lifecycle is manual** — the user changes version status via `tasks`.
+   `report` shows progress but never alters version status.
 7. **Every task must reference a valid version** — the Version column value must exist
    in the Versions table. Agents validate this during format validation.
 8. **Auto-detect priority**: when auto-detecting the next task, stages 1-2 prioritize
@@ -390,32 +390,32 @@ Every stage agent (1-5) MUST validate the tasks.md format before operating:
 14. No circular dependencies in the dependency graph (e.g., T-001 → T-002 → T-001)
 
 If the format marker is missing or validation fails, the agent must **STOP** and suggest
-running `/optimus-cycle-migrate` to fix the format. Do NOT attempt to interpret malformed data.
+running `/optimus-migrate` to fix the format. Do NOT attempt to interpret malformed data.
 
 15. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
 
 **NOTE:** For circular dependency detection (item 14), trace the full dependency chain for
 each task. If any task appears twice in the chain, a cycle exists. Report ALL tasks involved
-in the cycle so the user can fix it with `/optimus-cycle-crud`.
+in the cycle so the user can fix it with `/optimus-tasks`.
 
 ### Parallelization
 
 Tasks with no dependencies or all dependencies satisfied can run in parallel.
-The cycle-report agent computes and displays parallelization opportunities.
+The report agent computes and displays parallelization opportunities.
 
 ---
 
 ## Task Lifecycle
 
-Tasks flow through 5 stages (cycle-pr-review-stage-4 is optional). Status lives in `tasks.md`
+Tasks flow through 5 stages (pr-check is optional). Status lives in `tasks.md`
 (the markdown table in the target project). Each stage is a separate skill.
 
 ```
 Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando PR] → **DONE**
-           (cycle-spec-stage-1)   (cycle-impl-stage-2)  (cycle-impl-review-stage-3)  (cycle-pr-review-stage-4)  (cycle-close-stage-5)
+           (plan)   (build)  (check)  (pr-check)  (done)
                                                                [optional]
 
-Any status → Cancelado  (via cycle-crud cancel operation)
+Any status → Cancelado  (via tasks cancel operation)
 ```
 
 ### Rules
@@ -430,17 +430,17 @@ Any status → Cancelado  (via cycle-crud cancel operation)
    status before proceeding. If not, it refuses and tells the user which agent to
    run first.
 5. **Re-execution allowed** — every agent (stages 1-4) accepts being re-run when
-   the task is already in its own output status. For example, cycle-impl-stage-2 accepts
+   the task is already in its own output status. For example, build accepts
    `Em Andamento` (its own status) as well as `Validando Spec` (its predecessor).
    This allows the user to re-run a stage without resetting status.
-   **Exception:** cycle-close-stage-5 does NOT support re-execution — once a task is
+   **Exception:** done does NOT support re-execution — once a task is
    `**DONE**`, it cannot be re-closed.
 6. **Dependency check** — every agent verifies that ALL dependencies (Depends column)
    have status `**DONE**` before proceeding. If any dependency is not done, the agent
    fires the `task-blocked` hook (if configured) and then refuses with a clear message
    identifying which dependency is blocking. **If the blocking dependency has status
    `Cancelado`**, the message must differentiate: "T-YYY was cancelled (Cancelado).
-   Consider removing this dependency via `/optimus-cycle-crud`." This helps the user
+   Consider removing this dependency via `/optimus-tasks`." This helps the user
    understand the blocker requires a dependency edit, not waiting for completion.
 7. **Expanded confirmation on status change** — when a stage agent is about to change
    a task's status, it shows the task description (Objetivo + Critérios de Aceite) and
@@ -455,7 +455,7 @@ Any status → Cancelado  (via cycle-crud cancel operation)
    - Re-execution (status already equals the stage's output status — user knows the task)
    - The user specified the task ID explicitly (e.g., "execute T-012" — user has context)
 
-   **Exception:** cycle-close-stage-5 always changes status (no re-execution), so the
+   **Exception:** done always changes status (no re-execution), so the
    re-execution skip does not apply. It still skips when the user specified the task ID.
 
 8. **Branch protection** — execution skills (stages 1-5) require a feature branch.
@@ -465,17 +465,17 @@ Any status → Cancelado  (via cycle-crud cancel operation)
 
    | Type | Agent | Allowed on main/default? | Reason |
    |------|-------|-------------------------|--------|
-   | Admin | cycle-migrate | Yes | Only creates/modifies tasks.md |
-   | Admin | cycle-report | Yes | Read-only, no modifications |
+   | Admin | migrate | Yes | Only creates/modifies tasks.md |
+   | Admin | report | Yes | Read-only, no modifications |
    | Admin | quick-report | Yes | Read-only, no modifications |
-   | Admin | cycle-crud | Yes | Only creates/edits/removes tasks in tasks.md |
-   | Execution | cycle-spec-stage-1 | Yes (creates worktree) | Always creates worktree on default branch, then works there |
-   | Execution | cycle-impl-stage-2 | Yes (auto-navigates) | Finds task worktree and navigates to it |
-   | Execution | cycle-impl-review-stage-3 | Yes (auto-navigates) | Finds task worktree and navigates to it |
-   | Execution | cycle-pr-review-stage-4 | Yes (auto-navigates) | Finds task worktree and navigates to it |
-   | Execution | cycle-close-stage-5 | Yes (auto-navigates) | Finds task worktree and navigates to it |
-   | Admin | cycle-batch | Yes | Orchestrates stages, delegates to stage skills |
-   | Admin | cycle-conflict-resolve | Yes | Only resolves merge conflicts in tasks.md |
+   | Admin | tasks | Yes | Only creates/edits/removes tasks in tasks.md |
+   | Execution | plan | Yes (creates worktree) | Always creates worktree on default branch, then works there |
+   | Execution | build | Yes (auto-navigates) | Finds task worktree and navigates to it |
+   | Execution | check | Yes (auto-navigates) | Finds task worktree and navigates to it |
+   | Execution | pr-check | Yes (auto-navigates) | Finds task worktree and navigates to it |
+   | Execution | done | Yes (auto-navigates) | Finds task worktree and navigates to it |
+   | Admin | batch | Yes | Orchestrates stages, delegates to stage skills |
+   | Admin | resolve | Yes | Only resolves merge conflicts in tasks.md |
 
    **Administrative skills** manage tasks.md metadata. They never modify project code
    and can run on any branch.
@@ -500,28 +500,28 @@ Any status → Cancelado  (via cycle-crud cancel operation)
 
 | Agent | Expects status | Changes to | Re-execution? |
 |-------|---------------|------------|---------------|
-| cycle-spec-stage-1 | `Pendente` or `Validando Spec` | `Validando Spec` | Yes (accepts own status) |
-| cycle-impl-stage-2 | `Validando Spec` or `Em Andamento` | `Em Andamento` | Yes (accepts own status) |
-| cycle-impl-review-stage-3 | `Em Andamento` or `Validando Impl` | `Validando Impl` | Yes (accepts own status) |
-| cycle-pr-review-stage-4 | `Validando Impl` or `Revisando PR` | `Revisando PR` | Yes (accepts own status) |
-| cycle-close-stage-5 | `Validando Impl` or `Revisando PR` | `**DONE**` | No (final stage) |
+| plan | `Pendente` or `Validando Spec` | `Validando Spec` | Yes (accepts own status) |
+| build | `Validando Spec` or `Em Andamento` | `Em Andamento` | Yes (accepts own status) |
+| check | `Em Andamento` or `Validando Impl` | `Validando Impl` | Yes (accepts own status) |
+| pr-check | `Validando Impl` or `Revisando PR` | `Revisando PR` | Yes (accepts own status) |
+| done | `Validando Impl` or `Revisando PR` | `**DONE**` | No (final stage) |
 
 **NOTE:** `Cancelado` is a terminal status. No stage agent accepts it — all stages refuse
-tasks with status `Cancelado`. Cancellation is managed exclusively by `cycle-crud`.
+tasks with status `Cancelado`. Cancellation is managed exclusively by `tasks`.
 
-**NOTE:** cycle-pr-review-stage-4 is optional. cycle-close-stage-5 accepts both `Validando Impl`
+**NOTE:** pr-check is optional. done accepts both `Validando Impl`
 (if pr-review was skipped) and `Revisando PR` (if pr-review ran).
 
-**NOTE:** cycle-pr-review-stage-4 also works in standalone mode (without a task). In standalone
+**NOTE:** pr-check also works in standalone mode (without a task). In standalone
 mode, it skips all task status logic. See its SKILL.md for detection rules.
 
-**NOTE:** O merge do PR pode ser feito pelo cycle-close-stage-5 durante a fase de cleanup
+**NOTE:** O merge do PR pode ser feito pelo done durante a fase de cleanup
 (o agente pergunta ao usuário via AskUser com opções: merge commit, squash, rebase, keep open,
 close without merging), ou manualmente pelo usuário depois.
 
-### cycle-close-stage-5 Checklist
+### done Checklist
 
-Before marking done, cycle-close-stage-5 runs 8 checks:
+Before marking done, done runs 8 checks:
 1. No uncommitted changes (`git status --porcelain` = empty)
 2. No unpushed commits (`git log @{u}..HEAD` = empty)
 3. PR ready to merge (if PR exists) — includes PR title validation (Conventional Commits)
@@ -556,20 +556,20 @@ in every SKILL.md.
 
 ### Protocol: tasks.md Validation (HARD BLOCK)
 
-**Referenced by:** all stage agents (1-5), cycle-crud, cycle-batch, cycle-conflict-resolve
+**Referenced by:** all stage agents (1-5), tasks, batch, resolve
 
 Every stage agent MUST validate tasks.md before operating. The full validation rules are
 defined in the "Format Validation" section above (items 1-15). This protocol is the
 executable version:
 
-1. **Find tasks.md:** Look in `.optimus/tasks.md`. If not found, **STOP** and suggest `/optimus-cycle-migrate`.
-2. **Validate format:** Execute all 15 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-cycle-migrate`.
+1. **Find tasks.md:** Look in `.optimus/tasks.md`. If not found, **STOP** and suggest `/optimus-migrate`.
+2. **Validate format:** Execute all 15 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-migrate`.
 
 Skills reference this as: "Find and validate tasks.md (HARD BLOCK) — see AGENTS.md Protocol: tasks.md Validation."
 
 ### Protocol: GitHub CLI Check (HARD BLOCK)
 
-**Referenced by:** all stage agents (1-5), cycle-crud, cycle-batch
+**Referenced by:** all stage agents (1-5), tasks, batch
 
 ```bash
 gh auth status 2>/dev/null
@@ -729,7 +729,7 @@ Skills reference this as: "Check tasks.md divergence — see AGENTS.md Protocol:
 
 ### Protocol: Notification Hooks
 
-**Referenced by:** all stage agents (1-5), cycle-crud
+**Referenced by:** all stage agents (1-5), tasks
 
 After committing a status change, invoke notification hooks if present:
 
@@ -847,8 +847,8 @@ Location: `.optimus/config.json` (project root)
 
 ### Behavior
 
-All skills that run verification commands (verify, cycle-close-stage-5, cycle-impl-stage-2,
-cycle-impl-review-stage-3) MUST check for `.optimus/config.json` BEFORE auto-detecting
+All skills that run verification commands (verify, done, build,
+check) MUST check for `.optimus/config.json` BEFORE auto-detecting
 commands. If the config file exists, use its commands instead of auto-detection.
 
 If a command key is missing from the config, fall back to auto-detection for that command.
@@ -856,8 +856,8 @@ If a command key is present but empty (`""`), skip that check entirely.
 
 ## Common Patterns Across Skills
 
-The patterns below apply to **cycle review skills** (cycle-spec-stage-1, cycle-impl-review-stage-3,
-cycle-pr-review-stage-4, coderabbit-review). `deep-doc-review` uses a simplified model — it
+The patterns below apply to **cycle review skills** (plan, check,
+pr-check, coderabbit-review). `deep-doc-review` uses a simplified model — it
 follows the same user-authority and finding presentation principles but applies fixes inline
 without convergence loops or batch-apply. `deep-review` requires ring droids for analysis,
 has its own convergence loop (Phase 7), and uses batch-apply (Phase 6) — but applies fixes
@@ -922,7 +922,7 @@ during development while ensuring full validation before push.
   blocking the review loop. If targets don't exist, skip.
 
 ### Deep Research Before Presenting (MANDATORY for cycle review skills)
-Applies to: cycle-spec-stage-1, cycle-impl-review-stage-3, cycle-pr-review-stage-4, coderabbit-review
+Applies to: plan, check, pr-check, coderabbit-review
 
 **BEFORE presenting any finding to the user, the agent MUST research it deeply.** This
 research is done SILENTLY — do not show the research process. Present only the conclusions.
@@ -983,7 +983,7 @@ Every finding must present 2-3 options with this structure:
 - **Very high:** Architectural change, many files, extensive testing, risk of regressions
 
 ### Convergence Loop (Fresh Sub-Agent Model)
-Applies to: cycle-spec-stage-1, cycle-impl-review-stage-3, cycle-pr-review-stage-4, coderabbit-review
+Applies to: plan, check, pr-check, coderabbit-review
 
 The convergence loop eliminates false convergence caused by session bias:
 - **Round 1:** Orchestrator performs initial analysis (with full session context)

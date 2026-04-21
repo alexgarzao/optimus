@@ -6,7 +6,7 @@ trigger: >
   - When user wants a fast, compact status check without velocity or dependency graphs
 skip_when: >
   - No tasks.md exists in the project
-  - User wants the full dashboard with dependency graph, velocity, and workspace health (use optimus-cycle-report instead)
+  - User wants the full dashboard with dependency graph, velocity, and workspace health (use optimus-report instead)
 prerequisite: >
   - .optimus/tasks.md exists in the project
 NOT_skip_when: >
@@ -26,11 +26,11 @@ examples:
       2. Present compact dashboard
 related:
   complementary:
-    - optimus-cycle-report
+    - optimus-report
   differentiation:
-    - name: optimus-cycle-report
+    - name: optimus-report
       difference: >
-        optimus-cycle-report is the full dashboard with dependency graph, velocity
+        optimus-report is the full dashboard with dependency graph, velocity
         metrics, workspace health, parallelization opportunities, and warnings.
         optimus-quick-report is a compact daily view focused on actionable status
         (what's active, what's ready, what's blocked) without git operations.
@@ -55,7 +55,7 @@ and blocked tasks.
 
 ### Step 1.1: Locate and Validate
 
-Look for `.optimus/tasks.md`. If not found, inform the user and suggest `/optimus-cycle-migrate`.
+Look for `.optimus/tasks.md`. If not found, inform the user and suggest `/optimus-migrate`.
 
 Check the first line for `<!-- optimus:tasks-v1 -->`. If missing, warn but attempt best-effort parsing.
 
@@ -123,7 +123,7 @@ BLOCKED (N):
 3. **Ready tasks** are sorted by Priority (`Alta` > `Media` > `Baixa`), then by ID.
 
 4. **Blocked tasks** show which dependency is blocking and its current status. If a blocker
-   has status `Cancelado`, append `(Cancelado — remove dep via /optimus-cycle-crud)`.
+   has status `Cancelado`, append `(Cancelado — remove dep via /optimus-tasks)`.
 
 5. **Omit empty sections.** If there are no active tasks, skip the ACTIVE section entirely.
    Same for READY and BLOCKED.
@@ -141,4 +141,4 @@ BLOCKED (N):
 - **NEVER run git commands** — this skill avoids git operations for speed
 - **NEVER invoke other skills** — only report
 - Present the dashboard even if there's only 1 task
-- If tasks.md has no table or invalid format, suggest `/optimus-cycle-migrate`
+- If tasks.md has no table or invalid format, suggest `/optimus-migrate`
