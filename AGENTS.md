@@ -153,7 +153,7 @@ path using this priority:
 }
 ```
 
-**Task overlay files** (progress tracking, Ring source links) are stored as individual files
+**Task overlay files** (Ring source links) are stored as individual files
 in a `tasks/` directory **derived from the tasksFile path**:
 
 ```
@@ -224,9 +224,6 @@ suggests running `/optimus-import`.
 **Task spec:** `docs/pre-dev/tasks/task_001.md`
 **Subtasks:** `docs/pre-dev/subtasks/T-001/`
 
-## Progresso
-- [x] JWT middleware configurado
-- [x] Testes unitários passando
 ```
 
 **docs/tasks/T-002.md**:
@@ -235,10 +232,6 @@ suggests running `/optimus-import`.
 
 ## Fonte
 **Task spec:** `docs/pre-dev/tasks/task_002.md`
-
-## Progresso
-- [ ] Endpoint POST /api/users
-- [ ] Validação de email
 ```
 
 ### Column Specification
@@ -357,12 +350,9 @@ Each task has an overlay file at `docs/tasks/T-NNN.md` containing:
 - **Fonte:** Links to Ring pre-dev source (task spec, subtasks, execution plan).
   Stage agents (build, plan, check) MUST follow these links and read the referenced
   files for objective, acceptance criteria, and implementation details.
-- **Progresso:** Checkboxes tracking implementation progress (`- [x]` / `- [ ]`)
 
 Agents read objective and acceptance criteria from the Ring source (via Fonte links).
 The overlay only tracks operational state — it does NOT duplicate content from Ring.
-Tasks without Ring pre-dev artifacts have an empty `## Progresso` section until
-Ring pre-dev is run.
 
 This split prevents merge conflicts when multiple worktrees work on different tasks —
 each worktree only modifies its own `docs/tasks/T-NNN.md` file.
@@ -376,20 +366,7 @@ Example overlay:
 **Subtasks:** `docs/pre-dev/subtasks/T-020/`
 **Plano:** `docs/pre-dev/subtasks/T-020/PARALLEL-PLAN.md`
 
-## Progresso
-- [x] ST-020-01: Database schema
-- [ ] ST-020-02: API endpoints
-- [ ] ST-020-03: Input validation
 ```
-
-### Progress Tracking
-
-The checkboxes in **Progresso** (in `docs/tasks/T-NNN.md`) are updated by stage agents:
-- **build** marks items as `- [x]` as each is implemented
-- **check** validates that marked items are actually satisfied by reading the Ring source
-  (flags mismatches: `[x]` but not implemented → HIGH, `[ ]` but implemented → MEDIUM)
-
-This ensures the overlay accurately reflects what was delivered at every point in the lifecycle.
 
 ### Version Management
 
@@ -506,8 +483,8 @@ Any status → Cancelado  (via tasks cancel operation)
    Consider removing this dependency via `/optimus-tasks`." This helps the user
    understand the blocker requires a dependency edit, not waiting for completion.
 7. **Expanded confirmation on status change** — when a stage agent is about to change
-   a task's status, it shows the task summary (title, version, and Progresso from
-   `docs/tasks/T-NNN.md`) and asks for explicit confirmation via `AskUser`. This
+   a task's status, it shows the task summary (title and version) and asks for
+   explicit confirmation via `AskUser`. This
    prevents accidental status changes on the wrong task, especially during auto-detect.
 
    **Show expanded confirmation when:**
@@ -706,7 +683,7 @@ Each task gets its own file (e.g., `.optimus/session-T-003.json`).
   "started_at": "2025-01-15T10:30:00Z",
   "updated_at": "2025-01-15T11:45:00Z",
   "phase": "Phase 1: Implementation",
-  "notes": "Implementation in progress, 3 of 5 progress items done"
+  "notes": "Implementation in progress"
 }
 ```
 

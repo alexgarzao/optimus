@@ -155,83 +155,29 @@ If unclear, ask the user via `AskUser`:
 Create from a template or from scratch?
 ```
 Options:
-- **API Endpoint** — pre-fills Feature tipo, standard API progress items
-- **Bug Fix** — pre-fills Fix tipo, standard debugging progress items
-- **UI Component** — pre-fills Feature tipo, standard frontend progress items
-- **Chore/Infra** — pre-fills Chore tipo, standard infrastructure progress items
-- **Refactor** — pre-fills Refactor tipo, standard refactoring progress items
-- **Documentation** — pre-fills Docs tipo, standard documentation progress items
-- **Test** — pre-fills Test tipo, standard testing progress items
+- **API Endpoint** — pre-fills Feature tipo
+- **Bug Fix** — pre-fills Fix tipo
+- **UI Component** — pre-fills Feature tipo
+- **Chore/Infra** — pre-fills Chore tipo
+- **Refactor** — pre-fills Refactor tipo
+- **Documentation** — pre-fills Docs tipo
+- **Test** — pre-fills Test tipo
 - **From scratch** — manual entry (no template)
 
 #### Built-in Templates
 
-Templates pre-fill `## Progresso` items in the overlay file. When a Ring pre-dev
-reference is linked (Step 2.3.1), the template items are replaced by subtask
-headings from the Ring source.
+Templates pre-fill Tipo and Priority. When a Ring pre-dev reference is linked
+(Step 2.3.1), the overlay will include Fonte links to the Ring source.
 
-**API Endpoint template:**
-- Tipo: `Feature`, Priority: `Alta`
-- Progresso:
-  - [ ] Endpoint implemented with correct HTTP method and path
-  - [ ] Request validation (required fields, types, constraints)
-  - [ ] Success response format matches API contract
-  - [ ] Error responses with appropriate HTTP status codes
-  - [ ] Authentication/authorization enforced
-  - [ ] Unit tests for handler (happy path + error paths)
-  - [ ] Integration tests for repository layer
-  - [ ] Documentation updated (if applicable)
+**API Endpoint template:** Tipo: `Feature`, Priority: `Alta`
+**Bug Fix template:** Tipo: `Fix`, Priority: `Alta`
+**UI Component template:** Tipo: `Feature`, Priority: `Media`
+**Chore/Infra template:** Tipo: `Chore`, Priority: `Media`
+**Refactor template:** Tipo: `Refactor`, Priority: `Media`
+**Documentation template:** Tipo: `Docs`, Priority: `Baixa`
+**Test template:** Tipo: `Test`, Priority: `Media`
 
-**Bug Fix template:**
-- Tipo: `Fix`, Priority: `Alta`
-- Progresso:
-  - [ ] Root cause identified and documented
-  - [ ] Fix implemented with minimal scope
-  - [ ] Regression test added (reproduces the bug, passes after fix)
-  - [ ] No unrelated changes included
-  - [ ] Unit tests passing
-
-**UI Component template:**
-- Tipo: `Feature`, Priority: `Media`
-- Progresso:
-  - [ ] Component renders correctly in all states (empty, loading, error, success)
-  - [ ] Responsive design (mobile, tablet, desktop)
-  - [ ] Accessibility (keyboard navigation, ARIA labels, screen reader)
-  - [ ] Unit tests for component logic
-  - [ ] Visual matches design spec
-
-**Chore/Infra template:**
-- Tipo: `Chore`, Priority: `Media`
-- Progresso:
-  - [ ] Configuration/infrastructure change applied
-  - [ ] No regression in existing functionality
-  - [ ] Documentation updated (if applicable)
-
-**Refactor template:**
-- Tipo: `Refactor`, Priority: `Media`
-- Progresso:
-  - [ ] Refactoring applied without changing external behavior
-  - [ ] All existing tests still pass
-  - [ ] No new warnings introduced
-  - [ ] Code review confirms improvement in readability/maintainability
-
-**Documentation template:**
-- Tipo: `Docs`, Priority: `Baixa`
-- Progresso:
-  - [ ] Documentation written/updated
-  - [ ] Examples included (if applicable)
-  - [ ] Links and references verified
-  - [ ] Spelling and grammar checked
-
-**Test template:**
-- Tipo: `Test`, Priority: `Media`
-- Progresso:
-  - [ ] Test scenarios identified and documented
-  - [ ] Tests implemented and passing
-  - [ ] Coverage improved for target area
-  - [ ] No flaky tests introduced
-
-When a template is selected, pre-fill the Tipo, Priority, and Progresso items.
+When a template is selected, pre-fill the Tipo and Priority.
 The user can then modify any field before confirming.
 
 **Option B: From scratch.** Ask the user for task details using `AskUser` (one question at a time or batch if info provided):
@@ -242,7 +188,7 @@ The user can then modify any field before confirming.
 4. **Estimate** (optional): Task size estimate (`S`, `M`, `L`, `XL`, `2h`, `1d`, etc.). Default: `-`
 5. **Version** (required): Must match a version in the Versions table. Default: the version with Status `Ativa`
 6. **Dependencies** (optional): Comma-separated task IDs (e.g., `T-001, T-003`) or `-` for none
-7. **Progress items** (optional): Checklist items for `## Progresso` in the overlay file. If omitted, Ring pre-dev discovery (Step 2.3.1) will populate them.
+7. **Ring pre-dev reference** (optional): Link to Ring pre-dev task spec. If omitted, Ring pre-dev discovery (Step 2.3.1) will attempt to find a match.
 
 If the user provided some of these in the initial request, use them and ask only for missing fields.
 
@@ -339,7 +285,7 @@ Link to one of these?
 Options:
 - **[N] task_NNN.md** — link this ring task
 - **Show all ring tasks** — list every task for manual selection
-- **None** — create without Ring reference (overlay will have empty Progresso)
+- **None** — create without Ring reference
 
 **If no matches found or `docs/pre-dev/tasks/` does not exist**, ask:
 ```
@@ -347,7 +293,7 @@ No ring pre-dev tasks found. Create task without Ring reference?
 ```
 Options:
 - **Show all ring tasks** — list every task for manual selection (if directory exists)
-- **Create without reference** — overlay with empty Progresso
+- **Create without reference** — overlay with Fonte section only
 
 ### Step 2.4: Add to tasks.md and create overlay file
 
@@ -364,17 +310,11 @@ Options:
    ## Fonte
    **Task spec:** `docs/pre-dev/tasks/task_NNN.md`
    **Subtasks:** `docs/pre-dev/subtasks/T-NNN/`
-
-   ## Progresso
-   - [ ] <subtask 1 short title>
-   - [ ] <subtask 2 short title>
    ```
 
    **If no Ring pre-dev linked:**
    ```markdown
    # T-NNN: <title>
-
-   ## Progresso
    ```
 3. Save both files
 
@@ -411,7 +351,7 @@ Determine which field(s) to edit. Editable fields:
 | Status | **No** | Status is managed ONLY by stage agents |
 | Branch | **No** | Branch is managed ONLY by stage-1 and close |
 | ID | **No** | IDs are immutable |
-| Progress items | Yes | Updates `## Progresso` in `docs/tasks/T-NNN.md` |
+| Ring reference | No | Updates `## Fonte` in `docs/tasks/T-NNN.md` |
 
 **HARD BLOCK:** If the user tries to change Status or Branch, refuse:
 ```
@@ -426,7 +366,7 @@ task, use "reopen T-XXX".
 1. Update the relevant column(s) in the table row in `docs/tasks.md`
 2. If Title changed, also update the heading in `docs/tasks/T-NNN.md`
 3. If Depends changed, validate all references exist and no circular dependencies
-4. If Progress items changed, update `## Progresso` in `docs/tasks/T-NNN.md`
+4. If Ring reference changed, update `## Fonte` in `docs/tasks/T-NNN.md`
 5. Save the file(s)
 
 ### Step 3.2: Confirm
@@ -666,7 +606,7 @@ To resolve, run `/optimus-tasks`:
    ```
    Options:
    - **Bug found** — implementation has a defect
-   - **Incomplete** — not all progress items were actually met
+   - **Incomplete** — not all acceptance criteria were actually met
    - **Requirements changed** — spec was updated after close
    - **Decision reversed** — cancellation decision was reconsidered (only for Cancelado)
    - **Cancel** — keep current status

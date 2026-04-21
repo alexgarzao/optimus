@@ -156,10 +156,6 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 
        **T-XXX: [title]**
        **Version:** [version from table]
-       **Progresso:**
-       - [ ] [item 1]
-       - [ ] [item 2]
-       ...
 
        Confirm status change?
        ```
@@ -397,10 +393,7 @@ Required output format:
 
 **Spec Compliance agent** must additionally:
 1. List every acceptance criterion from the Ring source (via `## Fonte` in the overlay) and mark PASS/FAIL/PARTIAL
-2. **Validate checkboxes:** Verify that the `- [x]` items in `## Progresso` match reality.
-   If an item is marked `[x]` but the implementation doesn't satisfy it → flag as HIGH finding.
-   If an item is marked `[ ]` but the implementation satisfies it → flag as MEDIUM finding (checkbox not updated).
-3. List every test ID and verify a corresponding test exists
+2. List every test ID and verify a corresponding test exists
 4. If the task has API endpoints, verify request/response format matches API contracts
 5. If the task has DB changes, verify column types/constraints match the data model
 
@@ -789,7 +782,6 @@ The `--assignee @me` flag assigns the PR to the authenticated GitHub user automa
 The body should include:
 - Task ID and title
 - Objective (from Ring source via `## Fonte` in overlay)
-- Progresso summary
 - Link to the task section in tasks.md
 
 ### Step 12.4: Confirm

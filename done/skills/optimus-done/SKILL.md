@@ -123,10 +123,6 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 
        **T-XXX: [title]**
        **Version:** [version from table]
-       **Progresso:**
-       - [x] [item 1]
-       - [x] [item 2]
-       ...
 
        Confirm close?
        ```

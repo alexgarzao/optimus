@@ -44,7 +44,7 @@ verification:
 # Quick Report
 
 Compact daily status dashboard. Parses `tasks.md` and presents a focused overview:
-version progress, active tasks with Progresso status, ready-to-start tasks,
+version progress, active tasks with current status, ready-to-start tasks,
 and blocked tasks.
 
 **CRITICAL:** This agent NEVER modifies any files. It only reads and reports.

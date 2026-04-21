@@ -46,7 +46,7 @@ verification:
     - All Ring pre-dev tasks discovered and presented
     - Proposal shown before any changes
     - tasks.md generated in correct optimus format
-    - Overlay T-NNN.md files created with Fonte + Progresso
+    - Overlay T-NNN.md files created with Fonte links
     - Original Ring files NOT deleted
 ---
 
@@ -54,7 +54,7 @@ verification:
 
 Reads Ring pre-dev artifacts (`docs/pre-dev/tasks/`, `docs/pre-dev/subtasks/`) and creates
 the optimus tracking layer: `tasks.md` (status table) + `T-NNN.md` overlay files (Fonte
-links + Progresso checkboxes). Never copies content from Ring — only references it.
+links). Never copies content from Ring — only references it.
 
 **CRITICAL:** This agent NEVER deletes original files. It creates/updates tasks.md
 and overlay files, leaving Ring pre-dev artifacts untouched.
@@ -215,25 +215,12 @@ For each imported task, create `TASKS_DIR/T-NNN.md`:
 **Subtasks:** `docs/pre-dev/subtasks/T-NNN/`
 **Plano:** `docs/pre-dev/subtasks/T-NNN/PARALLEL-PLAN.md`
 
-| Arquivo | Descricao |
-|---------|-----------|
-| ST-NNN-01-xxx.md | <heading from subtask file> |
-| ST-NNN-02-yyy.md | <heading from subtask file> |
-| ... | ... |
-
-## Progresso
-- [ ] <subtask 1 short title>
-- [ ] <subtask 2 short title>
-- [ ] <subtask 3 short title>
 ```
 
 **Rules for overlay creation:**
 - `## Fonte` links to Ring source files — paths are relative to project root
-- If no subtasks directory exists, omit the Subtasks line and table
+- If no subtasks directory exists, omit the Subtasks line
 - If no PARALLEL-PLAN.md exists, omit that line
-- `## Progresso` items are derived from subtask headings (short titles)
-- If no subtasks exist, derive Progresso from the Ring task spec's acceptance criteria
-- All checkboxes start as `- [ ]`
 
 **IMPORTANT:** The overlay does NOT contain Objetivo or Critérios de Aceite. Agents
 read those from the Ring source via the Fonte links.
@@ -286,6 +273,5 @@ Original Ring files preserved."
 - **NEVER apply changes without user approval** — always present and confirm first
 - **NEVER invent task content** — only extract titles and subtask headings from Ring source
 - Ring pre-dev is the ONLY import source — generic formats (YAML, checklist, index) are not supported
-- If a Ring task has no subtasks, derive Progresso from the task spec's acceptance criteria
 - IDs between optimus and Ring are independent — Optimus T-038 may reference Ring T-020
 - Task IDs must be unique — if duplicates found, warn the user before proceeding

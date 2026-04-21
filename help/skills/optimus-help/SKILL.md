@@ -39,7 +39,7 @@ terminal display when available, otherwise use markdown tables.
 | **report** | `/optimus-report` | Checking project status — shows progress, active/blocked/ready tasks, dependency graph, parallelization opportunities, and velocity metrics. Read-only. |
 | **tasks** | `/optimus-tasks` | Creating, editing, removing, reordering, cancelling, or reopening tasks. Managing versions. Any administrative task management. |
 | **resolve** | `/optimus-resolve` | Resolving merge conflicts in `tasks.md` caused by parallel task execution across feature branches. |
-| **quick-report** | `/optimus-quick-report` | Compact daily status — active tasks with Progresso status, ready-to-start, blocked. No git ops. Read-only. |
+| **quick-report** | `/optimus-quick-report` | Compact daily status — active tasks with current status, ready-to-start, blocked. No git ops. Read-only. |
 | **help** | `/optimus-help` | This skill — discovering what's available. |
 
 ### Execution Skills (task lifecycle, stages 1-5)

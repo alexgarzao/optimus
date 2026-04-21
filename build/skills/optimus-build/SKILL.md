@@ -111,7 +111,7 @@ Executes a validated task specification end-to-end: identifies the task, loads c
 
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`build`, status=`Em Andamento`.
 
-**On stage completion** (after Phase 4 post-execution): delete the session file.
+**On stage completion** (after Phase 3 post-execution): delete the session file.
 
 ### Step 1.3: Validate and Update Task Status
 
@@ -141,10 +141,6 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 
        **T-XXX: [title]**
        **Version:** [version from table]
-       **Progresso:**
-       - [ ] [item 1]
-       - [ ] [item 2]
-       ...
 
        Confirm status change?
        ```
@@ -286,35 +282,11 @@ While dev-cycle executes:
 
 ---
 
-## Phase 3: Update Progress Checkboxes
-
-After Phase 2 completes, update the `## Progresso` checkboxes in the overlay file
-to reflect what was actually implemented.
-
-**IMPORTANT:** This step runs AFTER implementation and verification complete but BEFORE
-presenting the final summary. This ensures that when stage-3 (impl-review) runs, the
-checkboxes already reflect what was implemented, preventing false findings.
-
-### Step 3.1: Evaluate and Mark Checkboxes
-
-1. Read `docs/tasks/T-XXX.md` and list all items in `## Progresso` (`- [ ] ...`)
-2. For each item, read the corresponding Ring source (subtask file or acceptance criterion)
-   and verify whether the implementation satisfies it:
-   - If satisfied → mark as `- [x]`
-   - If NOT satisfied → leave as `- [ ]` and warn the user
-3. Commit the updated progress:
-   ```bash
-   git add "$TASKS_DIR/T-XXX.md"
-   git commit -m "chore(tasks): update progress for T-XXX"
-   ```
-
----
-
-## Phase 4: Post-Execution
+## Phase 3: Post-Execution
 
 After implementation completes (via dev-cycle):
 
-### Step 4.1: Test Gap Cross-Reference
+### Step 3.1: Test Gap Cross-Reference
 
 Review any test gaps identified during implementation:
 
@@ -327,7 +299,7 @@ Review any test gaps identified during implementation:
    - Flag as a gap and recommend adding the test to the current task
 4. Do NOT silently skip test gaps because they might be covered later — always verify and ask
 
-### Step 4.2: Present Final Summary
+### Step 3.2: Present Final Summary
 
 Present a structured summary including:
 - Task ID and title
@@ -336,7 +308,7 @@ Present a structured summary including:
 - dev-cycle gate results (all 6 gates)
 - Decisions made during questioning and review phases
 
-### Step 4.3: Commit
+### Step 3.3: Commit
 
 Only after explicit user approval:
 
@@ -345,7 +317,7 @@ Only after explicit user approval:
 3. If clean, stage all relevant files and commit with a descriptive message
 4. Run `git status` to confirm the commit succeeded
 
-### Step 4.4: Push Commits (optional)
+### Step 3.4: Push Commits (optional)
 
 Offer to push commits — see AGENTS.md Protocol: Push Commits.
 
@@ -376,6 +348,5 @@ If the user requests a dry-run (e.g., "dry-run impl T-003", "preview implementat
 - Present the implementation plan and all questions (Step 1.9)
 - **Do NOT change task status** — skip Step 1.3 (status update)
 - **Do NOT execute implementation** — skip Phase 2 entirely
-- **Do NOT update checkboxes** — skip Phase 3
-- **Do NOT commit or push anything** — skip Phase 4 commits
+- **Do NOT commit or push anything** — skip Phase 3 commits
 - Present a summary of: what would be implemented, estimated effort, identified risks

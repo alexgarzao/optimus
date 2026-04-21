@@ -146,12 +146,12 @@ If the user's invocation matches quick status triggers ("quick status", "what am
 
 1. Parse tasks.md (Phase 1 still runs fully)
 2. Find tasks with status other than `Pendente`, `DONE`, and `Cancelado` (active tasks)
-3. For each active task, read its overlay file (`docs/tasks/T-NNN.md`) and count checked vs total items in `## Progresso`
+3. For each active task, read its overlay file (`docs/tasks/T-NNN.md`) for context
 4. Present ONLY:
 
 ```
 Quick Status:
-  Active: T-XXX — [title] (Em Andamento) — 3/5 criteria done
+  Active: T-XXX — [title] (Em Andamento)
   Next up: T-YYY — [title] (Pendente, ready to start)
 ```
 
