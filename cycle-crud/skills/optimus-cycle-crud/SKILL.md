@@ -66,7 +66,7 @@ Administrative CRUD operations for tasks in `tasks.md`.
 
 ## Phase 1: Initialize
 
-### Step 0.0: Verify GitHub CLI (conditional)
+### Step 1.0: Verify GitHub CLI (conditional)
 
 Operations that interact with GitHub (cancel with PR/branch cleanup, reopen) require `gh`:
 
@@ -81,7 +81,7 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 
 For operations that do not use `gh` (create, edit, remove, reorder, version management), skip this check.
 
-### Step 0.0.1: Find and Validate tasks.md
+### Step 1.0.1: Find and Validate tasks.md
 
 1. **Find tasks.md:** Look in `.optimus/tasks.md`. If not found, ask the user via `AskUser`:
 
@@ -122,7 +122,7 @@ For operations that do not use `gh` (create, edit, remove, reorder, version mana
 
 If validation fails, **STOP** and suggest: "tasks.md is not in valid optimus format. Run `/optimus-cycle-migrate` to fix it."
 
-### Step 0.1: Determine Operation
+### Step 1.1: Determine Operation
 
 Parse the user's request to determine which operation to perform:
 
@@ -154,7 +154,7 @@ If unclear, ask the user via `AskUser`:
 
 ## Phase 2: Create Task
 
-### Step 1.0: Gather Task Information
+### Step 2.0: Gather Task Information
 
 **Option A: From template.** Ask the user if they want to use a template via `AskUser`:
 
@@ -250,7 +250,7 @@ The user can then modify any field before confirming.
 
 If the user provided some of these in the initial request, use them and ask only for missing fields.
 
-### Step 1.1: Check for Similar Tasks (duplicate detection)
+### Step 2.1: Check for Similar Tasks (duplicate detection)
 
 Before creating, search existing tasks for potential duplicates:
 
@@ -281,7 +281,7 @@ Options:
 
 If no similar tasks are found, proceed silently.
 
-### Step 1.1.1: Validate Title Characters
+### Step 2.1.1: Validate Title Characters
 
 **HARD BLOCK:** The task title must not contain unescaped pipe characters (`|`) because
 tasks.md uses markdown tables where `|` is the column delimiter.
@@ -293,20 +293,20 @@ If the title contains `|`:
 Also reject titles longer than 120 characters — longer titles break table formatting.
 If too long, ask the user to shorten it.
 
-### Step 1.2: Generate Task ID
+### Step 2.2: Generate Task ID
 
 1. Parse all existing task IDs from the table
 2. Find the highest numeric value (e.g., if T-012 exists, next is T-013)
 3. Format as `T-NNN` with zero-padding to 3 digits
 
-### Step 1.3: Validate Dependencies
+### Step 2.3: Validate Dependencies
 
 If the user specified dependencies:
 1. Verify each dependency ID exists in the table
 2. Check for circular dependencies: if T-NEW depends on T-X, and T-X (directly or transitively) would depend on T-NEW → reject
 3. If any dependency ID is invalid → ask the user to correct it
 
-### Step 1.4: Add to tasks.md
+### Step 2.4: Add to tasks.md
 
 1. Add a new row to the table:
    ```
@@ -324,7 +324,7 @@ If the user specified dependencies:
    ```
 3. Save the file
 
-### Step 1.5: Confirm
+### Step 2.5: Confirm
 
 Show the user the added task:
 ```
@@ -338,7 +338,7 @@ Created task T-NNN: <title>
 
 ## Phase 3: Edit Task
 
-### Step 2.0: Identify Task and Field
+### Step 3.0: Identify Task and Field
 
 1. Parse the task ID from the user's request
 2. Find the task row in the table
@@ -368,7 +368,7 @@ To change status manually, use the Advance or Demote operations in this skill
 task, use "reopen T-XXX".
 ```
 
-### Step 2.1: Apply Changes
+### Step 3.1: Apply Changes
 
 1. Update the relevant column(s) in the table row
 2. If Title changed, also update the H2 section header (`## T-NNN: <new title>`)
@@ -376,7 +376,7 @@ task, use "reopen T-XXX".
 4. If Objective or acceptance criteria changed, update the detail section
 5. Save the file
 
-### Step 2.2: Confirm
+### Step 3.2: Confirm
 
 Show the user the changes:
 ```
@@ -386,13 +386,13 @@ Updated T-XXX:
 
 ## Phase 4: Remove Task
 
-### Step 3.0: Identify Task
+### Step 4.0: Identify Task
 
 1. Parse the task ID from the user's request
 2. Find the task row in the table
 3. If task not found → **STOP**: "Task T-XXX not found in tasks.md"
 
-### Step 3.1: Validate Removal
+### Step 4.1: Validate Removal
 
 **HARD BLOCK:** Check if any other task depends on this task:
 
@@ -417,7 +417,7 @@ may cause data loss. Are you sure?
 
 Use `AskUser` for confirmation.
 
-### Step 3.2: Remove from tasks.md
+### Step 4.2: Remove from tasks.md
 
 1. Remove the table row for T-XXX
 2. Remove the detail section (`## T-XXX: ...` and all content until the next `## T-` or end of file)
@@ -425,7 +425,7 @@ Use `AskUser` for confirmation.
 
 **NOTE:** Do NOT renumber remaining task IDs. IDs are permanent identifiers.
 
-### Step 3.3: Confirm
+### Step 4.3: Confirm
 
 ```
 Removed task T-XXX: <title>
@@ -433,7 +433,7 @@ Removed task T-XXX: <title>
 
 ## Phase 5: Reorder Tasks
 
-### Step 4.0: Determine New Order
+### Step 5.0: Determine New Order
 
 Reordering changes the visual order of rows in the table. It does NOT change IDs or dependencies.
 
@@ -442,26 +442,26 @@ Options:
 - **Full reorder:** "Reorder by priority" → sort all rows by priority (Alta → Media → Baixa)
 - **Custom:** User provides a new order
 
-### Step 4.1: Apply Reorder
+### Step 5.1: Apply Reorder
 
 1. Rearrange table rows according to the requested order
 2. Do NOT change any cell values (ID, Title, Tipo, Status, Depends, Priority, Branch stay the same)
 3. Do NOT reorder the detail sections (they follow the original ID order for consistency)
 4. Save the file
 
-### Step 4.2: Confirm
+### Step 5.2: Confirm
 
 Show the new table order.
 
 ## Phase 6: Cancel Task
 
-### Step 5.0: Identify Task
+### Step 6.0: Identify Task
 
 1. Parse the task ID from the user's request
 2. Find the task row in the table
 3. If task not found → **STOP**: "Task T-XXX not found in tasks.md"
 
-### Step 5.1: Validate Cancellation
+### Step 6.1: Validate Cancellation
 
 1. **If status is `**DONE**`** → **STOP**: "Task T-XXX is already done. Cannot cancel a completed task."
 2. **If status is `Cancelado`** → **STOP**: "Task T-XXX is already cancelled."
@@ -520,10 +520,10 @@ Show the new table order.
       - **Keep** — leave the branch as is
       **NOTE:** If an open PR was kept in step (a), skip branch deletion — deleting the branch would orphan the PR.
 
-### Step 5.2: Apply Cancellation
+### Step 6.2: Apply Cancellation
 
 1. Update the **Status** column to `Cancelado`
-2. Update the **Branch** column to `-` (if branch was deleted in Step 5.1)
+2. Update the **Branch** column to `-` (if branch was deleted in Step 6.1)
 3. Save and commit: `chore(tasks): cancel T-XXX`
 4. **Invoke notification hooks (if present):**
    ```bash
@@ -533,14 +533,14 @@ Show the new table order.
    fi
    ```
 5. **Fire `task-blocked` hook for affected dependents:** For each non-cancelled task that
-   depends on T-XXX (identified in Step 5.1.3), fire the `task-blocked` hook:
+   depends on T-XXX (identified in Step 6.1.3), fire the `task-blocked` hook:
    ```bash
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
      "$HOOKS_FILE" task-blocked T-YYY "<dep-status>" "<dep-status>" "blocked by T-XXX (Cancelado)" 2>/dev/null &
    fi
    ```
 
-### Step 5.3: Confirm
+### Step 6.3: Confirm
 
 ```
 Cancelled task T-XXX: <title>
@@ -549,7 +549,7 @@ Cancelled task T-XXX: <title>
 ```
 
 **Proactive dependent notification:** If any non-cancelled tasks depend on T-XXX
-(identified in Step 5.1.3), display them with resolution guidance:
+(identified in Step 6.1.3), display them with resolution guidance:
 
 ```markdown
 ### Affected Dependents (now blocked)
@@ -568,13 +568,13 @@ To resolve, run `/optimus-cycle-crud`:
 
 ## Phase 7: Reopen Task
 
-### Step 5.5.0: Identify Task
+### Step 7.0: Identify Task
 
 1. Parse the task ID from the user's request
 2. Find the task row in the table
 3. If task not found → **STOP**: "Task T-XXX not found in tasks.md"
 
-### Step 5.5.1: Validate Reopen
+### Step 7.1: Validate Reopen
 
 1. **If status is NOT `**DONE**` and NOT `Cancelado`** → **STOP**: "Task T-XXX is in status '<status>'. Only completed or cancelled tasks can be reopened."
 2. **Determine target status based on current status and workspace availability:**
@@ -620,9 +620,9 @@ To resolve, run `/optimus-cycle-crud`:
 
    **BLOCKING:** Do NOT proceed without user confirmation and justification.
 
-### Step 5.5.2: Apply Reopen
+### Step 7.2: Apply Reopen
 
-1. Update the **Status** column to the target status determined in Step 5.5.1:
+1. Update the **Status** column to the target status determined in Step 7.1:
    - From `**DONE**`: `Em Andamento` if workspace exists, `Pendente` if not
    - From `Cancelado`: always `Pendente` (must restart from stage-1)
 2. If reopening from `Cancelado`, also clear the **Branch** column to `-` (any previous
@@ -636,7 +636,7 @@ To resolve, run `/optimus-cycle-crud`:
    fi
    ```
 
-### Step 5.5.3: Confirm
+### Step 7.3: Confirm
 
 ```
 Reopened task T-XXX: <title>
@@ -653,7 +653,7 @@ Reopened task T-XXX: <title>
 Manually advance a task's status to skip a stage (e.g., when the user implemented
 code manually without using stage-2).
 
-### Step 5.6.0: Identify Task and Target Status
+### Step 8.0: Identify Task and Target Status
 
 1. Parse the task ID from the user's request
 2. Find the task row in the table
@@ -671,7 +671,7 @@ code manually without using stage-2).
    | `**DONE**` | (use Reopen instead) |
    | `Cancelado` | (use Reopen or create new task) |
 
-### Step 5.6.1: Validate Advance
+### Step 8.1: Validate Advance
 
 1. **If status is `**DONE**` or `Cancelado`** → **STOP**: "Task T-XXX is in terminal status '<status>'. Use 'reopen' for DONE tasks."
 2. **Check dependencies (HARD BLOCK):** same rules as stage agents — all dependencies must be `**DONE**`.
@@ -702,7 +702,7 @@ code manually without using stage-2).
    ```
    **BLOCKING:** Do NOT proceed without confirmation.
 
-### Step 5.6.2: Apply Advance
+### Step 8.2: Apply Advance
 
 1. Update the **Status** column to the target status
 2. Save and commit: `chore(tasks): advance T-XXX to <target status> (manual override)`
@@ -721,7 +721,7 @@ code manually without using stage-2).
 Move a task back to a previous status (e.g., when stage-3 review identifies
 that significant rework is needed and the task should go back to implementation).
 
-### Step 5.7.0: Identify Task and Target Status
+### Step 9.0: Identify Task and Target Status
 
 1. Parse the task ID from the user's request
 2. Find the task row in the table
@@ -739,7 +739,7 @@ that significant rework is needed and the task should go back to implementation)
    | `**DONE**` | (use Reopen instead) |
    | `Cancelado` | (terminal, cannot demote) |
 
-### Step 5.7.1: Validate Demotion
+### Step 9.1: Validate Demotion
 
 1. **If status is `Pendente`** → **STOP**: "Task T-XXX is already at the initial status."
 2. **If status is `**DONE**` or `Cancelado`** → **STOP**: "Task T-XXX is in terminal status '<status>'. Use 'reopen' for DONE tasks."
@@ -760,7 +760,7 @@ that significant rework is needed and the task should go back to implementation)
 
    **BLOCKING:** Do NOT proceed without confirmation and justification.
 
-### Step 5.7.2: Apply Demotion
+### Step 9.2: Apply Demotion
 
 1. Update the **Status** column to the target status
 2. Save and commit: `chore(tasks): demote T-XXX to <target status> — <reason>`
@@ -785,7 +785,7 @@ If the user provides multiple tasks to create at once (e.g., a list of tasks), p
 
 ## Phase 11: Version Management
 
-### Step 7.0: Determine Version Operation
+### Step 11.0: Determine Version Operation
 
 | Sub-operation | Triggers |
 |---------------|----------|
@@ -794,7 +794,7 @@ If the user provides multiple tasks to create at once (e.g., a list of tasks), p
 | **Remove** | "remove version", "delete version" |
 | **Reorder** | "reorder versions" |
 
-### Step 7.1: Create Version
+### Step 11.1: Create Version
 
 Ask the user for:
 1. **Name** (required): Version name (e.g., `v3`, `Sprint 4`, `Futuro`)
@@ -810,7 +810,7 @@ Ask the user for:
 
 Add the row to the Versions table and commit: `chore(tasks): create version <name>`
 
-### Step 7.2: Edit Version
+### Step 11.2: Edit Version
 
 Editable fields:
 
@@ -844,7 +844,7 @@ Editable fields:
 
 Commit: `chore(tasks): update version <name>`
 
-### Step 7.3: Remove Version
+### Step 11.3: Remove Version
 
 **HARD BLOCK:** Check if any task references this version:
 ```
@@ -863,7 +863,7 @@ Move these tasks to another version first.
 If no tasks reference it, remove the row from the Versions table.
 Commit: `chore(tasks): remove version <name>`
 
-### Step 7.4: Reorder Versions
+### Step 11.4: Reorder Versions
 
 Rearrange rows in the Versions table. Does NOT change any values — only visual order.
 
@@ -871,7 +871,7 @@ Rearrange rows in the Versions table. Does NOT change any values — only visual
 
 Move one or more tasks from one version to another.
 
-### Step 8.0: Parse Move Request
+### Step 12.0: Parse Move Request
 
 The user may say:
 - "move T-003 to v2" → single task
@@ -879,11 +879,11 @@ The user may say:
 - "move all Pendente from MVP to v2" → batch by status + source version
 - "move all from MVP to v2" → batch by source version (all statuses except DONE)
 
-### Step 8.1: Validate Target Version
+### Step 12.1: Validate Target Version
 
 Verify the target version exists in the Versions table. If not → **STOP**: "Version '<name>' does not exist. Create it first."
 
-### Step 8.2: Identify Tasks to Move
+### Step 12.2: Identify Tasks to Move
 
 For batch moves, list the tasks that match the criteria and present to the user via `AskUser`:
 
@@ -900,7 +900,7 @@ Confirm move?
 
 **BLOCKING:** Do NOT proceed without confirmation.
 
-### Step 8.3: Apply Move
+### Step 12.3: Apply Move
 
 1. Update the Version column for each identified task
 2. Do NOT change Status, Branch, Depends, Priority, or any other field

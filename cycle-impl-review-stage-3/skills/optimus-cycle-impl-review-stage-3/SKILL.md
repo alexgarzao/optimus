@@ -94,25 +94,25 @@ for committed code).
 
 ## Phase 1: Load Context
 
-### Step 0.0: Verify GitHub CLI (HARD BLOCK)
+### Step 1.0: Verify GitHub CLI (HARD BLOCK)
 Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
-### Step 0.0.1: Find and Validate tasks.md
+### Step 1.0.1: Find and Validate tasks.md
 **HARD BLOCK:** Find and validate tasks.md — see AGENTS.md Protocol: tasks.md Validation.
 
-### Step 0.0.1.2: Verify Workspace (HARD BLOCK)
+### Step 1.0.1.2: Verify Workspace (HARD BLOCK)
 Resolve workspace — see AGENTS.md Protocol: Workspace Auto-Navigation.
 
-### Step 0.0.1.3: Check tasks.md Divergence (warning)
+### Step 1.0.1.3: Check tasks.md Divergence (warning)
 Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 
-### Step 0.0.1.4: Branch-Task Cross-Validation
+### Step 1.0.1.4: Branch-Task Cross-Validation
 Branch-task cross-validation — included in AGENTS.md Protocol: Workspace Auto-Navigation.
 
-### Step 0.0.1.5: Validate PR Title (if PR exists)
+### Step 1.0.1.5: Validate PR Title (if PR exists)
 Validate PR title — see AGENTS.md Protocol: PR Title Validation.
 
-### Step 0.0.2: Identify Task to Validate
+### Step 1.0.2: Identify Task to Validate
 
 **If the user specified a task ID** (e.g., "validate T-012"):
 - Use the provided task ID
@@ -126,12 +126,12 @@ Validate PR title — see AGENTS.md Protocol: PR Title Validation.
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
 
-### Step 0.0.2.1: Check Session State
+### Step 1.0.2.1: Check Session State
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`cycle-impl-review-stage-3`, status=`Validando Impl`.
 
 **On stage completion** (after Phase 10 validation summary): delete the session file.
 
-### Step 0.0.3: Validate and Update Task Status
+### Step 1.0.3: Validate and Update Task Status
 
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
@@ -180,7 +180,7 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 
 **Why commit immediately:** If the session is interrupted or the agent crashes before any review fixes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of the review outcome.
 
-### Step 0.1: Discover Project Structure
+### Step 1.1: Discover Project Structure
 
 Before loading docs, discover the project's structure and tooling (reuse discoveries from optimus-cycle-impl-stage-2 if available):
 
@@ -198,7 +198,7 @@ TEST_INTEGRATION_CMD=<discovered integration test command>
 TEST_E2E_CMD=<discovered E2E test command>
 ```
 
-### Step 0.2: Load Reference Documents
+### Step 1.2: Load Reference Documents
 
 Read the discovered reference docs to understand what was expected:
 - Task spec — the task being validated (find by ID): scope, acceptance criteria, testing strategy, DoD
@@ -209,7 +209,7 @@ Read the discovered reference docs to understand what was expected:
 - Coding standards (source of truth)
 - Dependency relationships
 
-### Step 0.3: Identify Changed Files
+### Step 1.3: Identify Changed Files
 
 Identify all files created/modified by the task. Use the appropriate method:
 - If changes are uncommitted: `git diff --name-only` and `git diff --name-only --cached`
@@ -217,7 +217,7 @@ Identify all files created/modified by the task. Use the appropriate method:
 
 Read ALL changed files — the full content of every changed file is required for agent prompts.
 
-### Step 0.4: Determine Task Scope
+### Step 1.4: Determine Task Scope
 
 Classify the task based on the file extensions of changed files:
 - **Backend-only** — only backend source files, migrations, backend tests changed
@@ -232,7 +232,7 @@ This determines which specialist agents to dispatch in Phase 3.
 
 **MANDATORY.** Before dispatching review agents, run automated checks to collect concrete data. These results feed into agent prompts and become findings if they fail.
 
-### Step 0.5.1: Run Static Analysis (parallel)
+### Step 2.1: Run Static Analysis (parallel)
 
 Run ALL applicable checks simultaneously. Capture stdout, stderr, exit code for each.
 
@@ -255,7 +255,7 @@ For checks that **pass**, note them for the Phase 5 overview.
 
 Skip checks whose commands don't exist in the project (e.g., skip `go vet` in a pure JS project).
 
-### Step 0.5.2: Run Unit Tests (Baseline — HARD BLOCK)
+### Step 2.2: Run Unit Tests (Baseline — HARD BLOCK)
 
 **HARD BLOCK:** Unit tests must pass before proceeding to agent dispatch. This establishes
 the baseline — if unit tests are already failing, review cannot proceed.
@@ -290,7 +290,7 @@ If no coverage command is available, mark as SKIP.
 (after convergence loop, before summary) or when the user invokes them directly.
 This avoids slow test suites blocking the review loop.
 
-### Step 0.5.3: Analyze Coverage
+### Step 2.3: Analyze Coverage
 
 Parse the coverage output (format varies by stack) to identify:
 - Overall coverage percentage
@@ -303,7 +303,7 @@ Create findings for coverage issues:
 - **LOW**: Packages below 85% coverage
 - Infrastructure/generated code with 0% → skip (not a finding)
 
-### Step 0.5.4: Test Scenario Gap Analysis
+### Step 2.4: Test Scenario Gap Analysis
 
 Dispatch a test gap analyzer via `Task` tool (use `ring-default-ring-test-reviewer`).
 
@@ -324,7 +324,7 @@ Report: function, existing scenarios, missing scenarios, priority (HIGH/MEDIUM/L
 
 HIGH priority gaps become findings in Phase 4 consolidation.
 
-### Step 0.5.5: Collect Results
+### Step 2.5: Collect Results
 
 Merge all static analysis findings and coverage gap findings into the findings list.
 These are presented alongside agent review findings in Phase 5 (overview) and Phase 6 (interactive resolution).
@@ -515,7 +515,7 @@ Internally record every decision: finding ID, chosen option (or "skip"), and rat
 
 **IMPORTANT:** This phase starts ONLY after ALL findings have been presented and ALL decisions collected. No fix is applied during Phase 6.
 
-### Step 5.1: Present Pre-Apply Summary
+### Step 7.1: Present Pre-Apply Summary
 
 Before touching any code, show the user a summary of everything that will be changed:
 
@@ -534,14 +534,14 @@ Before touching any code, show the user a summary of everything that will be cha
 | F5 | [summary] | User: out of scope |
 ```
 
-### Step 5.2: Apply All Fixes via Ring Droids
+### Step 7.2: Apply All Fixes via Ring Droids
 Apply fixes using ring droids with TDD cycle — see AGENTS.md "Common Patterns > Fix Implementation".
 
 **Droid selection for this stage:** Use the stack-appropriate droid (Go→`ring-dev-team-backend-engineer-golang`, TS→`ring-dev-team-backend-engineer-typescript`, React→`ring-dev-team-frontend-engineer`, tests→`ring-dev-team-qa-analyst`). Documentation fixes use ring-tw-team droids without TDD.
 
 **After each fix:** run unit tests to verify no regressions.
 
-### Step 5.3: Final Verification (Lint + Unit Tests)
+### Step 7.3: Final Verification (Lint + Unit Tests)
 
 **After ALL fixes are applied**, run lint and unit tests one final time:
 
@@ -555,7 +555,7 @@ to fix, revert the offending fix and ask the user.
 
 **NOTE:** Integration and E2E tests do NOT run here — they run in Phase 9 (after convergence loop, before summary).
 
-### Step 5.4: Coverage Verification
+### Step 7.4: Coverage Verification
 
 After the final verification passes, measure unit test coverage:
 
@@ -588,7 +588,7 @@ If coverage is below threshold, add findings to the results:
 **E2E tests:**
 If `make test-e2e` target does not exist, mark as SKIP in the summary. Do NOT ask the user whether to implement E2E — that's a project-level decision, not a per-task decision.
 
-### Step 5.5: Test Scenario Gap Analysis
+### Step 7.5: Test Scenario Gap Analysis
 
 After coverage measurement, dispatch an agent to cross-reference the task spec's acceptance criteria with implemented tests and identify missing scenarios.
 
@@ -741,16 +741,16 @@ Offer to push commits — see AGENTS.md Protocol: Push Commits.
 After the validation summary is presented and the verdict is APPROVED or APPROVED WITH CAVEATS,
 offer to create a PR for the task.
 
-### Step 8.1: Check if PR Already Exists
+### Step 12.1: Check if PR Already Exists
 
 ```bash
 gh pr list --head "$(git branch --show-current)" --json number,state,url --jq '.[]'
 ```
 
 - **If PR already exists (any state):** skip PR creation — inform the user: "PR #X already exists: <url>"
-- **If no PR exists:** proceed to Step 8.2
+- **If no PR exists:** proceed to Step 12.2
 
-### Step 8.2: Generate PR Title (Conventional Commits)
+### Step 12.2: Generate PR Title (Conventional Commits)
 
 Derive the PR title from the task's **Tipo** column and title:
 
@@ -763,7 +763,7 @@ Derive the PR title from the task's **Tipo** column and title:
 
 **Example:** Task T-003 "User registration API" with Tipo "Feature" → `feat(T-003): add user registration API`
 
-### Step 8.3: Offer to Create
+### Step 12.3: Offer to Create
 
 Ask via `AskUser`:
 ```
@@ -790,7 +790,7 @@ The body should include:
 - Acceptance criteria summary
 - Link to the task section in tasks.md
 
-### Step 8.4: Confirm
+### Step 12.4: Confirm
 
 If created, show: "PR #N created: <url> (assigned to you)"
 
@@ -803,7 +803,7 @@ context. The agent NEVER creates a PR without explicit user approval.
 
 ### Agent Dispatch
 - ALWAYS dispatch agents for: Code Quality, Business Logic, Security, QA, Cross-File Consistency, Spec Compliance
-- Dispatch Frontend/Backend specialists based on task scope (Step 0.4)
+- Dispatch Frontend/Backend specialists based on task scope (Step 1.4)
 - Each agent receives the FULL content of ALL changed files — never partial content
 - Agents run in PARALLEL — do not wait for one before dispatching another
 - Ring droids are required — do not proceed without them
@@ -853,7 +853,7 @@ If the user requests a dry-run (e.g., "dry-run review T-012", "preview review"):
 - Run ALL analysis phases (Phase 2, Phase 3, Phase 4, Phase 5) normally
 - Present ALL findings in Phase 6 (interactive resolution)
 - **Do NOT apply any fixes** — skip Phase 7 (batch apply) entirely
-- **Do NOT change task status** — skip the status update in Step 0.0.3
+- **Do NOT change task status** — skip the status update in Step 1.0.3
 - **Do NOT run the convergence loop** — one pass is sufficient for estimation
 - Present a summary showing: total findings, severity breakdown, estimated fix effort
 - This allows the user to see what would happen before committing to a full review

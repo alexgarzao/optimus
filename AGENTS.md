@@ -82,8 +82,8 @@ rationalize these away.
 
 ### SKILL.md Files
 - Preserve YAML frontmatter structure (---, name, description, trigger, skip_when, etc.)
-- Keep phase numbering sequential (Phase 0, Phase 1, ...)
-- Step numbering within phases: Step X.Y (e.g., Step 0.3, Step 8.2)
+- Keep phase numbering sequential starting from 1 (Phase 1, Phase 2, ...)
+- Step numbering within phases: Step X.Y where X matches the phase number (e.g., Step 1.3, Step 2.2)
 - Use `**HARD BLOCK:**` for steps the agent must never skip
 - Use `**CRITICAL:**` for rules that override normal behavior
 - Use `**IMPORTANT:**` for emphasis without hard blocking

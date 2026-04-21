@@ -60,7 +60,7 @@ always "most advanced status wins" for each task independently.
 
 ## Phase 1: Detect and Parse Conflicts
 
-### Step 0.1: Verify Conflict Exists
+### Step 1.1: Verify Conflict Exists
 
 Check if `tasks.md` has merge conflict markers:
 
@@ -73,7 +73,7 @@ If no conflict markers found:
 - If no merge in progress → **STOP**: "No conflicts found in tasks.md. Nothing to resolve."
 - If merge in progress but tasks.md is not conflicted → **STOP**: "tasks.md is not conflicted. Use `git mergetool` for other files."
 
-### Step 0.2: Parse Conflict Regions
+### Step 1.2: Parse Conflict Regions
 
 Read `tasks.md` and identify each conflict region:
 
@@ -91,10 +91,10 @@ For each conflict region, classify its content:
 |-------------|---------------|---------------------|
 | **Task table rows** | Lines matching `\| T-\d+ \|` pattern | Per-task most-advanced-status |
 | **Versions table** | Lines in the `## Versions` section | Merge both — keep all versions; deduplicate by name (if same version name on both sides, keep the one with more advanced status: Ativa > Próxima > Planejada > Backlog > Concluída) |
-| **Task detail sections** | Lines under `## T-NNN:` headings | Merge: union of `[x]` checkboxes from both sides; for prose differences, flag for user decision (Step 1.4) |
+| **Task detail sections** | Lines under `## T-NNN:` headings | Merge: union of `[x]` checkboxes from both sides; for prose differences, flag for user decision (Step 2.4) |
 | **Format marker / headers** | First line, `# Tasks`, table headers | Keep either (identical) |
 
-### Step 0.3: Parse Task Rows From Both Sides
+### Step 1.3: Parse Task Rows From Both Sides
 
 For each conflict region containing task table rows:
 
@@ -110,7 +110,7 @@ For tasks that appear on BOTH sides with different values, proceed to Phase 2.
 
 ## Phase 2: Resolve Using Most-Advanced-Status Rule
 
-### Step 1.1: Define Status Ordering
+### Step 2.1: Define Status Ordering
 
 The status lifecycle defines a strict ordering from least to most advanced:
 
@@ -119,9 +119,9 @@ Pendente < Validando Spec < Em Andamento < Validando Impl < Revisando PR < **DON
 ```
 
 `Cancelado` is a terminal status — it is NOT "more advanced" than any status. It is
-a lateral state change (a decision, not progress). See Step 1.3 for handling.
+a lateral state change (a decision, not progress). See Step 2.3 for handling.
 
-### Step 1.2: Resolve Each Conflicted Task
+### Step 2.2: Resolve Each Conflicted Task
 
 For each task that differs between current and incoming:
 
@@ -144,7 +144,7 @@ For each task that differs between current and incoming:
    - If changed on one side → keep the change
    - If changed on BOTH sides → flag for user decision (cannot auto-resolve)
 
-### Step 1.3: Handle Cancelado Conflicts
+### Step 2.3: Handle Cancelado Conflicts
 
 If one side has `Cancelado` and the other has a non-terminal status:
 
@@ -161,7 +161,7 @@ If one side has `Cancelado` and the other has a non-terminal status:
   - **Keep Cancelado** — the task was intentionally cancelled
   - **Keep <other status>** — the cancellation was premature, work continues
 
-### Step 1.4: Resolve Detail Sections
+### Step 2.4: Resolve Detail Sections
 
 For `## T-NNN:` detail sections that conflict:
 
@@ -174,7 +174,7 @@ For `## T-NNN:` detail sections that conflict:
 
 ## Phase 3: Present Resolution
 
-### Step 2.1: Show Resolution Summary
+### Step 3.1: Show Resolution Summary
 
 ```markdown
 ## tasks.md Conflict Resolution
@@ -196,14 +196,14 @@ For `## T-NNN:` detail sections that conflict:
 | T-009 | Title changed | Priority changed | Both sides edited |
 ```
 
-### Step 2.2: Collect Decisions
+### Step 3.2: Collect Decisions
 
 For each task that needs user decision, present via `AskUser` with the two options
 and the context of what changed on each side.
 
 **BLOCKING:** Do NOT apply any resolution until ALL decisions are collected.
 
-### Step 2.3: Preview Resolved File
+### Step 3.3: Preview Resolved File
 
 Present the full resolved `tasks.md` content (or a diff of changes) to the user:
 
@@ -222,11 +222,11 @@ Ask via `AskUser`:
 
 ## Phase 4: Apply Resolution
 
-### Step 3.1: Write Resolved File
+### Step 4.1: Write Resolved File
 
 Write the fully resolved `tasks.md` (no conflict markers remaining).
 
-### Step 3.2: Validate Format
+### Step 4.2: Validate Format
 
 Run the standard format validation (from AGENTS.md) on the resolved file:
 1. Format marker present (`<!-- optimus:tasks-v1 -->`)
@@ -239,13 +239,13 @@ Run the standard format validation (from AGENTS.md) on the resolved file:
 
 If validation fails, inform the user and offer to fix or abort.
 
-### Step 3.3: Stage the File
+### Step 4.3: Stage the File
 
 ```bash
 git add .optimus/tasks.md
 ```
 
-### Step 3.4: Inform Next Steps
+### Step 4.4: Inform Next Steps
 
 ```markdown
 ## Resolution Complete

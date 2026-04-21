@@ -66,7 +66,7 @@ Two-phase code verification supporting multiple stacks.
 
 Before running any checks, detect the project stack and determine available commands.
 
-### Step 0.1: Identify Stack(s)
+### Step 1.1: Identify Stack(s)
 
 Check for ALL of these files — a project may have multiple stacks (e.g., Go backend + React frontend):
 
@@ -79,14 +79,14 @@ Check for ALL of these files — a project may have multiple stacks (e.g., Go ba
 | `Makefile` (alone, no other matches) | Generic | Unknown — use Makefile targets only |
 
 **Multi-stack detection:** If multiple stack files are found (e.g., `go.mod` AND `package.json`),
-detect ALL stacks and build a **union** of their command matrices in Step 0.2. Run checks
+detect ALL stacks and build a **union** of their command matrices in Step 1.2. Run checks
 for ALL detected stacks. The primary stack (for reporting purposes) is the first match in
 the table above.
 
 **Example:** A project with `go.mod` and `package.json` runs Go lint + vet + format + tests
 AND Node.js lint + typecheck + format + tests.
 
-### Step 0.1.1: Check for Custom Commands
+### Step 1.1.1: Check for Custom Commands
 
 Check if `.optimus/config.json` exists and contains a `commands` section:
 
@@ -97,7 +97,7 @@ cat .optimus/config.json 2>/dev/null | jq '.commands' 2>/dev/null
 If found, use the configured commands instead of auto-detection. Missing keys fall back
 to auto-detection. Empty string values (`""`) mean skip that check.
 
-### Step 0.1.2: Determine Scope
+### Step 1.1.2: Determine Scope
 
 Ask the user what to verify (or detect from invocation):
 
@@ -122,7 +122,7 @@ Ask the user what to verify (or detect from invocation):
 If the user says "verify changes", "verify diff", or "verify changed files", use diff mode.
 If the user says "verify" or "verify all", use full project mode.
 
-### Step 0.2: Build Command Matrix
+### Step 1.2: Build Command Matrix
 
 Based on the detected stack(s), determine which commands to run:
 

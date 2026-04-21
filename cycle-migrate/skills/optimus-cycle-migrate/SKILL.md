@@ -62,7 +62,7 @@ and leaves originals untouched. The user decides whether to remove them later.
 
 ## Phase 1: Discovery
 
-### Step 0.1: Scan for Task Files
+### Step 1.1: Scan for Task Files
 
 Search the project for any form of task tracking. Check ALL of these locations:
 
@@ -87,7 +87,7 @@ Search the project for any form of task tracking. Check ALL of these locations:
 
 For each file/directory found, read its contents and classify it.
 
-### Step 0.2: Classify Each Source
+### Step 1.2: Classify Each Source
 
 For each discovered file, determine its type:
 
@@ -102,7 +102,7 @@ For each discovered file, determine its type:
 | **Checklist** | Simple TODO list with checkboxes | `- [ ] Implement auth\n- [x] Setup DB` |
 | **Optimus format** | First line is `<!-- optimus:tasks-v1 -->` with standard table + H2 sections | Valid optimus tasks.md |
 
-### Step 0.3: Extract Task Data
+### Step 1.3: Extract Task Data
 
 For each task found (regardless of format), extract:
 
@@ -114,7 +114,7 @@ For each task found (regardless of format), extract:
 | **Status** | YAML `status:`, column in table, checkbox state | Default: `Pendente` |
 | **Dependencies** | YAML `dependencies:`, "Depends on" text, "After T-XXX" | Default: `-` (none) |
 | **Priority** | YAML `priority:`, explicit mention, position in file | Default: `Media` |
-| **Version** | YAML `milestone:`, `version:`, labels, folder structure | Default: user-chosen version (see Step 0.5) |
+| **Version** | YAML `milestone:`, `version:`, labels, folder structure | Default: user-chosen version (see Step 1.5) |
 | **Branch** | YAML `branch:`, git branch naming convention | Default: `-` |
 | **Estimate** | YAML `estimate:`, `size:`, `effort:`, or explicit mention | Default: `-` |
 | **Objective** | H2/H3 "Objetivo", "Objective", "Description" section | Use title as fallback |
@@ -165,7 +165,7 @@ When no explicit dependencies exist, look for implicit signals:
 - Sequential numbering (T-001 before T-002) is NOT a dependency — don't infer from order
 - If nothing found, set to `-` and let the user add dependencies manually
 
-### Step 0.4: Handle Subtasks
+### Step 1.4: Handle Subtasks
 
 Subtasks become checklist items in the parent task's acceptance criteria section:
 
@@ -199,7 +199,7 @@ Subtasks become checklist items in the parent task's acceptance criteria section
 
 Nested subtasks become indented checklist items.
 
-### Step 0.5: Version Setup
+### Step 1.5: Version Setup
 
 Since the Versions table is mandatory, ask the user for the default version to assign to migrated tasks:
 
@@ -215,13 +215,13 @@ If the source tasks have labels, milestones, or folder-based grouping that sugge
 assignments, infer them and present to the user for confirmation. Create a version for each
 distinct group found.
 
-Store the default version for Step 1.1 (tasks without inferred version get this default).
+Store the default version for Step 2.1 (tasks without inferred version get this default).
 
 ---
 
 ## Phase 2: Present Inventory
 
-### Step 1.1: Show Discovery Summary
+### Step 2.1: Show Discovery Summary
 
 Present what was found to the user:
 
@@ -249,7 +249,7 @@ Present what was found to the user:
 - subtasks/t-007-subtasks.md: References T-007 which doesn't exist
 ```
 
-### Step 1.2: Ask for Adjustments
+### Step 2.2: Ask for Adjustments
 
 Use `AskUser` to confirm:
 
@@ -267,7 +267,7 @@ I found N tasks across M sources. Before converting:
 
 ## Phase 3: Propose Conversion
 
-### Step 2.1: Generate tasks.md Preview
+### Step 3.1: Generate tasks.md Preview
 
 Generate the complete `tasks.md` in optimus format and present it to the user:
 
@@ -300,7 +300,7 @@ Generate the complete `tasks.md` in optimus format and present it to the user:
 - [ ] Email validation
 ```
 
-### Step 2.2: Confirm Before Applying
+### Step 3.2: Confirm Before Applying
 
 Use `AskUser`:
 
@@ -319,7 +319,7 @@ Options:
 
 ## Phase 4: Apply Conversion
 
-### Step 3.1: Check for Existing .optimus/tasks.md
+### Step 4.1: Check for Existing .optimus/tasks.md
 
 If `.optimus/tasks.md` already exists in optimus format:
 - Ask via `AskUser`: ".optimus/tasks.md already exists. Merge new tasks into it, or replace entirely?"
@@ -330,19 +330,19 @@ If `.optimus/tasks.md` exists in non-optimus format:
 - Rename to `.optimus/tasks.md.bak` before creating the new one
 - Inform the user: "Backed up original to .optimus/tasks.md.bak"
 
-### Step 3.2: Write .optimus/tasks.md
+### Step 4.2: Write .optimus/tasks.md
 
 First ensure the directory exists: `mkdir -p .optimus`
 
 Create `.optimus/tasks.md` with:
 1. Format marker: `<!-- optimus:tasks-v1 -->` (MUST be the first line)
 2. H1 heading: `# Tasks`
-3. `## Versions` section with the versions table (from Step 0.5)
+3. `## Versions` section with the versions table (from Step 1.5)
 4. The tasks table (all columns including Version)
 5. Empty line
 6. H2 sections for each task (with extracted content)
 
-### Step 3.3: Commit
+### Step 4.3: Commit
 
 ```bash
 git add .optimus/tasks.md
@@ -352,7 +352,7 @@ Migrated N tasks from [sources list].
 Original files preserved."
 ```
 
-### Step 3.4: Final Summary
+### Step 4.4: Final Summary
 
 ```markdown
 ## Migration Complete

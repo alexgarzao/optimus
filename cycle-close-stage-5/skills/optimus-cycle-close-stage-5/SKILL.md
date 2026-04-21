@@ -65,18 +65,18 @@ Stage 5 of the task lifecycle. Verifies all prerequisites before marking a task 
 
 ## Phase 1: Identify and Validate Task
 
-### Step 0.0: Verify GitHub CLI (HARD BLOCK)
+### Step 1.0: Verify GitHub CLI (HARD BLOCK)
 
 Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
-### Step 0.0.1: Find and Validate tasks.md
+### Step 1.0.1: Find and Validate tasks.md
 
 **HARD BLOCK:** Find and validate tasks.md — see AGENTS.md Protocol: tasks.md Validation.
 
 3. **Resolve workspace (HARD BLOCK):** See AGENTS.md Protocol: Workspace Auto-Navigation.
 4. **Branch-task cross-validation:** Included in AGENTS.md Protocol: Workspace Auto-Navigation.
 
-### Step 0.0.2: Identify Task to Close
+### Step 1.0.2: Identify Task to Close
 
 **If the user specified a task ID** (e.g., "close T-012"):
 - Use the provided task ID
@@ -90,13 +90,13 @@ Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to close.
 
-### Step 0.0.2.1: Check Session State
+### Step 1.0.2.1: Check Session State
 
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`cycle-close-stage-5`, status=`**DONE**`.
 
 **On marking DONE** (Phase 3): delete the session file.
 
-### Step 0.1: Validate Task Status
+### Step 1.1: Validate Task Status
 
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
@@ -140,11 +140,11 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 
    **NOTE:** cycle-close-stage-5 does not support re-execution (status always changes to `**DONE**`), so the re-execution skip does not apply here.
 
-### Step 0.2: Check tasks.md Divergence (warning)
+### Step 1.2: Check tasks.md Divergence (warning)
 
 Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 
-### Step 0.3: Push Unpushed Commits (if any)
+### Step 1.3: Push Unpushed Commits (if any)
 
 Previous stages (1-4) commit tasks.md status changes immediately but do not push. Before running the close checklist, ensure the feature branch is in sync with remote.
 
@@ -404,7 +404,7 @@ to mark as DONE. If any still fail, report the remaining failures.
 This phase runs ONLY after the task has been marked as `**DONE**`. It checks for leftover
 resources and asks the user what to do. The agent NEVER cleans up automatically.
 
-### Step 3.1: Check for Task Worktree
+### Step 4.1: Check for Task Worktree
 
 **IMPORTANT:** Worktree must be removed BEFORE attempting branch deletion. Git refuses to delete a branch that is checked out in a worktree.
 
@@ -425,9 +425,9 @@ Options:
 2. Change working directory to the main repository: `cd <main-repo-path>`
 3. Then run `git worktree remove <worktree-path>`
 
-This also applies to Step 3.3 — if the agent is inside a worktree, `git checkout` changes the worktree's branch, not the main repo's. Always `cd` to the main repo first.
+This also applies to Step 4.3 — if the agent is inside a worktree, `git checkout` changes the worktree's branch, not the main repo's. Always `cd` to the main repo first.
 
-### Step 3.2: Check for Open PR
+### Step 4.2: Check for Open PR
 
 **IMPORTANT:** PR must be merged BEFORE branch deletion. If the branch is deleted first, all commits on it (including the DONE status change) are lost.
 
@@ -478,7 +478,7 @@ NOT be present on the default branch. Before closing, the agent MUST:
 This ensures the DONE status is preserved on the default branch even when the PR is
 not merged. Without this, deleting the branch would lose the status change entirely.
 
-### Step 3.3: Check for Task Branch
+### Step 4.3: Check for Task Branch
 
 Identify the task's branch from the **Branch column** in `tasks.md` (primary source). If the column is `-` or empty, fall back to convention:
 
@@ -507,9 +507,9 @@ gh pr list --head "$TASK_BRANCH" --json number,state --jq '.[] | select(.state =
 **If an open PR still exists:** the branch CANNOT be deleted — deleting it would orphan the PR and lose all commits. Inform the user:
 ```
 Branch '<branch>' cannot be deleted because PR #N is still open.
-Merge or close the PR first (Step 3.2), then re-run cleanup.
+Merge or close the PR first (Step 4.2), then re-run cleanup.
 ```
-Skip branch deletion and proceed to Step 3.4.
+Skip branch deletion and proceed to Step 4.4.
 
 **If no open PR exists** (merged, closed, or never created), ask via `AskUser`:
 ```
@@ -520,7 +520,7 @@ Options:
 - **Delete local only**: switch to default branch first, then delete local
 - **Keep**: Leave the branch as is
 
-**IMPORTANT:** You cannot delete a branch you are currently on. Before deleting, switch to the default branch and sync with remote (the merge in Step 3.2 may have changed `tasks.md` on the remote):
+**IMPORTANT:** You cannot delete a branch you are currently on. Before deleting, switch to the default branch and sync with remote (the merge in Step 4.2 may have changed `tasks.md` on the remote):
 ```bash
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
 git checkout "$DEFAULT_BRANCH"
@@ -539,7 +539,7 @@ git commit -m "chore(tasks): clear branch for T-XXX after cleanup"
 git push
 ```
 
-### Step 3.4: Cleanup Summary
+### Step 4.4: Cleanup Summary
 
 ```markdown
 ## Cleanup Summary for T-XXX
@@ -592,7 +592,7 @@ If the user requests a force close (e.g., "force close T-012", "force done T-012
   The user must type the exact task ID (not just "yes") to prevent accidental force-closes.
 - **If confirmed:** mark as `**DONE**`, commit, push, then run cleanup (Phase 4) normally
 - **Commit message:** `chore(tasks): force-close T-XXX as done (checklist skipped)`
-- **NOTE:** Force-close still validates task status (Step 0.1) and dependencies — it only
+- **NOTE:** Force-close still validates task status (Step 1.1) and dependencies — it only
   skips the quality/git checks in Phase 2
 
 ### Dry-Run Mode

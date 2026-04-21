@@ -87,15 +87,15 @@ Executes a validated task specification end-to-end: identifies the task, loads c
 
 ## Phase 1: Load Context & Question Everything
 
-### Step 0.0: Verify GitHub CLI (HARD BLOCK)
+### Step 1.0: Verify GitHub CLI (HARD BLOCK)
 
 **HARD BLOCK:** Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
-### Step 0.1: Find and Validate tasks.md
+### Step 1.1: Find and Validate tasks.md
 
 **HARD BLOCK:** Find and validate tasks.md — see AGENTS.md Protocol: tasks.md Validation.
 
-### Step 0.2: Identify Task to Execute
+### Step 1.2: Identify Task to Execute
 
 **If the user specified a task ID** (e.g., "execute T-012"):
 - Use the provided task ID
@@ -112,13 +112,13 @@ Executes a validated task specification end-to-end: identifies the task, loads c
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to execute.
 
-### Step 0.2.1: Check Session State
+### Step 1.2.1: Check Session State
 
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`cycle-impl-stage-2`, status=`Em Andamento`.
 
 **On stage completion** (after Phase 4 post-execution): delete the session file.
 
-### Step 0.3: Validate and Update Task Status
+### Step 1.3: Validate and Update Task Status
 
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
@@ -166,21 +166,21 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 
 **Why commit immediately:** If the session is interrupted or the agent crashes before any code changes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of what happens during implementation.
 
-### Step 0.3.1: Check tasks.md Divergence (warning)
+### Step 1.3.1: Check tasks.md Divergence (warning)
 
 Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 
-### Step 0.4: Verify Workspace
+### Step 1.4: Verify Workspace
 
 **HARD BLOCK:** Resolve workspace — see AGENTS.md Protocol: Workspace Auto-Navigation.
 
 Branch-task cross-validation is part of the workspace protocol above.
 
-### Step 0.5: Validate PR Title (if PR exists)
+### Step 1.5: Validate PR Title (if PR exists)
 
 Validate PR title — see AGENTS.md Protocol: PR Title Validation.
 
-### Step 0.6: Discover Project Structure
+### Step 1.6: Discover Project Structure
 
 Before loading docs, discover the project's structure and tooling:
 
@@ -190,7 +190,7 @@ Before loading docs, discover the project's structure and tooling:
 
 4. **Identify reference docs:** Look for `docs/pre-dev/`, `docs/`, or project-specific locations for tasks, PRD, TRD, API design, data model.
 
-### Step 0.7: Load All Reference Documents
+### Step 1.7: Load All Reference Documents
 
 Read the discovered reference docs to build full context:
 - Tasks file — the task being executed (find the task by ID)
@@ -201,14 +201,14 @@ Read the discovered reference docs to build full context:
 - Coding standards / project rules
 - Dependency relationships
 
-### Step 0.8: Explore Existing Codebase
+### Step 1.8: Explore Existing Codebase
 
 Before planning, understand what already exists:
 - **Grep for existing patterns** in the relevant domain packages. Understand the handler/service/repository structure, error patterns, test patterns.
 - **Check for migrations** and identify the latest migration number.
 - **Check existing test files** for patterns (table-driven tests, testcontainers, Playwright fixtures, Vitest, etc.).
 
-### Step 0.9: Identify and Ask ALL Questions Upfront
+### Step 1.9: Identify and Ask ALL Questions Upfront
 
 Before writing a single line of code, analyze the task spec for:
 
@@ -231,7 +231,7 @@ Use the `AskUser` tool to ask ALL questions at once (max 4 per call, multiple ca
 
 After context is loaded and all questions are answered, execute the implementation.
 
-### Step 1.0: Choose Execution Strategy
+### Step 2.0: Choose Execution Strategy
 
 **Tipo-aware gate selection:** Not all task types need all gates. Before choosing the
 execution strategy, check the task's **Tipo** column and adapt:
@@ -243,19 +243,19 @@ execution strategy, check the task's **Tipo** column and adapt:
 | `Docs` | Gate 1 (DevOps), Gate 2 (SRE), Gate 3 (Testing) | No production code — skip TDD, coverage, observability |
 | `Test` | Gate 1 (DevOps), Gate 2 (SRE) | Tests ARE the deliverable — skip DevOps and SRE but run Gate 3 for coverage |
 
-When using the built-in fallback (Step 1.2), skip irrelevant steps based on the table above.
-When using dev-cycle (Step 1.1), pass the Tipo so dev-cycle can adapt its gate execution.
+When using the built-in fallback (Step 2.2), skip irrelevant steps based on the table above.
+When using dev-cycle (Step 2.1), pass the Tipo so dev-cycle can adapt its gate execution.
 
 Check if the `dev-cycle` skill is available in the current environment:
 
-1. **If `dev-cycle` is available** → use it (preferred path, Step 1.1)
-2. **If `dev-cycle` is NOT available** → use the built-in fallback (Step 1.2).
+1. **If `dev-cycle` is available** → use it (preferred path, Step 2.1)
+2. **If `dev-cycle` is NOT available** → use the built-in fallback (Step 2.2).
    **NOTE:** The built-in fallback covers Implementation (TDD), Code Review, Verification,
    and User Validation. It does NOT include DevOps (Docker/IaC), SRE (observability validation),
    or dedicated testing gates — those are only available via `dev-cycle`. This is acceptable
    for most tasks; install `dev-cycle` for full gate coverage.
 
-### Step 1.1: Execute via dev-cycle (preferred)
+### Step 2.1: Execute via dev-cycle (preferred)
 
 Use the `Skill` tool to load and execute the dev-cycle:
 
@@ -277,8 +277,8 @@ Pass the tasks file path that contains the confirmed task. The dev-cycle handles
 Provide to dev-cycle:
 - The tasks file path and confirmed task ID
 - All reference docs discovered in Phase 1
-- Codebase patterns found in Step 0.3
-- Answers to all questions from Step 0.4
+- Codebase patterns found in Step 1.3
+- Answers to all questions from Step 1.4
 - Any user preferences or constraints mentioned during questioning
 
 While dev-cycle executes:
@@ -286,12 +286,12 @@ While dev-cycle executes:
 - If dev-cycle encounters a blocker or needs user input, it will handle it through its own flow
 - Do NOT interfere with dev-cycle's gate execution — let it run its full pipeline
 
-### Step 1.2: Built-in Fallback (when dev-cycle is unavailable)
+### Step 2.2: Built-in Fallback (when dev-cycle is unavailable)
 
 When `dev-cycle` is not installed, execute implementation directly using the following
 simplified pipeline. Each step dispatches specialist droids via `Task` tool.
 
-#### Step 1.2.0: Detect Re-Execution (existing implementation)
+#### Step 2.2.0: Detect Re-Execution (existing implementation)
 
 **If this is a re-execution** (status was already `Em Andamento` when the skill started),
 check if implementation files already exist from a previous run:
@@ -313,7 +313,7 @@ If the user chooses "Continue from current state", pass the existing file list a
 content to the implementation droid with instructions: "These files already exist from a
 previous run. Review, update, and complete them rather than creating from scratch."
 
-#### Step 1.2.1: Implementation (TDD)
+#### Step 2.2.1: Implementation (TDD)
 
 Dispatch a specialist droid to implement the task using TDD methodology:
 
@@ -332,11 +332,11 @@ No ring implementation droid available for this stack. Install the appropriate d
 
 **The droid MUST:**
 1. Follow TDD: write failing tests first, implement to pass, refactor
-2. Follow project coding standards (from Step 0.1)
+2. Follow project coding standards (from Step 1.1)
 3. Implement EXACTLY what the task spec says — no more, no less
 4. Run `make test` (or equivalent) to verify all tests pass
 
-#### Step 1.2.2: Code Review
+#### Step 2.2.2: Code Review
 
 Dispatch parallel ring review droids via `Task` tool:
 
@@ -349,7 +349,7 @@ Present findings to the user ONE AT A TIME. For each finding:
 - Collect decision via `AskUser`
 - Apply approved fixes via specialist droids
 
-#### Step 1.2.3: Verification
+#### Step 2.2.3: Verification
 
 Check for custom commands in `.optimus/config.json` first. If found, use configured
 commands. If not found or key is missing, fall back to Makefile:
@@ -366,7 +366,7 @@ make test-e2e               # E2E tests — if target exists
 If any MANDATORY check fails, fix and retry (max 3 attempts). If optional checks fail,
 warn the user but do not block.
 
-#### Step 1.2.4: User Validation
+#### Step 2.2.4: User Validation
 
 Present a summary of what was implemented and ask for explicit approval via `AskUser`:
 - Files created/modified
@@ -386,18 +386,18 @@ presenting the final summary. This ensures that when stage-3 (impl-review) runs,
 checkboxes in tasks.md already reflect what was implemented, preventing false findings
 about mismatched checkbox state.
 
-### Step 1.5.0: Reset Checkboxes on Re-Execution
+### Step 3.0: Reset Checkboxes on Re-Execution
 
 **If this is a re-execution** (status was already `Em Andamento` when the skill started):
 1. Read the task's detail section
-2. **If the user chose "Start fresh" in Step 1.2.0:** Reset ALL checkboxes to unchecked
+2. **If the user chose "Start fresh" in Step 2.2.0:** Reset ALL checkboxes to unchecked
    (`- [ ]`) before re-evaluating. This prevents stale `[x]` marks from a previous
    partial run from persisting.
-3. **If the user chose "Continue from current state" in Step 1.2.0:** Do NOT reset
+3. **If the user chose "Continue from current state" in Step 2.2.0:** Do NOT reset
    checkboxes. The existing `[x]` marks reflect work already completed in the previous
    run. Only evaluate and mark the remaining `[ ]` criteria.
 
-### Step 1.5.1: Evaluate and Mark Checkboxes
+### Step 3.1: Evaluate and Mark Checkboxes
 
 1. Read the task's detail section and list all acceptance criteria (`- [ ] ...`)
 2. For each criterion, verify whether the implementation satisfies it:
@@ -416,7 +416,7 @@ about mismatched checkbox state.
 
 After implementation completes (via dev-cycle or built-in fallback):
 
-### Step 2.1: Test Gap Cross-Reference
+### Step 4.1: Test Gap Cross-Reference
 
 Review any test gaps identified during implementation:
 
@@ -429,7 +429,7 @@ Review any test gaps identified during implementation:
    - Flag as a gap and recommend adding the test to the current task
 4. Do NOT silently skip test gaps because they might be covered later — always verify and ask
 
-### Step 2.2: Present Final Summary
+### Step 4.2: Present Final Summary
 
 Present a structured summary including:
 - Task ID and title
@@ -438,7 +438,7 @@ Present a structured summary including:
 - dev-cycle gate results (all 6 gates)
 - Decisions made during questioning and review phases
 
-### Step 2.3: Commit
+### Step 4.3: Commit
 
 Only after explicit user approval:
 
@@ -447,7 +447,7 @@ Only after explicit user approval:
 3. If clean, stage all relevant files and commit with a descriptive message
 4. Run `git status` to confirm the commit succeeded
 
-### Step 2.4: Push Commits (optional)
+### Step 4.4: Push Commits (optional)
 
 Offer to push commits — see AGENTS.md Protocol: Push Commits.
 
@@ -475,8 +475,8 @@ Offer to push commits — see AGENTS.md Protocol: Push Commits.
 ### Dry-Run Mode
 If the user requests a dry-run (e.g., "dry-run impl T-003", "preview implementation"):
 - Run ALL discovery and context-loading phases (Phase 1) normally
-- Present the implementation plan and all questions (Step 0.9)
-- **Do NOT change task status** — skip Step 0.3 (status update)
+- Present the implementation plan and all questions (Step 1.9)
+- **Do NOT change task status** — skip Step 1.3 (status update)
 - **Do NOT execute implementation** — skip Phase 2 entirely
 - **Do NOT update checkboxes** — skip Phase 3
 - **Do NOT commit or push anything** — skip Phase 4 commits

@@ -71,13 +71,13 @@ CodeRabbit-driven code review with TDD fix cycle, secondary agent validation for
 
 ## Phase 1: Execute CodeRabbit
 
-### Step 0.1: Discover Configuration
+### Step 1.1: Discover Configuration
 
 1. **Find config file:** Look for `.coderabbit.yaml` in the project root
 2. **Determine base branch:** Default to `origin/main`, or use user-specified branch
 3. **Verify CLI:** Confirm `coderabbit` command is available
 
-### Step 0.2: Run CodeRabbit
+### Step 1.2: Run CodeRabbit
 
 Check if the CodeRabbit CLI is available:
 
@@ -111,18 +111,11 @@ If the user chooses the fallback, dispatch the same agents used by `optimus-deep
 (code quality, business logic, security, test quality, cross-file consistency) and follow
 the same interactive resolution flow from Phase 3 onward.
 
-### Step 0.3: Load Project Context
+### Step 1.3: Load Project Context
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
 2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, unit test, integration test, and E2E test commands
-3. **Identify project rules and AI instructions (MANDATORY):** Search for these files and read ALL that exist:
-   - `AGENTS.md`, `CLAUDE.md`, `DROIDS.md`, `.cursorrules` (repo root)
-   - `PROJECT_RULES.md` (repo root or `docs/`)
-   - `.editorconfig`, `docs/coding-standards.md`, `docs/conventions.md`
-   - `.github/CONTRIBUTING.md` or `CONTRIBUTING.md`
-   - Linter configs: `.eslintrc*`, `biome.json`, `.golangci.yml`, `.prettierrc*`
-
-   These are the **source of truth** for coding standards. Pass relevant sections to every agent dispatched.
+3. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
 
 Store discovered commands:
 ```
@@ -135,7 +128,7 @@ TEST_INTEGRATION_CMD=<discovered integration test command>
 
 ## Phase 2: Triage
 
-### Step 1.1: Parse Findings
+### Step 2.1: Parse Findings
 
 Parse the CodeRabbit output. The output may contain three types of findings:
 
@@ -152,7 +145,7 @@ Categorize ALL findings (regardless of origin) by severity:
 | **MEDIUM** | Code quality concern, pattern inconsistency, maintainability issue, missing edge case coverage |
 | **LOW** | Polish, style, formatting, minor improvements |
 
-### Step 1.2: Present Overview Table
+### Step 2.2: Present Overview Table
 
 ```markdown
 ## CodeRabbit Review — X findings
@@ -273,11 +266,11 @@ Record the decision internally. Do NOT apply any fix yet — all fixes are appli
 Apply ALL approved fixes in a single pass (skipped for ignored findings). Group fixes by file
 to minimize I/O. The steps below apply to each fix within the batch — NOT sequentially
 one-at-a-time with full test cycles between each. Run the full test suite ONCE after all
-fixes are applied (Step 3.2 TDD covers individual fix verification, Step 3.3 handles failures).
+fixes are applied (Step 4.2 TDD covers individual fix verification, Step 4.3 handles failures).
 
 For each approved fix:
 
-### Step 3.1: Secondary Agent Validation (for logic changes only)
+### Step 4.1: Secondary Agent Validation (for logic changes only)
 
 For fixes that alter execution flow, conditions, method calls, or observable behavior:
 
@@ -312,7 +305,7 @@ Required ring droids are not installed. Install them before running this skill:
    - **Implementation conflicts:** Prioritize code-quality > business-logic
    - In all cases: present both feedbacks to the user with priority recommendation and wait for decision before proceeding
 
-### Step 3.2: TDD Cycle (mandatory)
+### Step 4.2: TDD Cycle (mandatory)
 
 For each approved fix:
 
@@ -325,7 +318,7 @@ For each approved fix:
 (`ring-tw-team-functional-writer`, `ring-tw-team-api-writer`). Documentation
 droids do NOT follow TDD — they apply the fix directly.
 
-### Step 3.3: Handle Test Failures
+### Step 4.3: Handle Test Failures
 
 If tests fail after implementing the fix (maximum 3 attempts):
 
@@ -336,7 +329,7 @@ If tests fail after implementing the fix (maximum 3 attempts):
 
 2. **Do NOT proceed** to the next finding until all tests pass or the failure is classified and documented
 
-### Step 3.4: Batching Independent Fixes
+### Step 4.4: Batching Independent Fixes
 
 For PRs with many findings, independent fixes (in different modules/files) may be grouped in a single test cycle, as long as all tests pass before proceeding to the next group.
 
@@ -346,7 +339,7 @@ For PRs with many findings, independent fixes (in different modules/files) may b
 
 After all findings have been processed through the TDD cycle:
 
-### Step 4.1: Lint + Coverage Measurement
+### Step 5.1: Lint + Coverage Measurement
 
 **Run lint ONCE** after all fixes are applied:
 ```bash
@@ -381,7 +374,7 @@ or `.optimus/config.json`."
 
 **NOTE:** Integration and E2E tests run only before push or when user invokes directly.
 
-### Step 4.2: Test Scenario Gap Analysis
+### Step 5.2: Test Scenario Gap Analysis
 
 Dispatch an agent to identify missing test scenarios in the changed files.
 
@@ -566,7 +559,7 @@ After the convergence loop exits:
 - BEFORE presenting each finding: deep research is MANDATORY — project patterns, architectural decisions, existing codebase, task focus, user/consumer use cases, UX impact, API best practices, engineering best practices, language-specific idioms. Option A must be the correct approach backed by research evidence, regardless of effort
 - No changes without prior user approval — the user ALWAYS decides the approach
 - Ignored findings are recorded but not fixed
-- Use review agents (Step 3.1) for logic changes; use codebase exploration for context investigation
+- Use review agents (Step 4.1) for logic changes; use codebase exploration for context investigation
 - Prioritize correctness over convenience
 - If a fix involves logic changes (flow, conditions, behavior), mention explicitly
 - Follow project coding standards (PROJECT_RULES.md or equivalent)

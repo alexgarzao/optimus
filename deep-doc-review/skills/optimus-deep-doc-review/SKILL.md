@@ -60,7 +60,7 @@ Deep review of project documentation. Finds errors, inconsistencies, gaps, missi
 
 ## Phase 1: Discover and Load Docs
 
-### Step 0.1: Identify Docs to Review
+### Step 1.1: Identify Docs to Review
 
 If the user specified files, use those. Otherwise, discover automatically:
 
@@ -70,7 +70,7 @@ If the user specified files, use those. Otherwise, discover automatically:
 
 Present the list of discovered docs to the user before proceeding. If there are many (>15), ask whether to review all or select a subset.
 
-### Step 0.2: Read All Docs
+### Step 1.2: Read All Docs
 
 Read the full content of each identified doc. Build a mental map of:
 - Entities and fields defined in each doc

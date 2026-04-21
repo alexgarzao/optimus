@@ -59,14 +59,14 @@ Chains stages 1-5 for one or more tasks with user checkpoints between stages.
 
 ## Phase 1: Plan the Batch
 
-### Step 0.1: Find and Validate tasks.md
+### Step 1.1: Find and Validate tasks.md
 
 1. **Find tasks.md:** Look in `.optimus/tasks.md`.
 2. **Validate format:** First line must be `<!-- optimus:tasks-v1 -->`. Full format validation.
 
 If validation fails, **STOP** and suggest `/optimus-cycle-migrate`.
 
-### Step 0.2: Identify Tasks and Stages
+### Step 1.2: Identify Tasks and Stages
 
 Parse the user's request to determine:
 
@@ -76,18 +76,18 @@ Parse the user's request to determine:
 If the user said "all ready tasks", scan for tasks with status `Pendente` and all
 dependencies `**DONE**`. Prioritize by version (`Ativa` first), then priority, then ID.
 
-### Step 0.3: Validate Eligibility
+### Step 1.3: Validate Eligibility
 
 For each task:
 1. Check that the task's status allows the requested starting stage
 2. Check that all dependencies are `**DONE**`
 3. If any task is blocked, report it and exclude from the batch
 
-**NOTE:** Eligibility is re-evaluated after each task completes (Step 1.4). Tasks that
+**NOTE:** Eligibility is re-evaluated after each task completes (Step 2.4). Tasks that
 become eligible during batch execution (e.g., because a dependency was just completed)
 are added to the plan dynamically.
 
-### Step 0.4: Compute Execution Order
+### Step 1.4: Compute Execution Order
 
 If multiple tasks are specified:
 1. Sort by dependency order (tasks that others depend on go first)
@@ -113,7 +113,7 @@ Ask via `AskUser`:
 
 **BLOCKING:** Do NOT start until the user approves.
 
-### Step 0.5: Worktree Model
+### Step 1.5: Worktree Model
 
 Each task in the batch may create its own worktree (via stage-1). The batch orchestrator
 tracks the working directory for each task and switches context between tasks.
@@ -141,7 +141,7 @@ starting the next task.
 
 For each task in the execution order:
 
-### Step 1.1: Stage Dispatch
+### Step 2.1: Stage Dispatch
 
 Invoke each stage sequentially. **CRITICAL:** Always pass the task ID explicitly to each
 stage to prevent auto-detect from picking the wrong task.
@@ -155,14 +155,14 @@ stage to prevent auto-detect from picking the wrong task.
 | 5 | "close T-XXX" (via Skill tool) | **DONE** |
 
 **Worktree context switch:** Before invoking stages 2-5, switch to the task's worktree
-directory (from Step 0.5 tracking). Stage-1 may create the worktree — capture its output
+directory (from Step 1.5 tracking). Stage-1 may create the worktree — capture its output
 path and record it in the tracking map.
 
 Each stage skill handles its own validation, status changes, and user interactions.
 The batch orchestrator does NOT duplicate any stage logic — it only chains them and
 manages worktree context.
 
-### Step 1.2: Checkpoint Between Stages
+### Step 2.2: Checkpoint Between Stages
 
 After each stage completes, present a checkpoint via `AskUser`:
 
@@ -189,7 +189,7 @@ Options:
 - **Run Stage 4** — review PR comments from Codacy/DeepSource/CodeRabbit/humans
 - **Skip to Stage 5** — go directly to close
 
-### Step 1.3: Checkpoint Between Tasks
+### Step 2.3: Checkpoint Between Tasks
 
 After completing all stages for a task, before starting the next task:
 
@@ -205,7 +205,7 @@ Options:
 - **Continue** — start T-MMM
 - **Stop** — pause the batch
 
-### Step 1.4: Re-Evaluate Eligibility
+### Step 2.4: Re-Evaluate Eligibility
 
 After completing a task (all stages done), re-evaluate the remaining task pool:
 

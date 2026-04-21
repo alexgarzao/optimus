@@ -178,7 +178,7 @@ When no task is referenced and no `tasks.md` exists, or the user explicitly want
 
 ## Phase 1: Fetch PR Context
 
-### Step 0.1: Obtain PR URL
+### Step 1.1: Obtain PR URL
 
 If the user provided a PR URL, use it directly.
 
@@ -210,7 +210,7 @@ If the user chooses **Create PR**:
 
 If the user chooses **Provide URL**, ask for the URL via `AskUser`.
 
-### Step 0.2: Fetch PR Metadata
+### Step 1.2: Fetch PR Metadata
 
 ```bash
 gh pr view <PR_NUMBER_OR_URL> --json title,body,state,headRefName,baseRefName,changedFiles,additions,deletions,labels,milestone,assignees,reviewRequests,comments,url,number
@@ -225,7 +225,7 @@ Extract and store:
 - **Labels and milestone** — categorization context
 - **Linked issues** — from PR description (look for "Fixes #", "Closes #", "Resolves #" patterns)
 
-### Step 0.2.1: Validate PR Title (Conventional Commits)
+### Step 1.2.1: Validate PR Title (Conventional Commits)
 
 The PR title MUST follow the **Conventional Commits 1.0.0** specification
 (https://www.conventionalcommits.org/en/v1.0.0/).
@@ -260,7 +260,7 @@ PR title validation follows AGENTS.md Protocol: PR Title Validation, with the ad
 
 **If validation passes:** no action needed, proceed.
 
-### Step 0.3: Collect ALL Existing PR Comments and Threads
+### Step 1.3: Collect ALL Existing PR Comments and Threads
 
 **IMPORTANT:** Static analysis tools post comments in TWO different ways:
 1. **Native app comments** — posted directly by the tool's GitHub App (e.g., `deepsource-io`, `codacy-production`). These create review threads that the REST API CANNOT reply to (returns 404). You MUST use GraphQL to reply and resolve these.
@@ -268,7 +268,7 @@ PR title validation follows AGENTS.md Protocol: PR Title Validation, with the ad
 
 You MUST collect BOTH types for each tool.
 
-#### Step 0.3.1: Fetch ALL Review Threads via GraphQL (PRIMARY SOURCE)
+#### Step 1.3.1: Fetch ALL Review Threads via GraphQL (PRIMARY SOURCE)
 
 This is the **single source of truth** for all review threads. It captures threads from ALL sources (native apps, workflows, humans, bots) in one query.
 
@@ -332,7 +332,7 @@ Store each thread as:
 }
 ```
 
-#### Step 0.3.2: Fetch General PR Comments
+#### Step 1.3.2: Fetch General PR Comments
 
 ```bash
 gh pr view <PR_NUMBER_OR_URL> --comments
@@ -340,7 +340,7 @@ gh pr view <PR_NUMBER_OR_URL> --comments
 
 These are non-inline comments (discussion, summaries). They don't have threads.
 
-#### Step 0.3.3: Parse Comment Content
+#### Step 1.3.3: Parse Comment Content
 
 **Codacy native comments** (author: `codacy-production`):
 - Body contains HTML with issue details embedded
@@ -385,7 +385,7 @@ This tagging helps the user understand whether the finding is about code they ch
 
 **Human reviewer comments:** All threads where the first comment author is not a known bot.
 
-#### Step 0.3.4: Summary
+#### Step 1.3.4: Summary
 
 Group all collected threads by source:
 ```
@@ -398,7 +398,7 @@ PR Threads:
   Total: X threads, Y unresolved
 ```
 
-### Step 0.4: Checkout PR Branch
+### Step 1.4: Checkout PR Branch
 
 ```bash
 gh pr checkout <PR_NUMBER_OR_URL>
@@ -406,7 +406,7 @@ gh pr checkout <PR_NUMBER_OR_URL>
 
 If already on the correct branch, skip. If checkout fails due to uncommitted changes, inform the user.
 
-### Step 0.5: Fetch CI Check Status (MANDATORY)
+### Step 1.5: Fetch CI Check Status (MANDATORY)
 
 **HARD BLOCK:** You MUST run this command and report the results. Do NOT skip this step.
 
@@ -436,7 +436,7 @@ CI Status:
   - Pending/Running: X checks
 ```
 
-### Step 0.6: Investigate EVERY Failing Check (MANDATORY)
+### Step 1.6: Investigate EVERY Failing Check (MANDATORY)
 
 **HARD BLOCK:** If `gh pr checks` showed ANY failing check, you MUST create a finding for EACH one. This applies to ALL types of failing checks:
 - GitHub Actions workflows (Backend, Frontend, Merge Gate, etc.)
@@ -489,7 +489,7 @@ These CI failure findings are included in Phase 4 consolidation alongside agent 
 
 **IMPORTANT:** CI failures are NOT informational — they are actionable findings that block merge readiness. If you present a PR summary that says "everything is OK" while `gh pr checks` shows failing checks, you have violated this rule.
 
-### Step 0.7: Fetch Changed Files
+### Step 1.7: Fetch Changed Files
 
 ```bash
 gh pr diff <PR_NUMBER_OR_URL> --name-only
@@ -536,7 +536,7 @@ Read the full content of each changed file for the review agents.
 
 ## Phase 3: Parallel Agent Dispatch
 
-### Step 2.1: Discover Project Context
+### Step 3.1: Discover Project Context
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
 2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config
@@ -551,7 +551,7 @@ TEST_INTEGRATION_CMD=<discovered integration test command>
 TEST_E2E_CMD=<discovered E2E test command>
 ```
 
-### Step 2.2: Dispatch Agents
+### Step 3.2: Dispatch Agents
 
 Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives:
 - The full content of every changed file
@@ -720,7 +720,7 @@ Findings are presented ONE AT A TIME, decisions collected for ALL, then fixes ap
 - Which finding they are currently reviewing (X)
 - How many remain (N - X)
 
-### Step 5.1: Present Findings One at a Time (collect decisions only)
+### Step 6.1: Present Findings One at a Time (collect decisions only)
 
 Present ALL findings sequentially, one after another, collecting the user's decision for each. Do NOT apply any fix during this phase — only collect decisions.
 
@@ -802,7 +802,7 @@ Ask the user whether to apply config changes. If approved, edit the config files
 
 **IMPORTANT:** This phase runs ONCE, after ALL findings have been presented and ALL decisions collected in Phase 6. No fix is applied during Phase 6.
 
-### Step 6.1: Pre-Apply Summary
+### Step 8.1: Pre-Apply Summary
 
 ```markdown
 ## Fixes to Apply (X of Y findings)
@@ -821,19 +821,19 @@ Ask the user whether to apply config changes. If approved, edit the config files
 |---|---------|--------|-------------|
 ```
 
-### Step 6.2: TDD Cycle for Each Fix
+### Step 8.2: TDD Cycle for Each Fix
 
 Apply fixes using ring droids with TDD cycle — see AGENTS.md "Common Patterns > Fix Implementation".
 
 **Droid selection:** Use the stack-appropriate droid. Documentation fixes use ring-tw-team droids without TDD.
 
-### Step 6.3: Handle Test Failures (max 3 attempts)
+### Step 8.3: Handle Test Failures (max 3 attempts)
 
 1. **Logic bug** → Return to RED, adjust test/fix
 2. **Flaky test** → Re-execute 3 times, document, tag with "pending-test-fix"
 3. **External dependency** → Pause and wait
 
-### Step 6.4: Commit Each Fix
+### Step 8.4: Commit Each Fix
 
 After each successful TDD cycle:
 
@@ -846,7 +846,7 @@ After each successful TDD cycle:
    ```
 3. Record `{finding_id} → {commit_sha}` mapping
 
-### Step 6.4.1: Final Lint Check
+### Step 8.4.1: Final Lint Check
 
 **After ALL fixes are committed**, run lint once:
 ```bash
@@ -854,7 +854,7 @@ make lint
 ```
 If lint fails, fix formatting issues, amend the last commit or create a `chore: fix lint` commit.
 
-### Step 6.5: Suppress Won't-Fix Findings (Codacy/DeepSource)
+### Step 8.5: Suppress Won't-Fix Findings (Codacy/DeepSource)
 
 For each **skipped/discarded** finding from Codacy or DeepSource, add inline suppression:
 
@@ -886,7 +886,7 @@ Record the suppression commit SHA for use in Phase 13.
 
 **IMPORTANT:** This phase runs ONLY ONCE, after ALL fixes from Phase 8 have been applied.
 
-### Step 6.6.1: Coverage Measurement (Unit Tests)
+### Step 9.1: Coverage Measurement (Unit Tests)
 
 Use the project's Makefile or `.optimus/config.json` commands:
 
@@ -906,7 +906,7 @@ If no coverage command is available, mark as SKIP.
 
 **NOTE:** Integration test coverage is measured in Phase 12 (before push), not here.
 
-### Step 6.6.2: Test Gap Analysis
+### Step 9.2: Test Gap Analysis
 
 Dispatch a test gap analyzer via `Task` tool. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
 
@@ -978,7 +978,7 @@ This triggers Codacy/DeepSource reanalysis automatically.
 
 **HARD BLOCK:** This phase is MANDATORY regardless of whether any fixes were applied. Every existing PR comment thread MUST receive a reply.
 
-### Step 8.1: Response Rules (uniform for ALL sources)
+### Step 13.1: Response Rules (uniform for ALL sources)
 
 **IMPORTANT:** Use the `{finding_id} → {commit_sha}` mapping from Phase 8.
 
@@ -1019,9 +1019,9 @@ Already addressed in a previous commit.
 <direct answer referencing specific code/files>
 ```
 
-### Step 8.2: Refresh Thread Map
+### Step 13.2: Refresh Thread Map
 
-Re-fetch the thread map from Step 0.3.1 to get the latest state (threads may have been resolved by pushes or other activity):
+Re-fetch the thread map from Step 1.3.1 to get the latest state (threads may have been resolved by pushes or other activity):
 
 ```bash
 gh api graphql -f query='
@@ -1051,7 +1051,7 @@ gh api graphql -f query='
 
 Update the thread map with fresh `isResolved` status. Skip threads already resolved.
 
-### Step 8.3: Reply AND Resolve Each Thread (atomically)
+### Step 13.3: Reply AND Resolve Each Thread (atomically)
 
 **CRITICAL:** For EACH thread, reply and resolve in the SAME step. Never batch "all replies first, then all resolves". The pattern is: reply → resolve → confirm → next thread.
 
@@ -1174,11 +1174,11 @@ gh pr comment <PR_NUMBER_OR_URL> --body "<reply>"
 
 These don't have threads and cannot be resolved.
 
-### Step 8.4: Verify Zero Unresolved Remain
+### Step 13.4: Verify Zero Unresolved Remain
 
-After all threads are processed, re-run the query from Step 8.2 and confirm ALL threads have `isResolved: true`. If any remain unresolved, reply and resolve them now. Do NOT proceed until zero unresolved threads remain.
+After all threads are processed, re-run the query from Step 13.2 and confirm ALL threads have `isResolved: true`. If any remain unresolved, reply and resolve them now. Do NOT proceed until zero unresolved threads remain.
 
-### Step 8.5: Hide Fully-Resolved Reviews
+### Step 13.5: Hide Fully-Resolved Reviews
 
 After all threads are resolved, minimize fully-resolved review sections:
 
@@ -1192,7 +1192,7 @@ gh api graphql -f query='
 '
 ```
 
-### Step 8.6: Reply Summary
+### Step 13.6: Reply Summary
 
 **HARD BLOCK:** The Status column MUST show "Resolved" for every row. If any row shows "Replied" instead of "Resolved", go back and resolve it.
 

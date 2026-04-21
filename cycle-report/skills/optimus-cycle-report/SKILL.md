@@ -57,13 +57,13 @@ Read-only agent that parses `tasks.md` and presents a comprehensive project stat
 
 ## Phase 1: Find and Parse tasks.md
 
-### Step 0.1: Locate tasks.md
+### Step 1.1: Locate tasks.md
 
 Look for `.optimus/tasks.md`. There are no fallback locations.
 
 If not found, inform the user and suggest: "No .optimus/tasks.md found. Run `/optimus-cycle-migrate` to create one from existing task files, or create it manually following the optimus format."
 
-### Step 0.1.1: Validate Format Marker
+### Step 1.1.1: Validate Format Marker
 
 Check that the **first line** of `tasks.md` is `<!-- optimus:tasks-v1 -->`.
 
@@ -71,7 +71,7 @@ If missing, warn the user: "tasks.md exists but is not in optimus format (missin
 
 The report agent still ATTEMPTS to parse and display data even without the marker (best effort), but shows the warning prominently.
 
-### Step 0.1.2: Default Branch Warning
+### Step 1.1.2: Default Branch Warning
 
 Detect if the report is being run on the default branch:
 
@@ -105,7 +105,7 @@ If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`):
 
 If NOT on the default branch, skip this step silently.
 
-### Step 0.2: Parse the Tasks Table
+### Step 1.2: Parse the Tasks Table
 
 Read `tasks.md` and extract the markdown table. Expected columns:
 
@@ -121,7 +121,7 @@ Read `tasks.md` and extract the markdown table. Expected columns:
 | Branch | Git branch name, or `-` |
 | Estimate | Task size estimate (S, M, L, XL, etc.), or `-` |
 
-### Step 0.2.1: Parse Versions Table
+### Step 1.2.1: Parse Versions Table
 
 Read the `## Versions` section and extract the versions table. Expected columns:
 - Version (name), Status (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`), Description
@@ -130,7 +130,7 @@ Identify the version with Status `Ativa` — this is the **active version** used
 
 For each task, also check if an H2 section exists below the table (`## T-NNN: Title`) to verify completeness.
 
-### Step 0.3: Validate Dependencies
+### Step 1.3: Validate Dependencies
 
 For each task with dependencies:
 1. Verify all referenced task IDs exist in the table
@@ -390,7 +390,7 @@ Present BOTH formats: the ASCII art first (always readable), then the json-rende
 After the dashboard, compute velocity metrics from git history. These provide trend
 data that a static snapshot (Phase 8) cannot show.
 
-### Step 4.5.1: Compute Task Completion History
+### Step 9.1: Compute Task Completion History
 
 Search git log for task completion commits using multiple patterns to catch various
 commit message formats:
@@ -413,7 +413,7 @@ Merge and deduplicate results from all patterns (same commit SHA = same event).
 
 For each completed task found, extract: task ID, completion date.
 
-### Step 4.5.2: Present Velocity Dashboard
+### Step 9.2: Present Velocity Dashboard
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -439,7 +439,7 @@ For each completed task found, extract: task ID, completion date.
 Velocity: No completed tasks in the last 4 weeks. Complete a task to start tracking.
 ```
 
-### Step 4.5.3: Average Time Per Stage
+### Step 9.3: Average Time Per Stage
 
 If enough data exists (3+ completed tasks), compute average time spent in each stage
 by analyzing git log timestamps for status change commits:
@@ -542,7 +542,7 @@ If no orphaned worktrees are found, show: "Workspace Health: OK — no orphaned 
 
 If the user requests an export (e.g., "export report", "save report", "report to file"):
 
-### Step 6.1: Generate Markdown Export
+### Step 11.1: Generate Markdown Export
 
 Compile the full dashboard into a single markdown file including all sections:
 - Project status summary (progress bar, counts)
@@ -554,7 +554,7 @@ Compile the full dashboard into a single markdown file including all sections:
 - Workspace health
 - Warnings and recommendations
 
-### Step 6.2: Write File
+### Step 11.2: Write File
 
 ```bash
 mkdir -p .optimus

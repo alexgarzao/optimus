@@ -82,14 +82,14 @@ Parallel code review with specialist agents, consolidation, deduplication, and i
 
 Before starting, determine the review parameters.
 
-### Step 0.1: Determine Review Type
+### Step 1.1: Determine Review Type
 
 Ask the user which type of review:
 
 - **Initial** (recurring review during development): 5 agents, focused on correctness and critical gaps
 - **Final** (review before merge/deployment): 7 agents, full coverage including stack idiomaticity
 
-### Step 0.2: Determine Scope
+### Step 1.2: Determine Scope
 
 Ask the user what to review:
 
@@ -97,17 +97,10 @@ Ask the user what to review:
 - **Changed files only** — use `git diff --name-only` to identify (optionally against a base branch)
 - **Specific directory or feature** — user specifies the path
 
-### Step 0.3: Load Context
+### Step 1.3: Load Context
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
-2. **Identify project rules and AI instructions (MANDATORY):** Search for these files and read ALL that exist:
-   - `AGENTS.md`, `CLAUDE.md`, `DROIDS.md`, `.cursorrules` (repo root)
-   - `PROJECT_RULES.md` (repo root or `docs/`)
-   - `.editorconfig`, `docs/coding-standards.md`, `docs/conventions.md`
-   - `.github/CONTRIBUTING.md` or `CONTRIBUTING.md`
-   - Linter configs: `.eslintrc*`, `biome.json`, `.golangci.yml`, `.prettierrc*`
-
-   These are the **source of truth** for coding standards. Pass relevant sections to every agent dispatched.
+2. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
 3. **Identify reference docs:** Look for PRD, TRD, API design, data model — these provide context but are not the primary validation target (unlike optimus-cycle-impl-review-stage-3)
 4. **Read all files in scope:** Load the full content of every file that will be reviewed
 
@@ -300,7 +293,7 @@ If there are 3+ findings of the same nature (e.g., "inconsistent import path in 
 **IMPORTANT:** This phase runs ONCE, after ALL findings have been presented and ALL decisions
 collected in Phase 5. No fix is applied during Phase 5.
 
-### Step 4.5.1: Present Pre-Apply Summary
+### Step 6.1: Present Pre-Apply Summary
 
 ```markdown
 ## Fixes to Apply (X of Y findings)
@@ -317,14 +310,14 @@ collected in Phase 5. No fix is applied during Phase 5.
 |---|---------|-------------|
 ```
 
-### Step 4.5.2: Apply Fixes
+### Step 6.2: Apply Fixes
 
 For each approved fix, apply the change. After each fix, confirm what changed in 1-2 sentences.
 
 For fixes that alter execution flow, conditions, or observable behavior, run unit tests
 after the fix to verify no regressions.
 
-### Step 4.5.3: Final Lint Check
+### Step 6.3: Final Lint Check
 
 After ALL fixes are applied, run lint once (if available):
 ```bash

@@ -75,7 +75,7 @@ Catches gaps, contradictions, and ambiguities that would cause rework.
 
 ## Phase 1: Discover and Load Context
 
-### Step 0.0: Verify GitHub CLI (HARD BLOCK)
+### Step 1.0: Verify GitHub CLI (HARD BLOCK)
 
 **HARD BLOCK:** Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
@@ -83,11 +83,11 @@ Catches gaps, contradictions, and ambiguities that would cause rework.
 subsequent stages (2-5) all require `gh`. Failing early prevents the user from completing
 spec validation only to discover `gh` is not set up when they try to run Stage-2.
 
-### Step 0.0.1: Find and Validate tasks.md
+### Step 1.0.1: Find and Validate tasks.md
 
 **HARD BLOCK:** Find and validate tasks.md — see AGENTS.md Protocol: tasks.md Validation.
 
-### Step 0.0.2: Identify Task to Validate
+### Step 1.0.2: Identify Task to Validate
 
 **If the user specified a task ID** (e.g., "validate T-006"):
 - Use the provided task ID
@@ -104,13 +104,13 @@ spec validation only to discover `gh` is not set up when they try to run Stage-2
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
 
-### Step 0.0.2.1: Check Session State
+### Step 1.0.2.1: Check Session State
 
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`cycle-spec-stage-1`, status=`Validando Spec`.
 
 **On stage completion** (after Step 7 convergence loop exits): delete the session file.
 
-### Step 0.0.3: Validate Task Status (DO NOT modify yet)
+### Step 1.0.3: Validate Task Status (DO NOT modify yet)
 
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
@@ -152,11 +152,11 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
    - **If re-execution** (status is already `Validando Spec`) OR the user specified the task ID explicitly:
      - Skip expanded confirmation (user already has context)
 
-**IMPORTANT:** Do NOT modify tasks.md yet. Status and Branch updates happen in Step 0.0.6 AFTER the workspace is created. This ensures the modifications happen in the correct working directory (worktree or feature branch).
+**IMPORTANT:** Do NOT modify tasks.md yet. Status and Branch updates happen in Step 1.0.6 AFTER the workspace is created. This ensures the modifications happen in the correct working directory (worktree or feature branch).
 
 **Anti-pulo:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`), refuse to proceed — the task has already passed this stage or was cancelled.
 
-### Step 0.0.4: Detect and Clean Abandoned Workspaces
+### Step 1.0.4: Detect and Clean Abandoned Workspaces
 
 **If re-execution** (status is `Validando Spec`), check for orphaned workspaces from
 a previous run that was abandoned:
@@ -186,7 +186,7 @@ a previous run that was abandoned:
       4. Commit: `chore(tasks): reset T-XXX — clean abandoned workspace`
       5. **STOP** — task is back to Pendente, user can re-run stage-1 when ready
 
-### Step 0.0.5: Create Workspace (if on default branch)
+### Step 1.0.5: Create Workspace (if on default branch)
 
 Check if currently on the default/main branch:
 
@@ -195,7 +195,7 @@ DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@
 CURRENT_BRANCH=$(git branch --show-current)
 ```
 
-**If already on a feature branch** (not default/main/master): proceed to Step 0.0.6 (update tasks.md).
+**If already on a feature branch** (not default/main/master): proceed to Step 1.0.6 (update tasks.md).
 
 **If on default branch:** First, check if the branch already exists from a previous interrupted run:
 
@@ -203,8 +203,8 @@ CURRENT_BRANCH=$(git branch --show-current)
 git branch --list "<tipo-prefix>/*<task-id>*"
 ```
 
-If a matching branch is found but the task status is `Pendente` (Step 0.0.4 was skipped because
-status is not `Validando Spec`), offer the same options as Step 0.0.4: Reuse, Clean and recreate,
+If a matching branch is found but the task status is `Pendente` (Step 1.0.4 was skipped because
+status is not `Validando Spec`), offer the same options as Step 1.0.4: Reuse, Clean and recreate,
 or Clean and keep as Pendente. This handles the case where a previous run crashed AFTER creating
 the branch but BEFORE updating tasks.md.
 
@@ -226,12 +226,12 @@ Then change working directory to the new worktree path for all subsequent steps.
 
 **BLOCKING**: Do NOT proceed until the worktree is created.
 
-### Step 0.0.6: Update tasks.md (Status + Branch)
+### Step 1.0.6: Update tasks.md (Status + Branch)
 
 **IMPORTANT:** This step runs AFTER the workspace is created, so modifications happen in the feature branch's working directory — not on the default branch.
 
 1. Update the **Status** column to `Validando Spec` (if not already)
-2. Update the **Branch** column with the branch name created in Step 0.0.5 (if a new workspace was created)
+2. Update the **Branch** column with the branch name created in Step 1.0.5 (if a new workspace was created)
 3. Commit these changes immediately:
    ```bash
    git add .optimus/tasks.md
@@ -242,11 +242,11 @@ Then change working directory to the new worktree path for all subsequent steps.
 
 **Why commit immediately:** Stage-1 is analysis-only — it may not produce any other file changes. If no findings are fixed (all skipped), Step 6 would not commit, leaving tasks.md changes uncommitted and at risk of being lost. Committing now ensures the status change is persisted regardless of the analysis outcome.
 
-### Step 0.0.7: Check tasks.md Divergence (warning)
+### Step 1.0.7: Check tasks.md Divergence (warning)
 
 Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 
-### Step 0.1: Discover Project Structure
+### Step 1.1: Discover Project Structure
 
 Before loading docs, discover the project's structure:
 
@@ -257,7 +257,7 @@ Before loading docs, discover the project's structure:
 4. **Identify reference docs:** Look for task specs, API design, data model, architecture docs, business requirements, and dependency maps.
 5. **Identify doc hierarchy:** Determine the source-of-truth ordering for conflicting docs (typically: project rules/AI instructions > API design > data model > architecture > business requirements > task specs).
 
-### Step 0.2: Load Documents
+### Step 1.2: Load Documents
 
 Read ALL discovered reference docs:
 - Task spec (find the task being validated by ID)
@@ -268,7 +268,7 @@ Read ALL discovered reference docs:
 - Coding standards (source of truth)
 - Dependency relationships
 
-### Step 0.3: Verify Existing Code
+### Step 1.3: Verify Existing Code
 
 Check the codebase for:
 - Are dependencies (required tasks) actually implemented?
@@ -659,8 +659,8 @@ Components verified: [list each component checked]
 If the user requests a dry-run (e.g., "dry-run spec T-003", "preview spec"):
 - Run ALL analysis phases (Phase 1, Validation Dimensions, Steps 1-3, Step 3.1) normally
 - Present ALL findings in Step 4 (interactive resolution)
-- **Do NOT change task status** — skip Step 0.0.6 (status update)
-- **Do NOT create workspaces** — skip Step 0.0.5 (workspace creation)
+- **Do NOT change task status** — skip Step 1.0.6 (status update)
+- **Do NOT create workspaces** — skip Step 1.0.5 (workspace creation)
 - **Do NOT commit or push anything** — skip Steps 5, 6, 8
 - **Do NOT run convergence loop** — one pass is sufficient for preview
 - Present results as informational: "what would happen" without side effects

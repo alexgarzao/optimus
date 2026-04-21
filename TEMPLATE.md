@@ -1,5 +1,7 @@
 # Skill Title
 
+> See `AGENTS.md` for phase/step numbering conventions and protocol references.
+
 ## Description
 
 Brief description of what this skill does.
