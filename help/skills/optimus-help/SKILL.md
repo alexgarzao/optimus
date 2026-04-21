@@ -1,9 +1,6 @@
 ---
 name: optimus-help
-description: >
-  Lists all available Optimus skills with descriptions, usage commands, and
-  when to use each one. Helps users discover what's available and choose the
-  right skill for their situation.
+description: "Lists all available Optimus skills with descriptions, usage commands, and when to use each one. Helps users discover what's available and choose the right skill for their situation."
 trigger: >
   - When user asks "what skills are available?" or "help"
   - When user asks "what can Optimus do?"

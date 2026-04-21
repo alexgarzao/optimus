@@ -1,10 +1,6 @@
 ---
 name: optimus-coderabbit-review
-description: >
-  CodeRabbit-driven code review with TDD fix cycle, secondary validation
-  via parallel review agents for logic changes, and interactive finding-by-finding
-  resolution. Runs CodeRabbit CLI to generate findings, then processes each
-  with mandatory RED-GREEN-REFACTOR and full test execution.
+description: "CodeRabbit-driven code review with TDD fix cycle, secondary validation via parallel review agents for logic changes, and interactive finding-by-finding resolution. Runs CodeRabbit CLI to generate findings, then processes each with mandatory RED-GREEN-REFACTOR and full test execution."
 trigger: >
   - When user requests code review using CodeRabbit
   - Before creating a pull request (when CodeRabbit is available)

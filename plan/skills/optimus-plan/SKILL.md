@@ -1,9 +1,6 @@
 ---
 name: optimus-plan
-description: >
-  Stage 1 of the task lifecycle. Validates a task specification against project
-  docs BEFORE code generation begins. Catches gaps, contradictions, ambiguities,
-  test coverage holes, and observability issues. Analysis only -- does not generate code.
+description: "Stage 1 of the task lifecycle. Validates a task specification against project docs BEFORE code generation begins. Catches gaps, contradictions, ambiguities, test coverage holes, and observability issues. Analysis only -- does not generate code."
 trigger: >
   - Before starting any task implementation
   - When user requests spec validation (e.g., "validate spec for T-006")

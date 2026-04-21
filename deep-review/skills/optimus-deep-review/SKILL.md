@@ -1,10 +1,6 @@
 ---
 name: optimus-deep-review
-description: >
-  Parallel code review with consolidation, deduplication, and interactive
-  finding-by-finding resolution. Supports initial (8 agents, critical gaps)
-  and final (10 agents, full coverage including stack idiomaticity) review modes.
-  Flexible scope: entire project, git diff, or specific directory.
+description: "Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Supports initial (8 agents, critical gaps) and final (10 agents, full coverage including stack idiomaticity) review modes. Flexible scope: entire project, git diff, or specific directory."
 trigger: >
   - When user requests code review (e.g., "review the code", "code review")
   - Before creating a pull request or merging a branch

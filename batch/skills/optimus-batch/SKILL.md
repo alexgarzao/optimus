@@ -1,9 +1,6 @@
 ---
 name: optimus-batch
-description: >
-  Chains stages 1-5 for one or more tasks sequentially. Instead of invoking
-  each stage manually, the user specifies which tasks and stages to run, and
-  this skill orchestrates the pipeline with user checkpoints between stages.
+description: "Chains stages 1-5 for one or more tasks sequentially. Instead of invoking each stage manually, the user specifies which tasks and stages to run, and this skill orchestrates the pipeline with user checkpoints between stages."
 trigger: >
   - When user says "run all stages for T-003"
   - When user says "process T-003 through T-006"

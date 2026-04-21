@@ -1,11 +1,6 @@
 ---
 name: optimus-build
-description: >
-  Stage 2 of the task lifecycle. Executes a validated task specification
-  end-to-end: identifies the task, loads context, questions ambiguities upfront,
-  then delegates execution to the dev-cycle skill (preferred) or uses a built-in
-  fallback pipeline (implementation, review, verification, validation).
-  Commits only after user approval.
+description: "Stage 2 of the task lifecycle. Executes a validated task specification end-to-end: identifies the task, loads context, questions ambiguities upfront, then delegates execution to the dev-cycle skill (preferred) or uses a built-in fallback pipeline (implementation, review, verification, validation). Commits only after user approval."
 trigger: >
   - After optimus-plan has PASSED for a task
   - When user requests full task execution with a task ID (e.g., "execute T-012")

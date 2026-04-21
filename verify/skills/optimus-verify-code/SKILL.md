@@ -1,11 +1,6 @@
 ---
 name: optimus-verify-code
-description: >
-  Two-phase code verification. Phase 2 runs static analysis in parallel
-  (lint, format, unit tests -- commands auto-detected from project stack).
-  Phase 3 runs integration and E2E tests sequentially. Presents executive
-  summary with MERGE_READY or NEEDS_FIX verdict. Supports Go, TypeScript,
-  Python, and any project with a Makefile.
+description: "Two-phase code verification. Phase 2 runs static analysis in parallel (lint, format, unit tests -- commands auto-detected from project stack). Phase 3 runs integration and E2E tests sequentially. Presents executive summary with MERGE_READY or NEEDS_FIX verdict. Supports Go, TypeScript, Python, and any project with a Makefile."
 trigger: >
   - When user asks to verify, validate, or check the code before merge
   - Before creating a pull request

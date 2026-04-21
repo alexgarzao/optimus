@@ -1,11 +1,6 @@
 ---
 name: optimus-resolve
-description: >
-  Resolves merge conflicts in tasks.md caused by parallel task execution.
-  When multiple tasks run simultaneously on different feature branches, each
-  commits status changes to tasks.md. When branches merge, conflicts arise.
-  This skill detects, parses, and resolves those conflicts using the "most
-  advanced status" rule -- each task's row is independent.
+description: "Resolves merge conflicts in tasks.md caused by parallel task execution. When multiple tasks run simultaneously on different feature branches, each commits status changes to tasks.md. When branches merge, conflicts arise. This skill detects, parses, and resolves those conflicts using the most advanced status rule -- each task's row is independent."
 trigger: >
   - When tasks.md has merge conflict markers (<<<<<<, ======, >>>>>>)
   - When user says "resolve tasks.md conflict" or "fix tasks conflict"

@@ -1,10 +1,6 @@
 ---
 name: optimus-done
-description: >
-  Stage 5 of the task lifecycle. Verifies all prerequisites before marking
-  a task as done: no uncommitted changes, no unpushed commits, PR ready to merge
-  (if applicable), CI passing, tests and lint passing locally.
-  During cleanup, offers to merge the PR (user chooses merge strategy via AskUser).
+description: "Stage 5 of the task lifecycle. Verifies all prerequisites before marking a task as done: no uncommitted changes, no unpushed commits, PR ready to merge (if applicable), CI passing, tests and lint passing locally. During cleanup, offers to merge the PR (user chooses merge strategy via AskUser)."
 trigger: >
   - After optimus-pr-check has completed for a task (optional), or after optimus-check
   - When user requests closing a task (e.g., "close T-012", "mark T-012 as done")

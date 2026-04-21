@@ -1,9 +1,6 @@
 ---
 name: optimus-deep-doc-review
-description: >
-  Deep review of project documentation. Finds errors, inconsistencies,
-  gaps, missing data, and improvements. Presents findings in a compact table
-  and resolves one by one with user approval. Does not make automatic changes.
+description: "Deep review of project documentation. Finds errors, inconsistencies, gaps, missing data, and improvements. Presents findings in a compact table and resolves one by one with user approval. Does not make automatic changes."
 trigger: >
   - When user requests project documentation review
   - Before starting implementation based on docs (validate doc quality)

@@ -1,10 +1,6 @@
 ---
 name: optimus-migrate
-description: >
-  Task format migrator. Discovers existing task files in any format (index-only,
-  inline tasks, individual files, subtask folders) and converts them to the
-  standard optimus tasks.md format. Presents the current state, proposes the
-  conversion, and only applies after user approval. Never deletes original files.
+description: "Task format migrator. Discovers existing task files in any format (index-only, inline tasks, individual files, subtask folders) and converts them to the standard optimus tasks.md format. Presents the current state, proposes the conversion, and only applies after user approval. Never deletes original files."
 trigger: >
   - When user wants to adopt the optimus task pipeline on an existing project
   - When user says "migrate tasks", "convert tasks", "setup task pipeline"
