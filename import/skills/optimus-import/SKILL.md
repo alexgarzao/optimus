@@ -207,18 +207,18 @@ When no explicit dependencies exist, look for implicit signals:
 
 ### Step 1.4: Handle Subtasks
 
-Classify each subtask file by richness:
+Classification depends on **origin**, not size:
 
-- **Simple subtasks** (< 20 lines AND no code blocks): merge as checklist items
-  in the parent task's acceptance criteria section (inline).
-- **Rich subtasks** (>= 20 lines OR contains code blocks/fenced blocks `` ``` ``):
-  do NOT inline. These are handled in Step 1.4.1 as ring pre-dev references.
+- **Ring pre-dev subtasks** (from `docs/pre-dev/subtasks/`): ALWAYS referenced via
+  `## Referencia Pre-Dev` — never inlined, regardless of size. Ring is the source of
+  truth; copying even 5 lines creates duplication and drift risk.
+- **Non-Ring subtasks** (from generic `subtasks/` directories or other sources):
+  inline as checklist items in the parent task's acceptance criteria section. These
+  have no authoritative source to reference back to.
 
-A file with code blocks (`` ``` ``) is always treated as rich regardless of line count.
+**Non-Ring subtasks example:**
 
-**Simple subtasks example:**
-
-**Before (subtasks/t-001-subtasks.md, 8 lines):**
+**Before (subtasks/t-001-subtasks.md):**
 ```markdown
 ## Subtasks for T-001
 - [ ] Define tables
@@ -506,17 +506,70 @@ git commit -m "chore: import tasks to optimus format (import)
 Imported N tasks from [sources list].
 Tasks file: $TASKS_FILE
 Ring pre-dev references: [linked/none]
+Ring sync: [N tasks synced/no drift detected/skipped]
 Original files preserved."
 ```
 
-### Step 4.5: Final Summary
+### Step 4.5: Sync Existing References (re-run mode)
+
+When tasks.md already exists in optimus format (re-run), after importing new tasks/artifacts,
+check existing tasks for drift between their `T-NNN.md` content and the Ring source.
+
+**For each task with a `## Referencia Pre-Dev` section:**
+
+1. Read the Ring task spec path from the reference section
+2. Extract the objective and acceptance criteria from the Ring source file
+3. Compare with the `**Objetivo:**` and `**Critérios de Aceite:**` in `T-NNN.md`
+4. **If identical** → skip silently
+5. **If different** → record the drift
+
+**After scanning all tasks, if any drift found:**
+
+```
+Ring source has changed for N tasks:
+
+T-038: "User Registration API"
+  Objetivo: changed (Ring updated description)
+  Critérios: 1 added, 1 modified in Ring source
+
+T-041: "Dashboard Metrics"
+  Critérios: 2 criteria reworded in Ring source
+
+Sync these tasks?
+```
+
+Options via `AskUser`:
+- **Sync all** — update all drifted tasks
+- **Review one by one** — show diff for each task and decide individually
+- **Skip sync** — keep current content, I'll handle it manually
+
+**When syncing:**
+- Overwrite `**Objetivo:**` with the Ring source version
+- For `**Critérios de Aceite:**`:
+  - **Unchanged criteria:** preserve the existing `[x]`/`[ ]` state
+  - **Modified criteria:** match by position and keyword similarity. If confident
+    match (>50% words overlap) → preserve `[x]` state. If uncertain → reset to `[ ]`
+    and warn the user
+  - **New criteria (added in Ring):** add as `- [ ]`
+  - **Removed criteria (deleted in Ring):** ask via `AskUser` per removal:
+    "Ring removed criterion '<text>' (currently `[x]`). Remove from tracking?"
+- Commit synced changes:
+  ```bash
+  git add "$TASKS_DIR/"
+  git commit -m "chore(tasks): sync T-NNN criteria with Ring source"
+  ```
+
+**If no drift found** → inform: "All Ring references are in sync."
+
+### Step 4.6: Final Summary
 
 ```markdown
 ## Import Complete
 
-- **Tasks imported:** N
+- **Tasks imported:** N (new) / M (synced)
 - **Sources processed:** [list]
-- **tasks.md created:** <TASKS_FILE> + <TASKS_DIR>/T-NNN.md files
+- **tasks.md created/updated:** <TASKS_FILE> + <TASKS_DIR>/T-NNN.md files
+- **Ring sync:** N tasks synced / no drift detected / skipped
 - **Registered in:** .optimus.json (tasksFile: <TASKS_FILE>)
 - **Original files:** NOT deleted (remove manually if desired)
 
@@ -537,6 +590,6 @@ Original files preserved."
 - If a task has no content (just a title), create `TASKS_DIR/T-NNN.md` with empty Objetivo and Critérios de Aceite, and warn the user
 - If status inference is uncertain, mark as `Pendente` and flag as "(inferred)" in the inventory
 - If the project already has a valid tasks.md at the configured/default path (first line is `<!-- optimus:tasks-v1 -->`), inform the user and stop (nothing to import)
-- Simple subtasks (< 20 lines AND no code blocks) become checklist items in the parent task — never separate entries in the table
-- Rich subtasks (>= 20 lines OR contains code blocks) are linked via `## Referencia Pre-Dev` section — never inlined
+- Ring pre-dev subtasks (from `docs/pre-dev/subtasks/`) are ALWAYS linked via `## Referencia Pre-Dev` — never inlined, regardless of size
+- Non-Ring subtasks (generic sources) become checklist items in the parent task — never separate entries in the table
 - Task IDs must be unique — if duplicates found, warn the user before proceeding
