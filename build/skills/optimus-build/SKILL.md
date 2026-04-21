@@ -64,10 +64,6 @@ related:
     before:
       - dev-feedback-loop  # external: ring ecosystem
 verification:
-  automated:
-    - command: "cat docs/dev-cycle/current-cycle.json 2>/dev/null | jq '.status'"
-      description: dev-cycle state file tracks execution progress
-      success_pattern: completed
   manual:
     - All 6 dev-cycle gates passed
     - Code review findings resolved or explicitly skipped

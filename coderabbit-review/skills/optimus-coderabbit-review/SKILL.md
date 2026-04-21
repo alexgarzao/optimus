@@ -281,6 +281,9 @@ Required ring droids are not installed. Install them before running this skill:
   - ring-default-business-logic-reviewer
   - ring-default-security-reviewer
   - ring-default-ring-test-reviewer
+  - ring-default-ring-nil-safety-reviewer
+  - ring-default-ring-consequences-reviewer
+  - ring-default-ring-dead-code-reviewer
 ```
 
 **Droids to dispatch:**
@@ -347,28 +350,9 @@ If lint fails, fix formatting issues and re-run.
 
 **Measure unit test coverage:**
 
-Use the project's Makefile or `.optimus.json` commands. If neither exists, fall
-back to stack-specific commands:
+Measure coverage — see AGENTS.md Protocol: Coverage Measurement.
 
-```bash
-# Preferred: Makefile target
-make test-coverage 2>/dev/null
-
-# Fallback: stack-specific
-# Go:     go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out | tail -1
-# Node:   npm test -- --coverage
-# Python: pytest --cov=. --cov-report=term
-```
-
-**Threshold:** Unit tests: 85% minimum
-
-If coverage measurement is available and below threshold, flag as a finding:
-- **HIGH** severity for unit test coverage below 85%
-- List untested business-logic functions as individual **HIGH** findings
-
-If coverage measurement is NOT available (no Makefile target, no recognized stack), mark
-as SKIP and note: "Coverage measurement not available — configure `make test-coverage`
-or `.optimus.json`."
+If coverage is below threshold, flag as findings.
 
 **NOTE:** Integration and E2E tests run only before push or when user invokes directly.
 

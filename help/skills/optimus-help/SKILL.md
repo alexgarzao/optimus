@@ -40,6 +40,7 @@ terminal display when available, otherwise use markdown tables.
 | **tasks** | `/optimus-tasks` | Creating, editing, removing, reordering, cancelling, or reopening tasks. Managing versions. Any administrative task management. |
 | **resolve** | `/optimus-resolve` | Resolving merge conflicts in `tasks.md` caused by parallel task execution across feature branches. |
 | **quick-report** | `/optimus-quick-report` | Compact daily status — active tasks with current status, ready-to-start, blocked. No git ops. Read-only. |
+| **batch** | `/optimus-batch` | Pipeline orchestrator — chains stages 1-5 for one or more tasks with user checkpoints between stages. Handles dependency ordering. |
 | **help** | `/optimus-help` | This skill — discovering what's available. |
 
 ### Execution Skills (task lifecycle, stages 1-5)
@@ -58,7 +59,6 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 | **check** | `/optimus-check` | After implementation — validates code quality, spec compliance, and test coverage using parallel specialist agents. |
 | **pr-check** | `/optimus-pr-check` | (Optional) After impl review — orchestrates PR review collecting findings from Codacy, DeepSource, CodeRabbit, and human reviewers. Also works standalone without a task. |
 | **done** | `/optimus-done` | Final step — verifies all prerequisites (tests, lint, PR ready) and marks the task as DONE. Offers to merge the PR. Supports force-close for tasks done outside the pipeline. |
-| **batch** | `/optimus-batch` | Pipeline orchestrator — chains stages 1-5 for one or more tasks with user checkpoints between stages. Handles dependency ordering. |
 
 ### Review & Verification Skills (standalone, no task required)
 
@@ -67,7 +67,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 | **deep-review** | `/optimus-deep-review` | Generic code review without task context — reviews entire project, git diff, or specific directory with parallel specialist agents. |
 | **deep-doc-review** | `/optimus-deep-doc-review` | Documentation review — finds errors, inconsistencies, and gaps across project docs with cross-referencing. |
 | **coderabbit-review** | `/optimus-coderabbit-review` | Code review using CodeRabbit CLI with TDD fix cycle and agent validation. Requires CodeRabbit CLI installed. |
-| **verify** | `/optimus-verify-code` | Quick automated verification — runs lint, vet, format checks, and tests in parallel. Reports MERGE_READY or NEEDS_FIX verdict. |
+| **verify-code** | `/optimus-verify-code` | Quick automated verification — runs lint, vet, format checks, and tests in parallel. Reports MERGE_READY or NEEDS_FIX verdict. |
 
 ---
 

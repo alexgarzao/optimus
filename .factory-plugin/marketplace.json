@@ -17,7 +17,7 @@
     },
     {
       "name": "tasks",
-      "description": "Administrative: Create, edit, remove, and reorder tasks in tasks.md. Runs on any branch.",
+      "description": "Administrative: Create, edit, remove, reorder, cancel, and reopen tasks. Manage versions and move tasks between versions. Runs on any branch.",
       "source": "./tasks"
     },
     {

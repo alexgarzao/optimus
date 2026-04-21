@@ -191,6 +191,8 @@ Options:
 ## Phase 4: Coverage Analysis
 
 After Phase 3 completes, analyze test coverage from the generated profiles.
+Thresholds and command resolution follow AGENTS.md Protocol: Coverage Measurement.
+The steps below extend the protocol with stack-specific analysis detail.
 
 ### Step 4.1: Extract Coverage Percentages
 

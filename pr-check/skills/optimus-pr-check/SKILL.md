@@ -620,6 +620,9 @@ Required ring droids are not installed. Install them before running this skill:
   - ring-default-business-logic-reviewer
   - ring-default-security-reviewer
   - ring-default-ring-test-reviewer
+  - ring-default-ring-nil-safety-reviewer
+  - ring-default-ring-consequences-reviewer
+  - ring-default-ring-dead-code-reviewer
 ```
 
 All agents MUST be dispatched in a SINGLE message with parallel Task calls.
@@ -903,21 +906,7 @@ Record the suppression commit SHA for use in Phase 13.
 
 ### Step 9.1: Coverage Measurement (Unit Tests)
 
-Use the project's Makefile or `.optimus.json` commands:
-
-```bash
-# Preferred: Makefile target
-make test-coverage 2>/dev/null
-
-# Fallback: stack-specific
-# Go:     go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out | tail -1
-# Node:   npm test -- --coverage
-# Python: pytest --cov=. --cov-report=term
-```
-
-If no coverage command is available, mark as SKIP.
-
-**Threshold:** Unit tests: 85% minimum
+Measure coverage — see AGENTS.md Protocol: Coverage Measurement.
 
 **NOTE:** Integration test coverage is measured in Phase 11 (before push), not here.
 

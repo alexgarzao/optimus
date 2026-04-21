@@ -572,10 +572,11 @@ If the user requests a force close (e.g., "force close T-012", "force done T-012
   - **Cancel force-close** — let me handle this first
 - **Require explicit confirmation** via `AskUser`:
   ```
-  WARNING: Force-closing T-XXX will skip ALL verification checks:
+  WARNING: Force-closing T-XXX will skip checks 2-8:
   - No lint, test, or CI validation
-  - No check for uncommitted/unpushed changes
+  - No check for unpushed commits
   - No PR state verification
+  Note: Check 1 (uncommitted changes) still runs to prevent data loss.
 
   This is intended for tasks completed outside the pipeline (manual implementation,
   external tools, or when you've already verified everything yourself).

@@ -114,6 +114,7 @@ Required ring droids are not installed. Install them before running this skill:
   - ring-default-security-reviewer
   - ring-default-ring-test-reviewer
   - ring-default-ring-nil-safety-reviewer
+  - ring-default-ring-consequences-reviewer
   - ring-default-ring-dead-code-reviewer
   - ring-dev-team-qa-analyst
 ```

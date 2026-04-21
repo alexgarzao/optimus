@@ -211,12 +211,12 @@ Examples: `[█░░░░] 1/5`, `[██░░░] 2/5`, `[███░░] 3
    (`⚙` active, `◇` pending, `✓` done, `⊘` blocked, `—` cancelled).
    Use `├──` for intermediate dependencies and `└──` for the last one.
    If a blocker has status `Cancelado`, show as `[— Cancelado — remove dep via /optimus-tasks]`.
-   If a dependency is from another version, append the version: `[▶ Em Andamento, v2]`.
+   If a dependency is from another version, append the version: `[⚙ Em Andamento, v2]`.
    Example with multiple blockers:
    ```
      T-004 Password reset flow
-         ├── T-002 [▶ Em Andamento]
-         └── T-003 [○ Pendente]
+         ├── T-002 [⚙ Em Andamento]
+         └── T-003 [◇ Pendente]
    ```
 
 6. **Omit empty sections.** If there are no active tasks, skip the ACTIVE section entirely.

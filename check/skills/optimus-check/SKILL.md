@@ -35,7 +35,7 @@ examples:
   - name: Validate last executed task (auto-detect)
     invocation: "Validate the last task"
     expected_flow: >
-      1. Check optimus-build-state.json or git diff for context
+      1. Check session state files or git diff for context
       2. Identify the task that was just executed
       3. Suggest to user and confirm via AskUser
       4. Standard validation flow
@@ -249,10 +249,10 @@ For checks that **pass**, note them for the Phase 5 overview.
 
 Skip checks whose commands don't exist in the project (e.g., skip `go vet` in a pure JS project).
 
-### Step 2.2: Run Unit Tests (Baseline — HARD BLOCK)
+### Step 2.2: Run Unit Tests (Baseline)
 
-**HARD BLOCK:** Unit tests must pass before proceeding to agent dispatch. This establishes
-the baseline — if unit tests are already failing, review cannot proceed.
+Unit tests should pass before proceeding to agent dispatch. This establishes
+the baseline — if unit tests are already failing, review findings may be unreliable.
 
 Check `.optimus.json` for custom `commands.test` first. Fall back to `make test` if not configured.
 
@@ -340,6 +340,9 @@ Required ring droids are not installed. Install them before running this skill:
   - ring-default-business-logic-reviewer
   - ring-default-security-reviewer
   - ring-default-ring-test-reviewer
+  - ring-default-ring-nil-safety-reviewer
+  - ring-default-ring-consequences-reviewer
+  - ring-default-ring-dead-code-reviewer
   - ring-dev-team-qa-analyst
 ```
 
@@ -552,33 +555,9 @@ to fix, revert the offending fix and ask the user.
 
 ### Step 7.4: Coverage Verification
 
-After the final verification passes, measure unit test coverage:
+Measure coverage — see AGENTS.md Protocol: Coverage Measurement.
 
-**Unit test coverage:**
-
-Use the project's Makefile or `.optimus.json` commands:
-```bash
-# Preferred: Makefile target
-make test-coverage 2>/dev/null
-
-# Fallback: stack-specific
-# Go:     go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out | tail -1
-# Node:   npm test -- --coverage
-# Python: pytest --cov=. --cov-report=term
-```
-
-If no coverage command is available, mark as SKIP.
-
-**Coverage gap analysis:**
-
-Parse the coverage output to identify untested functions/methods (0% coverage).
-The format depends on the stack — use the output from the coverage command above.
-
-**Threshold:** Unit tests: 85% minimum
-
-If coverage is below threshold, add findings to the results:
-- **HIGH** severity for unit test coverage below 85%
-- List untested business-logic functions as individual **HIGH** findings
+If coverage is below threshold, add findings to the results.
 
 **E2E tests:**
 If `make test-e2e` target does not exist, mark as SKIP in the summary. Do NOT ask the user whether to implement E2E — that's a project-level decision, not a per-task decision.

@@ -614,7 +614,8 @@ To resolve, run `/optimus-tasks`:
    - From `Cancelado`: always `Pendente` (must restart from stage-1)
 2. If reopening from `Cancelado`, also clear the **Branch** column to `-` (any previous
    branch is stale and should not be reused)
-3. Save and commit: `chore(tasks): reopen T-XXX — <reason> (from <previous status>, now <target status>)`
+3. Clean stale session state: `rm -f ".optimus/session-${TASK_ID}.json"`
+4. Save and commit: `chore(tasks): reopen T-XXX — <reason> (from <previous status>, now <target status>)`
 4. **Invoke notification hooks (if present):**
    ```bash
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))

@@ -14,7 +14,7 @@ optimus/
 ├── import/                    # Admin: Import external task artifacts (re-runnable)
 ├── report/                    # Admin: Task status dashboard (read-only)
 ├── tasks/                      # Admin: Create, edit, remove, reorder tasks
-├── batch/                     # Execution: Pipeline orchestrator (stages 1-5)
+├── batch/                     # Admin: Pipeline orchestrator (stages 1-5)
 ├── resolve/          # Admin: Resolve tasks.md merge conflicts
 ├── plan/              # Execution Stage 1: Spec validation + workspace creation
 ├── build/              # Execution Stage 2: Task implementation
@@ -97,7 +97,7 @@ rationalize these away.
 
 ### marketplace.json
 - Must list ALL plugins in the repo
-- `source` paths are relative to repo root (e.g., `./pr-review`)
+- `source` paths are relative to repo root (e.g., `./pr-check`)
 - Description should be concise (1-2 sentences)
 
 ### plugin.json
@@ -526,8 +526,14 @@ Any status → Cancelado  (via tasks cancel operation)
 
    To detect the default branch:
    ```bash
-   git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@'
-   # fallback: check if current branch is "main" or "master"
+   DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+   if [ -z "$DEFAULT_BRANCH" ]; then
+     DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
+   fi
+   if [ -z "$DEFAULT_BRANCH" ]; then
+     echo "ERROR: Cannot determine default branch. Set it with: git remote set-head origin <branch>"
+     exit 1
+   fi
    ```
 
 9. **Branch-task cross-validation** — stages 2-5 verify that the current branch matches
@@ -703,10 +709,10 @@ fi
       Progress: <phase from session>
     Resume this session?
     ```
-    Options: Resume / Start fresh / Ignore
+    Options: Resume / Start fresh (delete session) / Continue (keep session file)
   - If **Resume**: skip to the phase indicated in the session file
-  - If **Start fresh**: delete the session file and proceed normally
-  - If **Ignore**: proceed normally
+  - If **Start fresh (delete session)**: delete the session file and proceed from the beginning
+  - If **Continue (keep session file)**: proceed from the beginning without deleting the session file
 - If the file is stale (>24h) or the task status has changed → delete and proceed normally
 - If no file exists → proceed normally
 
@@ -739,6 +745,9 @@ be in the task's worktree before proceeding with any work.
 
 ```bash
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+if [ -z "$DEFAULT_BRANCH" ]; then
+  DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
+fi
 CURRENT_BRANCH=$(git branch --show-current)
 ```
 
@@ -791,6 +800,9 @@ edits that could cause merge conflicts later:
 
 ```bash
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+if [ -z "$DEFAULT_BRANCH" ]; then
+  DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
+fi
 TASKS_FILE=$(cat .optimus.json 2>/dev/null | jq -r '.tasksFile // empty')
 TASKS_FILE="${TASKS_FILE:-docs/tasks.md}"
 git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
@@ -852,13 +864,18 @@ droid is not installed, **STOP** and list missing droids.
 - `ring-default-security-reviewer`
 - `ring-default-ring-test-reviewer`
 
-**Extended review droids** (required by check, pr-check):
+**Extended review droids** (required by check, pr-check, deep-review, coderabbit-review):
 - `ring-default-ring-nil-safety-reviewer`
 - `ring-default-ring-consequences-reviewer`
 - `ring-default-ring-dead-code-reviewer`
 
+**QA droids** (required by check, deep-review):
+- `ring-dev-team-qa-analyst`
+
 **Documentation droids** (required by deep-doc-review):
 - `ring-tw-team-docs-reviewer`
+- `ring-default-business-logic-reviewer`
+- `ring-default-code-reviewer`
 
 **Implementation droids** (required by build):
 - `ring-dev-team-backend-engineer-golang` (Go)
@@ -872,6 +889,36 @@ droid is not installed, **STOP** and list missing droids.
 - `ring-default-code-reviewer`
 
 Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check."
+
+### Protocol: Coverage Measurement
+
+**Referenced by:** check, pr-check, coderabbit-review, verify
+
+Measure test coverage using the project's configured commands. Check `.optimus.json`
+for custom commands first, then fall back to Makefile targets, then stack-specific commands.
+
+**Command resolution order:**
+1. `.optimus.json` → `commands.test-coverage` (if present)
+2. `make test-coverage` (if Makefile target exists)
+3. Stack-specific fallback:
+   - Go: `go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out`
+   - Node: `npm test -- --coverage`
+   - Python: `pytest --cov=. --cov-report=term`
+
+If no coverage command is available, mark as **SKIP** — do not fail the verification.
+
+**Thresholds:**
+
+| Test Type | Threshold | Verdict if Below |
+|-----------|-----------|-----------------|
+| Unit tests | 85% | NEEDS_FIX / HIGH finding |
+| Integration tests | 70% | NEEDS_FIX / HIGH finding |
+
+**Coverage gap analysis:** Parse the coverage output to identify untested functions/methods
+(0% coverage). Flag business-logic functions with 0% as HIGH, infrastructure/generated
+code with 0% as SKIP.
+
+Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage Measurement."
 
 ### Protocol: PR Title Validation
 
