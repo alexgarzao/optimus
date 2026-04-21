@@ -258,8 +258,8 @@ Build a directed acyclic graph (DAG) from the Depends column.
 
 For the ASCII art graph:
 - Use `✓` for done tasks
-- Use `●` for active tasks
-- Use `○` for ready-to-start tasks
+- Use `⚙` for active tasks
+- Use `◇` for ready-to-start tasks
 - Use `⊘` for blocked tasks
 - Use `✗` for cancelled tasks
 - Use `─►` for dependency arrows
@@ -267,15 +267,15 @@ For the ASCII art graph:
 
 Example:
 ```
-T-001 ✓ ─┬─► T-002 ✓ ─┬─► T-004 ○
+T-001 ✓ ─┬─► T-002 ✓ ─┬─► T-004 ◇
           │             │
-          ├─► T-003 ○   ├─► T-005 ●
+          ├─► T-003 ◇   ├─► T-005 ⚙
           │             │
-          └─► T-006 ○   └─► T-008 ○
+          └─► T-006 ◇   └─► T-008 ◇
 
-T-007 ◐ ────► T-009 ⊘ ────► T-010 ⊘
+T-007 ⚙ ────► T-009 ⊘ ────► T-010 ⊘
 
-Legend: ✓=Done ●=Active ◐=Validating ○=Ready ⊘=Blocked ✗=Cancelled
+Legend: ✓=Done ⚙=Active ◇=Ready ⊘=Blocked ✗=Cancelled
 ```
 
 For trees with depth > 3 levels, simplify by showing only the critical path and noting "N more tasks omitted".
@@ -341,8 +341,8 @@ Progress: ████████░░░░░░░░░░░░ XX% (done
 │                                                  │
 │  [insert computed graph here]                    │
 │                                                  │
-│  Legend: ✓=Done ●=Active ◐=Validating            │
-│          ○=Ready ⊘=Blocked ✗=Cancelled           │
+│  Legend: ✓=Done ⚙=Active ◇=Ready                 │
+│          ⊘=Blocked ✗=Cancelled                   │
 └─────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────┐

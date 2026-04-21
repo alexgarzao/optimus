@@ -1,6 +1,6 @@
 {
   "name": "import",
-  "description": "Import external task artifacts into optimus format. Discovers task files and ring pre-dev artifacts. Re-runnable.",
+  "description": "Import Ring pre-dev artifacts into optimus format. Creates tracking overlays (tasks.md + T-NNN.md). Re-runnable — only imports what's new.",
   "version": "1.0.0",
   "author": {
     "name": "Alex Garzao"
