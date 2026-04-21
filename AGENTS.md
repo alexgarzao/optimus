@@ -11,10 +11,6 @@ optimus/
 ├── .factory-plugin/marketplace.json   # Plugin marketplace manifest
 ├── AGENTS.md                          # THIS FILE — read first
 ├── README.md                          # Public-facing docs
-├── TEMPLATE.md                        # Template for catalog entries
-├── catalog/                           # Skill reference cards (read-only docs)
-│   ├── analysis/                      # Review/analysis skill cards
-│   └── system/                        # Orchestration skill cards
 ├── import/                    # Admin: Import external task artifacts (re-runnable)
 ├── report/                    # Admin: Task status dashboard (read-only)
 ├── tasks/                      # Admin: Create, edit, remove, reorder tasks

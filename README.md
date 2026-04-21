@@ -53,13 +53,6 @@ droid plugin marketplace add https://github.com/alexgarzao/optimus
 droid plugin install <plugin-name>@optimus
 ```
 
-## Catalog
-
-Skill reference cards organized by category:
-
-- `catalog/system/` — Orchestration and task execution skills
-- `catalog/analysis/` — Analysis and review skills
-
 ## How it works
 
 Each skill is an installable plugin with:
