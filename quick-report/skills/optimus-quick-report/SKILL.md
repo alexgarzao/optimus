@@ -44,7 +44,7 @@ verification:
 # Quick Report
 
 Compact daily status dashboard. Parses `tasks.md` and presents a focused overview:
-version progress, active tasks with acceptance criteria progress, ready-to-start tasks,
+version progress, active tasks with Progresso status, ready-to-start tasks,
 and blocked tasks.
 
 **CRITICAL:** This agent NEVER modifies any files. It only reads and reports.
@@ -68,7 +68,7 @@ Check the first line for `<!-- optimus:tasks-v1 -->`. If missing, warn but attem
 ### Step 1.3: Parse Criteria Progress
 
 For each task with status other than `Pendente`, `DONE`, and `Cancelado`:
-1. Read the detail file (`docs/tasks/T-NNN.md`)
+1. Read the overlay file (`docs/tasks/T-NNN.md`)
 2. Count total checkboxes (`- [ ]` + `- [x]`)
 3. Count checked checkboxes (`- [x]`)
 4. Record as `checked/total`

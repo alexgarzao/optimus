@@ -160,13 +160,13 @@ in a `tasks/` directory **derived from the tasksFile path**:
 tasksDir = dirname(tasksFile) + "/tasks/"
 ```
 
-| tasksFile | tasksDir | Detail file example |
+| tasksFile | tasksDir | Overlay file example |
 |-----------|----------|---------------------|
 | `docs/tasks.md` (default) | `docs/tasks/` | `docs/tasks/T-001.md` |
 | `project/tasks.md` | `project/tasks/` | `project/tasks/T-001.md` |
 | `tasks.md` (root) | `tasks/` | `tasks/T-001.md` |
 
-Each task has its own detail file. This prevents merge conflicts when multiple
+Each task has its own overlay file. This prevents merge conflicts when multiple
 worktrees work on different tasks in parallel.
 
 Project configuration is stored at the project root:
@@ -455,7 +455,7 @@ If the format marker is missing or validation fails, the agent must **STOP** and
 running `/optimus-import` to fix the format. Do NOT attempt to interpret malformed data.
 
 15. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
-16. Every task ID in the table has a corresponding detail file at `docs/tasks/T-NNN.md`
+16. Every task ID in the table has a corresponding overlay file at `docs/tasks/T-NNN.md`
 
 **NOTE:** For circular dependency detection (item 14), trace the full dependency chain for
 each task. If any task appears twice in the chain, a cycle exists. Report ALL tasks involved
@@ -672,7 +672,7 @@ Skills reference this as: "Initialize .optimus directory — see AGENTS.md Proto
 
 ### Protocol: Initialize Tasks Directory
 
-**Referenced by:** all skills that create tasks.md or task detail files
+**Referenced by:** all skills that create tasks.md or task overlay files
 
 Before creating task files, resolve the tasks directory path and ensure it exists:
 

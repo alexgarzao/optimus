@@ -33,7 +33,7 @@ examples:
     invocation: "Quick status" or "What am I working on?"
     expected_flow: >
       1. Parse tasks.md
-      2. Show only: current active task, its acceptance criteria progress, and next-up
+      2. Show only: current active task, its progress status, and next-up
       3. Skip dependency graph, parallelization, velocity, and completed tasks
 related:
   complementary:
@@ -128,7 +128,7 @@ Read the `## Versions` section and extract the versions table. Expected columns:
 
 Identify the version with Status `Ativa` — this is the **active version** used for default filtering.
 
-For each task, also check if a detail file exists at `docs/tasks/T-NNN.md` to verify completeness.
+For each task, also check if an overlay file exists at `docs/tasks/T-NNN.md` to verify completeness.
 
 ### Step 1.3: Validate Dependencies
 
@@ -490,7 +490,7 @@ Average time per stage (from N completed tasks):
 After the dashboard, present any issues found:
 
 ### Warnings
-- Tasks with missing detail files (`docs/tasks/T-NNN.md`)
+- Tasks with missing overlay files (`docs/tasks/T-NNN.md`)
 - Circular dependencies
 - Invalid dependency references (pointing to non-existent task IDs)
 - Tasks blocked by a cancelled dependency (see "Blocked by Cancelled" section below)

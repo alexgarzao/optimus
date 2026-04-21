@@ -149,7 +149,7 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 3.1. **Active version guard:** Check active version guard — see AGENTS.md Protocol: Active Version Guard.
 4. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Validando Impl`) AND the user did NOT specify the task ID explicitly (auto-detect):
-     - Read the task's detail file (`docs/tasks/T-XXX.md`)
+     - Read the task's overlay file (`docs/tasks/T-XXX.md`)
      - Present to the user via `AskUser`:
        ```
        I'm about to change task T-XXX status from '<current>' to 'Validando Impl'.

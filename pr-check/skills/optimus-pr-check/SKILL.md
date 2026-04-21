@@ -126,7 +126,7 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
    **On stage completion** (after Phase 14 final summary): delete the session file.
 5. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Revisando PR`) AND the user did NOT specify the task ID explicitly (auto-detect):
-     - Read the task's detail file (`docs/tasks/T-XXX.md`)
+     - Read the task's overlay file (`docs/tasks/T-XXX.md`)
      - Present to the user via `AskUser`:
        ```
        I'm about to change task T-XXX status from '<current>' to 'Revisando PR'.

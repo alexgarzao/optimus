@@ -1,6 +1,6 @@
 ---
 name: optimus-build
-description: "Stage 2 of the task lifecycle. Executes a validated task specification end-to-end: identifies the task, loads context, questions ambiguities upfront, then delegates execution to the dev-cycle skill (preferred) or uses a built-in fallback pipeline (implementation, review, verification, validation). Commits only after user approval."
+description: "Stage 2 of the task lifecycle. Executes a validated task specification end-to-end: identifies the task, loads context from Ring pre-dev artifacts, questions ambiguities upfront, then delegates execution to the dev-cycle skill. Commits only after user approval."
 trigger: >
   - After optimus-plan has PASSED for a task
   - When user requests full task execution with a task ID (e.g., "execute T-012")
@@ -134,7 +134,7 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 3.1. **Active version guard:** Check active version guard — see AGENTS.md Protocol: Active Version Guard.
 4. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Em Andamento`) AND the user did NOT specify the task ID explicitly (auto-detect):
-     - Read the task's detail file (`docs/tasks/T-XXX.md`)
+     - Read the task's overlay file (`docs/tasks/T-XXX.md`)
      - Present to the user via `AskUser`:
        ```
        I'm about to change task T-XXX status from '<current>' to 'Em Andamento'.
@@ -312,7 +312,7 @@ checkboxes already reflect what was implemented, preventing false findings.
 
 ## Phase 4: Post-Execution
 
-After implementation completes (via dev-cycle or built-in fallback):
+After implementation completes (via dev-cycle):
 
 ### Step 4.1: Test Gap Cross-Reference
 

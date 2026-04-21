@@ -27,7 +27,7 @@ examples:
       1. Parse tasks.md
       2. Generate next ID (T-NNN)
       3. Ask for details (priority, dependencies)
-      4. Add row to table and create detail section
+      4. Add row to table and create overlay file
       5. Validate and save
   - name: Edit task priority
     invocation: "Change T-003 priority to Alta"
@@ -41,7 +41,7 @@ examples:
     expected_flow: >
       1. Parse tasks.md
       2. Check no other tasks depend on T-004
-      3. Remove row and detail section
+      3. Remove row and overlay file
       4. Save
 related:
   complementary:
@@ -155,20 +155,24 @@ If unclear, ask the user via `AskUser`:
 Create from a template or from scratch?
 ```
 Options:
-- **API Endpoint** — pre-fills Feature tipo, standard API acceptance criteria
-- **Bug Fix** — pre-fills Fix tipo, standard debugging acceptance criteria
-- **UI Component** — pre-fills Feature tipo, standard frontend acceptance criteria
-- **Chore/Infra** — pre-fills Chore tipo, standard infrastructure criteria
-- **Refactor** — pre-fills Refactor tipo, standard refactoring criteria
-- **Documentation** — pre-fills Docs tipo, standard documentation criteria
-- **Test** — pre-fills Test tipo, standard testing criteria
+- **API Endpoint** — pre-fills Feature tipo, standard API progress items
+- **Bug Fix** — pre-fills Fix tipo, standard debugging progress items
+- **UI Component** — pre-fills Feature tipo, standard frontend progress items
+- **Chore/Infra** — pre-fills Chore tipo, standard infrastructure progress items
+- **Refactor** — pre-fills Refactor tipo, standard refactoring progress items
+- **Documentation** — pre-fills Docs tipo, standard documentation progress items
+- **Test** — pre-fills Test tipo, standard testing progress items
 - **From scratch** — manual entry (no template)
 
 #### Built-in Templates
 
+Templates pre-fill `## Progresso` items in the overlay file. When a Ring pre-dev
+reference is linked (Step 2.3.1), the template items are replaced by subtask
+headings from the Ring source.
+
 **API Endpoint template:**
 - Tipo: `Feature`, Priority: `Alta`
-- Acceptance criteria:
+- Progresso:
   - [ ] Endpoint implemented with correct HTTP method and path
   - [ ] Request validation (required fields, types, constraints)
   - [ ] Success response format matches API contract
@@ -180,7 +184,7 @@ Options:
 
 **Bug Fix template:**
 - Tipo: `Fix`, Priority: `Alta`
-- Acceptance criteria:
+- Progresso:
   - [ ] Root cause identified and documented
   - [ ] Fix implemented with minimal scope
   - [ ] Regression test added (reproduces the bug, passes after fix)
@@ -189,7 +193,7 @@ Options:
 
 **UI Component template:**
 - Tipo: `Feature`, Priority: `Media`
-- Acceptance criteria:
+- Progresso:
   - [ ] Component renders correctly in all states (empty, loading, error, success)
   - [ ] Responsive design (mobile, tablet, desktop)
   - [ ] Accessibility (keyboard navigation, ARIA labels, screen reader)
@@ -198,14 +202,14 @@ Options:
 
 **Chore/Infra template:**
 - Tipo: `Chore`, Priority: `Media`
-- Acceptance criteria:
+- Progresso:
   - [ ] Configuration/infrastructure change applied
   - [ ] No regression in existing functionality
   - [ ] Documentation updated (if applicable)
 
 **Refactor template:**
 - Tipo: `Refactor`, Priority: `Media`
-- Acceptance criteria:
+- Progresso:
   - [ ] Refactoring applied without changing external behavior
   - [ ] All existing tests still pass
   - [ ] No new warnings introduced
@@ -213,7 +217,7 @@ Options:
 
 **Documentation template:**
 - Tipo: `Docs`, Priority: `Baixa`
-- Acceptance criteria:
+- Progresso:
   - [ ] Documentation written/updated
   - [ ] Examples included (if applicable)
   - [ ] Links and references verified
@@ -221,13 +225,13 @@ Options:
 
 **Test template:**
 - Tipo: `Test`, Priority: `Media`
-- Acceptance criteria:
+- Progresso:
   - [ ] Test scenarios identified and documented
   - [ ] Tests implemented and passing
   - [ ] Coverage improved for target area
   - [ ] No flaky tests introduced
 
-When a template is selected, pre-fill the Tipo, Priority, and acceptance criteria.
+When a template is selected, pre-fill the Tipo, Priority, and Progresso items.
 The user can then modify any field before confirming.
 
 **Option B: From scratch.** Ask the user for task details using `AskUser` (one question at a time or batch if info provided):
@@ -238,8 +242,7 @@ The user can then modify any field before confirming.
 4. **Estimate** (optional): Task size estimate (`S`, `M`, `L`, `XL`, `2h`, `1d`, etc.). Default: `-`
 5. **Version** (required): Must match a version in the Versions table. Default: the version with Status `Ativa`
 6. **Dependencies** (optional): Comma-separated task IDs (e.g., `T-001, T-003`) or `-` for none
-7. **Objective** (required): What the task achieves (for `docs/tasks/T-NNN.md`)
-8. **Acceptance criteria** (required): Checklist items (for `docs/tasks/T-NNN.md`)
+7. **Progress items** (optional): Checklist items for `## Progresso` in the overlay file. If omitted, Ring pre-dev discovery (Step 2.3.1) will populate them.
 
 If the user provided some of these in the initial request, use them and ask only for missing fields.
 
@@ -250,18 +253,18 @@ Before creating, search existing tasks for potential duplicates:
 1. **Compare by title:** For each existing task, check if the new title shares 2+ significant
    keywords with an existing title (ignore articles, prepositions, and generic words like
    "implement", "add", "create", "update", "fix")
-2. **Compare by objective:** If the user provided an objective, check if any existing task's
-   **Objetivo** section describes the same goal (semantic similarity — same entity, same action)
+2. **Compare by Ring source:** If a Ring pre-dev task was linked, check if any existing task's
+   `## Fonte` already references the same Ring task spec file
 
 If similar tasks are found, present them to the user via `AskUser`:
 
 ```
 I found N existing tasks that look similar to your new task:
 
-| ID | Title | Version | Status | Objetivo (excerpt) |
-|----|-------|---------|--------|--------------------|
-| T-003 | User login page | MVP | Pendente | Implement login with JWT... |
-| T-008 | Auth login flow | v2 | Em Andamento | Create the login screen... |
+| ID | Title | Version | Status | Ring Source |
+|----|-------|---------|--------|------------|
+| T-003 | User login page | MVP | Pendente | task_005.md |
+| T-008 | Auth login flow | v2 | Em Andamento | task_005.md |
 
 Your new task: "<new title>"
 
@@ -392,8 +395,7 @@ Determine which field(s) to edit. Editable fields:
 | Status | **No** | Status is managed ONLY by stage agents |
 | Branch | **No** | Branch is managed ONLY by stage-1 and close |
 | ID | **No** | IDs are immutable |
-| Objective | Yes | Updates `docs/tasks/T-NNN.md` |
-| Acceptance criteria | Yes | Updates `docs/tasks/T-NNN.md` checklist |
+| Progress items | Yes | Updates `## Progresso` in `docs/tasks/T-NNN.md` |
 
 **HARD BLOCK:** If the user tries to change Status or Branch, refuse:
 ```
@@ -408,7 +410,7 @@ task, use "reopen T-XXX".
 1. Update the relevant column(s) in the table row in `docs/tasks.md`
 2. If Title changed, also update the heading in `docs/tasks/T-NNN.md`
 3. If Depends changed, validate all references exist and no circular dependencies
-4. If Objective or acceptance criteria changed, update `docs/tasks/T-NNN.md`
+4. If Progress items changed, update `## Progresso` in `docs/tasks/T-NNN.md`
 5. Save the file(s)
 
 ### Step 3.2: Confirm
@@ -452,10 +454,10 @@ may cause data loss. Are you sure?
 
 Use `AskUser` for confirmation.
 
-### Step 4.2: Remove from tasks.md and delete detail file
+### Step 4.2: Remove from tasks.md and delete overlay file
 
 1. Remove the table row for T-XXX from `docs/tasks.md`
-2. Delete the detail file `docs/tasks/T-NNN.md`
+2. Delete the overlay file `docs/tasks/T-NNN.md`
 3. Save
 
 **NOTE:** Do NOT renumber remaining task IDs. IDs are permanent identifiers.
@@ -818,7 +820,7 @@ If the user provides multiple tasks to create at once (e.g., a list of tasks), p
 
 1. Generate IDs for all tasks first (to allow cross-references in dependencies)
 2. Validate all dependencies
-3. Add all rows to `docs/tasks.md` and create all `docs/tasks/T-NNN.md` detail files
+3. Add all rows to `docs/tasks.md` and create all `docs/tasks/T-NNN.md` overlay files
 4. Show summary of all created tasks
 
 ## Phase 11: Version Management

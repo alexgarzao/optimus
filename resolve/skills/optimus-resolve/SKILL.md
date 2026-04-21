@@ -88,7 +88,7 @@ For each conflict region, classify its content:
 |-------------|---------------|---------------------|
 | **Task table rows** | Lines matching `\| T-\d+ \|` pattern | Per-task most-advanced-status |
 | **Versions table** | Lines in the `## Versions` section | Merge both — keep all versions; deduplicate by name (if same version name on both sides, keep the one with more advanced status: Ativa > Próxima > Planejada > Backlog > Concluída) |
-| **Task detail files** | `docs/tasks/T-NNN.md` files | Merge: union of `[x]` checkboxes from both sides; for prose differences, flag for user decision (Step 2.4) |
+| **Task overlay files** | `docs/tasks/T-NNN.md` files | Merge: union of `[x]` checkboxes from both sides in `## Progresso` (Step 2.4) |
 | **Format marker / headers** | First line, `# Tasks`, table headers | Keep either (identical) |
 
 ### Step 1.3: Parse Task Rows From Both Sides
@@ -158,14 +158,14 @@ If one side has `Cancelado` and the other has a non-terminal status:
   - **Keep Cancelado** — the task was intentionally cancelled
   - **Keep <other status>** — the cancellation was premature, work continues
 
-### Step 2.4: Resolve Detail Sections
+### Step 2.4: Resolve Overlay Files
 
-For `docs/tasks/T-NNN.md` detail files that conflict:
+For `docs/tasks/T-NNN.md` overlay files that conflict:
 
-1. Compare acceptance criteria checkboxes:
+1. `## Fonte` section: should be identical on both sides (same Ring source). If different, flag for user decision.
+2. `## Progresso` checkboxes:
    - If one side has more `[x]` checkboxes → use that version (more work was done)
    - If both sides changed different checkboxes → merge both (union of `[x]` marks)
-2. If Objetivo or other prose differs → flag for user decision
 
 ---
 
