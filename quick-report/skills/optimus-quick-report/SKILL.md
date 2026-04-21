@@ -75,9 +75,23 @@ For each task with status other than `Pendente`, `DONE`, and `Cancelado`:
 
 ---
 
-## Phase 2: Classify Tasks
+## Phase 2: Filter by Version and Classify Tasks
 
-For each task:
+### Step 2.1: Filter by Active Version
+
+**Default behavior:** Show only tasks from the `Ativa` version. If the user specifies a
+version (e.g., "quick report for v2") or asks for "all tasks", show accordingly.
+
+Filter the task list to include only tasks whose **Version** column matches the `Ativa`
+version name. Tasks from other versions are excluded from the ACTIVE, READY, BLOCKED,
+and DONE sections below.
+
+**Cross-version dependencies:** When a filtered task depends on a task from another version,
+show the dependency with its version in brackets (e.g., `T-001 [MVP, DONE]`).
+
+### Step 2.2: Classify Filtered Tasks
+
+For each task **in the filtered set**:
 
 - **Done:** Status is `DONE`
 - **Cancelled:** Status is `Cancelado`
@@ -159,17 +173,23 @@ If a task has no criteria section (0 checkboxes), show `--` instead.
 ### Rules
 
 1. **Version progress** shows the `Ativa` version. Progress = Done / (Total - Cancelled).
+   The progress bar counts only tasks from the active version.
 
-2. **Active tasks** are sorted by status advancement (Revisando PR first, then Validando Impl,
+2. **All sections (ACTIVE, READY, BLOCKED, DONE)** show only tasks from the filtered
+   version (Step 2.1). Tasks from other versions are never shown unless the user
+   explicitly asks for "all tasks" or a specific version.
+
+3. **Active tasks** are sorted by status advancement (Revisando PR first, then Validando Impl,
    Em Andamento, Validando Spec). Show criteria mini-bar from Step 1.3.
 
-3. **Ready tasks** are sorted by Priority (`Alta` > `Media` > `Baixa`), then by ID.
+4. **Ready tasks** are sorted by Priority (`Alta` > `Media` > `Baixa`), then by ID.
 
-4. **Blocked tasks** render dependencies as a tree using box-drawing characters.
+5. **Blocked tasks** render dependencies as a tree using box-drawing characters.
    Each dependency appears on its own line with the appropriate status indicator symbol
    (`▶` active, `○` pending, `✓` done, `✗` blocked, `—` cancelled).
    Use `├──` for intermediate dependencies and `└──` for the last one.
    If a blocker has status `Cancelado`, show as `[— Cancelado — remove dep via /optimus-tasks]`.
+   If a dependency is from another version, append the version: `[▶ Em Andamento, v2]`.
    Example with multiple blockers:
    ```
      T-004 Password reset flow
@@ -177,10 +197,10 @@ If a task has no criteria section (0 checkboxes), show `--` instead.
          └── T-003 [○ Pendente]
    ```
 
-5. **Omit empty sections.** If there are no active tasks, skip the ACTIVE section entirely.
+6. **Omit empty sections.** If there are no active tasks, skip the ACTIVE section entirely.
    Same for READY, BLOCKED, and DONE.
 
-6. **Progress bar characters:** Use `█` for filled and `░` for empty. Both the version
+7. **Progress bar characters:** Use `█` for filled and `░` for empty. Both the version
    progress bar (20 chars) and criteria mini-bar (5 chars) follow this convention.
 
 ---
