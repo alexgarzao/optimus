@@ -104,7 +104,7 @@ Executes a validated task specification end-to-end: identifies the task, loads c
 **If the user did NOT specify a task ID** (e.g., "execute the next task", or just invoked the skill):
 1. **Identify the next task ready for implementation:** Scan the table for the first task that:
    - Has status `Validando Spec` (plan completed) or `Em Andamento` (re-execution)
-   - Has all dependencies (Depends column) with status `**DONE**` (or Depends is `-`)
+   - Has all dependencies (Depends column) with status `DONE` (or Depends is `-`)
    - **Version priority:** prefer tasks from the `Ativa` version first. If none found, try `Próxima`. If none found, pick from any version and warn the user: "No eligible tasks in the active version (<name>). Suggesting T-XXX from version '<other>'."
 2. **If multiple candidates exist in the same version priority**, pick the one with highest Priority (`Alta` > `Media` > `Baixa`), then lowest ID
 3. **Suggest to the user** using `AskUser`: "I identified the next task to execute: T-XXX — [task title]. Is this correct, or would you like to execute a different task?"
@@ -127,15 +127,15 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
    - If status is `Validando Spec` → proceed (plan has completed)
    - If status is `Em Andamento` → proceed (re-execution of this stage)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run plan first."
-   - If status is `Validando Impl`, `Revisando PR`, `**DONE**`, or `Cancelado` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage or was cancelled."
+   - If status is `Validando Impl`, `Revisando PR`, `DONE`, or `Cancelado` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage or was cancelled."
 3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:
-     - If ALL dependencies have status `**DONE**` → proceed
-     - If ANY dependency is NOT `**DONE**`:
+     - If ALL dependencies have status `DONE` → proceed
+     - If ANY dependency is NOT `DONE`:
        - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
        - If the dependency has status `Cancelado` → **STOP**: `"T-YYY was cancelled (Cancelado). Consider removing this dependency via /optimus-tasks."`
-       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first."`
+       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be DONE first."`
 4. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Em Andamento`) AND the user did NOT specify the task ID explicitly (auto-detect):
      - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`

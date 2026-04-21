@@ -79,7 +79,7 @@ Catches gaps, contradictions, and ambiguities that would cause rework.
 
 **HARD BLOCK:** Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
-**Why check here:** Stage-1 dispatches ring droids (Step 3.1) that may use `gh`, and
+**Why check here:** Stage-1 dispatches ring droids (Step 2.4) that may use `gh`, and
 subsequent stages (2-5) all require `gh`. Failing early prevents the user from completing
 spec validation only to discover `gh` is not set up when they try to run Stage-2.
 
@@ -96,7 +96,7 @@ spec validation only to discover `gh` is not set up when they try to run Stage-2
 **If the user did NOT specify a task ID** (e.g., "validate the next task", or just invoked the skill):
 1. **Identify the next eligible task:** Scan the table for the first task that:
    - Has status `Pendente` or `Validando Spec` (re-execution)
-   - Has all dependencies (Depends column) with status `**DONE**` (or Depends is `-`)
+   - Has all dependencies (Depends column) with status `DONE` (or Depends is `-`)
    - **Version priority:** prefer tasks from the `Ativa` version first. If none found, try `Próxima`. If none found, pick from any version and warn the user: "No eligible tasks in the active version (<name>). Suggesting T-XXX from version '<other>'."
 2. **If multiple candidates exist in the same version priority**, pick the one with highest Priority (`Alta` > `Media` > `Baixa`), then lowest ID
 3. **Suggest to the user** using `AskUser`: "I identified the next task to validate: T-XXX — [task title]. Is this correct, or would you like to validate a different task?"
@@ -108,7 +108,7 @@ spec validation only to discover `gh` is not set up when they try to run Stage-2
 
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`plan`, status=`Validando Spec`.
 
-**On stage completion** (after Step 7 convergence loop exits): delete the session file.
+**On stage completion** (after Phase 6 convergence loop exits): delete the session file.
 
 ### Step 1.0.3: Validate Task Status (DO NOT modify yet)
 
@@ -126,11 +126,11 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:
-     - If ALL dependencies have status `**DONE**` → proceed
-     - If ANY dependency is NOT `**DONE**`:
+     - If ALL dependencies have status `DONE` → proceed
+     - If ANY dependency is NOT `DONE`:
        - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
        - If the dependency has status `Cancelado` → **STOP**: `"T-YYY was cancelled (Cancelado). Consider removing this dependency via /optimus-tasks."`
-       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first."`
+       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be DONE first."`
 4. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Validando Spec`) AND the user did NOT specify the task ID explicitly (auto-detect):
      - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
@@ -152,70 +152,110 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
    - **If re-execution** (status is already `Validando Spec`) OR the user specified the task ID explicitly:
      - Skip expanded confirmation (user already has context)
 
-**IMPORTANT:** Do NOT modify tasks.md yet. Status and Branch updates happen in Step 1.0.6 AFTER the workspace is created. This ensures the modifications happen in the correct working directory (worktree or feature branch).
-
-**Anti-pulo:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`), refuse to proceed — the task has already passed this stage or was cancelled.
+**Anti-pulo:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `Revisando PR`, `DONE`, `Cancelado`), refuse to proceed — the task has already passed this stage or was cancelled.
 
 ### Step 1.0.4: Detect and Clean Abandoned Workspaces
 
-**If re-execution** (status is `Validando Spec`), check for orphaned workspaces from
-a previous run that was abandoned:
+**ALWAYS run this step** — regardless of task status. This detects orphaned workspaces
+from a previous run that was interrupted (crash, user closed terminal, etc.).
 
-1. Read the **Branch** column for this task
-2. If Branch is NOT `-`:
-   a. Check if the branch exists: `git branch --list "<branch>"`
-   b. Check if a worktree exists: `git worktree list | grep -i "<task-id>"`
-   c. If the workspace exists but the user is on the **default branch** (not on the task branch):
-      - Ask via `AskUser`:
-        ```
-        Task T-XXX has an existing workspace from a previous run:
-          Branch: <branch>
-          Worktree: <path> (if applicable)
+1. Read the **Branch** column for this task in tasks.md
+2. Check if any branch or worktree already exists for this task:
+   ```bash
+   # Check Branch column value
+   BRANCH_IN_TABLE="<branch-column-value>"
+   # Check for any branch matching the task ID
+   git branch --list "*<task-id>*" 2>/dev/null
+   # Check for any worktree matching the task ID
+   git worktree list | grep -i "<task-id>"
+   ```
+3. **If a branch or worktree exists** (regardless of whether Branch column is `-` or populated):
+   - Ask via `AskUser`:
+     ```
+     Task T-XXX has an existing workspace from a previous run:
+       Branch: <branch> (tasks.md says: <branch-column-value>)
+       Worktree: <path> (if applicable)
+       Status in tasks.md: <current-status>
 
-        What should I do?
-        ```
-        Options:
-        - **Reuse** — switch to the existing workspace and continue
-        - **Clean and recreate** — delete the old workspace and create a fresh one
-        - **Clean and reset to Pendente** — delete the workspace and reset the task to Pendente (abandon)
+     What should I do?
+     ```
+     Options:
+     - **Reuse** — switch to the existing workspace and continue from where it left off
+     - **Clean and recreate** — delete the old workspace and create a fresh one
+     - **Clean and reset to Pendente** — delete the workspace and reset the task (abandon)
 
-      If the user chooses **Clean and reset to Pendente**:
-      1. Remove worktree if exists: `git worktree remove <path>`
-      2. Delete branch: `git branch -D <branch>` and `git push origin --delete <branch>` (if pushed)
-      3. Update tasks.md: set Status to `Pendente`, Branch to `-`
-      4. Commit: `chore(tasks): reset T-XXX — clean abandoned workspace`
-      5. **STOP** — task is back to Pendente, user can re-run stage-1 when ready
+   If the user chooses **Reuse**:
+   - If a worktree exists, change working directory to it and proceed to Step 1.0.7
+   - If only a branch exists (no worktree), create a worktree for it and proceed to Step 1.0.7
 
-### Step 1.0.5: Create Workspace (if on default branch)
+   If the user chooses **Clean and recreate**:
+   1. Remove worktree if exists: `git worktree remove <path>`
+   2. Delete branch: `git branch -D <branch>` and `git push origin --delete <branch>` (if pushed)
+   3. Continue to Step 1.0.5 (will create fresh workspace)
 
-Check if currently on the default/main branch:
+   If the user chooses **Clean and reset to Pendente**:
+   1. Remove worktree if exists: `git worktree remove <path>`
+   2. Delete branch: `git branch -D <branch>` and `git push origin --delete <branch>` (if pushed)
+   3. Update tasks.md on default branch: set Status to `Pendente`, Branch to `-`
+   4. Commit and push: `chore(tasks): reset T-XXX — clean abandoned workspace`
+   5. **STOP** — task is back to Pendente, user can re-run stage-1 when ready
 
-```bash
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-CURRENT_BRANCH=$(git branch --show-current)
-```
+4. **If no branch or worktree exists** → proceed to Step 1.0.5
 
-**If already on a feature branch** (not default/main/master): proceed to Step 1.0.6 (update tasks.md).
+### Step 1.0.5: Reserve Task on Default Branch (Status + Branch)
 
-**If on default branch:** First, check if the branch already exists from a previous interrupted run:
+**IMPORTANT:** This step updates tasks.md on the **default branch** BEFORE creating the
+worktree. This prevents race conditions where another agent or session picks the same
+task while the worktree is being created.
 
-```bash
-git branch --list "<tipo-prefix>/*<task-id>*"
-```
+**If already on a feature branch** (not default/main/master): skip to Step 1.0.6
+(the task was already reserved in a previous run or by the user manually).
 
-If a matching branch is found but the task status is `Pendente` (Step 1.0.4 was skipped because
-status is not `Validando Spec`), offer the same options as Step 1.0.4: Reuse, Clean and recreate,
-or Clean and keep as Pendente. This handles the case where a previous run crashed AFTER creating
-the branch but BEFORE updating tasks.md.
+**If on the default branch:**
 
-If no existing branch is found, create a worktree for the task.
+1. **Generate branch name** from the task's **Tipo** and ID:
+   - Pattern: `<tipo-prefix>/<task-id>-<keywords>` where keywords are 2-4 lowercase words from the title
+   - The `<tipo-prefix>` is derived from the task's Tipo column using the same mapping as Conventional Commits:
+     - Feature → `feat`, Fix → `fix`, Refactor → `refactor`, Chore → `chore`, Docs → `docs`, Test → `test`
+   - Examples: `feat/t-003-user-auth-jwt`, `fix/t-007-duplicate-login`, `refactor/t-012-extract-middleware`
+   - Strip articles, prepositions, and generic words (implement, add, create, update)
 
-**Branch naming:** Generate a descriptive name from the task's **Tipo** and ID:
-- Pattern: `<tipo-prefix>/<task-id>-<keywords>` where keywords are 2-4 lowercase words from the title
-- The `<tipo-prefix>` is derived from the task's Tipo column using the same mapping as Conventional Commits:
-  - Feature → `feat`, Fix → `fix`, Refactor → `refactor`, Chore → `chore`, Docs → `docs`, Test → `test`
-- Examples: `feat/t-003-user-auth-jwt`, `fix/t-007-duplicate-login`, `refactor/t-012-extract-middleware`
-- Strip articles, prepositions, and generic words (implement, add, create, update)
+2. **Update tasks.md on the default branch:**
+   - Set **Status** to `Validando Spec`
+   - Set **Branch** to the generated branch name
+   - Commit immediately:
+     ```bash
+     git add .optimus/tasks.md
+     git commit -m "chore(tasks): start T-XXX — set status to Validando Spec"
+     ```
+
+3. **Push to remote (best-effort):**
+   ```bash
+   git push 2>/dev/null
+   ```
+   - If push succeeds → the reservation is visible to all agents/sessions
+   - If push fails (protected branch, no permissions, etc.) → warn the user:
+     ```
+     Could not push status change to remote (branch may be protected).
+     The status is committed locally and will be visible in the worktree.
+     Other agents on different machines may not see this reservation until the PR is merged.
+     ```
+   - **Do NOT block on push failure** — the local commit already prevents re-picks on this machine
+
+4. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
+
+**Why commit on default first:** If the status update happens only on the feature branch,
+the task remains `Pendente` on the default branch until the PR is merged. During that window
+another agent could pick the same task. Committing on default eliminates this race condition.
+The feature branch inherits this commit as part of its history (the worktree is created from
+the default branch HEAD, which now includes the status change).
+
+### Step 1.0.6: Create Workspace (if on default branch)
+
+**If already on a feature branch** (not default/main/master): proceed to Step 1.0.7.
+
+**If on the default branch:** Create a worktree for the task using the branch name
+generated in Step 1.0.5.
 
 **Create worktree:**
 ```bash
@@ -224,23 +264,15 @@ git worktree add ../${REPO_NAME}-<task-id>-<keywords> -b <tipo-prefix>/<task-id>
 ```
 Then change working directory to the new worktree path for all subsequent steps.
 
-**BLOCKING**: Do NOT proceed until the worktree is created.
-
-### Step 1.0.6: Update tasks.md (Status + Branch)
-
-**IMPORTANT:** This step runs AFTER the workspace is created, so modifications happen in the feature branch's working directory — not on the default branch.
-
-1. Update the **Status** column to `Validando Spec` (if not already)
-2. Update the **Branch** column with the branch name created in Step 1.0.5 (if a new workspace was created)
-3. Commit these changes immediately:
+**Rollback on failure:** If worktree creation fails:
+1. Revert the status change on the default branch:
    ```bash
-   git add .optimus/tasks.md
-   git commit -m "chore(tasks): start T-XXX — set status to Validando Spec"
+   git revert HEAD --no-edit
+   git push 2>/dev/null
    ```
+2. **STOP** and report the error to the user
 
-4. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
-
-**Why commit immediately:** Stage-1 is analysis-only — it may not produce any other file changes. If no findings are fixed (all skipped), Step 6 would not commit, leaving tasks.md changes uncommitted and at risk of being lost. Committing now ensures the status change is persisted regardless of the analysis outcome.
+**BLOCKING**: Do NOT proceed until the worktree is created.
 
 ### Step 1.0.7: Check tasks.md Divergence (warning)
 
@@ -404,16 +436,16 @@ Check if the task should emit structured fields that enable metrics:
 
 ---
 
-## Execution
+## Phase 2: Execution
 
-### Step 1: Cross-Reference
+### Step 2.1: Cross-Reference
 For EACH item in the task spec, verify it exists and is consistent in the reference docs.
 Flag any item that:
 - Exists in the task spec but NOT in API contracts or data model
 - Has different values between docs (field type, HTTP method, error code)
 - References something that doesn't exist yet (table, endpoint, component)
 
-### Step 2: Analyze Test Gaps (MANDATORY — do NOT skip)
+### Step 2.2: Analyze Test Gaps (MANDATORY — do NOT skip)
 For EACH test type (unit, integration, E2E):
 1. List every function/method/flow the task will create or modify
 2. For each one, check every bullet from Dimension 5
@@ -422,8 +454,8 @@ For EACH test type (unit, integration, E2E):
 
 You MUST produce output for all 4 sub-sections (5a, 5b, 5c, 5d).
 
-### Step 2.1: Cross-Reference Test Gaps with Future Tasks (MANDATORY)
-For EACH test gap identified in Step 2:
+### Step 2.2.1: Cross-Reference Test Gaps with Future Tasks (MANDATORY)
+For EACH test gap identified in Step 2.2:
 1. **Search future tasks:** Scan the tasks file for any task that explicitly covers the missing test scenario (look for test-related acceptance criteria, testing strategy sections, or test IDs that match the gap)
 2. **Classify each gap:**
    - **NOT PLANNED** — no future task covers this test. Flag as a gap in the current task.
@@ -446,13 +478,13 @@ Add a column to the Test Coverage Gaps table:
 | 3 | E2E | Empty state flow | HIGH | T-018 | Anticipate — current task creates this flow |
 ```
 
-### Step 3: Analyze Observability Gaps (MANDATORY — do NOT skip)
+### Step 2.3: Analyze Observability Gaps (MANDATORY — do NOT skip)
 For EACH new component:
 1. Check existing logging patterns in the codebase
 2. Verify new components follow them
 3. Flag missing logs and missing structured fields for metrics
 
-### Step 3.1: Dispatch Validation Agents (MANDATORY)
+### Step 2.4: Dispatch Validation Agents (MANDATORY)
 
 **HARD BLOCK:** Dispatch specialist ring droids in parallel to validate the task spec. Each agent receives the task spec, reference docs, and the gaps/findings identified so far.
 
@@ -479,7 +511,7 @@ Goal: Pre-implementation validation of task T-XXX — [your domain]
 Context:
   - Task spec: [full task content]
   - Reference docs: [relevant sections]
-  - Gaps already identified: [list from Steps 1-3]
+  - Gaps already identified: [list from Steps 2.1-2.3]
 
 Your job:
   Validate the task spec from your domain perspective BEFORE implementation.
@@ -491,9 +523,11 @@ Required output:
   If no issues: "PASS — [domain] validation clean"
 ```
 
-Merge agent findings with the findings from Steps 1-3. Deduplicate and sort by severity before presenting.
+Merge agent findings with the findings from Steps 2.1-2.3. Deduplicate and sort by severity before presenting.
 
-### Step 4: Phase 1 — Present Summary, then Walk Through Each Finding
+## Phase 3: Present and Resolve Findings
+
+### Step 3.1: Present Summary, then Walk Through Each Finding
 
 1. **Announce total findings count:** Display `"### Total findings to review: N"` prominently before presenting the first finding
 2. **Present the summary report** (tables from Output Format) for bird's-eye view
@@ -525,18 +559,22 @@ Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding O
 5. **IMMEDIATE RESPONSE RULE** — see AGENTS.md "Finding Presentation" item 8. If the user
    selects "Tell me more" or responds with free text: STOP, research and answer RIGHT NOW.
    **NEVER defer to the end of the findings loop.**
-6. **Track all decisions** internally. Do NOT apply any fix yet — all fixes are applied in Step 5.
+6. **Track all decisions** internally. Do NOT apply any fix yet — all fixes are applied in Phase 4.
 
-### Step 5: Phase 2 — Apply ALL Approved Corrections
+## Phase 4: Apply Approved Corrections
+
+### Step 4.1: Apply ALL Approved Corrections
 
 After the user has responded to ALL findings:
 1. Present a pre-apply summary listing every change grouped by file
 2. Apply ALL approved changes to the docs in a single pass
 3. Present a final summary of what was changed vs skipped/rejected
 
-### Step 6: Commit Changes (if any modifications were made)
+## Phase 5: Commit Changes
 
-If any corrections were applied in Step 5:
+### Step 5.1: Commit Changes (if any modifications were made)
+
+If any corrections were applied in Phase 4:
 1. Run `git status` and `git diff` to review all changes
 2. Check for sensitive data (secrets, keys, tokens) — if found, STOP and warn the user
 3. Present the summary of changes and ask the user for commit approval via `AskUser`
@@ -545,7 +583,9 @@ If any corrections were applied in Step 5:
 
 If no corrections were applied (all findings skipped), skip this step.
 
-### Step 7: Convergence Loop (MANDATORY)
+## Phase 6: Convergence Loop
+
+### Step 6.1: Convergence Loop (MANDATORY)
 
 Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Loop".
 
@@ -553,11 +593,13 @@ Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Lo
 Use `ring-default-business-logic-reviewer` for spec validation. The sub-agent receives:
 1. Task spec, reference docs, tasks.md, project rules (re-read fresh)
 2. The findings ledger (for dedup only)
-3. Analysis instructions: cross-reference (Step 1), test gaps (Step 2), observability (Step 3), DoD, ambiguities
+3. Analysis instructions: cross-reference (Step 2.1), test gaps (Step 2.2), observability (Step 2.3), DoD, ambiguities
 
-When the loop exits, proceed to Step 8 (Push).
+When the loop exits, proceed to Phase 7 (Push).
 
-### Step 8: Push Commits (optional)
+## Phase 7: Push Commits
+
+### Step 7.1: Push Commits (optional)
 
 Offer to push commits — see AGENTS.md Protocol: Push Commits.
 
@@ -657,10 +699,10 @@ Components verified: [list each component checked]
 
 ### Dry-Run Mode
 If the user requests a dry-run (e.g., "dry-run spec T-003", "preview spec"):
-- Run ALL analysis phases (Phase 1, Validation Dimensions, Steps 1-3, Step 3.1) normally
-- Present ALL findings in Step 4 (interactive resolution)
-- **Do NOT change task status** — skip Step 1.0.6 (status update)
-- **Do NOT create workspaces** — skip Step 1.0.5 (workspace creation)
-- **Do NOT commit or push anything** — skip Steps 5, 6, 8
+- Run ALL analysis phases (Phase 1, Validation Dimensions, Phase 2) normally
+- Present ALL findings in Phase 3 (interactive resolution)
+- **Do NOT change task status** — skip Step 1.0.5 (status reservation)
+- **Do NOT create workspaces** — skip Step 1.0.6 (workspace creation)
+- **Do NOT commit or push anything** — skip Phases 4, 5, 7
 - **Do NOT run convergence loop** — one pass is sufficient for preview
 - Present results as informational: "what would happen" without side effects

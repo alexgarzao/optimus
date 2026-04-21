@@ -78,13 +78,13 @@ Parse the user's request to determine:
 2. **Which stages:** "all" (1-5), specific range ("stages 1-3"), or "from current" (resume from task's current status)
 
 If the user said "all ready tasks", scan for tasks with status `Pendente` and all
-dependencies `**DONE**`. Prioritize by version (`Ativa` first), then priority, then ID.
+dependencies `DONE`. Prioritize by version (`Ativa` first), then priority, then ID.
 
 ### Step 1.3: Validate Eligibility
 
 For each task:
 1. Check that the task's status allows the requested starting stage
-2. Check that all dependencies are `**DONE**`
+2. Check that all dependencies are `DONE`
 3. If any task is blocked, report it and exclude from the batch
 
 **NOTE:** Eligibility is re-evaluated after each task completes (Step 2.4). Tasks that
@@ -156,7 +156,7 @@ stage to prevent auto-detect from picking the wrong task.
 | 2 | `optimus-build` | "execute T-XXX" (via Skill tool) | Em Andamento |
 | 3 | `optimus-check` | "validate T-XXX" (via Skill tool) | Validando Impl |
 | 4 (optional) | `optimus-pr-check` | "review PR for T-XXX" (via Skill tool) | Revisando PR |
-| 5 | `optimus-done` | "close T-XXX" (via Skill tool) | **DONE** |
+| 5 | `optimus-done` | "close T-XXX" (via Skill tool) | DONE |
 
 **Worktree context switch:** Before invoking stages 2-5, switch to the task's worktree
 directory (from Step 1.5 tracking). Stage-1 may create the worktree — capture its output
@@ -239,8 +239,8 @@ After all tasks are processed (or the user stops):
 ### Completed
 | # | Task | Title | Final Status | Stages Run |
 |---|------|-------|-------------|------------|
-| 1 | T-003 | User auth | **DONE** | 1-5 |
-| 2 | T-004 | Login page | **DONE** | 1-3, 5 |
+| 1 | T-003 | User auth | DONE | 1-5 |
+| 2 | T-004 | Login page | DONE | 1-3, 5 |
 
 ### Stopped / Remaining
 | # | Task | Title | Current Status | Stopped At |

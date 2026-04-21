@@ -127,12 +127,12 @@ When no explicit status exists, infer from available signals:
 
 | Signal | Inferred status |
 |--------|----------------|
-| All checkboxes checked (`- [x]`) | `**DONE**` |
+| All checkboxes checked (`- [x]`) | `DONE` |
 | Some checkboxes checked | `Em Andamento` |
 | No checkboxes checked | `Pendente` |
-| File mentions "completed", "done", "finished" | `**DONE**` |
+| File mentions "completed", "done", "finished" | `DONE` |
 | File mentions "in progress", "working on" | `Em Andamento` |
-| YAML `status: done/completed/closed` | `**DONE**` |
+| YAML `status: done/completed/closed` | `DONE` |
 | YAML `status: in_progress/active/started` | `Em Andamento` |
 | YAML `status: pending/todo/backlog` | `Pendente` |
 | File mentions "cancelled", "abandoned", "won't do" | `Cancelado` |
@@ -238,7 +238,7 @@ Present what was found to the user:
 ### Tasks Extracted
 | ID | Title | Tipo (inferred?) | Status (inferred?) | Dependencies | Version | Estimate | Subtasks |
 |----|-------|-------------------|-------------------|-------------|---------|----------|
-| T-001 | Setup auth module | Feature (default) | **DONE** (inferred from checkboxes) | - | MVP (inferred) | 3 subtasks |
+| T-001 | Setup auth module | Feature (default) | DONE (inferred from checkboxes) | - | MVP (inferred) | 3 subtasks |
 | T-002 | User registration | Feature (default) | Pendente (no status found) | T-001 (explicit) | MVP (default) | - |
 | T-003 | Login page | Feature (default) | Pendente (no status found) | T-001 (inferred) | MVP (default) | 2 subtasks |
 | ... | ... | ... | ... | ... | ... | ... |
@@ -277,7 +277,7 @@ Generate the complete `tasks.md` in optimus format and present it to the user:
 ### Table
 | ID | Title | Tipo | Status | Depends | Priority | Version | Branch |
 |----|-------|------|--------|---------|----------|---------|--------|
-| T-001 | Setup auth module | Feature | **DONE** | - | Alta | MVP | - |
+| T-001 | Setup auth module | Feature | DONE | - | Alta | MVP | - |
 | T-002 | User registration | Feature | Pendente | T-001 | Alta | MVP | - |
 | ... | ... | ... | ... | ... | ... | ... | ... |
 

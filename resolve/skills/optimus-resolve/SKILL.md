@@ -115,7 +115,7 @@ For tasks that appear on BOTH sides with different values, proceed to Phase 2.
 The status lifecycle defines a strict ordering from least to most advanced:
 
 ```
-Pendente < Validando Spec < Em Andamento < Validando Impl < Revisando PR < **DONE**
+Pendente < Validando Spec < Em Andamento < Validando Impl < Revisando PR < DONE
 ```
 
 `Cancelado` is a terminal status — it is NOT "more advanced" than any status. It is
@@ -187,7 +187,7 @@ For `## T-NNN:` detail sections that conflict:
 | ID | Current Status | Incoming Status | Resolved To | Reason |
 |----|---------------|-----------------|-------------|--------|
 | T-003 | Pendente | Em Andamento | Em Andamento | More advanced status |
-| T-005 | Em Andamento | **DONE** | **DONE** | More advanced status |
+| T-005 | Em Andamento | DONE | DONE | More advanced status |
 
 ### Needs User Decision
 | ID | Current | Incoming | Conflict |

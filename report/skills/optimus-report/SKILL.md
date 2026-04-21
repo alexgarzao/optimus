@@ -114,7 +114,7 @@ Read `tasks.md` and extract the markdown table. Expected columns:
 | ID | Task identifier (e.g., T-001) |
 | Title | Short description |
 | Tipo | Task type: Feature, Fix, Refactor, Chore, Docs, or Test |
-| Status | Current status (Pendente, Validando Spec, Em Andamento, Validando Impl, Revisando PR, **DONE**, Cancelado) |
+| Status | Current status (Pendente, Validando Spec, Em Andamento, Validando Impl, Revisando PR, DONE, Cancelado) |
 | Depends | Comma-separated dependency IDs, or `-` for none |
 | Priority | Alta, Media, or Baixa |
 | Version | Version/milestone this task belongs to |
@@ -145,7 +145,7 @@ If the user's invocation matches quick status triggers ("quick status", "what am
 "current task", "status rápido"):
 
 1. Parse tasks.md (Phase 1 still runs fully)
-2. Find tasks with status other than `Pendente`, `**DONE**`, and `Cancelado` (active tasks)
+2. Find tasks with status other than `Pendente`, `DONE`, and `Cancelado` (active tasks)
 3. For each active task, read its detail section and count checked vs total acceptance criteria
 4. Present ONLY:
 
@@ -166,24 +166,24 @@ If the invocation does NOT match quick status triggers, proceed to Phase 3 norma
 Classify each task into one of these categories:
 
 ### Done
-Status is `**DONE**`.
+Status is `DONE`.
 
 ### Cancelled
 Status is `Cancelado`. These tasks were abandoned and will not be implemented.
 Show in a separate section — do NOT count them in progress calculations.
 
 ### Active
-Status is anything other than `Pendente`, `**DONE**`, or `Cancelado`:
+Status is anything other than `Pendente`, `DONE`, or `Cancelado`:
 - `Validando Spec` (plan running)
 - `Em Andamento` (build running)
 - `Validando Impl` (check running)
 - `Revisando PR` (pr-check running)
 
 ### Ready to Start
-Status is `Pendente` AND all dependencies are `**DONE**` (or no dependencies).
+Status is `Pendente` AND all dependencies are `DONE` (or no dependencies).
 
 ### Blocked
-Status is `Pendente` AND at least one dependency is NOT `**DONE**` or is `Cancelado`.
+Status is `Pendente` AND at least one dependency is NOT `DONE` or is `Cancelado`.
 Record which dependencies are blocking (note if a blocker is `Cancelado` — the dependency
 should be removed or replaced).
 
@@ -260,7 +260,7 @@ For trees with depth > 3 levels, simplify by showing only the critical path and 
 ## Phase 7: Identify Parallelization Opportunities
 
 ### Currently Parallelizable
-Tasks that are `Pendente` with all dependencies `**DONE**`. These can ALL start right now, in parallel.
+Tasks that are `Pendente` with all dependencies `DONE`. These can ALL start right now, in parallel.
 
 ### Next Wave
 For each active task, identify which blocked tasks it would unlock when completed.
@@ -508,7 +508,7 @@ For each worktree (excluding the main repository entry):
 3. Check the task's Status
 
 Flag worktrees as potentially orphaned if:
-- The task is `**DONE**` — worktree should have been cleaned up by done
+- The task is `DONE` — worktree should have been cleaned up by done
 - The task is `Cancelado` — worktree should have been cleaned up by tasks cancel
 - The task is `Pendente` — worktree exists but task was never started or was reset
 - No matching task found — worktree has no corresponding task in tasks.md
@@ -520,7 +520,7 @@ Flag worktrees as potentially orphaned if:
 │ Active worktrees: N                              │
 │                                                  │
 │ ⚠ Potentially orphaned:                         │
-│   /path/to/wt-t-003  →  T-003 (**DONE**)        │
+│   /path/to/wt-t-003  →  T-003 (DONE)        │
 │   /path/to/wt-t-007  →  T-007 (Cancelado)       │
 │   /path/to/wt-unknown →  no matching task        │
 │                                                  │

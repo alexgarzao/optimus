@@ -23,7 +23,7 @@ Skills are classified as **Administrative** (run anywhere) or **Execution** (req
 Stage-1 creates the workspace (worktree). Stages 2-5 auto-navigate to the task's worktree.
 
 ```
-Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando PR] → **DONE**
+Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando PR] → DONE
            (plan)            (build)         (check)          (pr-check)      (done)
 ```
 

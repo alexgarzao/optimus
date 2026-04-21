@@ -92,7 +92,7 @@ Resolve workspace — see AGENTS.md Protocol: Workspace Auto-Navigation. Branch-
 
 ### Step 1.0.2.1: Check Session State
 
-Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`done`, status=`**DONE**`.
+Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`done`, status=`DONE`.
 
 **On marking DONE** (Phase 3): delete the session file.
 
@@ -107,22 +107,22 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. It must go through plan, build, and check first."
    - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run build and check first."
    - If status is `Em Andamento` → **STOP**: "Task T-XXX is in 'Em Andamento'. Run check first."
-   - If status is `**DONE**` → **STOP**: "Task T-XXX is already done. Re-execution of done is not supported."
+   - If status is `DONE` → **STOP**: "Task T-XXX is already done. Re-execution of done is not supported."
    - If status is `Cancelado` → **STOP**: "Task T-XXX was cancelled. Cannot close a cancelled task."
 3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:
-     - If ALL dependencies have status `**DONE**` → proceed
-     - If ANY dependency is NOT `**DONE**`:
+     - If ALL dependencies have status `DONE` → proceed
+     - If ANY dependency is NOT `DONE`:
        - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
        - If the dependency has status `Cancelado` → **STOP**: `"T-YYY was cancelled (Cancelado). Consider removing this dependency via /optimus-tasks."`
-       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first."`
+       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be DONE first."`
 4. **Expanded confirmation before status change:**
    - **If the user did NOT specify the task ID explicitly** (auto-detect):
      - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
      - Present to the user via `AskUser`:
        ```
-       I'm about to close task T-XXX and mark it as **DONE** (from '<current>').
+       I'm about to close task T-XXX and mark it as DONE (from '<current>').
 
        **T-XXX: [title]**
        **Version:** [version from table]
@@ -138,7 +138,7 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
    - **If the user specified the task ID explicitly** (e.g., "close T-012"):
      - Skip expanded confirmation (user already has context)
 
-   **NOTE:** done does not support re-execution (status always changes to `**DONE**`), so the re-execution skip does not apply here.
+   **NOTE:** done does not support re-execution (status always changes to `DONE`), so the re-execution skip does not apply here.
 
 ### Step 1.2: Check tasks.md Divergence (warning)
 
@@ -329,11 +329,11 @@ make test-e2e
 
 **Verdict: READY TO CLOSE**
 
-All prerequisites met. Marking task as **DONE**.
+All prerequisites met. Marking task as DONE.
 ```
 
 Then:
-1. Update the Status column in `tasks.md` to `**DONE**` (from either `Validando Impl` or `Revisando PR`)
+1. Update the Status column in `tasks.md` to `DONE` (from either `Validando Impl` or `Revisando PR`)
 2. Commit: `chore(tasks): mark T-XXX as done`
 3. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
 4. Invoke notification hooks (event=`task-done`) — see AGENTS.md Protocol: Notification Hooks.
@@ -402,7 +402,7 @@ to mark as DONE. If any still fail, report the remaining failures.
 
 ## Phase 4: Cleanup (after marking DONE)
 
-This phase runs ONLY after the task has been marked as `**DONE**`. It checks for leftover
+This phase runs ONLY after the task has been marked as `DONE`. It checks for leftover
 resources and asks the user what to do. The agent NEVER cleans up automatically.
 
 ### Step 4.1: Check for Task Worktree
@@ -469,7 +469,7 @@ NOT be present on the default branch. Before closing, the agent MUST:
    - Offer resolution via `AskUser`:
      - **Resolve manually** — open tasks.md, show the conflict markers, let user fix
      - **Apply status directly** — instead of cherry-pick, read the current tasks.md on
-       the default branch, find the row for T-XXX, update its Status to `**DONE**`, commit
+       the default branch, find the row for T-XXX, update its Status to `DONE`, commit
        and push. This bypasses the cherry-pick entirely.
      - **Skip** — close the PR without preserving status. User will update tasks.md manually.
    - **BLOCKING:** Do NOT proceed until the conflict is resolved or the user chooses to skip.
@@ -591,7 +591,7 @@ If the user requests a force close (e.g., "force close T-012", "force done T-012
   Type the task ID to confirm: T-XXX
   ```
   The user must type the exact task ID (not just "yes") to prevent accidental force-closes.
-- **If confirmed:** mark as `**DONE**`, commit, push, then run cleanup (Phase 4) normally
+- **If confirmed:** mark as `DONE`, commit, push, then run cleanup (Phase 4) normally
 - **Commit message:** `chore(tasks): force-close T-XXX as done (checklist skipped)`
 - **NOTE:** Force-close still validates task status (Step 1.1) and dependencies — it only
   skips the quality/git checks in Phase 2

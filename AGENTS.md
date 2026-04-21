@@ -180,7 +180,7 @@ suggests running `/optimus-migrate`.
 
 | ID | Title | Tipo | Status | Depends | Priority | Version | Branch | Estimate |
 |----|-------|------|--------|---------|----------|---------|--------|----------|
-| T-001 | Setup auth module | Feature | **DONE** | - | Alta | MVP | - | S |
+| T-001 | Setup auth module | Feature | DONE | - | Alta | MVP | - | S |
 | T-002 | User registration API | Feature | Em Andamento | T-001 | Alta | MVP | feat/t-002-user-registration | M |
 | T-003 | Login page | Feature | Pendente | T-001 | Alta | MVP | - | M |
 | T-004 | Password reset flow | Fix | Pendente | T-002, T-003 | Media | v2 | fix/t-004-password-reset | L |
@@ -286,11 +286,11 @@ Examples: `chore(tasks): start T-003 — set status to Validando Spec`,
 | `Em Andamento` | build | Implementation in progress |
 | `Validando Impl` | check | Implementation being reviewed |
 | `Revisando PR` | pr-check | PR being reviewed (optional stage) |
-| `**DONE**` | done | Completed |
+| `DONE` | done | Completed |
 | `Cancelado` | tasks | Task abandoned, will not be implemented |
 
 **Administrative status operations** (managed by tasks, not by stage agents):
-- **Reopen:** `**DONE**` → `Pendente` (if branch deleted) or `Em Andamento` (if branch exists) — when a bug is found after close. Also accepts `Cancelado` → `Pendente` — when a cancellation decision is reversed.
+- **Reopen:** `DONE` → `Pendente` (if branch deleted) or `Em Andamento` (if branch exists) — when a bug is found after close. Also accepts `Cancelado` → `Pendente` — when a cancellation decision is reversed.
 - **Advance:** move forward one stage — when work was done manually outside the pipeline
 - **Demote:** move backward one stage — when rework is needed after review
 - **Cancel:** any non-terminal → `Cancelado` — task will not be implemented
@@ -300,12 +300,12 @@ in the commit message for audit trail.
 
 ### Dependency Rules
 
-1. **A task can only start if ALL its dependencies are `**DONE**`**. If any dependency
+1. **A task can only start if ALL its dependencies are `DONE`**. If any dependency
    is not done, the task is BLOCKED. `Cancelado` does NOT satisfy dependencies —
    if a dependency is cancelled, the dependent task is blocked until the dependency
    is removed or replaced.
 2. **Dependencies are by task ID**, not by status. `Depends: T-001, T-003` means
-   both T-001 AND T-003 must be `**DONE**` before this task can start.
+   both T-001 AND T-003 must be `DONE` before this task can start.
 3. **`-` means no dependencies** — the task can start immediately.
 4. **Circular dependencies are invalid** — agents must detect and refuse them.
 5. **The execution order is determined by dependencies + status**, NOT by the order
@@ -361,7 +361,7 @@ The `## Versions` section in tasks.md is **mandatory** and defines the available
 2. **Version does NOT block execution** — a task in `Futuro` can be executed if the user wants.
    The version is organizational, not a gate.
 3. **Cross-version dependencies are allowed** — T-003 (v2) can depend on T-001 (MVP).
-   The dependency system already validates that dependencies are `**DONE**`.
+   The dependency system already validates that dependencies are `DONE`.
 4. **Moving tasks between versions** does not alter Status, Branch, Depends, or any other field.
 5. **Tasks keep their version when DONE** — they are not moved automatically.
 6. **Version lifecycle is manual** — the user changes version status via `tasks`.
@@ -382,7 +382,7 @@ Every stage agent (1-5) MUST validate the tasks.md format before operating:
 6. A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch, Estimate (Estimate is optional — tables without it are still valid)
 7. All task IDs follow the `T-NNN` pattern
 8. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
-9. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `**DONE**`, `Cancelado`
+9. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `DONE`, `Cancelado`
 10. All Depends values are either `-` or comma-separated valid task IDs
 11. All Priority values are one of: `Alta`, `Media`, `Baixa`
 12. All Version values reference a version name that exists in the Versions table
@@ -411,7 +411,7 @@ Tasks flow through 5 stages (pr-check is optional). Status lives in `tasks.md`
 (the markdown table in the target project). Each stage is a separate skill.
 
 ```
-Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando PR] → **DONE**
+Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando PR] → DONE
            (plan)   (build)  (check)  (pr-check)  (done)
                                                                [optional]
 
@@ -434,9 +434,9 @@ Any status → Cancelado  (via tasks cancel operation)
    `Em Andamento` (its own status) as well as `Validando Spec` (its predecessor).
    This allows the user to re-run a stage without resetting status.
    **Exception:** done does NOT support re-execution — once a task is
-   `**DONE**`, it cannot be re-closed.
+   `DONE`, it cannot be re-closed.
 6. **Dependency check** — every agent verifies that ALL dependencies (Depends column)
-   have status `**DONE**` before proceeding. If any dependency is not done, the agent
+   have status `DONE` before proceeding. If any dependency is not done, the agent
    fires the `task-blocked` hook (if configured) and then refuses with a clear message
    identifying which dependency is blocking. **If the blocking dependency has status
    `Cancelado`**, the message must differentiate: "T-YYY was cancelled (Cancelado).
@@ -469,7 +469,7 @@ Any status → Cancelado  (via tasks cancel operation)
    | Admin | report | Yes | Read-only, no modifications |
    | Admin | quick-report | Yes | Read-only, no modifications |
    | Admin | tasks | Yes | Only creates/edits/removes tasks in tasks.md |
-   | Execution | plan | Yes (creates worktree) | Always creates worktree on default branch, then works there |
+   | Execution | plan | Yes (reserves + creates worktree) | Reserves task (status + branch) on default branch, then creates worktree |
    | Execution | build | Yes (auto-navigates) | Finds task worktree and navigates to it |
    | Execution | check | Yes (auto-navigates) | Finds task worktree and navigates to it |
    | Execution | pr-check | Yes (auto-navigates) | Finds task worktree and navigates to it |
@@ -481,7 +481,9 @@ Any status → Cancelado  (via tasks cancel operation)
    and can run on any branch.
 
    **Execution skills** modify code or run verification. They require a feature branch
-   (workspace). Stage-1 always creates a worktree when invoked on the default branch.
+   (workspace). Stage-1 reserves the task on the default branch (updates Status and Branch
+   in tasks.md, commits and pushes best-effort) BEFORE creating the worktree — this prevents
+   race conditions where another agent picks the same task.
    Stages 2-5 auto-navigate to the task's worktree when invoked on the default branch
    (see Protocol: Workspace Auto-Navigation).
 
@@ -504,7 +506,7 @@ Any status → Cancelado  (via tasks cancel operation)
 | build | `Validando Spec` or `Em Andamento` | `Em Andamento` | Yes (accepts own status) |
 | check | `Em Andamento` or `Validando Impl` | `Validando Impl` | Yes (accepts own status) |
 | pr-check | `Validando Impl` or `Revisando PR` | `Revisando PR` | Yes (accepts own status) |
-| done | `Validando Impl` or `Revisando PR` | `**DONE**` | No (final stage) |
+| done | `Validando Impl` or `Revisando PR` | `DONE` | No (final stage) |
 
 **NOTE:** `Cancelado` is a terminal status. No stage agent accepts it — all stages refuse
 tasks with status `Cancelado`. Cancellation is managed exclusively by `tasks`.

@@ -121,11 +121,11 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
 4. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:
-     - If ALL dependencies have status `**DONE**` → proceed
-     - If ANY dependency is NOT `**DONE**`:
+     - If ALL dependencies have status `DONE` → proceed
+     - If ANY dependency is NOT `DONE`:
        - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
        - If the dependency has status `Cancelado` → **STOP**: `"T-YYY was cancelled (Cancelado). Consider removing this dependency via /optimus-tasks."`
-       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first."`
+       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be DONE first."`
 4.1. **Check session state:** Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`pr-check`, status=`Revisando PR`.
 
    **On stage completion** (after Phase 14 final summary): delete the session file.

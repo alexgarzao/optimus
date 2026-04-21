@@ -67,7 +67,7 @@ Check the first line for `<!-- optimus:tasks-v1 -->`. If missing, warn but attem
 
 ### Step 1.3: Parse Criteria Progress
 
-For each task with status other than `Pendente`, `**DONE**`, and `Cancelado`:
+For each task with status other than `Pendente`, `DONE`, and `Cancelado`:
 1. Find the detail section (`## T-NNN: Title`)
 2. Count total checkboxes (`- [ ]` + `- [x]`)
 3. Count checked checkboxes (`- [x]`)
@@ -79,11 +79,11 @@ For each task with status other than `Pendente`, `**DONE**`, and `Cancelado`:
 
 For each task:
 
-- **Done:** Status is `**DONE**`
+- **Done:** Status is `DONE`
 - **Cancelled:** Status is `Cancelado`
 - **Active:** Status is `Validando Spec`, `Em Andamento`, `Validando Impl`, or `Revisando PR`
-- **Ready:** Status is `Pendente` AND all dependencies are `**DONE**` (or Depends is `-`)
-- **Blocked:** Status is `Pendente` AND at least one dependency is NOT `**DONE**`
+- **Ready:** Status is `Pendente` AND all dependencies are `DONE` (or Depends is `-`)
+- **Blocked:** Status is `Pendente` AND at least one dependency is NOT `DONE`
 
 ---
 

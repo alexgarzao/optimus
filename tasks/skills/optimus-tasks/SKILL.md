@@ -448,7 +448,7 @@ Show the new table order.
 
 ### Step 6.1: Validate Cancellation
 
-1. **If status is `**DONE**`** → **STOP**: "Task T-XXX is already done. Cannot cancel a completed task."
+1. **If status is `DONE`** → **STOP**: "Task T-XXX is already done. Cannot cancel a completed task."
 2. **If status is `Cancelado`** → **STOP**: "Task T-XXX is already cancelled."
 3. **Check for dependents:** Scan the Depends column of ALL tasks for references to T-XXX.
    If any non-cancelled task depends on T-XXX, warn via `AskUser`:
@@ -561,11 +561,11 @@ To resolve, run `/optimus-tasks`:
 
 ### Step 7.1: Validate Reopen
 
-1. **If status is NOT `**DONE**` and NOT `Cancelado`** → **STOP**: "Task T-XXX is in status '<status>'. Only completed or cancelled tasks can be reopened."
+1. **If status is NOT `DONE` and NOT `Cancelado`** → **STOP**: "Task T-XXX is in status '<status>'. Only completed or cancelled tasks can be reopened."
 2. **Determine target status based on current status and workspace availability:**
    - **If reopening from `Cancelado`:** Target status is always `Pendente` (task must restart
      from the beginning via plan).
-   - **If reopening from `**DONE**`:**
+   - **If reopening from `DONE`:**
      - Read the **Branch** column for this task
      - If Branch is NOT `-` AND the branch exists locally (`git branch --list "<branch>"`):
        - Target status: `Em Andamento` (workspace exists, can resume implementation)
@@ -573,12 +573,12 @@ To resolve, run `/optimus-tasks`:
        - Target status: `Pendente` (workspace must be recreated via plan)
 3. Warn via `AskUser`:
    ```
-   Task T-XXX is marked as **DONE**. Reopening will set it to '<target status>'.
+   Task T-XXX is marked as DONE. Reopening will set it to '<target status>'.
 
    **T-XXX: [title]**
    **Version:** [version]
    **Branch:** [branch value or "deleted"]
-   **Previous status:** [**DONE** or Cancelado]
+   **Previous status:** [DONE or Cancelado]
    **Target status:** <target status>
    **Reason:** <see below>
 
@@ -608,7 +608,7 @@ To resolve, run `/optimus-tasks`:
 ### Step 7.2: Apply Reopen
 
 1. Update the **Status** column to the target status determined in Step 7.1:
-   - From `**DONE**`: `Em Andamento` if workspace exists, `Pendente` if not
+   - From `DONE`: `Em Andamento` if workspace exists, `Pendente` if not
    - From `Cancelado`: always `Pendente` (must restart from stage-1)
 2. If reopening from `Cancelado`, also clear the **Branch** column to `-` (any previous
    branch is stale and should not be reused)
@@ -617,7 +617,7 @@ To resolve, run `/optimus-tasks`:
    ```bash
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-     "$HOOKS_FILE" status-change T-XXX "**DONE**" "<target status>" 2>/dev/null &
+     "$HOOKS_FILE" status-change T-XXX "DONE" "<target status>" 2>/dev/null &
    fi
    ```
 
@@ -625,7 +625,7 @@ To resolve, run `/optimus-tasks`:
 
 ```
 Reopened task T-XXX: <title>
-  Previous status: [**DONE** | Cancelado]
+  Previous status: [DONE | Cancelado]
   New status: <target status>
   Reason: <user's reason>
   Next step: [run /optimus-plan | switch to branch and run /optimus-build]
@@ -653,16 +653,16 @@ code manually without using stage-2).
    | `Em Andamento` | `Validando Impl` |
    | `Validando Impl` | `Revisando PR` |
    | `Revisando PR` | (use done to mark DONE) |
-   | `**DONE**` | (use Reopen instead) |
+   | `DONE` | (use Reopen instead) |
    | `Cancelado` | (use Reopen or create new task) |
 
 ### Step 8.1: Validate Advance
 
-1. **If status is `**DONE**` or `Cancelado`** → **STOP**: "Task T-XXX is in terminal status '<status>'. Use 'reopen' for DONE tasks."
-1b. **If target status is `**DONE**`** → **STOP**: "Cannot advance to DONE manually. Use `/optimus-done` which runs the verification checklist."
+1. **If status is `DONE` or `Cancelado`** → **STOP**: "Task T-XXX is in terminal status '<status>'. Use 'reopen' for DONE tasks."
+1b. **If target status is `DONE`** → **STOP**: "Cannot advance to DONE manually. Use `/optimus-done` which runs the verification checklist."
 1c. **If target status is `Cancelado`** → **STOP**: "Cannot advance to Cancelado. Use the cancel operation (`cancel T-XXX`) which handles cleanup."
 1d. **If current status is `Revisando PR` and no target was specified** → **STOP**: "Task T-XXX is in 'Revisando PR'. The next step is `/optimus-done`, not manual advance."
-2. **Check dependencies (HARD BLOCK):** same rules as stage agents — all dependencies must be `**DONE**`.
+2. **Check dependencies (HARD BLOCK):** same rules as stage agents — all dependencies must be `DONE`.
 3. **Workspace check (warning):** If the target status is `Em Andamento` or later, verify
    that a workspace exists for this task:
    - Read the Branch column for the task
@@ -724,13 +724,13 @@ that significant rework is needed and the task should go back to implementation)
    | `Validando Impl` | `Em Andamento` |
    | `Revisando PR` | `Validando Impl` |
    | `Pendente` | (already at start) |
-   | `**DONE**` | (use Reopen instead) |
+   | `DONE` | (use Reopen instead) |
    | `Cancelado` | (terminal, cannot demote) |
 
 ### Step 9.1: Validate Demotion
 
 1. **If status is `Pendente`** → **STOP**: "Task T-XXX is already at the initial status."
-2. **If status is `**DONE**` or `Cancelado`** → **STOP**: "Task T-XXX is in terminal status '<status>'. Use 'reopen' for DONE tasks."
+2. **If status is `DONE` or `Cancelado`** → **STOP**: "Task T-XXX is in terminal status '<status>'. Use 'reopen' for DONE tasks."
 3. Require justification via `AskUser`:
    ```
    You are demoting task T-XXX status backward.
@@ -815,7 +815,7 @@ Editable fields:
   "Version '<existing>' is currently Próxima. Change it to Planejada and set '<name>' as Próxima?"
 - If setting to `Concluída` → check tasks in this version:
   - Classify non-DONE tasks into two groups:
-    - **In progress:** tasks with status other than `**DONE**` or `Cancelado` (e.g., Pendente, Em Andamento, etc.)
+    - **In progress:** tasks with status other than `DONE` or `Cancelado` (e.g., Pendente, Em Andamento, etc.)
     - **Cancelled:** tasks with status `Cancelado`
   - If no in-progress AND no cancelled → proceed (all DONE)
   - If no in-progress BUT some cancelled → softer warning via `AskUser`:

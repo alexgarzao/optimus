@@ -141,15 +141,15 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
    - If status is `Validando Impl` → proceed (re-execution of this stage)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run plan and build first."
    - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run build first."
-   - If status is `Revisando PR`, `**DONE**`, or `Cancelado` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage or was cancelled."
+   - If status is `Revisando PR`, `DONE`, or `Cancelado` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage or was cancelled."
 3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:
-     - If ALL dependencies have status `**DONE**` → proceed
-     - If ANY dependency is NOT `**DONE**`:
+     - If ALL dependencies have status `DONE` → proceed
+     - If ANY dependency is NOT `DONE`:
        - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
        - If the dependency has status `Cancelado` → **STOP**: `"T-YYY was cancelled (Cancelado). Consider removing this dependency via /optimus-tasks."`
-       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be **DONE** first."`
+       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be DONE first."`
 4. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Validando Impl`) AND the user did NOT specify the task ID explicitly (auto-detect):
      - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
