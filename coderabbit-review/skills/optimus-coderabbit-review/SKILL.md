@@ -110,14 +110,19 @@ the same interactive resolution flow from Phase 3 onward.
 ### Step 1.3: Load Project Context
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
-2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, unit test, integration test, and E2E test commands
+2. **Identify test commands:** Check `.optimus.json` for custom commands first. If found, use configured commands (empty string means skip). Fall back to `Makefile`, `package.json` scripts, or CI config.
 3. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
 
 Store discovered commands:
-```
-LINT_CMD=<discovered lint command>
-TEST_UNIT_CMD=<discovered unit test command>
-TEST_INTEGRATION_CMD=<discovered integration test command>
+```bash
+CONFIG_FILE=".optimus.json"
+if [ -f "$CONFIG_FILE" ]; then
+  LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_UNIT_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
+fi
+LINT_CMD="${LINT_CMD:-make lint}"
+TEST_UNIT_CMD="${TEST_UNIT_CMD:-make test}"
 ```
 
 ---
@@ -342,9 +347,9 @@ After all findings have been processed through the TDD cycle:
 
 ### Step 5.1: Lint + Coverage Measurement
 
-**Run lint ONCE** after all fixes are applied:
+**Run lint ONCE** after all fixes are applied, using the resolved command from Step 1.3:
 ```bash
-make lint
+$LINT_CMD   # from .optimus.json, or fallback: make lint
 ```
 If lint fails, fix formatting issues and re-run.
 

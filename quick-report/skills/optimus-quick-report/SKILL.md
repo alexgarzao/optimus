@@ -208,9 +208,9 @@ Examples: `[█░░░░] 1/5`, `[██░░░] 2/5`, `[███░░] 3
 
 5. **Blocked tasks** render dependencies as a tree using box-drawing characters.
    Each dependency appears on its own line with the appropriate status indicator symbol
-   (`⚙` active, `◇` pending, `✓` done, `⊘` blocked, `—` cancelled).
+   (`⚙` active, `◇` pending, `✓` done, `⊘` blocked, `✗` cancelled).
    Use `├──` for intermediate dependencies and `└──` for the last one.
-   If a blocker has status `Cancelado`, show as `[— Cancelado — remove dep via /optimus-tasks]`.
+   If a blocker has status `Cancelado`, show as `[✗ Cancelado — remove dep via /optimus-tasks]`.
    If a dependency is from another version, append the version: `[⚙ Em Andamento, v2]`.
    Example with multiple blockers:
    ```

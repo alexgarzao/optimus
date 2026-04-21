@@ -219,10 +219,10 @@ go tool cover -func=coverage-unit.out | grep -v "total:" | awk '{print $NF, $1}'
 **Node.js/Python:** Parse per-file coverage from the coverage report output.
 
 Flag files/packages below thresholds:
-- **CRITICAL:** 0% coverage (completely untested code)
-- **HIGH:** < 50% coverage
+- **HIGH:** 0% coverage on business logic (handlers, services, domain)
 - **MEDIUM:** < 70% coverage
 - **LOW:** < 85% coverage
+- **SKIP:** 0% coverage on infrastructure/generated code (config, bootstrap, mocks)
 
 ### Step 4.3: Identify Untested Functions
 
@@ -234,8 +234,8 @@ go tool cover -func=coverage-unit.out | grep "0.0%"
 
 For each untested function, classify:
 - **Business logic** (handlers, services, domain) → HIGH priority gap
-- **Infrastructure** (config, bootstrap, wiring) → MEDIUM priority gap
-- **Generated code** (mocks, protobuf) → can be excluded
+- **Infrastructure** (config, bootstrap, wiring) → SKIP (can be excluded)
+- **Generated code** (mocks, protobuf) → SKIP (can be excluded)
 
 ### Step 4.4: Coverage Summary
 

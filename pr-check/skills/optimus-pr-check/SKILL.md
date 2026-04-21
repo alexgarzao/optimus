@@ -529,16 +529,21 @@ Read the full content of each changed file for the review agents.
 ### Step 3.1: Discover Project Context
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
-2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config
+2. **Identify test commands:** Check `.optimus.json` for custom commands first. If found, use configured commands (empty string means skip). Fall back to `Makefile`, `package.json` scripts, or CI config.
 3. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
 4. **Identify reference docs:** Look for PRD, TRD, API design
 
 Store discovered commands:
-```
-LINT_CMD=<discovered lint command>
-TEST_UNIT_CMD=<discovered unit test command>
-TEST_INTEGRATION_CMD=<discovered integration test command>
-TEST_E2E_CMD=<discovered E2E test command>
+```bash
+CONFIG_FILE=".optimus.json"
+if [ -f "$CONFIG_FILE" ]; then
+  LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_UNIT_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
+fi
+LINT_CMD="${LINT_CMD:-make lint}"
+TEST_UNIT_CMD="${TEST_UNIT_CMD:-make test}"
 ```
 
 ### Step 3.2: Dispatch Agents
@@ -866,9 +871,9 @@ After each successful TDD cycle:
 
 ### Step 8.4.1: Final Lint Check
 
-**After ALL fixes are committed**, run lint once:
+**After ALL fixes are committed**, run lint once using the resolved command from Step 3.1:
 ```bash
-make lint
+$LINT_CMD   # from .optimus.json, or fallback: make lint
 ```
 If lint fails, fix formatting issues, amend the last commit or create a `chore: fix lint` commit.
 
@@ -1354,7 +1359,7 @@ gh api graphql -f query='
   "PR review complete. Next step: run `/optimus-done` to close this task."
 
 ### Dry-Run Mode
-If the user requests a dry-run (e.g., "dry-run pr-review", "preview PR review"):
+If the user requests a dry-run (e.g., "dry-run pr-check", "preview PR review"):
 - Fetch ALL PR data normally (Phase 1)
 - Dispatch ALL review agents (Phase 3) and consolidate (Phase 4)
 - Present ALL findings in Phase 6 (interactive resolution)

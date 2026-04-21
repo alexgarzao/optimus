@@ -102,7 +102,7 @@ Read `.optimus.json` for configured path, fallback to `docs/tasks.md`.
 for any file named `tasks.md`:
 
 ```bash
-find . -name tasks.md -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null
+find . -name tasks.md ! -path '*/node_modules/*' ! -path '*/.git/*' 2>/dev/null
 ```
 
 For each file found, check the first line for the optimus format marker

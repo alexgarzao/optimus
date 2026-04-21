@@ -555,7 +555,7 @@ Any status → Cancelado  (via tasks cancel operation)
 tasks with status `Cancelado`. Cancellation is managed exclusively by `tasks`.
 
 **NOTE:** pr-check is optional. done accepts both `Validando Impl`
-(if pr-review was skipped) and `Revisando PR` (if pr-review ran).
+(if pr-check was skipped) and `Revisando PR` (if pr-check ran).
 
 **NOTE:** pr-check also works in standalone mode (without a task). In standalone
 mode, it skips all task status logic. See its SKILL.md for detection rules.
@@ -1053,6 +1053,7 @@ Location: `.optimus.json` (project root, versioned)
     "test": "npm test",
     "test-integration": "npm run test:integration",
     "test-e2e": "npx playwright test",
+    "test-coverage": "npm test -- --coverage",
     "format-check": "npx prettier --check .",
     "typecheck": "npx tsc --noEmit"
   }
@@ -1062,7 +1063,7 @@ Location: `.optimus.json` (project root, versioned)
 ### Behavior
 
 All skills that run verification commands (verify, done, build,
-check) MUST check for `.optimus.json` BEFORE auto-detecting
+check, pr-check, coderabbit-review) MUST check for `.optimus.json` BEFORE auto-detecting
 commands. If the config file exists, use its commands instead of auto-detection.
 
 If a command key is missing from the config, fall back to auto-detection for that command.
