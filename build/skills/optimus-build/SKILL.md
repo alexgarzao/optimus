@@ -141,10 +141,9 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 
        **T-XXX: [title]**
        **Version:** [version from table]
-       **Objetivo:** [objective from docs/tasks/T-XXX.md]
-       **Critérios de Aceite:**
-       - [ ] [criterion 1]
-       - [ ] [criterion 2]
+       **Progresso:**
+       - [ ] [item 1]
+       - [ ] [item 2]
        ...
 
        Confirm status change?

@@ -153,7 +153,7 @@ path using this priority:
 }
 ```
 
-**Task detail files** (objectives, acceptance criteria) are stored as individual files
+**Task overlay files** (progress tracking, Ring source links) are stored as individual files
 in a `tasks/` directory **derived from the tasksFile path**:
 
 ```
@@ -216,13 +216,15 @@ suggests running `/optimus-import`.
 | T-005 | E2E auth tests | Test | Pendente | T-002, T-003 | Media | MVP | - | S |
 ```
 
-**docs/tasks/T-001.md** (individual detail file):
+**docs/tasks/T-001.md** (overlay file):
 ```markdown
 # T-001: Setup auth module
 
-**Objetivo:** Configurar o módulo de autenticação...
+## Fonte
+**Task spec:** `docs/pre-dev/tasks/task_001.md`
+**Subtasks:** `docs/pre-dev/subtasks/T-001/`
 
-**Critérios de Aceite:**
+## Progresso
 - [x] JWT middleware configurado
 - [x] Testes unitários passando
 ```
@@ -231,9 +233,10 @@ suggests running `/optimus-import`.
 ```markdown
 # T-002: User registration API
 
-**Objetivo:** ...
+## Fonte
+**Task spec:** `docs/pre-dev/tasks/task_002.md`
 
-**Critérios de Aceite:**
+## Progresso
 - [ ] Endpoint POST /api/users
 - [ ] Validação de email
 ```
@@ -503,9 +506,9 @@ Any status → Cancelado  (via tasks cancel operation)
    Consider removing this dependency via `/optimus-tasks`." This helps the user
    understand the blocker requires a dependency edit, not waiting for completion.
 7. **Expanded confirmation on status change** — when a stage agent is about to change
-   a task's status, it shows the task description (from `docs/tasks/T-NNN.md`: Objetivo + Critérios de Aceite) and
-   asks for explicit confirmation via `AskUser`. This prevents accidental status changes
-   on the wrong task, especially during auto-detect.
+   a task's status, it shows the task summary (title, version, and Progresso from
+   `docs/tasks/T-NNN.md`) and asks for explicit confirmation via `AskUser`. This
+   prevents accidental status changes on the wrong task, especially during auto-detect.
 
    **Show expanded confirmation when:**
    - The status will actually change (not re-execution), AND

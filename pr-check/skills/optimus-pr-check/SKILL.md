@@ -133,10 +133,9 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
 
        **T-XXX: [title]**
        **Version:** [version from table]
-       **Objetivo:** [objective from docs/tasks/T-XXX.md]
-       **Critérios de Aceite:**
-       - [ ] [criterion 1]
-       - [ ] [criterion 2]
+       **Progresso:**
+       - [ ] [item 1]
+       - [ ] [item 2]
        ...
 
        Confirm status change?
@@ -195,7 +194,7 @@ Options:
 
 If the user chooses **Create PR**:
 1. Generate PR title from task Tipo + ID + title (e.g., `feat(T-003): add user registration API`)
-2. Generate PR body from `docs/tasks/T-XXX.md` (Objetivo + Critérios de Aceite)
+2. Generate PR body from Ring source (read via `## Fonte` in `docs/tasks/T-XXX.md`) and Progresso status
 3. Push the branch if not yet pushed: `git push -u origin $(git branch --show-current)`
 4. Create the PR:
    ```bash
