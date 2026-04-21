@@ -89,49 +89,99 @@ For each task:
 
 ## Phase 3: Present Dashboard
 
-Present a compact text dashboard. No json-render, no ASCII art graphs.
+Present a compact ASCII art dashboard. No json-render. Use box-drawing characters and
+visual indicators to make task status immediately scannable.
 
-### Format
+### Version Progress Bar
+
+Build an ASCII progress bar for the `Ativa` version. Width = 20 characters.
+Filled chars = round(done / effective_total * 20). Effective total = Total - Cancelled.
 
 ```
-PROJECT STATUS: <active-version> (<status>) — X/Y done (Z%)
+═══════════════════════════════════════════════════
+  <version> (<status>)  [████████████░░░░░░░░] Z% (X/Y)
+═══════════════════════════════════════════════════
+```
 
-ACTIVE (N):
-  T-NNN <status>       — <title>              — X/Y criteria
-  T-NNN <status>       — <title>              — X/Y criteria
+If other versions have non-done tasks, show a one-line summary below:
+```
+  Also: v2 (0/6), Futuro (0/3)
+```
 
-READY (N):
-  T-NNN [<priority>]   <title>
-  T-NNN [<priority>]   <title>
+If ALL tasks are done:
+```
+═══════════════════════════════════════════════════
+  <version>  [████████████████████] 100% (X/X) ALL DONE
+═══════════════════════════════════════════════════
+```
 
-BLOCKED (N):
-  T-NNN <title>        ← T-XXX (<dep-status>)
-  T-NNN <title>        ← T-XXX (<dep-status>), T-YYY (<dep-status>)
+### Status Indicators
+
+Each section uses a distinct ASCII symbol for instant visual recognition:
+
+- **Active:** `▶` (in progress)
+- **Ready:** `○` (open, available)
+- **Blocked:** `✗` (cannot proceed)
+- **Done:** `✓` (completed)
+
+### Criteria Progress Mini-Bar
+
+For active tasks, render a mini progress bar (5 chars wide) next to the criteria count.
+Filled = round(checked / total * 5).
+
+Examples: `[█░░░░] 1/5`, `[███░░] 3/5`, `[█████] 5/5`, `[░░░░░] 0/4`
+
+If a task has no criteria section (0 checkboxes), show `--` instead.
+
+### Section Format
+
+```
+  ▶ ACTIVE (N)
+    T-NNN <status>       — <title>              [██░░░] X/Y
+    T-NNN <status>       — <title>              [░░░░░] X/Y
+
+  ○ READY (N)
+    T-NNN [<priority>]   <title>
+    T-NNN [<priority>]   <title>
+
+  ✗ BLOCKED (N)
+    T-NNN <title>
+        ├── T-XXX [▶ <dep-status>]
+        └── T-YYY [○ <dep-status>]
+    T-NNN <title>
+        └── T-XXX [✓ DONE pending refresh]
+
+  ✓ DONE (N)
+    T-NNN <title>
+    T-NNN <title>
 ```
 
 ### Rules
 
 1. **Version progress** shows the `Ativa` version. Progress = Done / (Total - Cancelled).
-   If other versions have non-done tasks, show a one-line summary after the main status:
-   ```
-   Also: v2 (0/6), Futuro (0/3)
-   ```
 
 2. **Active tasks** are sorted by status advancement (Revisando PR first, then Validando Impl,
-   Em Andamento, Validando Spec). Show criteria progress from Step 1.3.
+   Em Andamento, Validando Spec). Show criteria mini-bar from Step 1.3.
 
 3. **Ready tasks** are sorted by Priority (`Alta` > `Media` > `Baixa`), then by ID.
 
-4. **Blocked tasks** show which dependency is blocking and its current status. If a blocker
-   has status `Cancelado`, append `(Cancelado — remove dep via /optimus-tasks)`.
+4. **Blocked tasks** render dependencies as a tree using box-drawing characters.
+   Each dependency appears on its own line with the appropriate status indicator symbol
+   (`▶` active, `○` pending, `✓` done, `✗` blocked, `—` cancelled).
+   Use `├──` for intermediate dependencies and `└──` for the last one.
+   If a blocker has status `Cancelado`, show as `[— Cancelado — remove dep via /optimus-tasks]`.
+   Example with multiple blockers:
+   ```
+     T-004 Password reset flow
+         ├── T-002 [▶ Em Andamento]
+         └── T-003 [○ Pendente]
+   ```
 
 5. **Omit empty sections.** If there are no active tasks, skip the ACTIVE section entirely.
-   Same for READY and BLOCKED.
+   Same for READY, BLOCKED, and DONE.
 
-6. **If ALL tasks are done**, show:
-   ```
-   PROJECT STATUS: <version> — ALL DONE (X/X)
-   ```
+6. **Progress bar characters:** Use `█` for filled and `░` for empty. Both the version
+   progress bar (20 chars) and criteria mini-bar (5 chars) follow this convention.
 
 ---
 
