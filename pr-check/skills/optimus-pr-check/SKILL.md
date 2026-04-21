@@ -823,11 +823,34 @@ Ask the user whether to apply config changes. If approved, edit the config files
 |---|---------|--------|-------------|
 ```
 
-### Step 8.2: TDD Cycle for Each Fix
+### Step 8.2: Classify and Apply Each Fix
 
-Apply fixes using ring droids with TDD cycle — see AGENTS.md "Common Patterns > Fix Implementation".
+For each approved fix, classify its complexity and apply accordingly — see AGENTS.md
+"Common Patterns > Fix Implementation (Complexity-Based Dispatch)".
 
-**Droid selection:** Use the stack-appropriate droid. Documentation fixes use ring-tw-team droids without TDD.
+**Complexity classification (per finding):**
+
+| Complexity | Criteria | Action |
+|------------|----------|--------|
+| **Simple** | Review agent provided exact fix, single file, localized change, obvious resolution (typo, missing nil guard, import, rename, dead code removal) | Apply directly with Edit tool |
+| **Complex** | Multiple files, new logic, architectural impact, new test scenarios, security-sensitive, uncertain resolution | Dispatch ring droid with TDD cycle |
+| **Uncertain** | Cannot confidently classify | Treat as complex → dispatch ring droid |
+
+**Simple fix flow:**
+1. Apply the fix directly using Edit/MultiEdit tools
+2. Run unit tests to verify no regression
+3. If tests fail → revert the change and escalate to ring droid dispatch
+
+**Complex fix flow:**
+1. Dispatch the stack-appropriate ring droid via `Task` tool with TDD cycle (RED-GREEN-REFACTOR)
+2. Documentation fixes use ring-tw-team droids without TDD
+
+**Droid selection (complex fixes only):**
+- Go → `ring-dev-team-backend-engineer-golang`
+- TypeScript → `ring-dev-team-backend-engineer-typescript`
+- React/Next.js → `ring-dev-team-frontend-engineer`
+- Tests → `ring-dev-team-qa-analyst`
+- Docs → `ring-tw-team-functional-writer`, `ring-tw-team-api-writer`
 
 ### Step 8.3: Handle Test Failures (max 3 attempts)
 
@@ -1336,8 +1359,9 @@ gh api graphql -f query='
 - No changes without user approval
 - BEFORE presenting each finding: deep research is MANDATORY — project patterns, architectural decisions, existing codebase, task focus, user/consumer use cases, UX impact, API best practices, engineering best practices, language-specific idioms. Option A must be the correct approach backed by research evidence, regardless of effort
 - If the user selects "Tell me more" or responds with free text: STOP, research and answer thoroughly RIGHT NOW — do NOT defer to the fix phase or continue to the next finding. NEVER batch responses.
-- Ring droids are required — do not proceed without them
-- Fixes use TDD cycle (RED-GREEN-REFACTOR) with separate commits per finding
+- Ring droids are required for complex fixes and for review dispatch — do not proceed without them
+- Simple fixes (obvious resolution provided by review agents) are applied directly; complex or uncertain fixes use ring droids with TDD cycle (RED-GREEN-REFACTOR)
+- Each fix gets a separate commit regardless of whether it was applied directly or via ring droid
 - For won't-fix Codacy findings: use the underlying linter's suppression syntax (e.g., `biome-ignore` for Biome, `eslint-disable-next-line` for ESLint, `//nolint` for Go). `codacy:ignore` does NOT exist.
 - For won't-fix DeepSource findings: add `// skipcq: <shortcode>` inline and commit
 - Response to ALL comments is uniform: commit SHA for fixes, concrete reason for won't-fix

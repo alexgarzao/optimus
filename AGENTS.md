@@ -1031,14 +1031,46 @@ All cycle review skills follow this pattern:
    Only AFTER the user is satisfied, re-present the options and ask for their decision again.
    This may go back and forth multiple times — that is expected and correct behavior.
    **NEVER defer the response to the end of the findings loop.**
-9. After ALL N decisions collected: apply ALL approved fixes via ring droids (see below)
+9. After ALL N decisions collected: apply ALL approved fixes (see below)
 10. Run verification (see Verification Timing below)
 11. Present final summary
 
-### Fix Implementation (Ring Droids — MANDATORY for cycle review skills)
+### Fix Implementation (Complexity-Based Dispatch)
 
-ALL fixes MUST be implemented by dispatching specialist ring droids via `Task` tool — the
-orchestrator does NOT apply fixes directly. This ensures consistent code quality.
+Fixes are classified by complexity. **Simple fixes** are applied directly by the
+orchestrator. **Complex fixes** (or fixes whose complexity cannot be determined) are
+delegated to specialist ring droids.
+
+#### Complexity Classification
+
+For each approved fix, assess complexity BEFORE applying:
+
+**Simple fix (apply directly):**
+- The review agent already provided the exact code change needed
+- Single file, localized change (few lines)
+- Obvious resolution: typo, missing error check, wrong variable name, missing nil guard,
+  import fix, formatting, adding a log line, renaming, removing dead code
+- No new logic, no architectural impact, no new test scenarios needed
+
+**Complex fix (dispatch ring droid):**
+- Multiple files affected
+- Requires understanding broader codebase context or architectural decisions
+- New functionality, significant refactoring, or new integration points
+- Requires new test scenarios (not just updating existing ones)
+- Security-sensitive changes (auth, crypto, input validation)
+- Database schema, API contract, or config changes
+- The orchestrator is unsure how to fix it
+
+**When in doubt → dispatch ring droid.** If you cannot confidently classify a fix as
+simple, treat it as complex.
+
+#### Direct Fix (simple findings)
+
+The orchestrator applies the fix directly using Edit/MultiEdit tools. After applying:
+1. Run unit tests to verify no regression
+2. If tests fail, revert and escalate to ring droid dispatch
+
+#### Ring Droid Dispatch (complex findings)
 
 **Code fixes** → dispatch ring backend/frontend/QA droids with **TDD cycle** (RED-GREEN-REFACTOR):
 - `ring-dev-team-backend-engineer-golang` (Go), `ring-dev-team-backend-engineer-typescript` (TS),
@@ -1048,8 +1080,9 @@ orchestrator does NOT apply fixes directly. This ensures consistent code quality
 - `ring-tw-team-functional-writer` (guides), `ring-tw-team-api-writer` (API docs),
   `ring-tw-team-docs-reviewer` (quality fixes)
 
-**Ring droids are REQUIRED** — there is no fallback to `worker`. If the required droids are
-not installed, the skill MUST stop and inform the user which droids need to be installed.
+**Ring droids are REQUIRED for complex fixes** — there is no fallback to `worker`. If the
+required droids are not installed and a complex fix is needed, the skill MUST stop and
+inform the user which droids need to be installed.
 
 ### Verification Timing (cycle review skills)
 
