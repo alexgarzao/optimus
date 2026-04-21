@@ -15,5 +15,5 @@ See the full installable version at [`quick-report/skills/optimus-quick-report/S
 ## Example
 
 ```
-/optimus-quick-report — compact daily status with criteria progress bars.
+/optimus-quick-report — compact daily status dashboard.
 ```

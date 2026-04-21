@@ -347,12 +347,13 @@ in the commit message for audit trail.
 
 Each task has an overlay file at `docs/tasks/T-NNN.md` containing:
 - **H1 heading:** `# T-NNN: Title` (must match the table row)
-- **Fonte:** Links to Ring pre-dev source (task spec, subtasks, execution plan).
+- **Fonte (optional):** Links to Ring pre-dev source (task spec, subtasks, execution plan).
   Stage agents (build, plan, check) MUST follow these links and read the referenced
   files for objective, acceptance criteria, and implementation details.
 
-Agents read objective and acceptance criteria from the Ring source (via Fonte links).
-The overlay only tracks operational state — it does NOT duplicate content from Ring.
+Tasks created without Ring pre-dev artifacts may have an overlay with only the H1 heading.
+When Fonte links are present, agents read objective and acceptance criteria from the Ring
+source. The overlay only tracks operational state — it does NOT duplicate content from Ring.
 
 This split prevents merge conflicts when multiple worktrees work on different tasks —
 each worktree only modifies its own `docs/tasks/T-NNN.md` file.

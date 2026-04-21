@@ -1,6 +1,6 @@
 ---
 name: optimus-quick-report
-description: "Compact daily status dashboard. Shows version progress, active tasks with criteria progress, ready-to-start, and blocked tasks. Read-only -- this agent NEVER modifies any files."
+description: "Compact daily status dashboard. Shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Read-only -- this agent NEVER modifies any files."
 trigger: >
   - When user asks for a quick project overview (e.g., "quick report", "quick status", "daily report", "resumo rapido")
   - When user wants a fast, compact status check without velocity or dependency graphs
@@ -11,7 +11,7 @@ prerequisite: >
   - docs/tasks.md exists in the project
 NOT_skip_when: >
   - "I already know the status" -- A quick glance catches tasks you forgot about.
-  - "There's only one task" -- Even one task benefits from criteria progress visibility.
+  - "There's only one task" -- Even one task benefits from status visibility.
 examples:
   - name: Daily status
     invocation: "Quick report"
@@ -37,7 +37,6 @@ related:
 verification:
   manual:
     - Dashboard displays correctly
-    - Criteria progress counts match tasks.md checkboxes
     - Blocked tasks correctly identified
 ---
 
@@ -64,14 +63,6 @@ Check the first line for `<!-- optimus:tasks-v1 -->`. If missing, warn but attem
 1. Parse the `## Versions` table (Version, Status, Description)
 2. Parse the tasks table (ID, Title, Tipo, Status, Depends, Priority, Version, Branch, Estimate)
 3. Identify the `Ativa` version
-
-### Step 1.3: Parse Criteria Progress
-
-For each task with status other than `Pendente`, `DONE`, and `Cancelado`:
-1. Read the overlay file (`docs/tasks/T-NNN.md`)
-2. Count total checkboxes (`- [ ]` + `- [x]`)
-3. Count checked checkboxes (`- [x]`)
-4. Record as `checked/total`
 
 ---
 
@@ -165,21 +156,12 @@ Each section uses a distinct ASCII symbol for instant visual recognition:
 - **Blocked:** `✗` (cannot proceed)
 - **Done:** `✓` (completed)
 
-### Criteria Progress Mini-Bar
-
-For active tasks, render a mini progress bar (5 chars wide) next to the criteria count.
-Filled = round(checked / total * 5).
-
-Examples: `[█░░░░] 1/5`, `[███░░] 3/5`, `[█████] 5/5`, `[░░░░░] 0/4`
-
-If a task has no criteria section (0 checkboxes), show `--` instead.
-
 ### Section Format
 
 ```
   ▶ ACTIVE (N)
-    T-NNN <status>       — <title>              [██░░░] X/Y
-    T-NNN <status>       — <title>              [░░░░░] X/Y
+    T-NNN <status>       — <title>
+    T-NNN <status>       — <title>
 
   ○ READY (N)
     T-NNN [<priority>]   <title>
@@ -206,7 +188,7 @@ If a task has no criteria section (0 checkboxes), show `--` instead.
    version(s) selected in Step 2.2.
 
 3. **Active tasks** are sorted by status advancement (Revisando PR first, then Validando Impl,
-   Em Andamento, Validando Spec). Show criteria mini-bar from Step 1.3.
+   Em Andamento, Validando Spec).
 
 4. **Ready tasks** are sorted by Priority (`Alta` > `Media` > `Baixa`), then by ID.
 
@@ -226,8 +208,8 @@ If a task has no criteria section (0 checkboxes), show `--` instead.
 6. **Omit empty sections.** If there are no active tasks, skip the ACTIVE section entirely.
    Same for READY, BLOCKED, and DONE.
 
-7. **Progress bar characters:** Use `█` for filled and `░` for empty. Both the version
-   progress bar (20 chars) and criteria mini-bar (5 chars) follow this convention.
+7. **Progress bar characters:** Use `█` for filled and `░` for empty in the version
+   progress bar (20 chars).
 
 ---
 

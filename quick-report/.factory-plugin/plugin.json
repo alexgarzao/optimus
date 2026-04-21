@@ -1,6 +1,6 @@
 {
   "name": "quick-report",
-  "description": "Compact daily status dashboard. Shows version progress, active tasks with criteria progress, ready-to-start, and blocked tasks. Read-only.",
+  "description": "Compact daily status dashboard. Shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Read-only.",
   "version": "1.0.0",
   "author": {
     "name": "Alex Garzao"
