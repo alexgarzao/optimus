@@ -389,9 +389,9 @@ The `## Versions` section in tasks.md is **mandatory** and defines the available
 1. **Exactly one `Ativa` version** at any time. Agents refuse to set two versions as `Ativa`.
    **At most one `Próxima` version** at any time. If setting a new `Próxima`, the existing one
    is demoted to `Planejada` (with user confirmation).
-2. **Version soft-blocks execution** — when a stage agent is about to start a task that is
-   NOT in the `Ativa` version, it warns the user and offers to move the task to the active
-   version, continue without moving, or cancel. See Protocol: Active Version Guard.
+2. **Version blocks execution** — a task can only be executed if it belongs to the `Ativa`
+   version. When a stage agent detects a task outside the active version, it offers to move
+   the task to the active version or cancel. See Protocol: Active Version Guard.
 3. **Cross-version dependencies are allowed** — T-003 (v2) can depend on T-001 (MVP).
    The dependency system already validates that dependencies are `DONE`.
 4. **Moving tasks between versions** does not alter Status, Branch, Depends, or any other field.
@@ -952,10 +952,10 @@ to the `Ativa` version. If not, present options before proceeding.
    ```
    Task T-XXX is in version '<task_version>' (<version_status>),
    but the active version is '<active_version>'.
+   To execute this task, it must be moved to the active version first.
    ```
    Options:
    - **Move to active version and continue** — updates the Version column to the active version, commits, and proceeds
-   - **Continue without moving** — proceeds without changing the version (for urgent work outside the active version)
    - **Cancel** — stops execution
 
 5. **If "Move to active version and continue":**
@@ -967,9 +967,7 @@ to the `Ativa` version. If not, present options before proceeding.
      ```
    - Proceed with the stage
 
-6. **If "Continue without moving":** proceed with the stage (no changes)
-
-7. **If "Cancel":** **STOP** — do not proceed with the stage
+6. **If "Cancel":** **STOP** — do not proceed with the stage
 
 Skills reference this as: "Check active version guard — see AGENTS.md Protocol: Active Version Guard."
 
