@@ -119,14 +119,14 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
        - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be DONE first."`
 4. **Expanded confirmation before status change:**
    - **If the user did NOT specify the task ID explicitly** (auto-detect):
-     - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
+     - Read the task's detail file (`docs/tasks/T-XXX.md`)
      - Present to the user via `AskUser`:
        ```
        I'm about to close task T-XXX and mark it as DONE (from '<current>').
 
        **T-XXX: [title]**
        **Version:** [version from table]
-       **Objetivo:** [objective from detail section]
+       **Objetivo:** [objective from docs/tasks/T-XXX.md]
        **Critérios de Aceite:**
        - [ ] [criterion 1]
        - [ ] [criterion 2]
@@ -239,10 +239,10 @@ If no PR was found in Check 3 (`PR_NUMBER` is empty), skip this check.
 
 #### Load Verification Commands
 
-Before running checks 5-8, check for custom commands in `.optimus/config.json`:
+Before running checks 5-8, check for custom commands in `.optimus.json`:
 
 ```bash
-CONFIG_FILE=".optimus/config.json"
+CONFIG_FILE=".optimus.json"
 if [ -f "$CONFIG_FILE" ]; then
   LINT_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands.lint // empty')
   TEST_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands.test // empty')
@@ -433,7 +433,7 @@ This also applies to Step 4.3 — if the agent is inside a worktree, `git checko
 **IMPORTANT:** PR must be merged BEFORE branch deletion. If the branch is deleted first, all commits on it (including the DONE status change) are lost.
 
 ```bash
-TASK_BRANCH=$(grep "T-XXX" .optimus/tasks.md | ... extract Branch column ...)
+TASK_BRANCH=$(grep "T-XXX" docs/tasks.md | ... extract Branch column ...)
 gh pr list --head "$TASK_BRANCH" --json number,state,title,url --jq '.[] | select(.state == "OPEN")'
 ```
 
@@ -455,8 +455,8 @@ NOT be present on the default branch. Before closing, the agent MUST:
 2. Cherry-pick ONLY the tasks.md DONE status commit from the feature branch:
    ```bash
    git cherry-pick <done-commit-sha> --no-commit
-   git checkout -- . ':!.optimus/tasks.md'   # keep only tasks.md changes
-   git add .optimus/tasks.md
+   git checkout -- . ':!docs/tasks.md'   # keep only tasks.md changes
+   git add docs/tasks.md
    git commit -m "chore(tasks): mark T-XXX as done"
    git push
    ```
@@ -485,7 +485,7 @@ Identify the task's branch from the **Branch column** in `tasks.md` (primary sou
 
 ```bash
 # Primary: read Branch column from tasks.md for this task ID
-TASK_BRANCH=$(grep "T-XXX" .optimus/tasks.md | ... extract Branch column ...)
+TASK_BRANCH=$(grep "T-XXX" docs/tasks.md | ... extract Branch column ...)
 
 # Fallback: search by convention (any Tipo prefix)
 git branch --list "feat/*T-XXX*" "feat/*t-xxx*" "fix/*T-XXX*" "fix/*t-xxx*" "refactor/*T-XXX*" "refactor/*t-xxx*" "chore/*T-XXX*" "chore/*t-xxx*" "docs/*T-XXX*" "docs/*t-xxx*" "test/*T-XXX*" "test/*t-xxx*"
@@ -535,7 +535,7 @@ git push origin --delete <branch>
 
 **After branch deletion:** Update the Branch column in `tasks.md` to `-` (the branch no longer exists, keeping the old name would be misleading). Commit and push (this is an administrative commit directly on the default branch — acceptable because the feature branch no longer exists):
 ```bash
-git add .optimus/tasks.md
+git add docs/tasks.md
 git commit -m "chore(tasks): clear branch for T-XXX after cleanup"
 git push
 ```

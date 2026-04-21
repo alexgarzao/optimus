@@ -133,14 +133,14 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
        - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be DONE first."`
 4. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Validando Spec`) AND the user did NOT specify the task ID explicitly (auto-detect):
-     - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
+     - Read the task's detail file (`docs/tasks/T-XXX.md`)
      - Present to the user via `AskUser`:
        ```
        I'm about to change task T-XXX status from '<current>' to 'Validando Spec'.
 
        **T-XXX: [title]**
        **Version:** [version from table]
-       **Objetivo:** [objective from detail section]
+       **Objetivo:** [objective from docs/tasks/T-XXX.md]
        **Critérios de Aceite:**
        - [ ] [criterion 1]
        - [ ] [criterion 2]
@@ -225,7 +225,7 @@ task while the worktree is being created.
    - Set **Branch** to the generated branch name
    - Commit immediately:
      ```bash
-     git add .optimus/tasks.md
+     git add docs/tasks.md
      git commit -m "chore(tasks): start T-XXX — set status to Validando Spec"
      ```
 

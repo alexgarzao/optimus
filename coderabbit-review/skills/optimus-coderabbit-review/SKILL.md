@@ -349,7 +349,7 @@ If lint fails, fix formatting issues and re-run.
 
 **Measure unit test coverage:**
 
-Use the project's Makefile or `.optimus/config.json` commands. If neither exists, fall
+Use the project's Makefile or `.optimus.json` commands. If neither exists, fall
 back to stack-specific commands:
 
 ```bash
@@ -370,7 +370,7 @@ If coverage measurement is available and below threshold, flag as a finding:
 
 If coverage measurement is NOT available (no Makefile target, no recognized stack), mark
 as SKIP and note: "Coverage measurement not available — configure `make test-coverage`
-or `.optimus/config.json`."
+or `.optimus.json`."
 
 **NOTE:** Integration and E2E tests run only before push or when user invokes directly.
 

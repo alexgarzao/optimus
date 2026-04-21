@@ -8,7 +8,7 @@ skip_when: >
   - No tasks.md exists in the project
   - User wants the full dashboard with dependency graph, velocity, and workspace health (use optimus-report instead)
 prerequisite: >
-  - .optimus/tasks.md exists in the project
+  - docs/tasks.md exists in the project
 NOT_skip_when: >
   - "I already know the status" -- A quick glance catches tasks you forgot about.
   - "There's only one task" -- Even one task benefits from criteria progress visibility.
@@ -55,7 +55,7 @@ and blocked tasks.
 
 ### Step 1.1: Locate and Validate
 
-Look for `.optimus/tasks.md`. If not found, inform the user and suggest `/optimus-migrate`.
+Look for `docs/tasks.md`. If not found, inform the user and suggest `/optimus-migrate`.
 
 Check the first line for `<!-- optimus:tasks-v1 -->`. If missing, warn but attempt best-effort parsing.
 
@@ -68,7 +68,7 @@ Check the first line for `<!-- optimus:tasks-v1 -->`. If missing, warn but attem
 ### Step 1.3: Parse Criteria Progress
 
 For each task with status other than `Pendente`, `DONE`, and `Cancelado`:
-1. Find the detail section (`## T-NNN: Title`)
+1. Read the detail file (`docs/tasks/T-NNN.md`)
 2. Count total checkboxes (`- [ ]` + `- [x]`)
 3. Count checked checkboxes (`- [x]`)
 4. Record as `checked/total`

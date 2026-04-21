@@ -131,14 +131,14 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
    **On stage completion** (after Phase 14 final summary): delete the session file.
 5. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Revisando PR`) AND the user did NOT specify the task ID explicitly (auto-detect):
-     - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
+     - Read the task's detail file (`docs/tasks/T-XXX.md`)
      - Present to the user via `AskUser`:
        ```
        I'm about to change task T-XXX status from '<current>' to 'Revisando PR'.
 
        **T-XXX: [title]**
        **Version:** [version from table]
-       **Objetivo:** [objective from detail section]
+       **Objetivo:** [objective from docs/tasks/T-XXX.md]
        **Critérios de Aceite:**
        - [ ] [criterion 1]
        - [ ] [criterion 2]
@@ -152,7 +152,7 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
 6. **Update status:** Change the task status in `tasks.md` to `Revisando PR` (if not already).
 7. Commit the status change immediately:
    ```bash
-   git add .optimus/tasks.md
+   git add docs/tasks.md
    git commit -m "chore(tasks): set T-XXX status to Revisando PR"
    ```
 8. **Invoke notification hooks** (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
@@ -168,11 +168,11 @@ When no task is referenced and no `tasks.md` exists, or the user explicitly want
 
 ### How to detect which mode:
 1. If the user mentions a task ID (T-XXX) → Task Mode
-2. Find `.optimus/tasks.md`. If found:
+2. Find `docs/tasks.md`. If found:
    a. If exactly ONE task is in `Validando Impl` or `Revisando PR` → Task Mode (confirm with user via `AskUser`)
    b. If MULTIPLE tasks are in `Validando Impl` or `Revisando PR` → Task Mode, but ask the user which task to review via `AskUser` (list all candidates with ID, title, version, and branch)
    c. If NO tasks are in `Validando Impl` or `Revisando PR` → Standalone Mode
-3. If no `.optimus/tasks.md` exists → Standalone Mode
+3. If no `docs/tasks.md` exists → Standalone Mode
 
 ---
 
@@ -200,7 +200,7 @@ Options:
 
 If the user chooses **Create PR**:
 1. Generate PR title from task Tipo + ID + title (e.g., `feat(T-003): add user registration API`)
-2. Generate PR body from the task's detail section (Objetivo + Critérios de Aceite)
+2. Generate PR body from `docs/tasks/T-XXX.md` (Objetivo + Critérios de Aceite)
 3. Push the branch if not yet pushed: `git push -u origin $(git branch --show-current)`
 4. Create the PR:
    ```bash
@@ -888,7 +888,7 @@ Record the suppression commit SHA for use in Phase 13.
 
 ### Step 9.1: Coverage Measurement (Unit Tests)
 
-Use the project's Makefile or `.optimus/config.json` commands:
+Use the project's Makefile or `.optimus.json` commands:
 
 ```bash
 # Preferred: Makefile target

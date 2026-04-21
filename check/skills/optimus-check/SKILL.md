@@ -152,14 +152,14 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
        - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be DONE first."`
 4. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Validando Impl`) AND the user did NOT specify the task ID explicitly (auto-detect):
-     - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
+     - Read the task's detail file (`docs/tasks/T-XXX.md`)
      - Present to the user via `AskUser`:
        ```
        I'm about to change task T-XXX status from '<current>' to 'Validando Impl'.
 
        **T-XXX: [title]**
        **Version:** [version from table]
-       **Objetivo:** [objective from detail section]
+       **Objetivo:** [objective from docs/tasks/T-XXX.md]
        **Critérios de Aceite:**
        - [ ] [criterion 1]
        - [ ] [criterion 2]
@@ -173,7 +173,7 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 5. Update the Status column to `Validando Impl` (if not already)
 6. Commit the status change immediately:
    ```bash
-   git add .optimus/tasks.md
+   git add docs/tasks.md
    git commit -m "chore(tasks): set T-XXX status to Validando Impl"
    ```
 7. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
@@ -236,7 +236,7 @@ This determines which specialist agents to dispatch in Phase 3.
 
 Run ALL applicable checks simultaneously. Capture stdout, stderr, exit code for each.
 
-Check `.optimus/config.json` for custom commands first. If `commands.lint` exists, use it. If a command key is present but empty (`""`), skip that check entirely. If missing, fall back to auto-detection below.
+Check `.optimus.json` for custom commands first. If `commands.lint` exists, use it. If a command key is present but empty (`""`), skip that check entirely. If missing, fall back to auto-detection below.
 
 | # | Check | Command (discover from project) | What it detects |
 |---|-------|---------------------------------|-----------------|
@@ -260,7 +260,7 @@ Skip checks whose commands don't exist in the project (e.g., skip `go vet` in a 
 **HARD BLOCK:** Unit tests must pass before proceeding to agent dispatch. This establishes
 the baseline — if unit tests are already failing, review cannot proceed.
 
-Check `.optimus/config.json` for custom `commands.test` first. Fall back to `make test` if not configured.
+Check `.optimus.json` for custom `commands.test` first. Fall back to `make test` if not configured.
 
 ```bash
 make test                    # Unit tests — MANDATORY
@@ -272,7 +272,7 @@ make test                    # Unit tests — MANDATORY
 3. Do NOT proceed to Phase 3 until unit tests pass or user explicitly chooses to skip
 
 **If unit tests pass:** collect coverage data for analysis using the project's Makefile
-or `.optimus/config.json` commands:
+or `.optimus.json` commands:
 
 ```bash
 # Preferred: Makefile target
@@ -563,7 +563,7 @@ After the final verification passes, measure unit test coverage:
 
 **Unit test coverage:**
 
-Use the project's Makefile or `.optimus/config.json` commands:
+Use the project's Makefile or `.optimus.json` commands:
 ```bash
 # Preferred: Makefile target
 make test-coverage 2>/dev/null
@@ -788,7 +788,7 @@ The `--assignee @me` flag assigns the PR to the authenticated GitHub user automa
 
 The body should include:
 - Task ID and title
-- Objective (from tasks.md detail section)
+- Objective (from `docs/tasks/T-XXX.md`)
 - Acceptance criteria summary
 - Link to the task section in tasks.md
 

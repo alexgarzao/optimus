@@ -138,14 +138,14 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
        - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be DONE first."`
 4. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Em Andamento`) AND the user did NOT specify the task ID explicitly (auto-detect):
-     - Read the task's H2 detail section (`## T-XXX: Title`) from `tasks.md`
+     - Read the task's detail file (`docs/tasks/T-XXX.md`)
      - Present to the user via `AskUser`:
        ```
        I'm about to change task T-XXX status from '<current>' to 'Em Andamento'.
 
        **T-XXX: [title]**
        **Version:** [version from table]
-       **Objetivo:** [objective from detail section]
+       **Objetivo:** [objective from docs/tasks/T-XXX.md]
        **Critérios de Aceite:**
        - [ ] [criterion 1]
        - [ ] [criterion 2]
@@ -159,7 +159,7 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 5. Update the Status column to `Em Andamento` (if not already)
 6. Commit the status change immediately:
    ```bash
-   git add .optimus/tasks.md
+   git add docs/tasks.md
    git commit -m "chore(tasks): set T-XXX status to Em Andamento"
    ```
 7. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
@@ -351,7 +351,7 @@ Present findings to the user ONE AT A TIME. For each finding:
 
 #### Step 2.2.3: Verification
 
-Check for custom commands in `.optimus/config.json` first. If found, use configured
+Check for custom commands in `.optimus.json` first. If found, use configured
 commands. If a command key is present but empty (`""`), skip that check entirely.
 If not found or key is missing, fall back to Makefile:
 
@@ -390,7 +390,7 @@ about mismatched checkbox state.
 ### Step 3.0: Reset Checkboxes on Re-Execution
 
 **If this is a re-execution** (status was already `Em Andamento` when the skill started):
-1. Read the task's detail section
+1. Read `docs/tasks/T-XXX.md`
 2. **If the user chose "Start fresh" in Step 2.2.0:** Reset ALL checkboxes to unchecked
    (`- [ ]`) before re-evaluating. This prevents stale `[x]` marks from a previous
    partial run from persisting.
@@ -400,14 +400,14 @@ about mismatched checkbox state.
 
 ### Step 3.1: Evaluate and Mark Checkboxes
 
-1. Read the task's detail section and list all acceptance criteria (`- [ ] ...`)
+1. Read `docs/tasks/T-XXX.md` and list all acceptance criteria (`- [ ] ...`)
 2. For each criterion, verify whether the implementation satisfies it:
    - Check if the code/tests/config for that criterion exist and work
    - If satisfied → mark as `- [x]`
    - If NOT satisfied → leave as `- [ ]` and warn the user
 3. Commit the updated checkboxes:
    ```bash
-   git add .optimus/tasks.md
+   git add docs/tasks/T-XXX.md
    git commit -m "chore(tasks): update acceptance criteria for T-XXX"
    ```
 

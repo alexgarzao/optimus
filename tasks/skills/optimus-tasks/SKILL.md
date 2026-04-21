@@ -20,7 +20,7 @@ skip_when: >
   - User wants to execute a task (use plan instead)
   - User wants to change task status through the lifecycle (status is managed by stage agents -- except cancellation, which is handled here)
 prerequisite: >
-  - .optimus/tasks.md exists in the project
+  - docs/tasks.md exists in the project
 NOT_skip_when: >
   - "I can edit tasks.md manually" -- This agent validates format, dependencies, and IDs automatically.
   - "It's just a small change" -- Even small changes can break format or create circular dependencies.
@@ -83,14 +83,15 @@ For operations that do not use `gh` (create, edit, remove, reorder, version mana
 
 ### Step 1.0.1: Find and Validate tasks.md
 
-1. **Find tasks.md:** Look in `.optimus/tasks.md`. If not found, ask the user via `AskUser`:
+1. **Find tasks.md:** Look in `docs/tasks.md`. If not found, ask the user via `AskUser`:
 
-   "No .optimus/tasks.md found. What should I do?"
-   - **(a) Create a new tasks.md** — creates `.optimus/tasks.md` with the optimus format marker and empty table
+   "No docs/tasks.md found. What should I do?"
+   - **(a) Create a new tasks.md** — creates `docs/tasks.md` with the optimus format marker and empty table
    - **(b) Run migrate** — use this if you already have task files in another format
 
-   If the user chooses to create, first `mkdir -p .optimus`. Ask for an initial version name
-   via `AskUser` (e.g., "MVP", "v1"), then write `.optimus/tasks.md` with:
+   If the user chooses to create, first initialize the docs/tasks directory (see AGENTS.md
+   Protocol: Initialize docs/tasks Directory). Ask for an initial version name
+   via `AskUser` (e.g., "MVP", "v1"), then write `docs/tasks.md` with:
    ```markdown
    <!-- optimus:tasks-v1 -->
    # Tasks
@@ -230,8 +231,8 @@ The user can then modify any field before confirming.
 4. **Estimate** (optional): Task size estimate (`S`, `M`, `L`, `XL`, `2h`, `1d`, etc.). Default: `-`
 5. **Version** (required): Must match a version in the Versions table. Default: the version with Status `Ativa`
 6. **Dependencies** (optional): Comma-separated task IDs (e.g., `T-001, T-003`) or `-` for none
-7. **Objective** (required): What the task achieves (for the detail section)
-8. **Acceptance criteria** (required): Checklist items (for the detail section)
+7. **Objective** (required): What the task achieves (for `docs/tasks/T-NNN.md`)
+8. **Acceptance criteria** (required): Checklist items (for `docs/tasks/T-NNN.md`)
 
 If the user provided some of these in the initial request, use them and ask only for missing fields.
 
@@ -291,15 +292,15 @@ If the user specified dependencies:
 2. Check for circular dependencies: if T-NEW depends on T-X, and T-X (directly or transitively) would depend on T-NEW → reject
 3. If any dependency ID is invalid → ask the user to correct it
 
-### Step 2.4: Add to tasks.md
+### Step 2.4: Add to tasks.md and create detail file
 
-1. Add a new row to the table:
+1. Add a new row to the table in `docs/tasks.md`:
    ```
    | T-NNN | <title> | <tipo> | Pendente | <depends> | <priority> | <version> | - | <estimate or -> |
    ```
-2. Add a detail section at the end of the file:
+2. Create the detail file `docs/tasks/T-NNN.md`:
    ```markdown
-   ## T-NNN: <title>
+   # T-NNN: <title>
 
    **Objetivo:** <objective>
 
@@ -307,7 +308,7 @@ If the user specified dependencies:
    - [ ] <criterion 1>
    - [ ] <criterion 2>
    ```
-3. Save the file
+3. Save both files
 
 ### Step 2.5: Confirm
 
@@ -333,7 +334,7 @@ Determine which field(s) to edit. Editable fields:
 
 | Field | Allowed? | Notes |
 |-------|----------|-------|
-| Title | Yes | Updates both table and H2 section header |
+| Title | Yes | Updates both table row and `docs/tasks/T-NNN.md` heading |
 | Tipo | Yes | Must be `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, or `Test` |
 | Priority | Yes | Must be `Alta`, `Media`, or `Baixa` |
 | Version | Yes | Must reference a version in the Versions table |
@@ -342,8 +343,8 @@ Determine which field(s) to edit. Editable fields:
 | Status | **No** | Status is managed ONLY by stage agents |
 | Branch | **No** | Branch is managed ONLY by stage-1 and close |
 | ID | **No** | IDs are immutable |
-| Objective | Yes | Updates the detail section |
-| Acceptance criteria | Yes | Updates the detail section checklist |
+| Objective | Yes | Updates `docs/tasks/T-NNN.md` |
+| Acceptance criteria | Yes | Updates `docs/tasks/T-NNN.md` checklist |
 
 **HARD BLOCK:** If the user tries to change Status or Branch, refuse:
 ```
@@ -355,11 +356,11 @@ task, use "reopen T-XXX".
 
 ### Step 3.1: Apply Changes
 
-1. Update the relevant column(s) in the table row
-2. If Title changed, also update the H2 section header (`## T-NNN: <new title>`)
+1. Update the relevant column(s) in the table row in `docs/tasks.md`
+2. If Title changed, also update the heading in `docs/tasks/T-NNN.md`
 3. If Depends changed, validate all references exist and no circular dependencies
-4. If Objective or acceptance criteria changed, update the detail section
-5. Save the file
+4. If Objective or acceptance criteria changed, update `docs/tasks/T-NNN.md`
+5. Save the file(s)
 
 ### Step 3.2: Confirm
 
@@ -402,11 +403,11 @@ may cause data loss. Are you sure?
 
 Use `AskUser` for confirmation.
 
-### Step 4.2: Remove from tasks.md
+### Step 4.2: Remove from tasks.md and delete detail file
 
-1. Remove the table row for T-XXX
-2. Remove the detail section (`## T-XXX: ...` and all content until the next `## T-` or end of file)
-3. Save the file
+1. Remove the table row for T-XXX from `docs/tasks.md`
+2. Delete the detail file `docs/tasks/T-NNN.md`
+3. Save
 
 **NOTE:** Do NOT renumber remaining task IDs. IDs are permanent identifiers.
 
@@ -431,7 +432,7 @@ Options:
 
 1. Rearrange table rows according to the requested order
 2. Do NOT change any cell values (ID, Title, Tipo, Status, Depends, Priority, Branch stay the same)
-3. Do NOT reorder the detail sections (they follow the original ID order for consistency)
+3. Detail files in `docs/tasks/` are not affected by reordering
 4. Save the file
 
 ### Step 5.2: Confirm
@@ -768,7 +769,7 @@ If the user provides multiple tasks to create at once (e.g., a list of tasks), p
 
 1. Generate IDs for all tasks first (to allow cross-references in dependencies)
 2. Validate all dependencies
-3. Add all rows and detail sections
+3. Add all rows to `docs/tasks.md` and create all `docs/tasks/T-NNN.md` detail files
 4. Show summary of all created tasks
 
 ## Phase 11: Version Management

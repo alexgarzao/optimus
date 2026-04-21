@@ -65,7 +65,7 @@ always "most advanced status wins" for each task independently.
 Check if `tasks.md` has merge conflict markers:
 
 ```bash
-grep -c '<<<<<<<' .optimus/tasks.md 2>/dev/null
+grep -c '<<<<<<<' docs/tasks.md 2>/dev/null
 ```
 
 If no conflict markers found:
@@ -91,7 +91,7 @@ For each conflict region, classify its content:
 |-------------|---------------|---------------------|
 | **Task table rows** | Lines matching `\| T-\d+ \|` pattern | Per-task most-advanced-status |
 | **Versions table** | Lines in the `## Versions` section | Merge both — keep all versions; deduplicate by name (if same version name on both sides, keep the one with more advanced status: Ativa > Próxima > Planejada > Backlog > Concluída) |
-| **Task detail sections** | Lines under `## T-NNN:` headings | Merge: union of `[x]` checkboxes from both sides; for prose differences, flag for user decision (Step 2.4) |
+| **Task detail files** | `docs/tasks/T-NNN.md` files | Merge: union of `[x]` checkboxes from both sides; for prose differences, flag for user decision (Step 2.4) |
 | **Format marker / headers** | First line, `# Tasks`, table headers | Keep either (identical) |
 
 ### Step 1.3: Parse Task Rows From Both Sides
@@ -163,7 +163,7 @@ If one side has `Cancelado` and the other has a non-terminal status:
 
 ### Step 2.4: Resolve Detail Sections
 
-For `## T-NNN:` detail sections that conflict:
+For `docs/tasks/T-NNN.md` detail files that conflict:
 
 1. Compare acceptance criteria checkboxes:
    - If one side has more `[x]` checkboxes → use that version (more work was done)
@@ -242,7 +242,7 @@ If validation fails, inform the user and offer to fix or abort.
 ### Step 4.3: Stage the File
 
 ```bash
-git add .optimus/tasks.md
+git add docs/tasks.md
 ```
 
 ### Step 4.4: Inform Next Steps

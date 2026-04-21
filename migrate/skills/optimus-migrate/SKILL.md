@@ -55,7 +55,7 @@ verification:
 
 Discovers existing task files and converts them to the standard optimus `tasks.md` format.
 
-**CRITICAL:** This agent NEVER deletes original files. It creates/updates `.optimus/tasks.md`
+**CRITICAL:** This agent NEVER deletes original files. It creates/updates `docs/tasks.md`
 and leaves originals untouched. The user decides whether to remove them later.
 
 ---
@@ -68,7 +68,7 @@ Search the project for any form of task tracking. Check ALL of these locations:
 
 ```
 # Files to check (in order)
-.optimus/tasks.md
+docs/tasks.md
 ./tasks.md
 ./docs/tasks.md
 ./docs/pre-dev/tasks.md
@@ -94,13 +94,13 @@ For each discovered file, determine its type:
 | Type | How to detect | Example |
 |------|--------------|---------|
 | **Index-only** | tasks.md with links/references to other files but no task details inline | `- [T-001](./tasks/t-001.md)` |
-| **Inline tasks** | tasks.md with full task descriptions (objectives, criteria) inside | H2 sections with content |
-| **Table-only** | tasks.md with a markdown table but no detail sections | Just a table, no H2s |
+| **Inline tasks** | tasks.md with full task descriptions (objectives, criteria) inside | H2 sections with content (legacy format) |
+| **Table-only** | tasks.md with a markdown table but no detail sections | Just a table, no detail files |
 | **Individual files** | tasks/ directory with one .md file per task | `tasks/t-001.md`, `tasks/t-002.md` |
 | **Subtask files** | subtasks/ directory with subtask .md files | `subtasks/t-001-subtasks.md` |
 | **YAML frontmatter** | Task files with YAML frontmatter (taskmd format) | `---\nid: "001"\nstatus: pending\n---` |
 | **Checklist** | Simple TODO list with checkboxes | `- [ ] Implement auth\n- [x] Setup DB` |
-| **Optimus format** | First line is `<!-- optimus:tasks-v1 -->` with standard table + H2 sections | Valid optimus tasks.md |
+| **Optimus format** | First line is `<!-- optimus:tasks-v1 -->` with standard table + `docs/tasks/T-NNN.md` detail files | Valid optimus tasks.md |
 
 ### Step 1.3: Extract Task Data
 
@@ -231,7 +231,7 @@ Present what was found to the user:
 ### Sources Found
 | # | Location | Type | Tasks Found |
 |---|----------|------|-------------|
-| 1 | .optimus/tasks.md | Index-only | 8 links |
+| 1 | docs/tasks.md | Index-only | 8 links |
 | 2 | ./tasks/ | Individual files | 8 files |
 | 3 | ./subtasks/ | Subtask files | 5 files |
 
@@ -319,33 +319,35 @@ Options:
 
 ## Phase 4: Apply Conversion
 
-### Step 4.1: Check for Existing .optimus/tasks.md
+### Step 4.1: Check for Existing docs/tasks.md
 
-If `.optimus/tasks.md` already exists in optimus format:
-- Ask via `AskUser`: ".optimus/tasks.md already exists. Merge new tasks into it, or replace entirely?"
+If `docs/tasks.md` already exists in optimus format:
+- Ask via `AskUser`: "docs/tasks.md already exists. Merge new tasks into it, or replace entirely?"
 - If merge: add only tasks that don't already exist (match by ID or title)
 - If replace: backup the existing file content (show it to the user first)
 
-If `.optimus/tasks.md` exists in non-optimus format:
-- Rename to `.optimus/tasks.md.bak` before creating the new one
-- Inform the user: "Backed up original to .optimus/tasks.md.bak"
+If `docs/tasks.md` exists in non-optimus format:
+- Rename to `docs/tasks.md.bak` before creating the new one
+- Inform the user: "Backed up original to docs/tasks.md.bak"
 
-### Step 4.2: Write .optimus/tasks.md
+### Step 4.2: Write docs/tasks.md and detail files
 
-First ensure the directory exists: `mkdir -p .optimus`
+First initialize the docs/tasks directory (see AGENTS.md Protocol: Initialize docs/tasks Directory).
 
-Create `.optimus/tasks.md` with:
+Create `docs/tasks.md` with:
 1. Format marker: `<!-- optimus:tasks-v1 -->` (MUST be the first line)
 2. H1 heading: `# Tasks`
 3. `## Versions` section with the versions table (from Step 1.5)
 4. The tasks table (all columns including Version)
-5. Empty line
-6. H2 sections for each task (with extracted content)
+
+Create individual detail files `docs/tasks/T-NNN.md` for each task with:
+1. H1 heading: `# T-NNN: <title>`
+2. Objective and acceptance criteria (extracted content)
 
 ### Step 4.3: Commit
 
 ```bash
-git add .optimus/tasks.md
+git add docs/tasks.md docs/tasks/
 git commit -m "chore: migrate tasks to optimus format (migrate)
 
 Migrated N tasks from [sources list].
@@ -359,7 +361,7 @@ Original files preserved."
 
 - **Tasks migrated:** N
 - **Sources processed:** [list]
-- **tasks.md created:** .optimus/tasks.md
+- **tasks.md created:** docs/tasks.md + docs/tasks/T-NNN.md files
 - **Original files:** NOT deleted (remove manually if desired)
 
 ### Next Steps
@@ -372,12 +374,12 @@ Original files preserved."
 
 ## Rules
 
-- **NEVER delete original files** — only create/update .optimus/tasks.md
+- **NEVER delete original files** — only create/update docs/tasks.md and docs/tasks/T-NNN.md
 - **NEVER apply changes without user approval** — always present and confirm first
 - **NEVER invent task content** — only extract what exists in the source files
 - **NEVER assume dependencies from task order** — sequential IDs don't imply dependency
-- If a task has no content (just a title), create the H2 section with empty Objetivo and Critérios de Aceite, and warn the user
+- If a task has no content (just a title), create `docs/tasks/T-NNN.md` with empty Objetivo and Critérios de Aceite, and warn the user
 - If status inference is uncertain, mark as `Pendente` and flag as "(inferred)" in the inventory
-- If the project already has a valid `.optimus/tasks.md` (first line is `<!-- optimus:tasks-v1 -->`), inform the user and stop (nothing to migrate)
+- If the project already has a valid `docs/tasks.md` (first line is `<!-- optimus:tasks-v1 -->`), inform the user and stop (nothing to migrate)
 - Subtasks always become checklist items in the parent task — never separate entries in the table
 - Task IDs must be unique — if duplicates found, warn the user before proceeding

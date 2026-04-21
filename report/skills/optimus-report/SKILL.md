@@ -11,7 +11,7 @@ skip_when: >
   - No tasks.md exists in the project
   - User wants to run a specific stage agent (use that agent directly)
 prerequisite: >
-  - .optimus/tasks.md exists in the project
+  - docs/tasks.md exists in the project
 NOT_skip_when: >
   - "I already know the status" -- The dashboard shows dependencies and parallelization you might miss.
   - "There's only one task" -- Even single tasks benefit from status verification.
@@ -59,9 +59,9 @@ Read-only agent that parses `tasks.md` and presents a comprehensive project stat
 
 ### Step 1.1: Locate tasks.md
 
-Look for `.optimus/tasks.md`. There are no fallback locations.
+Look for `docs/tasks.md`. There are no fallback locations.
 
-If not found, inform the user and suggest: "No .optimus/tasks.md found. Run `/optimus-migrate` to create one from existing task files, or create it manually following the optimus format."
+If not found, inform the user and suggest: "No docs/tasks.md found. Run `/optimus-migrate` to create one from existing task files, or create it manually following the optimus format."
 
 ### Step 1.1.1: Validate Format Marker
 
@@ -128,7 +128,7 @@ Read the `## Versions` section and extract the versions table. Expected columns:
 
 Identify the version with Status `Ativa` — this is the **active version** used for default filtering.
 
-For each task, also check if an H2 section exists below the table (`## T-NNN: Title`) to verify completeness.
+For each task, also check if a detail file exists at `docs/tasks/T-NNN.md` to verify completeness.
 
 ### Step 1.3: Validate Dependencies
 
@@ -146,7 +146,7 @@ If the user's invocation matches quick status triggers ("quick status", "what am
 
 1. Parse tasks.md (Phase 1 still runs fully)
 2. Find tasks with status other than `Pendente`, `DONE`, and `Cancelado` (active tasks)
-3. For each active task, read its detail section and count checked vs total acceptance criteria
+3. For each active task, read its detail file (`docs/tasks/T-NNN.md`) and count checked vs total acceptance criteria
 4. Present ONLY:
 
 ```
@@ -465,7 +465,7 @@ Average time per stage (from N completed tasks):
 After the dashboard, present any issues found:
 
 ### Warnings
-- Tasks with missing H2 detail sections
+- Tasks with missing detail files (`docs/tasks/T-NNN.md`)
 - Circular dependencies
 - Invalid dependency references (pointing to non-existent task IDs)
 - Tasks blocked by a cancelled dependency (see "Blocked by Cancelled" section below)
@@ -556,9 +556,8 @@ Compile the full dashboard into a single markdown file including all sections:
 
 ### Step 11.2: Write File
 
-```bash
-mkdir -p .optimus
-```
+Initialize the .optimus directory (see AGENTS.md Protocol: Initialize .optimus Directory)
+for temporary state files.
 
 Write to `.optimus/report-<date>.md`:
 

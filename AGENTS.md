@@ -138,19 +138,31 @@ source of truth for task tracking.
 All agents look for `tasks.md` in a single fixed location:
 
 ```
-.optimus/tasks.md
+docs/tasks.md
 ```
 
-There are no fallback locations. If `.optimus/tasks.md` does not exist, the agent must
+There are no fallback locations. If `docs/tasks.md` does not exist, the agent must
 inform the user and suggest running `migrate` to create one.
 
-The `.optimus/` directory is also used for `config.json` and session state files.
-The `.gitignore` should be configured to commit `tasks.md` and `config.json` but
-ignore session files:
+Task detail files (objectives, acceptance criteria) are stored as individual files:
+
 ```
-.optimus/*
-!.optimus/tasks.md
-!.optimus/config.json
+docs/tasks/T-NNN.md
+```
+
+Each task has its own detail file. This prevents merge conflicts when multiple
+worktrees work on different tasks in parallel.
+
+Project configuration is stored at the project root:
+
+```
+.optimus.json
+```
+
+The `.optimus/` directory is used exclusively for temporary state files (sessions,
+reports). It should be fully gitignored:
+```
+.optimus/
 ```
 
 ### Format Marker
@@ -167,6 +179,7 @@ suggests running `/optimus-migrate`.
 
 ### Format:
 
+**docs/tasks.md** (table + versions only):
 ```markdown
 <!-- optimus:tasks-v1 -->
 # Tasks
@@ -185,16 +198,22 @@ suggests running `/optimus-migrate`.
 | T-003 | Login page | Feature | Pendente | T-001 | Alta | MVP | - | M |
 | T-004 | Password reset flow | Fix | Pendente | T-002, T-003 | Media | v2 | fix/t-004-password-reset | L |
 | T-005 | E2E auth tests | Test | Pendente | T-002, T-003 | Media | MVP | - | S |
+```
 
-## T-001: Setup auth module
+**docs/tasks/T-001.md** (individual detail file):
+```markdown
+# T-001: Setup auth module
 
 **Objetivo:** Configurar o módulo de autenticação...
 
 **Critérios de Aceite:**
 - [x] JWT middleware configurado
 - [x] Testes unitários passando
+```
 
-## T-002: User registration API
+**docs/tasks/T-002.md**:
+```markdown
+# T-002: User registration API
 
 **Objetivo:** ...
 
@@ -312,23 +331,26 @@ in the commit message for audit trail.
    of rows in the table. Agents must compute the dependency graph to find which
    tasks are ready.
 
-### Task Detail Sections
+### Task Detail Files
 
-Below the table, each task has an H2 section (`## T-NNN: Title`) containing:
+Each task has an individual detail file at `docs/tasks/T-NNN.md` containing:
+- **H1 heading:** `# T-NNN: Title` (must match the table row)
 - **Objetivo:** What the task achieves
 - **Critérios de Aceite:** Checklist of acceptance criteria (use `- [ ]` / `- [x]`)
 - Any additional context: API specs, data model, references, etc.
 
-Agents read these sections to understand what to implement and validate.
+Agents read these files to understand what to implement and validate. This split
+prevents merge conflicts when multiple worktrees work on different tasks — each
+worktree only modifies its own `docs/tasks/T-NNN.md` file.
 
 ### Acceptance Criteria Tracking
 
-The checkboxes in **Critérios de Aceite** are updated by stage agents as the task progresses:
+The checkboxes in **Critérios de Aceite** (in `docs/tasks/T-NNN.md`) are updated by stage agents as the task progresses:
 - **build** marks criteria as `- [x]` as each is implemented
 - **check** validates that marked criteria are actually satisfied
   (flags mismatches: `[x]` but not implemented → HIGH, `[ ]` but implemented → MEDIUM)
 
-This ensures tasks.md accurately reflects what was delivered at every point in the lifecycle.
+This ensures the task detail files accurately reflect what was delivered at every point in the lifecycle.
 
 ### Version Management
 
@@ -373,7 +395,7 @@ The `## Versions` section in tasks.md is **mandatory** and defines the available
 
 ### Format Validation
 
-Every stage agent (1-5) MUST validate the tasks.md format before operating:
+Every stage agent (1-5) MUST validate the `docs/tasks.md` format before operating:
 1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
 2. A `## Versions` section exists with a table containing columns: Version, Status, Description
 3. All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
@@ -393,6 +415,7 @@ If the format marker is missing or validation fails, the agent must **STOP** and
 running `/optimus-migrate` to fix the format. Do NOT attempt to interpret malformed data.
 
 15. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
+16. Every task ID in the table has a corresponding detail file at `docs/tasks/T-NNN.md`
 
 **NOTE:** For circular dependency detection (item 14), trace the full dependency chain for
 each task. If any task appears twice in the chain, a cycle exists. Report ALL tasks involved
@@ -407,7 +430,7 @@ The report agent computes and displays parallelization opportunities.
 
 ## Task Lifecycle
 
-Tasks flow through 5 stages (pr-check is optional). Status lives in `tasks.md`
+Tasks flow through 5 stages (pr-check is optional). Status lives in `docs/tasks.md`
 (the markdown table in the target project). Each stage is a separate skill.
 
 ```
@@ -443,7 +466,7 @@ Any status → Cancelado  (via tasks cancel operation)
    Consider removing this dependency via `/optimus-tasks`." This helps the user
    understand the blocker requires a dependency edit, not waiting for completion.
 7. **Expanded confirmation on status change** — when a stage agent is about to change
-   a task's status, it shows the task description (Objetivo + Critérios de Aceite) and
+   a task's status, it shows the task description (from `docs/tasks/T-NNN.md`: Objetivo + Critérios de Aceite) and
    asks for explicit confirmation via `AskUser`. This prevents accidental status changes
    on the wrong task, especially during auto-detect.
 
@@ -528,8 +551,8 @@ Before marking done, done runs 8 checks:
 2. No unpushed commits (`git log @{u}..HEAD` = empty)
 3. PR ready to merge (if PR exists) — includes PR title validation (Conventional Commits)
 4. CI passing (if PR exists)
-5. `make lint` passes (or command from `.optimus/config.json`)
-6. `make test` passes (or command from `.optimus/config.json`)
+5. `make lint` passes (or command from `.optimus.json`)
+6. `make test` passes (or command from `.optimus.json`)
 7. `make test-integration` passes (if target exists, or from config.json)
 8. `make test-e2e` passes (if target exists, or from config.json)
 
@@ -564,8 +587,8 @@ Every stage agent MUST validate tasks.md before operating. The full validation r
 defined in the "Format Validation" section above (items 1-15). This protocol is the
 executable version:
 
-1. **Find tasks.md:** Look in `.optimus/tasks.md`. If not found, **STOP** and suggest `/optimus-migrate`.
-2. **Validate format:** Execute all 15 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-migrate`.
+1. **Find tasks.md:** Look in `docs/tasks.md`. If not found, **STOP** and suggest `/optimus-migrate`.
+2. **Validate format:** Execute all 16 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-migrate`.
 
 Skills reference this as: "Find and validate tasks.md (HARD BLOCK) — see AGENTS.md Protocol: tasks.md Validation."
 
@@ -581,6 +604,36 @@ If this command fails (exit code != 0), **STOP** immediately:
 ```
 GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
 ```
+
+### Protocol: Initialize .optimus Directory
+
+**Referenced by:** all skills that create temporary state files
+
+Before creating ANY file inside `.optimus/`, ensure the directory exists and is fully
+gitignored (`.optimus/` contains only temporary state — no versioned files):
+
+```bash
+mkdir -p .optimus
+if ! grep -q '^\.optimus/' .gitignore 2>/dev/null; then
+  printf '\n.optimus/\n' >> .gitignore
+fi
+```
+
+This MUST run before writing session files or report exports.
+
+Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
+
+### Protocol: Initialize docs/tasks Directory
+
+**Referenced by:** all skills that create `docs/tasks.md` or `docs/tasks/T-NNN.md`
+
+Before creating task files, ensure the directory structure exists:
+
+```bash
+mkdir -p docs/tasks
+```
+
+Skills reference this as: "Initialize docs/tasks directory — see AGENTS.md Protocol: Initialize docs/tasks Directory."
 
 ### Protocol: Session State
 
@@ -634,10 +687,10 @@ fi
 **On stage progress (at key phase transitions):**
 
 ```bash
+# Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
 mkdir -p .optimus
-# Ensure .optimus/ session files are gitignored but tasks.md and config.json are tracked
-if ! grep -q '.optimus/\*' .gitignore 2>/dev/null; then
-  printf '\n.optimus/*\n!.optimus/tasks.md\n!.optimus/config.json\n' >> .gitignore
+if ! grep -q '^\.optimus/' .gitignore 2>/dev/null; then
+  printf '\n.optimus/\n' >> .gitignore
 fi
 cat > ".optimus/session-${TASK_ID}.json" << EOF
 {"task_id":"${TASK_ID}","stage":"<stage-name>","status":"<status>","branch":"$(git branch --show-current)","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","phase":"<current-phase>","notes":"<progress>"}
@@ -667,7 +720,7 @@ CURRENT_BRANCH=$(git branch --show-current)
 
 1. **Already on a feature branch?**
    - Cross-validate: check that `CURRENT_BRANCH` matches the **Branch** column in
-     `.optimus/tasks.md` for the target task.
+     `docs/tasks.md` for the target task.
    - If Branch matches → proceed silently.
    - If Branch does not match → warn via `AskUser`: "tasks.md shows branch `<expected>`
      for T-XXX, but you are on `<current>`. Continue on current branch, or switch?"
@@ -675,7 +728,7 @@ CURRENT_BRANCH=$(git branch --show-current)
      T-XXX, but you are on `<current>`. Continue anyway?"
 
 2. **On the default branch (auto-navigate)?**
-   - Read `.optimus/tasks.md` and list tasks with status compatible with the current stage
+   - Read `docs/tasks.md` and list tasks with status compatible with the current stage
      (use the Transition Table to determine which statuses are valid).
    - **If 0 eligible tasks** → **STOP**: "No tasks in `<expected-status>` found."
    - **If 1 eligible task** → suggest via `AskUser`: "Found task T-XXX — [title] in
@@ -713,7 +766,7 @@ edits that could cause merge conflicts later:
 ```bash
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
 git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
-git diff "origin/$DEFAULT_BRANCH" -- .optimus/tasks.md 2>/dev/null | head -20
+git diff "origin/$DEFAULT_BRANCH" -- docs/tasks.md 2>/dev/null | head -20
 ```
 
 - If diff output is non-empty → warn via `AskUser`:
@@ -827,12 +880,12 @@ Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Pus
 
 ## Verification Command Configuration
 
-Projects can customize verification commands via `.optimus/config.json` instead of relying
+Projects can customize verification commands via `.optimus.json` instead of relying
 on auto-detection from Makefile or stack conventions.
 
 ### Config File
 
-Location: `.optimus/config.json` (project root)
+Location: `.optimus.json` (project root, versioned)
 
 ```json
 {
@@ -850,7 +903,7 @@ Location: `.optimus/config.json` (project root)
 ### Behavior
 
 All skills that run verification commands (verify, done, build,
-check) MUST check for `.optimus/config.json` BEFORE auto-detecting
+check) MUST check for `.optimus.json` BEFORE auto-detecting
 commands. If the config file exists, use its commands instead of auto-detection.
 
 If a command key is missing from the config, fall back to auto-detection for that command.
