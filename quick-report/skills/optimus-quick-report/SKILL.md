@@ -156,12 +156,26 @@ Each section uses a distinct ASCII symbol for instant visual recognition:
 - **Blocked:** `✗` (cannot proceed)
 - **Done:** `✓` (completed)
 
+### Stage Progress Mini-Bar
+
+For active tasks, render a mini progress bar (5 chars wide) showing how far the task
+has advanced through the 5-stage pipeline. The mapping is:
+
+| Status | Stage | Filled chars |
+|--------|-------|-------------|
+| `Validando Spec` | 1/5 | 1 |
+| `Em Andamento` | 2/5 | 2 |
+| `Validando Impl` | 3/5 | 3 |
+| `Revisando PR` | 4/5 | 4 |
+
+Examples: `[█░░░░] 1/5`, `[██░░░] 2/5`, `[███░░] 3/5`, `[████░] 4/5`
+
 ### Section Format
 
 ```
   ▶ ACTIVE (N)
-    T-NNN <status>       — <title>
-    T-NNN <status>       — <title>
+    T-NNN <status>       — <title>              [██░░░] 2/5
+    T-NNN <status>       — <title>              [███░░] 3/5
 
   ○ READY (N)
     T-NNN [<priority>]   <title>
@@ -188,7 +202,7 @@ Each section uses a distinct ASCII symbol for instant visual recognition:
    version(s) selected in Step 2.2.
 
 3. **Active tasks** are sorted by status advancement (Revisando PR first, then Validando Impl,
-   Em Andamento, Validando Spec).
+   Em Andamento, Validando Spec). Show stage progress mini-bar next to each task.
 
 4. **Ready tasks** are sorted by Priority (`Alta` > `Media` > `Baixa`), then by ID.
 
