@@ -83,28 +83,39 @@ For operations that do not use `gh` (create, edit, remove, reorder, version mana
 
 ### Step 1.0.1: Find and Validate tasks.md
 
-1. **Find tasks.md:** Look in `docs/tasks.md`. If not found, ask the user via `AskUser`:
+1. **Find tasks.md:** Resolve the path using the AGENTS.md Protocol: tasks.md Validation
+   (reads `tasksFile` from `.optimus.json`, falls back to `docs/tasks.md`).
 
-   "No docs/tasks.md found. What should I do?"
-   - **(a) Create a new tasks.md** — creates `docs/tasks.md` with the optimus format marker and empty table
-   - **(b) Run migrate** — use this if you already have task files in another format
+   If not found, ask the user via `AskUser`:
 
-   If the user chooses to create, first initialize the docs/tasks directory (see AGENTS.md
-   Protocol: Initialize docs/tasks Directory). Ask for an initial version name
-   via `AskUser` (e.g., "MVP", "v1"), then write `docs/tasks.md` with:
-   ```markdown
-   <!-- optimus:tasks-v1 -->
-   # Tasks
+   "No tasks.md found. What should I do?"
+   - **(a) Create at docs/tasks.md** (default location)
+   - **(b) Create at a custom path** — user specifies (e.g., `project/tasks.md`)
+   - **(c) Run migrate** — use this if you already have task files in another format
 
-   ## Versions
-   | Version | Status | Description |
-   |---------|--------|-------------|
-   | <user-provided> | Ativa | <ask user for description> |
+   If the user chooses to create:
+   1. Determine the path (`TASKS_FILE`) — default or custom
+   2. Initialize the tasks directory (see AGENTS.md Protocol: Initialize Tasks Directory)
+   3. Ask for an initial version name via `AskUser` (e.g., "MVP", "v1")
+   4. Write `TASKS_FILE` with:
+      ```markdown
+      <!-- optimus:tasks-v1 -->
+      # Tasks
 
-   | ID | Title | Tipo | Status | Depends | Priority | Version | Branch | Estimate |
-   |----|-------|------|--------|---------|----------|---------|--------|----------|
-   ```
-   Then commit: `chore(tasks): initialize tasks.md`
+      ## Versions
+      | Version | Status | Description |
+      |---------|--------|-------------|
+      | <user-provided> | Ativa | <ask user for description> |
+
+      | ID | Title | Tipo | Status | Depends | Priority | Version | Branch | Estimate |
+      |----|-------|------|--------|---------|----------|---------|--------|----------|
+      ```
+   5. If `TASKS_FILE` is not the default (`docs/tasks.md`), register it in `.optimus.json`:
+      ```bash
+      if [ ! -f .optimus.json ]; then echo '{}' > .optimus.json; fi
+      jq --arg path "$TASKS_FILE" '.tasksFile = $path' .optimus.json > .optimus.json.tmp && mv .optimus.json.tmp .optimus.json
+      ```
+   6. Commit: `chore(tasks): initialize tasks.md`
 
 2. **Validate format (HARD BLOCK):** See AGENTS.md Protocol: tasks.md Validation.
 

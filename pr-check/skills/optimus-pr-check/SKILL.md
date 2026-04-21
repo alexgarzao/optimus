@@ -152,7 +152,7 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
 6. **Update status:** Change the task status in `tasks.md` to `Revisando PR` (if not already).
 7. Commit the status change immediately:
    ```bash
-   git add docs/tasks.md
+   git add "$TASKS_FILE"
    git commit -m "chore(tasks): set T-XXX status to Revisando PR"
    ```
 8. **Invoke notification hooks** (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.

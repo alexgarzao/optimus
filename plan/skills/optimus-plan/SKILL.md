@@ -225,7 +225,7 @@ task while the worktree is being created.
    - Set **Branch** to the generated branch name
    - Commit immediately:
      ```bash
-     git add docs/tasks.md
+     git add "$TASKS_FILE"
      git commit -m "chore(tasks): start T-XXX — set status to Validando Spec"
      ```
 

@@ -175,9 +175,10 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 5. Update the Status column to `Validando Impl` (if not already)
 6. Commit the status change immediately:
    ```bash
-   git add docs/tasks.md
+   git add "$TASKS_FILE"
    git commit -m "chore(tasks): set T-XXX status to Validando Impl"
    ```
+   Where `TASKS_FILE` is the resolved path from the tasks.md Validation protocol.
 7. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
 
 **Why commit immediately:** If the session is interrupted or the agent crashes before any review fixes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of the review outcome.

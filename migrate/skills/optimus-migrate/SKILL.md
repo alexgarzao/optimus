@@ -55,8 +55,12 @@ verification:
 
 Discovers existing task files and converts them to the standard optimus `tasks.md` format.
 
-**CRITICAL:** This agent NEVER deletes original files. It creates/updates `docs/tasks.md`
+**CRITICAL:** This agent NEVER deletes original files. It creates/updates tasks.md
 and leaves originals untouched. The user decides whether to remove them later.
+
+**NOTE:** The output location is configurable. If `.optimus.json` has a `tasksFile` key,
+use that path. Otherwise, default to `docs/tasks.md`. After migration, register the
+chosen path in `.optimus.json` so all agents find it.
 
 ---
 
@@ -64,19 +68,43 @@ and leaves originals untouched. The user decides whether to remove them later.
 
 ### Step 1.1: Scan for Task Files
 
-Search the project for any form of task tracking. Check ALL of these locations:
+Search the project for any form of task tracking. First check `.optimus.json` for a
+configured path, then scan known locations, then search recursively.
 
+**Step 1 — Check configured path:**
+```bash
+CONFIGURED=$(cat .optimus.json 2>/dev/null | jq -r '.tasksFile // empty')
 ```
-# Files to check (in order)
+If `CONFIGURED` is set and the file exists with the optimus format marker, inform the
+user: "Found configured tasks.md at `<path>`. Nothing to migrate." and **STOP**.
+
+**Step 2 — Check known locations (in order):**
+```
 docs/tasks.md
 ./tasks.md
-./docs/tasks.md
 ./docs/pre-dev/tasks.md
 ./TODO.md
 ./TASKS.md
 ./backlog.md
+```
 
-# Directories to check
+**Step 3 — Recursive search for any tasks.md:**
+```bash
+find . -name "tasks.md" -not -path "*/.git/*" -not -path "*/node_modules/*" -not -path "*/.optimus/*" 2>/dev/null
+```
+
+If multiple `tasks.md` files are found, present ALL to the user via `AskUser`:
+```
+Multiple tasks.md files found:
+  1. docs/tasks.md (optimus format detected)
+  2. project/tasks.md (plain markdown)
+  3. src/tasks.md (checklist format)
+
+Which one should be the primary tasks.md? (The others will be treated as migration sources)
+```
+
+**Step 4 — Check known directories:**
+```
 ./tasks/
 ./docs/tasks/
 ./docs/pre-dev/tasks/
@@ -300,12 +328,31 @@ Generate the complete `tasks.md` in optimus format and present it to the user:
 - [ ] Email validation
 ```
 
-### Step 3.2: Confirm Before Applying
+### Step 3.2: Choose Output Location
+
+Ask via `AskUser` where to write the tasks.md:
+
+```
+Where should I create tasks.md?
+```
+
+Options:
+- **docs/tasks.md** (default) — standard location
+- **Custom path** — specify a different location (e.g., `project/tasks.md`)
+- If a source tasks.md was found during discovery, offer: **Keep at current location** (`<source-path>`)
+
+Store the chosen path as `TASKS_FILE`. Derive `TASKS_DIR = dirname(TASKS_FILE) + "/tasks/"`.
+
+### Step 3.3: Confirm Before Applying
 
 Use `AskUser`:
 
 ```
-Here's the proposed tasks.md with N tasks. What should I do?
+Here's the proposed tasks.md with N tasks.
+  Location: <TASKS_FILE>
+  Detail files: <TASKS_DIR>/T-NNN.md
+
+What should I do?
 ```
 
 Options:
@@ -319,49 +366,67 @@ Options:
 
 ## Phase 4: Apply Conversion
 
-### Step 4.1: Check for Existing docs/tasks.md
+### Step 4.1: Check for Existing tasks.md
 
-If `docs/tasks.md` already exists in optimus format:
-- Ask via `AskUser`: "docs/tasks.md already exists. Merge new tasks into it, or replace entirely?"
+If `TASKS_FILE` already exists in optimus format:
+- Ask via `AskUser`: "`<TASKS_FILE>` already exists. Merge new tasks into it, or replace entirely?"
 - If merge: add only tasks that don't already exist (match by ID or title)
 - If replace: backup the existing file content (show it to the user first)
 
-If `docs/tasks.md` exists in non-optimus format:
-- Rename to `docs/tasks.md.bak` before creating the new one
-- Inform the user: "Backed up original to docs/tasks.md.bak"
+If `TASKS_FILE` exists in non-optimus format:
+- Rename to `<TASKS_FILE>.bak` before creating the new one
+- Inform the user: "Backed up original to `<TASKS_FILE>.bak`"
 
-### Step 4.2: Write docs/tasks.md and detail files
+### Step 4.2: Write tasks.md and detail files
 
-First initialize the docs/tasks directory (see AGENTS.md Protocol: Initialize docs/tasks Directory).
+First initialize the tasks directory (see AGENTS.md Protocol: Initialize Tasks Directory).
 
-Create `docs/tasks.md` with:
+Create `TASKS_FILE` with:
 1. Format marker: `<!-- optimus:tasks-v1 -->` (MUST be the first line)
 2. H1 heading: `# Tasks`
 3. `## Versions` section with the versions table (from Step 1.5)
 4. The tasks table (all columns including Version)
 
-Create individual detail files `docs/tasks/T-NNN.md` for each task with:
+Create individual detail files `TASKS_DIR/T-NNN.md` for each task with:
 1. H1 heading: `# T-NNN: <title>`
 2. Objective and acceptance criteria (extracted content)
 
-### Step 4.3: Commit
+### Step 4.3: Register in .optimus.json
+
+If `TASKS_FILE` is NOT the default (`docs/tasks.md`), register it in `.optimus.json`:
 
 ```bash
-git add docs/tasks.md docs/tasks/
+if [ ! -f .optimus.json ]; then
+  echo '{}' > .optimus.json
+fi
+# Add or update tasksFile key
+jq --arg path "$TASKS_FILE" '.tasksFile = $path' .optimus.json > .optimus.json.tmp && mv .optimus.json.tmp .optimus.json
+```
+
+If `TASKS_FILE` IS the default (`docs/tasks.md`), registration is optional (the default
+is used when `tasksFile` is absent). Still register it if `.optimus.json` already exists
+to be explicit.
+
+### Step 4.4: Commit
+
+```bash
+git add "$TASKS_FILE" "$TASKS_DIR/" .optimus.json
 git commit -m "chore: migrate tasks to optimus format (migrate)
 
 Migrated N tasks from [sources list].
+Tasks file: $TASKS_FILE
 Original files preserved."
 ```
 
-### Step 4.4: Final Summary
+### Step 4.5: Final Summary
 
 ```markdown
 ## Migration Complete
 
 - **Tasks migrated:** N
 - **Sources processed:** [list]
-- **tasks.md created:** docs/tasks.md + docs/tasks/T-NNN.md files
+- **tasks.md created:** <TASKS_FILE> + <TASKS_DIR>/T-NNN.md files
+- **Registered in:** .optimus.json (tasksFile: <TASKS_FILE>)
 - **Original files:** NOT deleted (remove manually if desired)
 
 ### Next Steps
@@ -374,12 +439,12 @@ Original files preserved."
 
 ## Rules
 
-- **NEVER delete original files** — only create/update docs/tasks.md and docs/tasks/T-NNN.md
+- **NEVER delete original files** — only create/update tasks.md and task detail files at the configured location
 - **NEVER apply changes without user approval** — always present and confirm first
 - **NEVER invent task content** — only extract what exists in the source files
 - **NEVER assume dependencies from task order** — sequential IDs don't imply dependency
-- If a task has no content (just a title), create `docs/tasks/T-NNN.md` with empty Objetivo and Critérios de Aceite, and warn the user
+- If a task has no content (just a title), create `TASKS_DIR/T-NNN.md` with empty Objetivo and Critérios de Aceite, and warn the user
 - If status inference is uncertain, mark as `Pendente` and flag as "(inferred)" in the inventory
-- If the project already has a valid `docs/tasks.md` (first line is `<!-- optimus:tasks-v1 -->`), inform the user and stop (nothing to migrate)
+- If the project already has a valid tasks.md at the configured/default path (first line is `<!-- optimus:tasks-v1 -->`), inform the user and stop (nothing to migrate)
 - Subtasks always become checklist items in the parent task — never separate entries in the table
 - Task IDs must be unique — if duplicates found, warn the user before proceeding

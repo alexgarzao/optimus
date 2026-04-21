@@ -133,20 +133,31 @@ source of truth for task tracking.
 
 ### File Location
 
-All agents look for `tasks.md` in a single fixed location:
+The location of `tasks.md` is configurable via `.optimus.json`. Agents resolve the
+path using this priority:
+
+1. **Read `.optimus.json`** at the project root. If `tasksFile` is set, use that path.
+2. **Fallback:** `docs/tasks.md` (default when no config exists).
+3. **If not found:** **STOP** and suggest running `migrate` to create one.
+
+```json
+{
+  "tasksFile": "docs/tasks.md"
+}
+```
+
+**Task detail files** (objectives, acceptance criteria) are stored as individual files
+in a `tasks/` directory **derived from the tasksFile path**:
 
 ```
-docs/tasks.md
+tasksDir = dirname(tasksFile) + "/tasks/"
 ```
 
-There are no fallback locations. If `docs/tasks.md` does not exist, the agent must
-inform the user and suggest running `migrate` to create one.
-
-Task detail files (objectives, acceptance criteria) are stored as individual files:
-
-```
-docs/tasks/T-NNN.md
-```
+| tasksFile | tasksDir | Detail file example |
+|-----------|----------|---------------------|
+| `docs/tasks.md` (default) | `docs/tasks/` | `docs/tasks/T-001.md` |
+| `project/tasks.md` | `project/tasks/` | `project/tasks/T-001.md` |
+| `tasks.md` (root) | `tasks/` | `tasks/T-001.md` |
 
 Each task has its own detail file. This prevents merge conflicts when multiple
 worktrees work on different tasks in parallel.
@@ -585,8 +596,15 @@ Every stage agent MUST validate tasks.md before operating. The full validation r
 defined in the "Format Validation" section above (items 1-15). This protocol is the
 executable version:
 
-1. **Find tasks.md:** Look in `docs/tasks.md`. If not found, **STOP** and suggest `/optimus-migrate`.
-2. **Validate format:** Execute all 16 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-migrate`.
+1. **Resolve tasks.md path:**
+   - Read `.optimus.json` at project root. If `tasksFile` key exists, use that path.
+   - If `.optimus.json` does not exist or `tasksFile` is not set, use `docs/tasks.md` (default).
+   - Store the resolved path as `TASKS_FILE` and derive `TASKS_DIR = dirname(TASKS_FILE) + "/tasks/"`.
+2. **Find tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus-migrate`.
+3. **Validate format:** Execute all 16 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-migrate`.
+
+**All subsequent references to `tasks.md` and `docs/tasks/T-NNN.md` in the skill use the
+resolved `TASKS_FILE` and `TASKS_DIR` paths** — never hardcoded paths.
 
 Skills reference this as: "Find and validate tasks.md (HARD BLOCK) — see AGENTS.md Protocol: tasks.md Validation."
 
@@ -621,17 +639,22 @@ This MUST run before writing session files or report exports.
 
 Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
 
-### Protocol: Initialize docs/tasks Directory
+### Protocol: Initialize Tasks Directory
 
-**Referenced by:** all skills that create `docs/tasks.md` or `docs/tasks/T-NNN.md`
+**Referenced by:** all skills that create tasks.md or task detail files
 
-Before creating task files, ensure the directory structure exists:
+Before creating task files, resolve the tasks directory path and ensure it exists:
 
 ```bash
-mkdir -p docs/tasks
+# Resolve TASKS_DIR from .optimus.json (or default)
+TASKS_FILE=$(cat .optimus.json 2>/dev/null | jq -r '.tasksFile // empty')
+TASKS_FILE="${TASKS_FILE:-docs/tasks.md}"
+TASKS_DIR="$(dirname "$TASKS_FILE")/tasks"
+
+mkdir -p "$TASKS_DIR"
 ```
 
-Skills reference this as: "Initialize docs/tasks directory — see AGENTS.md Protocol: Initialize docs/tasks Directory."
+Skills reference this as: "Initialize tasks directory — see AGENTS.md Protocol: Initialize Tasks Directory."
 
 ### Protocol: Session State
 
@@ -763,8 +786,10 @@ edits that could cause merge conflicts later:
 
 ```bash
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+TASKS_FILE=$(cat .optimus.json 2>/dev/null | jq -r '.tasksFile // empty')
+TASKS_FILE="${TASKS_FILE:-docs/tasks.md}"
 git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
-git diff "origin/$DEFAULT_BRANCH" -- docs/tasks.md 2>/dev/null | head -20
+git diff "origin/$DEFAULT_BRANCH" -- "$TASKS_FILE" 2>/dev/null | head -20
 ```
 
 - If diff output is non-empty → warn via `AskUser`:

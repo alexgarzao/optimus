@@ -65,7 +65,9 @@ always "most advanced status wins" for each task independently.
 Check if `tasks.md` has merge conflict markers:
 
 ```bash
-grep -c '<<<<<<<' docs/tasks.md 2>/dev/null
+TASKS_FILE=$(cat .optimus.json 2>/dev/null | jq -r '.tasksFile // empty')
+TASKS_FILE="${TASKS_FILE:-docs/tasks.md}"
+grep -c '<<<<<<<' "$TASKS_FILE" 2>/dev/null
 ```
 
 If no conflict markers found:
@@ -242,7 +244,7 @@ If validation fails, inform the user and offer to fix or abort.
 ### Step 4.3: Stage the File
 
 ```bash
-git add docs/tasks.md
+git add "$TASKS_FILE"
 ```
 
 ### Step 4.4: Inform Next Steps

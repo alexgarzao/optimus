@@ -65,7 +65,7 @@ Chains stages 1-5 for one or more tasks with user checkpoints between stages.
 
 ### Step 1.1: Find and Validate tasks.md
 
-1. **Find tasks.md:** Look in `docs/tasks.md`.
+1. **Find tasks.md:** Resolve the path using the AGENTS.md Protocol: tasks.md Validation.
 2. **Validate format:** First line must be `<!-- optimus:tasks-v1 -->`. Full format validation.
 
 If validation fails, **STOP** and suggest `/optimus-migrate`.

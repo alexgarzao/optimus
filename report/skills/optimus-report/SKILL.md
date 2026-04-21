@@ -59,9 +59,9 @@ Read-only agent that parses `tasks.md` and presents a comprehensive project stat
 
 ### Step 1.1: Locate tasks.md
 
-Look for `docs/tasks.md`. There are no fallback locations.
+Resolve the tasks.md path: read `tasksFile` from `.optimus.json` (fallback: `docs/tasks.md`).
 
-If not found, inform the user and suggest: "No docs/tasks.md found. Run `/optimus-migrate` to create one from existing task files, or create it manually following the optimus format."
+If not found, inform the user and suggest: "No tasks.md found. Run `/optimus-migrate` to create one from existing task files, or create it manually following the optimus format."
 
 ### Step 1.1.1: Validate Format Marker
 
