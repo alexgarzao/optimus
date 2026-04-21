@@ -1,0 +1,8 @@
+{
+  "name": "import",
+  "description": "Import external task artifacts into optimus format. Discovers task files and ring pre-dev artifacts. Re-runnable.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Alex Garzao"
+  }
+}

@@ -45,7 +45,7 @@ examples:
       4. Save
 related:
   complementary:
-    - optimus-migrate
+    - optimus-import
     - optimus-report
 verification:
   manual:
@@ -87,7 +87,7 @@ For operations that do not use `gh` (create, edit, remove, reorder, version mana
    "No tasks.md found. What should I do?"
    - **(a) Create at docs/tasks.md** (default location)
    - **(b) Create at a custom path** — user specifies (e.g., `project/tasks.md`)
-   - **(c) Run migrate** — use this if you already have task files in another format
+   - **(c) Run import** — use this if you already have task files in another format
 
    If the user chooses to create:
    1. Determine the path (`TASKS_FILE`) — default or custom
@@ -298,6 +298,46 @@ If the user specified dependencies:
 1. Verify each dependency ID exists in the table
 2. Check for circular dependencies: if T-NEW depends on T-X, and T-X (directly or transitively) would depend on T-NEW → reject
 3. If any dependency ID is invalid → ask the user to correct it
+
+### Step 2.3.1: Discover Ring Pre-Dev Artifacts
+
+Before creating the detail file, check if ring pre-dev artifacts exist for this task:
+
+1. Check if `docs/pre-dev/tasks/` directory exists. If not, skip this step.
+2. Scan `docs/pre-dev/tasks/*.md` for task files
+3. Extract the title from the first heading of each ring task file
+4. Extract 3-5 significant keywords from the new task's title (ignore articles,
+   prepositions, and generic verbs like "criar", "implementar", "resolver", "add", "create")
+5. Calculate keyword overlap and sort by relevance
+
+**If matches found** (1+ keyword in common), present via `AskUser`:
+```
+Found ring pre-dev tasks that may be related to "<new task title>":
+
+  [1] task_020.md — "Painel UI Redesign (Sidebar + Topbar)" (3 keywords)
+      Subtasks: 13 files in docs/pre-dev/subtasks/T-020/
+  [2] task_022.md — "Formularios Responsivos com Abas" (1 keyword)
+
+Link to one of these?
+```
+Options:
+- **[N] task_NNN.md** — link this ring task
+- **Show all ring tasks** — list every task for manual selection
+- **None** — create without ring reference
+
+**If no matches found**, ask:
+```
+No ring pre-dev tasks found with similar title.
+Link to an existing ring task?
+```
+Options:
+- **Show all ring tasks** — list every task for manual selection
+- **None** — create without ring reference
+
+**If linked**, append a `## Referencia Pre-Dev` section to the detail file content
+(generated in Step 2.4) with the ring task spec path, subtasks directory path,
+PARALLEL-PLAN.md path (if exists), and a table listing each subtask file with
+its heading as description. See `optimus-import` Step 1.4.1 for the exact format.
 
 ### Step 2.4: Add to tasks.md and create detail file
 

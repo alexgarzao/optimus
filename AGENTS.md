@@ -15,7 +15,7 @@ optimus/
 ├── catalog/                           # Skill reference cards (read-only docs)
 │   ├── analysis/                      # Review/analysis skill cards
 │   └── system/                        # Orchestration skill cards
-├── migrate/                   # Admin: Task format migrator (one-time)
+├── import/                    # Admin: Import external task artifacts (re-runnable)
 ├── report/                    # Admin: Task status dashboard (read-only)
 ├── tasks/                      # Admin: Create, edit, remove, reorder tasks
 ├── batch/                     # Execution: Pipeline orchestrator (stages 1-5)
@@ -138,7 +138,7 @@ path using this priority:
 
 1. **Read `.optimus.json`** at the project root. If `tasksFile` is set, use that path.
 2. **Fallback:** `docs/tasks.md` (default when no config exists).
-3. **If not found:** **STOP** and suggest running `migrate` to create one.
+3. **If not found:** **STOP** and suggest running `import` to create one.
 
 ```json
 {
@@ -184,7 +184,7 @@ The **first line** of `tasks.md` MUST be the format marker:
 
 This marker tells agents that the file is in valid optimus format. Agents check this
 line FIRST — if it's missing, the file is treated as non-optimus format and the agent
-suggests running `/optimus-migrate`.
+suggests running `/optimus-import`.
 
 ### Format:
 
@@ -346,6 +346,10 @@ Each task has an individual detail file at `docs/tasks/T-NNN.md` containing:
 - **H1 heading:** `# T-NNN: Title` (must match the table row)
 - **Objetivo:** What the task achieves
 - **Critérios de Aceite:** Checklist of acceptance criteria (use `- [ ]` / `- [x]`)
+- **Referencia Pre-Dev** (optional): Links to ring pre-dev artifacts (task spec, subtask
+  files, execution plan). Added by `import` or `tasks` when ring pre-dev artifacts are
+  discovered. When present, stage agents (build, plan) MUST follow these links and read
+  the referenced files as part of the task's full specification.
 - Any additional context: API specs, data model, references, etc.
 
 Agents read these files to understand what to implement and validate. This split
@@ -422,7 +426,7 @@ Every stage agent (1-5) MUST validate the `docs/tasks.md` format before operatin
 14. No circular dependencies in the dependency graph (e.g., T-001 → T-002 → T-001)
 
 If the format marker is missing or validation fails, the agent must **STOP** and suggest
-running `/optimus-migrate` to fix the format. Do NOT attempt to interpret malformed data.
+running `/optimus-import` to fix the format. Do NOT attempt to interpret malformed data.
 
 15. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
 16. Every task ID in the table has a corresponding detail file at `docs/tasks/T-NNN.md`
@@ -498,7 +502,7 @@ Any status → Cancelado  (via tasks cancel operation)
 
    | Type | Agent | Allowed on main/default? | Reason |
    |------|-------|-------------------------|--------|
-   | Admin | migrate | Yes | Only creates/modifies tasks.md |
+   | Admin | import | Yes | Only creates/modifies tasks.md |
    | Admin | report | Yes | Read-only, no modifications |
    | Admin | quick-report | Yes | Read-only, no modifications |
    | Admin | tasks | Yes | Only creates/edits/removes tasks in tasks.md |
@@ -601,8 +605,8 @@ executable version:
    - Read `.optimus.json` at project root. If `tasksFile` key exists, use that path.
    - If `.optimus.json` does not exist or `tasksFile` is not set, use `docs/tasks.md` (default).
    - Store the resolved path as `TASKS_FILE` and derive `TASKS_DIR = dirname(TASKS_FILE) + "/tasks/"`.
-2. **Find tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus-migrate`.
-3. **Validate format:** Execute all 16 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-migrate`.
+2. **Find tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus-import`.
+3. **Validate format:** Execute all 16 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-import`.
 
 **All subsequent references to `tasks.md` and `docs/tasks/T-NNN.md` in the skill use the
 resolved `TASKS_FILE` and `TASKS_DIR` paths** — never hardcoded paths.

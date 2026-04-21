@@ -1,8 +1,0 @@
-{
-  "name": "migrate",
-  "description": "Discovers existing task files in any format and converts them to the standard optimus tasks.md format. Runs once per project.",
-  "version": "1.0.0",
-  "author": {
-    "name": "Alex Garzao"
-  }
-}

@@ -291,12 +291,28 @@ Before loading docs, discover the project's structure:
 
 Read ALL discovered reference docs:
 - Task spec (find the task being validated by ID)
+- **Ring pre-dev references** (see Step 1.2.1 below)
 - API contracts
 - DB schema / data model
 - Technical architecture
 - Business requirements
 - Coding standards (source of truth)
 - Dependency relationships
+
+### Step 1.2.1: Load Ring Pre-Dev References
+
+Check the task's detail file (`docs/tasks/T-XXX.md`) for a `## Referencia Pre-Dev` section.
+If present, follow the links and read ALL referenced artifacts:
+
+1. **Task spec** (`docs/pre-dev/tasks/task_NNN.md`) — contains the validated task
+   specification with objective, acceptance criteria, API contracts, and data model.
+2. **Subtask files** (`docs/pre-dev/subtasks/T-NNN/*.md`) — contain implementation
+   details, code examples, and step-by-step instructions.
+
+**Why this matters for spec validation:** Without reading ring pre-dev references, the
+validator may raise false findings about "incomplete spec" or "missing details" when the
+information exists in the referenced artifacts. These documents are part of the task's
+specification — not just implementation guidance.
 
 ### Step 1.3: Verify Existing Code
 
