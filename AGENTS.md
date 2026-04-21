@@ -32,6 +32,7 @@ optimus/
 ├── coderabbit-review/                 # CodeRabbit CLI + TDD cycle
 ├── verify/                            # Automated verification (lint/test/build)
 ├── help/                              # Skill discovery and help
+├── quick-report/                      # Compact daily status dashboard
 └── docs/                              # Project documentation
     └── future-improvements.md         # Tracked improvements not yet prioritized
 ```
@@ -466,6 +467,7 @@ Any status → Cancelado  (via cycle-crud cancel operation)
    |------|-------|-------------------------|--------|
    | Admin | cycle-migrate | Yes | Only creates/modifies tasks.md |
    | Admin | cycle-report | Yes | Read-only, no modifications |
+   | Admin | quick-report | Yes | Read-only, no modifications |
    | Admin | cycle-crud | Yes | Only creates/edits/removes tasks in tasks.md |
    | Execution | cycle-spec-stage-1 | Yes (creates worktree) | Always creates worktree on default branch, then works there |
    | Execution | cycle-impl-stage-2 | Yes (auto-navigates) | Finds task worktree and navigates to it |

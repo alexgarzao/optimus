@@ -15,6 +15,7 @@ Skills are classified as **Administrative** (run anywhere) or **Execution** (req
 | `cycle-crud` | Create, edit, remove, reorder, and cancel tasks in tasks.md. Runs on any branch | `/optimus-cycle-crud` |
 | `cycle-batch` | Pipeline orchestrator: chains stages 1-5 for one or more tasks with user checkpoints between stages | `/optimus-cycle-batch` |
 | `cycle-conflict-resolve` | Resolves merge conflicts in tasks.md caused by parallel task execution across feature branches | `/optimus-cycle-conflict-resolve` |
+| `quick-report` | Compact daily status dashboard. Shows version progress, active tasks with criteria progress, ready-to-start, and blocked tasks. Read-only | `/optimus-quick-report` |
 | `help` | Lists all available Optimus skills with descriptions, usage commands, and when to use each one | `/optimus-help` |
 
 ### Execution Skills (stages 1-5)
