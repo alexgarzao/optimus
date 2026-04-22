@@ -266,9 +266,27 @@ If the user chose to fix:
 
 ---
 
-## Phase 6: Final Summary
+## Phase 6: Convergence Loop (MANDATORY)
 
-After processing all findings:
+Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Loop".
+
+**Stage-specific scope for convergence rounds 2+:**
+Dispatch the **same 3 droids** from Phase 2 (docs-reviewer, business-logic-reviewer,
+code-reviewer). Each agent receives file paths to all docs being reviewed and project
+rules (re-read fresh from disk). Do NOT include the findings ledger in agent prompts —
+the orchestrator handles dedup using strict matching (same file + same line range ±5 +
+same category).
+
+**Failure handling:** If any agent dispatch fails, treat that agent's slot as "zero findings"
+for that round but warn the user. Do NOT fail the entire review.
+
+When the loop exits, proceed to Phase 7 (Final Summary).
+
+---
+
+## Phase 7: Final Summary
+
+After the convergence loop exits and all findings are processed:
 
 ```markdown
 ## Deep Doc Review — Summary

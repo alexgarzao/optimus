@@ -573,12 +573,16 @@ If no corrections were applied (all findings skipped), skip this step.
 
 Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Loop".
 
-**Stage-specific scope for fresh sub-agent dispatch (rounds 2+):**
-Use `ring-default-business-logic-reviewer` for spec validation. The sub-agent receives:
-1. File paths to task spec, reference docs, tasks.md, project rules (sub-agent reads fresh via Read/Grep/Glob tools)
-2. The findings ledger (for dedup only)
-3. Analysis instructions: cross-reference (Step 2.1), test gaps (Step 2.2), observability (Step 2.3), DoD, ambiguities
-4. Cross-cutting analysis instructions (same 5 items from Step 2.4 prompt)
+**Stage-specific scope for convergence rounds 2+:**
+Dispatch the **same 4 droids** from Step 2.4 (business-logic-reviewer, security-reviewer,
+qa-analyst, code-reviewer). Each agent receives file paths to task spec, reference docs,
+tasks.md, and project rules (re-read fresh from disk). Do NOT include the findings ledger
+in agent prompts — the orchestrator handles dedup using strict matching (same file + same
+line range ±5 + same category).
+
+Include analysis instructions: cross-reference (Step 2.1), test gaps (Step 2.2),
+observability (Step 2.3), DoD, ambiguities. Include the cross-cutting analysis instructions
+(same 5 items from Step 2.4 prompt).
 
 When the loop exits, proceed to Phase 7 (Re-run Guard).
 

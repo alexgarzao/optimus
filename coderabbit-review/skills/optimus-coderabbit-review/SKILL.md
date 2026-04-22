@@ -443,98 +443,24 @@ Required output format:
 
 ---
 
-## Phase 6: Convergence Loop (MANDATORY — automatic re-validation with escalating scrutiny)
+## Phase 6: Convergence Loop (MANDATORY)
 
-After Phase 5 completes, the reviewer MUST automatically re-validate using fresh sub-agents to eliminate session bias. This catches both new issues introduced by fixes AND issues missed in round 1.
+Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Loop".
 
-**CRITICAL — Why Fresh Sub-Agents:**
+**Stage-specific scope for convergence rounds 2+:**
+Dispatch the **same agent roster** used in Phase 4 Step 4.1 (all 7 review droids). Each
+agent receives file paths and project rules (re-read fresh from disk). Do NOT include the
+findings ledger in agent prompts — the orchestrator handles dedup using strict matching
+(same file + same line range ±5 + same category).
 
-The primary failure mode of convergence loops is **false convergence**: the orchestrator re-runs analysis in the same session, with the same mental model, and declares "zero new findings" — not because there are none, but because it can't see past its own prior reasoning.
+Additionally, one agent in the roster should re-run CodeRabbit CLI
+(`coderabbit review --prompt-only --base <base-branch> --plain`) to get fresh static
+analysis. The other agents review the code from their specialist domains.
 
-The solution: **rounds 2+ are executed by a fresh sub-agent** dispatched via `Task` tool. The sub-agent has zero context from prior rounds, reads all files from scratch, and returns findings independently. The orchestrator then deduplicates against the cumulative ledger.
+**Failure handling:** If any agent dispatch fails, treat that agent's slot as "zero findings"
+for that round but warn the user. Do NOT fail the entire review.
 
-**Round structure:**
-
-| Round | Who analyzes | How |
-|-------|-------------|-----|
-| **1** (initial) | Orchestrator (this agent) | CodeRabbit CLI + parallel agent dispatch — normal flow |
-| **2** (mandatory) | **Fresh sub-agent** via `Task` | Sub-agent re-runs CodeRabbit CLI, reads all changed files from scratch, reviews independently, returns findings |
-| **3-5** | **Fresh sub-agent** via `Task` | Same as round 2 — only triggered if round 2+ found new findings |
-
-**Round 2 is MANDATORY.** The "zero new findings" stop condition can only trigger starting from round 3.
-
-**Fresh sub-agent dispatch (rounds 2+):**
-
-Dispatch a single sub-agent via `Task` tool (use any available ring review droid, e.g., `ring-default-code-reviewer`). The sub-agent receives file paths and can navigate the codebase autonomously:
-
-1. **File paths to all changed files** (sub-agent reads fresh via Read/Grep/Glob tools)
-2. **File paths to project rules and coding standards** (sub-agent reads fresh)
-3. **The findings ledger** — for deduplication ONLY
-4. **CodeRabbit CLI command** — the sub-agent re-runs CodeRabbit CLI itself to get fresh analysis
-
-```
-Goal: Independent code review (convergence round X of 5)
-
-You are a FRESH reviewer with NO prior context. Review from scratch.
-
-Steps:
-  1. Re-run CodeRabbit CLI: coderabbit review --prompt-only --base <base-branch> --plain
-  2. Parse CodeRabbit output for findings
-  3. Review all changed files for: code quality, business logic, security,
-     test quality, spec compliance
-  4. Return all findings
-
-Context:
-  - Project root: <absolute path to project worktree>
-  - Changed files: [list of file paths] (READ each file fresh from disk)
-  - Project rules: AGENTS.md, PROJECT_RULES.md, docs/PROJECT_RULES.md (READ all that exist)
-
-IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
-  - Read files at the paths above fresh from disk
-  - Search the codebase for patterns and conventions
-  - Explore related files when needed for context
-
-Previously identified findings (for DEDUP ONLY):
-  [list of findings with IDs and descriptions]
-
-CRITICAL: Analyze INDEPENDENTLY. Do NOT skip areas because previous rounds
-"already covered" them. The orchestrator will dedup.
-
-Required output:
-  For each finding: severity, file, line, category, description, recommendation
-  If no issues: "PASS — all domains clean"
-```
-
-**Orchestrator deduplication after sub-agent returns:**
-
-1. Compare each sub-agent finding against the cumulative ledger (match by file + topic + description similarity)
-2. **Genuinely new findings** → add to ledger, present to user via Phase 3
-3. **Duplicates** → discard silently
-
-**Loop rules:**
-- **Maximum rounds:** 5 (the initial run counts as round 1)
-- **Round 2 is MANDATORY** — always dispatch a fresh sub-agent regardless of round 1 results
-- **Progress indicator:** Show `"=== Re-validation round X of 5 (fresh sub-agent) ==="` at the start of each re-run
-- **Scope:** Sub-agent re-runs CodeRabbit CLI, reviews files, and returns findings. Do NOT re-load project context (Phase 1) in the orchestrator
-- **If new findings exist:** Present them using Phase 3 (interactive resolution), fix via Phase 4 (TDD cycle), verify via Phase 5 (coverage), then loop again
-- **Stop conditions (any one triggers exit):**
-  1. Zero new findings — **only valid from round 3 onward** (round 2 is mandatory)
-  2. Round 5 completed (hard limit)
-  3. User explicitly requests to stop (via AskUser response)
-  
-  **IMPORTANT:** LOW severity findings are NOT a reason to stop. ALL findings regardless of severity MUST be presented to the user for decision. The agent NEVER decides that LOW findings can be skipped.
-
-**Round summary (show after each round):**
-
-```markdown
-### Round X of 5 (fresh sub-agent) — Summary
-- New findings this round: N (C critical, H high, M medium, L low)
-- Cumulative: X total findings across Y rounds
-- Fixed: A | Skipped: B | Deferred: C
-- Status: CONVERGED / CONTINUING / HARD LIMIT REACHED
-```
-
-**When the loop exits**, proceed to the Final Summary with the cumulative results from ALL rounds.
+When the loop exits, proceed to Phase 7 (integration/E2E tests).
 
 ---
 
