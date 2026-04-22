@@ -289,26 +289,34 @@ jq --arg dir "$TASKS_DIR" '.tasksDir = $dir' .optimus/config.json > .optimus/con
 
 ### Step 3.4: Cleanup and Commit
 
-**If `EXISTING_FILE` was used as source** (from Step 1.3), delete the old file and its
-overlay directory (if any) now that the new tasks.md has been written:
+**If `EXISTING_FILE` was used as source** (from Step 1.3), check if all tasks have
+a TaskSpec before deleting the old file:
 
 ```bash
 if [ -n "$EXISTING_FILE" ] && [ "$EXISTING_FILE" != ".optimus/tasks.md" ]; then
-  EXISTING_OVERLAY_DIR="$(dirname "$EXISTING_FILE")/tasks"
-  git rm -r "$EXISTING_FILE" 2>/dev/null || rm -f "$EXISTING_FILE"
-  git rm -r "$EXISTING_OVERLAY_DIR" 2>/dev/null || rm -rf "$EXISTING_OVERLAY_DIR"
+  # Count tasks with TaskSpec = -
+  MISSING_SPECS=$(grep -c '| - |$' .optimus/tasks.md 2>/dev/null || echo 0)
+  if [ "$MISSING_SPECS" -gt 0 ]; then
+    echo "WARNING: $MISSING_SPECS tasks still have no TaskSpec (TaskSpec = -)."
+    echo "Keeping old file as reference until all specs are generated."
+  else
+    EXISTING_OVERLAY_DIR="$(dirname "$EXISTING_FILE")/tasks"
+    git rm -r "$EXISTING_FILE" 2>/dev/null || rm -f "$EXISTING_FILE"
+    git rm -r "$EXISTING_OVERLAY_DIR" 2>/dev/null || rm -rf "$EXISTING_OVERLAY_DIR"
+  fi
 fi
 ```
 
-The old file is recoverable from git history if needed.
+**The old file is only deleted when ALL tasks have a TaskSpec.** If any task has
+`TaskSpec = -`, the old file is preserved as reference. After generating the missing
+specs (via `/optimus-tasks` or re-running import), the old file can be removed by
+re-running import.
 
 ```bash
 git add .optimus/
 git commit -m "chore: import Ring pre-dev tasks to optimus format
 
 Imported N tasks from $TASKS_DIR/tasks/.
-Tasks file: $TASKS_FILE
-Previous tasks.md removed (recoverable from git history).
 Original Ring files preserved."
 ```
 
