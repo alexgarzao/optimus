@@ -12,15 +12,15 @@ skip_when: >
 prerequisite: >
   - tasks.md exists and contains merge conflict markers
 NOT_skip_when: >
-  - "I can resolve it manually" -- Manual resolution risks reverting a task's status backward.
-  - "It's just one line" -- Even one-line conflicts can silently lose a DONE status.
+  - "I can resolve it manually" -- Manual resolution risks losing structural changes (dependencies, versions).
+  - "It's just one line" -- Even one-line conflicts can silently lose data.
 examples:
   - name: Resolve after merge
     invocation: "Resolve tasks.md conflict"
     expected_flow: >
       1. Detect conflict markers in tasks.md
       2. Parse both sides of each conflict
-      3. Apply most-advanced-status rule per task
+      3. Resolve structural columns using field-specific merge rules
       4. Present resolution to user
       5. Apply after approval
   - name: Resolve during rebase
@@ -37,19 +37,20 @@ related:
 verification:
   manual:
     - All conflict markers removed
-    - Each task retains its most advanced status
-    - No task status was reverted backward
+    - Each task's structural fields correctly merged
     - Format validation passes after resolution
 ---
 
 # Tasks.md Conflict Resolver
 
-Resolves merge conflicts in `tasks.md` caused by parallel task execution across feature branches.
+Resolves merge conflicts in `tasks.md` caused by parallel structural edits across feature branches.
+Since Status and Branch live in state.json (gitignored), conflicts are limited to structural columns.
 
 **Classification:** Administrative skill — runs on any branch.
 
-**CRITICAL:** This skill NEVER reverts a task's status backward. The resolution rule is
-always "most advanced status wins" for each task independently.
+**CRITICAL:** Status and Branch live in state.json (gitignored) — they are NOT in tasks.md
+and cannot cause merge conflicts. This skill only resolves structural column conflicts
+(Title, Tipo, Depends, Priority, Version, Estimate, TaskSpec).
 
 ---
 
@@ -236,8 +237,7 @@ Run `/optimus-report` to verify the dashboard looks correct.
 
 ## Rules
 
-- **NEVER revert a task's status backward** — always keep the most advanced status
-- **NEVER auto-resolve Cancelado conflicts** — always ask the user
+- **NEVER lose structural data** — when both sides changed the same field, always ask the user
 - **NEVER write the file without user approval** — always preview first
 - **NEVER commit automatically** — only stage the file, let the user commit
 - Each task row is independent — resolve conflicts per-task, not per-region
