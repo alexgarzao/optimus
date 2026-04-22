@@ -657,14 +657,13 @@ user: "Convergence round X dispatch failed: &lt;error&gt;. Proceeding without ad
 validation. Consider re-running the review." Do NOT fail the entire review because one
 convergence round failed.
 
-**Stage-specific scope for fresh sub-agent dispatch (rounds 2+):**
-Use any available ring review droid (e.g., `ring-default-code-reviewer`). The sub-agent receives:
-1. File paths to all changed files (sub-agent reads fresh via Read/Grep/Glob tools)
-2. File paths to task spec and reference docs (sub-agent reads fresh)
-3. File paths to project rules (sub-agent reads fresh)
-4. The findings ledger (for dedup only)
-5. Analysis instructions: code quality, business logic, security, test quality, spec compliance, cross-file consistency
-6. Cross-cutting analysis instructions (same 5 items from Phase 3 prompt)
+**Stage-specific scope for convergence rounds 2+:**
+Dispatch the **same agent roster** from Phase 3 (all agents from the Agent Roster table).
+Each agent receives file paths, task spec, reference docs, and project rules (re-read fresh
+from disk). Do NOT include the findings ledger in agent prompts — the orchestrator handles
+dedup using strict matching (same file + same line range ±5 + same category).
+
+Include the cross-cutting analysis instructions (same 5 items from Phase 3 prompt).
 
 When the loop exits, proceed to Phase 9 (Re-run Guard).
 

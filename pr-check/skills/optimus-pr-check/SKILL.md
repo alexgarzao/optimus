@@ -1012,16 +1012,16 @@ HIGH priority gaps are presented as findings for user decision.
 
 Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Loop".
 
-**Stage-specific scope for fresh sub-agent dispatch (rounds 2+):**
-Use any available ring review droid (e.g., `ring-default-code-reviewer`). The sub-agent receives:
-1. File paths to all changed files (sub-agent reads fresh via Read/Grep/Glob tools)
-2. PR context (description, linked issues, base branch)
-3. File paths to project rules (sub-agent reads fresh)
-4. The findings ledger (for dedup only)
-5. Existing PR comments from all sources (reuse data from Phase 1 — do NOT re-fetch)
-6. Cross-cutting analysis instructions (same 5 items from Step 3.3 prompt)
+**Stage-specific scope for convergence rounds 2+:**
+Dispatch the **same agent roster** from Phase 3 (all 7 agents from Step 3.3). Each agent
+receives file paths, PR context (description, linked issues, base branch), and project
+rules (re-read fresh from disk). Do NOT include the findings ledger in agent prompts —
+the orchestrator handles dedup using strict matching (same file + same line range ±5 +
+same category).
 
-**Do NOT re-fetch** Codacy/DeepSource comments — they only update after push.
+Include existing PR comments from all sources (reuse data from Phase 1 — do NOT re-fetch
+Codacy/DeepSource comments, they only update after push). Include the cross-cutting
+analysis instructions (same 5 items from Step 3.3 prompt).
 
 When the loop exits, proceed to Phase 11 (integration/E2E tests).
 

@@ -431,15 +431,16 @@ Required output format:
 
 Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Loop".
 
-**Stage-specific scope for fresh sub-agent dispatch (rounds 2+):**
-Use `ring-default-code-reviewer` or any available ring review droid. The sub-agent receives:
-1. File paths to all files in scope (sub-agent reads fresh via Read/Grep/Glob tools)
-2. File paths to project rules and coding standards (sub-agent reads fresh)
-3. The findings ledger (for dedup only)
-4. Review type (Initial/Final) and scope from Phase 1
-5. Cross-cutting analysis instructions (same 5 items from Phase 2 prompt)
+**Stage-specific scope for convergence rounds 2+:**
+Dispatch the **same agent roster** from Phase 2 (all 8 or 10 agents depending on review type).
+Each agent receives file paths and project rules (re-read fresh from disk). Do NOT include
+the findings ledger in agent prompts — the orchestrator handles dedup using strict matching
+(same file + same line range ±5 + same category).
 
-**Failure handling:** If the fresh sub-agent dispatch fails, treat as "zero new findings"
+Include the review type (Initial/Final) and scope from Phase 1, plus the cross-cutting
+analysis instructions (same 5 items from Phase 2 prompt).
+
+**Failure handling:** If any agent dispatch fails, treat that agent's slot as "zero findings"
 for that round but warn the user. Do NOT fail the entire review.
 
 When the loop exits, proceed to Phase 8 (Final Summary).

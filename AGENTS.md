@@ -1459,9 +1459,9 @@ If a command key is present but empty (`""`), skip that check entirely.
 ## Common Patterns Across Skills
 
 The patterns below apply to **cycle review skills** (plan, check,
-pr-check, coderabbit-review). `deep-doc-review` uses a simplified model — it
-follows the same user-authority and finding presentation principles but applies fixes inline
-without convergence loops or batch-apply. `deep-review` requires ring droids for analysis,
+pr-check, coderabbit-review). `deep-doc-review` follows the same user-authority and finding
+presentation principles, applies fixes inline (not batch-apply), and uses the convergence
+loop to catch issues introduced by fixes. `deep-review` requires ring droids for analysis,
 has its own convergence loop (Phase 7), and uses batch-apply (Phase 6) — but applies fixes
 directly rather than via ring droid TDD cycle.
 
@@ -1643,17 +1643,27 @@ Every finding must present 2-3 options with this structure:
 - **High:** Significant refactoring, new tests, multiple modules affected
 - **Very high:** Architectural change, many files, extensive testing, risk of regressions
 
-### Convergence Loop (Fresh Sub-Agent Model)
-Applies to: plan, check, pr-check, coderabbit-review
+### Convergence Loop (Full Roster Model)
+Applies to: plan, check, pr-check, coderabbit-review, deep-review, deep-doc-review
 
-The convergence loop eliminates false convergence caused by session bias:
-- **Round 1:** Orchestrator performs initial analysis (with full session context)
-- **Rounds 2-5:** A **fresh sub-agent** (via `Task` tool) re-analyzes from scratch with zero prior context
+The convergence loop eliminates false convergence by dispatching the **same agent roster**
+as round 1 in every subsequent round:
+- **Round 1:** Orchestrator dispatches all specialist agents in parallel (with full session context)
+- **Rounds 2-5:** The **same agent roster** as round 1 is dispatched in parallel via `Task`
+  tool, each with zero prior context. Each agent reads all files fresh from disk.
 - **Round 2 is MANDATORY** — the "zero new findings" stop condition only applies from round 3 onward
-- The sub-agent receives the findings ledger for **deduplication only**, not to bias its analysis
-- The orchestrator deduplicates sub-agent findings against the cumulative ledger
+- **Sub-agents do NOT receive the findings ledger.** Dedup is performed entirely by the
+  orchestrator after agents return, using **strict matching**: same file + same line range
+  (±5 lines) + same category. "Description similarity" is NOT sufficient for dedup — the
+  file, location, and category must all match.
 - Stop only when: zero new findings (round 3+), round 5 reached, or user explicitly stops
 - LOW severity findings are NOT a reason to stop — ALL findings are presented to the user
+
+**Why full roster, not a single agent:** A single generalist agent structurally cannot
+replicate the coverage of 8-10 domain specialists. The security-reviewer catches injection
+risks a code-reviewer won't. The nil-safety-reviewer catches empty guards a QA analyst won't.
+Dispatching a single agent in rounds 2+ creates false convergence — the agent declares
+"zero new findings" because it lacks the domain depth, not because the code is clean.
 
 ### Agent Dispatch
 Skills dispatch specialist ring droids in parallel via Task tool:
