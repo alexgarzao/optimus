@@ -22,7 +22,7 @@ examples:
       2. Validate status is "Validando Impl" or "Revisando PR"
       3. Run close checklist (8 verifications: git state, lint, tests)
       4. If all pass, mark as DONE
-      5. Commit status change
+      5. Write DONE status to state.json
   - name: Close with failures
     invocation: "Close task T-012"
     expected_flow: >
@@ -49,8 +49,7 @@ related:
 verification:
   manual:
     - All checklist items passed
-    - Task status updated to DONE in tasks.md
-    - Status change committed
+    - Task status updated to DONE in state.json
 ---
 
 # Task Closer
@@ -137,7 +136,7 @@ Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 
 ### Step 1.3: Push Unpushed Commits (if any)
 
-Previous stages (1-4) commit tasks.md status changes immediately but do not push. Before running the close checklist, ensure the feature branch is in sync with remote.
+Previous stages may have code commits that were not pushed. Before running the close checklist, ensure the feature branch is in sync with remote.
 
 **Step 1 — Check if upstream tracking exists:**
 
@@ -157,7 +156,7 @@ git rev-parse --abbrev-ref @{u} 2>/dev/null
 
 **Why check upstream first:** `git log @{u}..HEAD` silently produces empty output when no upstream exists, making it appear there's nothing to push. But in reality ALL local commits are unpushed because the remote branch doesn't exist yet. Without this check, the close checklist would pass while the feature branch was never pushed — and branch deletion in cleanup would lose all work.
 
-**Why push now:** The close checklist (Check 2) verifies "no unpushed commits". Stages 2-4 commit status changes eagerly to prevent data loss on session interruption, but they don't push. Without this step, Check 2 would always fail with false positives from those legitimate status commits.
+**Why push now:** The close checklist (Check 2) verifies "no unpushed commits". Without this step, Check 2 would fail if there are legitimate code commits that were never pushed.
 
 ---
 
@@ -414,10 +413,13 @@ This also applies to Step 4.3 — if the agent is inside a worktree, `git checko
 
 ### Step 4.2: Check for Open PR
 
-**IMPORTANT:** PR must be merged BEFORE branch deletion. If the branch is deleted first, all commits on it (including the DONE status change) are lost.
+**IMPORTANT:** PR must be merged BEFORE branch deletion. If the branch is deleted first, all code commits on it are lost.
 
 ```bash
-TASK_BRANCH=$(grep -E '^\| T-XXX \|' "$TASKS_FILE" | awk -F'|' '{print $9}' | tr -d ' ')
+TASK_BRANCH=$(jq -r '.["'"$TASK_ID"'"].branch // ""' .optimus/state.json 2>/dev/null)
+if [ -z "$TASK_BRANCH" ]; then
+  TASK_BRANCH=$(git branch --list "*$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')*" 2>/dev/null | head -1 | tr -d ' *')
+fi
 gh pr list --head "$TASK_BRANCH" --json number,state,title,url --jq '.[] | select(.state == "OPEN")'
 ```
 
@@ -438,8 +440,8 @@ by GitHub (squash and rebase merges often auto-delete the branch):
 git fetch origin --prune
 git branch -r --list "origin/$TASK_BRANCH"
 ```
-If the branch was auto-deleted, proceed directly to Step 4.3 to update the Branch column
-in tasks.md to `-`. Do not ask the user about branch deletion — it already happened.
+If the branch was auto-deleted, proceed directly to Step 4.3 to clean up the branch entry
+in state.json. Do not ask the user about branch deletion — it already happened.
 
 **"Close without merging":** Since status lives in state.json (local, gitignored), closing
 the PR without merging does NOT lose the DONE status. Simply close the PR:
@@ -501,7 +503,7 @@ git branch -d <branch> 2>/dev/null || git branch -D <branch>
 git push origin --delete <branch>
 ```
 
-**Why `git pull` after checkout:** If the PR was merged (especially squash merge), the remote `main` has a different version of `tasks.md` than the local `main`. Without pulling, the Branch column cleanup would operate on a stale version and could conflict or lose the DONE status change.
+**Why `git pull` after checkout:** If the PR was merged (especially squash merge), the remote `main` has changes not yet in local `main`. Pulling ensures local is in sync before any further operations.
 
 **After branch deletion:** Remove the `branch` field from the task's entry in state.json
 (or remove the entry entirely if status is DONE).

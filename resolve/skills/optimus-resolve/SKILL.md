@@ -125,41 +125,24 @@ a lateral state change (a decision, not progress). See Step 2.3 for handling.
 
 For each task that differs between current and incoming:
 
-1. Compare the **Status** column:
-   - If one side has a more advanced status → use that entire row
-   - If both sides have the same status → compare other columns (Branch, Depends)
-     and keep the row with more information (non-`-` Branch wins over `-`)
+**NOTE:** Status and Branch are NOT in tasks.md — they live in state.json (gitignored).
+Conflicts in tasks.md are limited to structural columns only.
 
-1b. Compare the **Estimate** column:
+1. Compare the **Estimate** column:
    - If one side has a value and the other has `-` → keep the non-empty value
    - If both have different non-empty values → keep the more specific one (prefer values with units like `2h` over generic `M`)
    - If both are `-` or identical → keep as-is
 
-2. Compare the **Branch** column:
-   - If one side has a branch name and the other has `-` → keep the branch name
-   - If both have different branch names → keep the one matching the more advanced status
-
-3. All other columns (Title, Tipo, Priority, Version, Depends):
+2. All other columns (Title, Tipo, Priority, Version, Depends, TaskSpec):
    - If unchanged on both sides → keep as-is
    - If changed on one side → keep the change
    - If changed on BOTH sides → flag for user decision (cannot auto-resolve)
 
-### Step 2.3: Handle Cancelado Conflicts
+### Step 2.3: Handle Structural Conflicts
 
-If one side has `Cancelado` and the other has a non-terminal status:
-
-- This is ambiguous — someone cancelled while someone else was working.
-- **Do NOT auto-resolve.** Present to the user via `AskUser`:
-  ```
-  Task T-XXX has conflicting statuses:
-    Current branch: <status A>
-    Incoming branch: <status B> (one is Cancelado)
-
-  Which should I keep?
-  ```
-  Options:
-  - **Keep Cancelado** — the task was intentionally cancelled
-  - **Keep <other status>** — the cancellation was premature, work continues
+Since Status and Branch live in state.json (not tasks.md), conflicts are limited to
+structural fields. If both sides changed the same structural field (e.g., Priority or
+Version), flag for user decision via `AskUser`.
 
 ---
 

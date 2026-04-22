@@ -129,7 +129,7 @@ tracks the working directory for each task and switches context between tasks.
 ```
 
 **Before invoking stages 2-5 for a task**, the orchestrator MUST:
-1. Check if the task has a worktree (from stage-1 output or Branch column)
+1. Check if the task has a worktree (from stage-1 output or `branch` field in state.json)
 2. If worktree exists, switch to it: `cd <worktree-path>`
 3. Verify the correct branch is checked out: `git branch --show-current`
 4. Only then invoke the stage skill

@@ -171,13 +171,27 @@ For each Ring pre-dev task not yet imported:
 | **Estimate** | From `EXISTING_DATA` if available, else `-` | `-` |
 | **TaskSpec** | Path to Ring task spec, relative to `TASKS_DIR` | Required |
 
-**NOTE:** Status and Branch are NOT stored in tasks.md. If `EXISTING_DATA` contains
-status/branch info, import it into `.optimus/state.json` (see AGENTS.md Protocol: State Management).
+**NOTE:** Status and Branch are NOT stored in tasks.md. They live in `.optimus/state.json`
+(gitignored). See AGENTS.md Protocol: State Management.
 
 **When `EXISTING_DATA` is available** (from Step 1.3), match Ring pre-dev tasks to
 existing tasks by TaskSpec path. For matched tasks,
-carry over Status, Depends, Priority, Version, Branch, and Estimate. For unmatched
-tasks (new in Ring but not in existing data), use defaults.
+carry over Depends, Priority, Version, and Estimate into tasks.md.
+
+**Migration of Status/Branch from legacy format:** If `EXISTING_DATA` has columns named
+"Status" or "Branch" (from an older tasks.md format), migrate them to state.json:
+```bash
+# For each task with non-Pendente status or non-empty branch in EXISTING_DATA:
+STATE_FILE=".optimus/state.json"
+if [ ! -f "$STATE_FILE" ]; then echo '{}' > "$STATE_FILE"; fi
+jq --arg id "$TASK_ID" --arg status "$LEGACY_STATUS" --arg branch "$LEGACY_BRANCH" \
+  --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '.[$id] = {status: $status, branch: $branch, updated_at: $ts}' \
+  "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+```
+After migration, inform the user: "Migrated N task statuses from legacy format to state.json."
+
+For unmatched tasks (new in Ring but not in existing data), use defaults.
 
 **IMPORTANT:** Do NOT match by task ID. IDs between Optimus and Ring are independent
 (Optimus T-038 may reference Ring T-020). Always match by the Ring source file path.

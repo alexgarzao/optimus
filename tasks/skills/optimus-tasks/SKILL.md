@@ -465,7 +465,7 @@ Show the new table order.
    2. Change working directory to the main repository: `cd <main-repo-path>`
    3. Then run `git worktree remove <worktree-path>`
 
-5. **If task has a branch** (Branch column is not `-`):
+5. **If task has a branch** (read `branch` field from state.json or search `git branch --list "*t-xxx*"`):
    a. **Check for open PR:**
       ```bash
       gh pr list --head "<branch>" --json number,state,url --jq '.[] | select(.state == "OPEN")'
@@ -648,8 +648,8 @@ code manually without using stage-2).
 3. **Workspace check (warning):** If the target status is `Validando Spec` or later, verify
    that a workspace exists for this task (stage-1 normally creates the workspace when
    setting `Validando Spec` — advancing manually bypasses this):
-   - Read the Branch column for the task
-   - If Branch is `-` or the branch does not exist locally → warn via `AskUser`:
+   - Read the `branch` field from state.json for the task (or search by task ID pattern)
+   - If no branch found → warn via `AskUser`:
      ```
      Task T-XXX has no workspace (branch). Advancing to '<target status>' without a
      workspace means execution stages (2-5) will fail when they verify the workspace.

@@ -367,7 +367,8 @@ The subtasks directory is derived automatically from the TaskSpec path:
 - The `T-NNN` identifier is extracted from the task spec filename convention
 
 Agents read objective and acceptance criteria directly from the Ring source files.
-The tasks.md table only tracks operational state — it does NOT duplicate content from Ring.
+The tasks.md table only tracks structural data (dependencies, versions, priorities)
+— it does NOT duplicate content from Ring.
 
 ### Version Management
 
@@ -646,8 +647,8 @@ and operational/temporary files are gitignored:
 
 ```bash
 mkdir -p .optimus/sessions .optimus/reports
-if ! grep -q '^\.optimus/sessions/' .gitignore 2>/dev/null; then
-  printf '\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n' >> .gitignore
+if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
+  printf '\n# optimus-operational-files\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n' >> .gitignore
 fi
 ```
 
@@ -776,14 +777,14 @@ fi
 ```bash
 # Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
 mkdir -p .optimus/sessions .optimus/reports
-if ! grep -q '^\.optimus/sessions/' .gitignore 2>/dev/null; then
-  printf '\n.optimus/sessions/\n.optimus/reports/\n' >> .gitignore
-fi
 BRANCH_NAME=$(git branch --show-current 2>/dev/null || echo "detached")
-printf '{"task_id":"%s","stage":"%s","status":"%s","branch":"%s","started_at":"%s","updated_at":"%s","phase":"%s","notes":"%s"}\n' \
-  "${TASK_ID}" "<stage-name>" "<status>" "${BRANCH_NAME}" \
-  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  "<current-phase>" "<progress>" \
+jq -n \
+  --arg task_id "${TASK_ID}" --arg stage "<stage-name>" --arg status "<status>" \
+  --arg branch "${BRANCH_NAME}" --arg started "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --arg updated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg phase "<current-phase>" \
+  --arg notes "<progress>" \
+  '{task_id: $task_id, stage: $stage, status: $status, branch: $branch,
+    started_at: $started, updated_at: $updated, phase: $phase, notes: $notes}' \
   > ".optimus/sessions/session-${TASK_ID}.json"
 ```
 
@@ -1118,10 +1119,27 @@ Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Pus
 
 All status and branch data is stored in `.optimus/state.json` (gitignored).
 
+**Prerequisites:**
+
+```bash
+if ! command -v jq &>/dev/null; then
+  echo "ERROR: jq is required for state management but not installed."
+  # STOP — do not proceed
+fi
+```
+
 **Reading state:**
 
 ```bash
 STATE_FILE=".optimus/state.json"
+if [ -f "$STATE_FILE" ]; then
+  # Validate JSON integrity before reading
+  if ! jq empty "$STATE_FILE" 2>/dev/null; then
+    echo "WARNING: state.json is corrupted. Running reconciliation."
+    rm -f "$STATE_FILE"
+    # Fall through to missing-file handling below
+  fi
+fi
 if [ -f "$STATE_FILE" ]; then
   TASK_STATUS=$(jq -r '.["'"$TASK_ID"'"].status // "Pendente"' "$STATE_FILE")
   TASK_BRANCH=$(jq -r '.["'"$TASK_ID"'"].branch // ""' "$STATE_FILE")
@@ -1154,14 +1172,38 @@ jq --arg id "$TASK_ID" 'del(.[$id])' "$STATE_FILE" > "${STATE_FILE}.tmp" \
   && mv "${STATE_FILE}.tmp" "$STATE_FILE"
 ```
 
+**Listing all tasks with status (for report/quick-report):**
+
+```bash
+STATE_FILE=".optimus/state.json"
+TASKS_FILE=".optimus/tasks.md"
+# Get all task IDs from tasks.md
+TASK_IDS=$(grep -E '^\| T-[0-9]+ \|' "$TASKS_FILE" | awk -F'|' '{print $2}' | tr -d ' ')
+# For each task, read status from state.json (default: Pendente)
+for TASK_ID in $TASK_IDS; do
+  if [ -f "$STATE_FILE" ]; then
+    STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")
+  else
+    STATUS="Pendente"
+  fi
+  echo "$TASK_ID: $STATUS"
+done
+```
+
 **state.json is NEVER committed.** It is gitignored. No `git add` or `git commit`
 for state changes.
 
-**Reconciliation (if state.json is lost):**
+**Reconciliation (if state.json is lost or empty):**
 1. List all worktrees: `git worktree list`
-2. For each worktree matching a task ID pattern, infer status as in-progress
+2. For each worktree matching a task ID pattern (e.g., `t-003` in the path),
+   infer status as `Em Andamento` (most common in-progress status)
 3. Tasks without worktrees are `Pendente`
 4. Ask the user to confirm before proceeding
+
+**Automatic mismatch detection:** Stage agents SHOULD check for inconsistencies on startup:
+if state.json is missing or empty AND worktrees exist for known task IDs, warn the user
+and offer to run reconciliation before proceeding. This prevents tasks from silently
+appearing as `Pendente` when they actually have active worktrees.
 
 Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: State Management."
 
@@ -1186,10 +1228,18 @@ Where:
 - `<keywords>` are 2-4 lowercase words from the Title, stripping articles,
   prepositions, and generic words (implement, add, create, update)
 
+**Sanitization (applied to keywords before constructing branch name):**
+1. Convert to lowercase
+2. Replace non-alphanumeric characters (except hyphens) with hyphens
+3. Collapse consecutive hyphens to a single hyphen
+4. Remove leading/trailing hyphens from each keyword
+5. Truncate the full branch name to 100 characters
+
 **Examples:**
 - T-003 "User Auth JWT" (Feature) → `feat/t-003-user-auth-jwt`
 - T-007 "Duplicate Login" (Fix) → `fix/t-007-duplicate-login`
 - T-012 "Extract Middleware" (Refactor) → `refactor/t-012-extract-middleware`
+- T-015 "User Auth: JWT/OAuth2 Support" (Feature) → `feat/t-015-user-auth-jwt-oauth2-support`
 
 **Resolution order when looking for a task's branch:**
 1. Read `branch` from state.json (fastest)
@@ -1482,6 +1532,13 @@ moves), which are infrequent and happen on the default branch.
 
 If tasks.md IS modified on a feature branch (e.g., Active Version Guard moves a task),
 standard git merge conflict resolution applies — keep both changes.
+
+### Concurrent state.json Writes
+The state.json read-modify-write pattern is not atomic across processes. If two stage
+agents run simultaneously (e.g., two terminals), the last write wins and the first
+task's status update may be lost. This is an accepted limitation — Optimus processes
+one task at a time. For parallel task work, use separate worktrees but run stage
+commands sequentially.
 
 ### Standalone Skills vs Ring Droid Dispatch
 The `deep-review` and `deep-doc-review` standalone skills apply fixes directly in their
