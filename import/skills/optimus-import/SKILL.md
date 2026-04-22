@@ -132,7 +132,8 @@ transparency but cannot be selected.
   - Tasks without an overlay or without a Fonte link are keyed by their ID as fallback
 - Parse the Versions table and carry it over to the new tasks.md
 - Store this as `EXISTING_DATA` for use in Step 1.3
-- The existing file is NOT modified or deleted — only read
+- Store the source file path as `EXISTING_FILE` and its overlay directory as `EXISTING_DIR` for cleanup in Step 3.5
+- The existing file is read first, then deleted after the new tasks.md is written (Step 3.5)
 
 **If no tasks.md files are found**, continue (will create from scratch).
 
@@ -291,12 +292,25 @@ jq --arg path "$TASKS_FILE" '.tasksFile = $path' .optimus.json > .optimus.json.t
 
 ### Step 3.5: Commit
 
+**If `EXISTING_FILE` was used as source** (from Step 1.2), delete the old file and its
+overlay directory now that the new tasks.md has been written:
+
+```bash
+if [ -n "$EXISTING_FILE" ] && [ "$EXISTING_FILE" != "$TASKS_FILE" ]; then
+  EXISTING_DIR="$(dirname "$EXISTING_FILE")/tasks"
+  git rm -r "$EXISTING_FILE" "$EXISTING_DIR" 2>/dev/null || rm -rf "$EXISTING_FILE" "$EXISTING_DIR"
+fi
+```
+
+The old file is recoverable from git history if needed.
+
 ```bash
 git add "$TASKS_FILE" "$TASKS_DIR/" .optimus.json
 git commit -m "chore: import Ring pre-dev tasks to optimus format
 
 Imported N tasks from docs/pre-dev/tasks/.
 Tasks file: $TASKS_FILE
+Previous tasks.md removed (recoverable from git history).
 Original Ring files preserved."
 ```
 
@@ -309,6 +323,7 @@ Original Ring files preserved."
 - **Ring source:** docs/pre-dev/tasks/ (N task specs, M subtask files)
 - **Tracking created:** <TASKS_FILE> + <TASKS_DIR>/T-NNN.md overlays
 - **Registered in:** .optimus.json
+- **Previous tasks.md:** removed (recoverable from git history)
 - **Ring files:** NOT modified
 
 ### Next Steps
