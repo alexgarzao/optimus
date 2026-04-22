@@ -11,7 +11,7 @@ skip_when: >
   - No tasks.md exists in the project
   - User wants to run a specific stage agent (use that agent directly)
 prerequisite: >
-  - docs/tasks.md exists in the project
+  - .optimus/tasks.md exists in the project
 NOT_skip_when: >
   - "I already know the status" -- The dashboard shows dependencies and parallelization you might miss.
   - "There's only one task" -- Even single tasks benefit from status verification.
@@ -234,6 +234,8 @@ version names as options.
 Compute progress for each version, regardless of filtering.
 **Cancelled tasks are excluded from progress calculations** — they do not count toward
 the total, done, active, or pending numbers. Progress = Done / (Total - Cancelled).
+**If (Total - Cancelled) == 0** (all tasks cancelled or no tasks exist), show progress as
+"N/A — all tasks cancelled" instead of computing a division.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐

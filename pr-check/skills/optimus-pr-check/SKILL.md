@@ -157,11 +157,11 @@ When no task is referenced and no `tasks.md` exists, or the user explicitly want
 
 ### How to detect which mode:
 1. If the user mentions a task ID (T-XXX) → Task Mode
-2. Find `docs/tasks.md`. If found:
+2. Find `.optimus/tasks.md`. If found:
    a. If exactly ONE task is in `Validando Impl` or `Revisando PR` → Task Mode (confirm with user via `AskUser`)
    b. If MULTIPLE tasks are in `Validando Impl` or `Revisando PR` → Task Mode, but ask the user which task to review via `AskUser` (list all candidates with ID, title, version, and branch)
    c. If NO tasks are in `Validando Impl` or `Revisando PR` → Standalone Mode
-3. If no `docs/tasks.md` exists → Standalone Mode
+3. If no `.optimus/tasks.md` exists → Standalone Mode
 
 ---
 

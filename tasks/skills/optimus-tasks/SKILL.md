@@ -16,7 +16,7 @@ skip_when: >
   - User wants to execute a task (use plan instead)
   - User wants to change task status through the lifecycle (status is managed by stage agents -- except cancellation, which is handled here)
 prerequisite: >
-  - docs/tasks.md exists in the project
+  - .optimus/tasks.md exists in the project
 NOT_skip_when: >
   - "I can edit tasks.md manually" -- This agent validates format, dependencies, and IDs automatically.
   - "It's just a small change" -- Even small changes can break format or create circular dependencies.
@@ -85,8 +85,7 @@ For operations that do not use `gh` (create, edit, remove, reorder, version mana
    If not found, ask the user via `AskUser`:
 
    "No tasks.md found. What should I do?"
-   - **(a) Create at docs/tasks.md** (default location)
-   - **(b) Create at a custom path** — user specifies (e.g., `project/tasks.md`)
+   - **(a) Create at .optimus/tasks.md** (standard location)
    - **(c) Run import** — use this if you already have task files in another format
 
    If the user chooses to create:
@@ -102,8 +101,8 @@ For operations that do not use `gh` (create, edit, remove, reorder, version mana
       |---------|--------|-------------|
       | <user-provided> | Ativa | <ask user for description> |
 
-      | ID | Title | Tipo | Status | Depends | Priority | Version | Branch | Estimate |
-      |----|-------|------|--------|---------|----------|---------|--------|----------|
+      | ID | Title | Tipo | Status | Depends | Priority | Version | Branch | Estimate | TaskSpec |
+      |----|-------|------|--------|---------|----------|---------|--------|----------|----------|
       ```
    5. Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
    6. Commit: `chore(tasks): initialize tasks.md`
@@ -255,9 +254,10 @@ Collect IDs from ALL sources to avoid collisions with parallel branches:
 ### Step 2.3: Validate Dependencies
 
 If the user specified dependencies:
-1. Verify each dependency ID exists in the table
-2. Check for circular dependencies: if T-NEW depends on T-X, and T-X (directly or transitively) would depend on T-NEW → reject
-3. If any dependency ID is invalid → ask the user to correct it
+1. **Self-reference check:** If any dependency ID matches the task's own ID → **STOP** immediately: "Task cannot depend on itself."
+2. Verify each dependency ID exists in the table
+3. Check for circular dependencies: if T-NEW depends on T-X, and T-X (directly or transitively) would depend on T-NEW → reject
+4. If any dependency ID is invalid → ask the user to correct it
 
 ### Step 2.3.1: Generate Ring Pre-Dev Spec
 
@@ -332,7 +332,7 @@ task, use "reopen T-XXX".
 
 ### Step 3.1: Apply Changes
 
-1. Update the relevant column(s) in the table row in `docs/tasks.md`
+1. Update the relevant column(s) in the table row in tasks.md
 2. If Depends changed, validate all references exist and no circular dependencies
 3. Save the file
 
@@ -379,7 +379,7 @@ Use `AskUser` for confirmation.
 
 ### Step 4.2: Remove from tasks.md
 
-1. Remove the table row for T-XXX from `docs/tasks.md`
+1. Remove the table row for T-XXX from tasks.md
 2. Save
 
 **NOTE:** Do NOT renumber remaining task IDs. IDs are permanent identifiers.
@@ -423,6 +423,14 @@ Show the new table order.
 
 1. **If status is `DONE`** → **STOP**: "Task T-XXX is already done. Cannot cancel a completed task."
 2. **If status is `Cancelado`** → **STOP**: "Task T-XXX is already cancelled."
+2.1. **Mid-pipeline warning:** If status is `Validando Spec`, `Em Andamento`, `Validando Impl`, or `Revisando PR`, warn via `AskUser`:
+   ```
+   Task T-XXX is currently in stage '<status>'. Cancelling mid-pipeline may leave
+   uncommitted work in the worktree. Check for local changes before proceeding.
+   ```
+   Options:
+   - **Continue** — I've checked, proceed with cancellation
+   - **Cancel** — let me check first
 3. **Check for dependents:** Scan the Depends column of ALL tasks for references to T-XXX.
    If any non-cancelled task depends on T-XXX, warn via `AskUser`:
    ```
@@ -742,7 +750,7 @@ If the user provides multiple tasks to create at once (e.g., a list of tasks), p
 
 1. Generate IDs for all tasks first (to allow cross-references in dependencies)
 2. Validate all dependencies
-3. Add all rows to `docs/tasks.md`
+3. Add all rows to tasks.md
 4. Show summary of all created tasks
 
 ## Phase 11: Version Management
@@ -807,6 +815,12 @@ Editable fields:
 Commit: `chore(tasks): update version <name>`
 
 ### Step 11.3: Remove Version
+
+**HARD BLOCK:** Check if this is the only version:
+```
+Count the rows in the Versions table
+```
+If only one version exists → **STOP**: "Cannot remove the only version. Create another version first."
 
 **HARD BLOCK:** Check if any task references this version:
 ```

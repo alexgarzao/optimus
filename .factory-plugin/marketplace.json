@@ -65,7 +65,6 @@
       "description": "Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Supports initial (8 agents) and final (10 agents) review modes.",
       "source": "./deep-review"
     },
-
     {
       "name": "coderabbit-review",
       "description": "CodeRabbit-driven code review with TDD fix cycle, secondary validation via review agents, and interactive finding resolution.",

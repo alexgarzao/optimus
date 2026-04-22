@@ -81,7 +81,9 @@ Read `tasks.md` and identify each conflict region:
 >>>>>>> <branch-name or commit>
 ```
 
-For each conflict region, classify its content:
+**Multi-way conflict detection:** If a conflict region contains more than one `=======` marker (indicating an N-way merge), warn: "This is a multi-way merge conflict. This skill only handles 2-way conflicts. Manual resolution required for this region." Present the raw conflict region for manual review and skip auto-resolution for that region.
+
+For each 2-way conflict region, classify its content:
 
 | Content Type | How to Detect | Resolution Strategy |
 |-------------|---------------|---------------------|
@@ -98,7 +100,9 @@ For each conflict region containing task table rows:
 2. Extract ALL task rows from the **incoming** side (theirs)
 3. Build a map: `{task_id → {current_row, incoming_row}}`
 
-For tasks that appear on ONLY ONE side (no conflict for that row), keep as-is.
+For tasks that appear on ONLY ONE side, determine whether the task was ADDED on one branch or DELETED on the other:
+- **If the task exists in the non-conflicted portion of the file on the other branch** → it was likely deleted. Present to user via `AskUser`: "Task T-XXX exists on one side but was removed on the other. Keep or remove?" User decides — this is NOT auto-resolved.
+- **If the task does not exist anywhere on the other branch** → it was added. Keep as-is.
 
 For tasks that appear on BOTH sides with different values, proceed to Phase 2.
 

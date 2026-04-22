@@ -81,6 +81,12 @@ Options via `AskUser`:
 
 Store as `TASKS_DIR`.
 
+**Validate path exists:** Verify `TASKS_DIR` is a valid directory:
+```bash
+test -d "$TASKS_DIR"
+```
+If the directory does not exist, **STOP**: "tasksDir path `<TASKS_DIR>` does not exist. Check `.optimus/config.json` or provide a valid path."
+
 ### Step 1.2: Scan for Ring Pre-Dev Artifacts
 
 Check for Ring pre-dev output in `<TASKS_DIR>/tasks/`:

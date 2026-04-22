@@ -375,7 +375,7 @@ The `## Versions` section in tasks.md is **mandatory** and defines the available
 
 ### Format Validation
 
-Every stage agent (1-5) MUST validate the `docs/tasks.md` format before operating:
+Every stage agent (1-5) MUST validate the tasks.md format before operating:
 1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
 2. A `## Versions` section exists with a table containing columns: Version, Status, Description
 3. All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
@@ -409,7 +409,7 @@ The report agent computes and displays parallelization opportunities.
 
 ## Task Lifecycle
 
-Tasks flow through 5 stages (pr-check is optional). Status lives in `docs/tasks.md`
+Tasks flow through 5 stages (pr-check is optional). Status lives in `.optimus/tasks.md`
 (the markdown table in the target project). Each stage is a separate skill.
 
 ```
@@ -704,7 +704,7 @@ CURRENT_BRANCH=$(git branch --show-current)
 
 1. **Already on a feature branch?**
    - Cross-validate: check that `CURRENT_BRANCH` matches the **Branch** column in
-     `docs/tasks.md` for the target task.
+     tasks.md for the target task.
    - If Branch matches → proceed silently.
    - If Branch does not match → warn via `AskUser`: "tasks.md shows branch `<expected>`
      for T-XXX, but you are on `<current>`. Continue on current branch, or switch?"
@@ -712,7 +712,7 @@ CURRENT_BRANCH=$(git branch --show-current)
      T-XXX, but you are on `<current>`. Continue anyway?"
 
 2. **On the default branch (auto-navigate)?**
-   - Read `docs/tasks.md` and list tasks with status compatible with the current stage
+   - Read tasks.md and list tasks with status compatible with the current stage
      (use the Transition Table to determine which statuses are valid).
    - **If 0 eligible tasks** → **STOP**: "No tasks in `<expected-status>` found."
    - **If 1 eligible task** → suggest via `AskUser`: "Found task T-XXX — [title] in
@@ -1106,7 +1106,7 @@ The orchestrator applies the fix directly using Edit/MultiEdit tools. After appl
 - `ring-tw-team-functional-writer` (guides), `ring-tw-team-api-writer` (API docs),
   `ring-tw-team-docs-reviewer` (quality fixes)
 
-**Ring droids are REQUIRED for complex fixes** — there is no fallback to `worker`. If the
+**Ring droids are REQUIRED for complex fixes** — there is no alternative dispatch mechanism. If the
 required droids are not installed and a complex fix is needed, the skill MUST stop and
 inform the user which droids need to be installed.
 

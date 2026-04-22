@@ -8,7 +8,7 @@ skip_when: >
   - No tasks.md exists in the project
   - User wants the full dashboard with dependency graph, velocity, and workspace health (use optimus-report instead)
 prerequisite: >
-  - docs/tasks.md exists in the project
+  - .optimus/tasks.md exists in the project
 NOT_skip_when: >
   - "I already know the status" -- A quick glance catches tasks you forgot about.
   - "There's only one task" -- Even one task benefits from status visibility.
