@@ -44,8 +44,8 @@ def parse_agents_md():
 
 
 def extract_refs_from_skill(skill_path):
-    """Extract all AGENTS.md references from a SKILL.md file."""
-    content = skill_path.read_text()
+    """Extract all AGENTS.md references from a SKILL.md file (body only, not inlined block)."""
+    content = strip_existing_inline(skill_path.read_text())
     refs = set()
 
     # Protocol references: "see AGENTS.md Protocol: X"
