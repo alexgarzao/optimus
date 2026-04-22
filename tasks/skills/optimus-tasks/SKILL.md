@@ -546,10 +546,10 @@ To resolve, run `/optimus-tasks`:
    - **If reopening from `Cancelado`:** Target status is always `Pendente` (task must restart
      from the beginning via plan).
    - **If reopening from `DONE`:**
-     - Read the **Branch** column for this task
-     - If Branch is NOT `-` AND the branch exists locally (`git branch --list "<branch>"`):
+     - Read the `branch` field from state.json (or search `git branch --list "*<task-id>*"`)
+     - If a branch exists locally:
        - Target status: `Em Andamento` (workspace exists, can resume implementation)
-     - If Branch is `-` OR the branch no longer exists:
+     - If no branch found:
        - Target status: `Pendente` (workspace must be recreated via plan)
 3. Warn via `AskUser`:
    ```
