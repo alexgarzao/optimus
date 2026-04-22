@@ -398,31 +398,30 @@ Present BOTH formats: the ASCII art first (always readable), then the json-rende
 
 ## Phase 9: Velocity and History Metrics
 
-After the dashboard, compute velocity metrics from git history. These provide trend
-data that a static snapshot (Phase 8) cannot show.
+After the dashboard, compute velocity metrics from `state.json` timestamps. These provide
+trend data that a static snapshot (Phase 8) cannot show.
+
+**NOTE:** Status lives in `.optimus/state.json` (gitignored), not in git commits.
+Velocity is derived from the `updated_at` timestamps of tasks with status `DONE`.
 
 ### Step 9.1: Compute Task Completion History
 
-Search git log for task completion commits using multiple patterns to catch various
-commit message formats:
+Read `.optimus/state.json` and extract all tasks with status `DONE`:
 
 ```bash
-# Pattern 1: Standard optimus format
-git log --oneline --all --grep="chore(tasks): mark T-" --since="4 weeks ago" --format="%H %ai %s"
-
-# Pattern 2: Keyword-based (mark + done)
-git log --oneline --all --grep="mark T-" --grep="done" --all-match --since="4 weeks ago" --format="%H %ai %s"
-
-# Pattern 3: Force-close format
-git log --oneline --all --grep="force-close T-" --since="4 weeks ago" --format="%H %ai %s"
-
-# Pattern 4: Status contains DONE
-git log --oneline --all --grep="T-[0-9]" --grep="DONE" --all-match --since="4 weeks ago" --format="%H %ai %s"
+STATE_FILE=".optimus/state.json"
+if [ -f "$STATE_FILE" ] && jq empty "$STATE_FILE" 2>/dev/null; then
+  jq -r 'to_entries[] | select(.value.status == "DONE") | "\(.key) \(.value.updated_at)"' "$STATE_FILE"
+fi
 ```
 
-Merge and deduplicate results from all patterns (same commit SHA = same event).
+For each completed task, extract: task ID and completion date (from `updated_at`).
+Group completions by week (last 4 weeks) for the velocity chart.
 
-For each completed task found, extract: task ID, completion date.
+**If state.json is missing or has no DONE tasks**, show:
+```
+Velocity: No completed tasks found in state.json. Complete a task to start tracking.
+```
 
 ### Step 9.2: Present Velocity Dashboard
 
@@ -445,19 +444,12 @@ For each completed task found, extract: task ID, completion date.
 └─────────────────────────────────────────────────┘
 ```
 
-**If no completion history is found** (new project, no tasks completed yet), show:
-```
-Velocity: No completed tasks in the last 4 weeks. Complete a task to start tracking.
-```
-
 ### Step 9.3: Average Time Per Stage
 
-If enough data exists (3+ completed tasks), compute average time spent in each stage
-by analyzing git log timestamps for status change commits:
-
-```bash
-git log --oneline --all --grep="chore(tasks):" --format="%H %ai %s" | head -50
-```
+If enough data exists (3+ completed tasks with `updated_at` timestamps in state.json),
+compute approximate stage durations by comparing `updated_at` values of tasks that
+progressed through multiple stages. If `stats.json` has `last_plan` and `last_check`
+timestamps, use those for more precise stage duration estimates.
 
 Present as:
 ```
@@ -471,12 +463,12 @@ Average time per stage (from N completed tasks):
 
 ---
 
-## Phase 9.5: Stage Execution Stats (Churn Metrics)
+## Phase 9.4: Stage Execution Stats (Churn Metrics)
 
 Read `.optimus/stats.json` to display stage execution counters. If the file does not
 exist, skip this phase silently.
 
-### Step 9.5.1: Load Stats
+### Step 9.4.1: Load Stats
 
 ```bash
 STATS_FILE=".optimus/stats.json"
@@ -485,7 +477,7 @@ if [ -f "$STATS_FILE" ]; then
 fi
 ```
 
-### Step 9.5.2: Present Churn Dashboard
+### Step 9.4.2: Present Churn Dashboard
 
 Only show this section if stats.json exists AND has at least one task entry.
 
@@ -525,7 +517,7 @@ After the dashboard, present any issues found:
 - Circular dependencies
 - Invalid dependency references (pointing to non-existent task IDs)
 - Tasks blocked by a cancelled dependency (see "Blocked by Cancelled" section below)
-- Tasks stuck in the same status for too long (if git log shows no commits on their branch)
+- Tasks stuck in the same status for too long (check `updated_at` timestamp in state.json — if older than 7 days, flag as potentially stale)
 
 ### Blocked by Cancelled Dependencies (guided resolution)
 

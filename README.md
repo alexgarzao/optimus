@@ -53,6 +53,19 @@ droid plugin marketplace add https://github.com/alexgarzao/optimus
 droid plugin install <plugin-name>@optimus
 ```
 
+## Quick Start
+
+1. **Import tasks:** `/optimus-import` — creates `tasks.md` from Ring pre-dev artifacts
+2. **Check status:** `/optimus-report` — see the dashboard with dependencies and parallelization
+3. **Validate spec:** `/optimus-plan` — validates the first pending task and creates a workspace
+4. **Implement:** `/optimus-build` — implements the task with TDD and verification gates
+5. **Review:** `/optimus-check` — validates implementation with parallel specialist agents
+6. **Close:** `/optimus-done` — verifies prerequisites and marks the task as done
+
+Or use `/optimus-batch` to chain all stages with checkpoints between them.
+
+**Note:** Execution and review skills require [Ring ecosystem](https://github.com/LerianStudio) droids to be installed.
+
 ## How it works
 
 Each skill is an installable plugin with:

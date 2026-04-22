@@ -175,8 +175,8 @@ from a previous run that was interrupted (crash, user closed terminal, etc.).
      - **Clean and reset to Pendente** — delete the workspace and reset the task (abandon)
 
    If the user chooses **Reuse**:
-   - If a worktree exists, change working directory to it and proceed to Step 1.0.7
-   - If only a branch exists (no worktree), create a worktree for it and proceed to Step 1.0.7
+   - If a worktree exists, change working directory to it and proceed to Step 1.0.6
+   - If only a branch exists (no worktree), create a worktree for it and proceed to Step 1.0.6
 
    If the user chooses **Clean and recreate**:
    1. Remove worktree if exists: `git worktree remove <path>`
@@ -196,7 +196,7 @@ from a previous run that was interrupted (crash, user closed terminal, etc.).
 Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelines.
 
 **If already on a feature branch** (not default/main/master): skip to Step 1.0.6
-(the task was already reserved in a previous run or by the user manually).
+(check divergence — the task was already reserved in a previous run or by the user manually).
 
 **If on the default branch:**
 
@@ -221,13 +221,11 @@ Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelin
 
 **BLOCKING**: Do NOT proceed until the worktree is created.
 
-### Step 1.0.6: Skip (reserved for compatibility)
-
-### Step 1.0.7: Check tasks.md Divergence (warning)
+### Step 1.0.6: Check tasks.md Divergence (warning)
 
 Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 
-### Step 1.0.8: Increment Stage Stats
+### Step 1.0.7: Increment Stage Stats
 
 Increment stage stats — see AGENTS.md Protocol: Increment Stage Stats. Use counter=`plan_runs`, timestamp=`last_plan`.
 
@@ -513,7 +511,7 @@ Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding O
 
 4. Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
    **Every AskUser MUST include a "Tell me more" option** alongside the fix/skip options.
-5. **IMMEDIATE RESPONSE RULE** — see AGENTS.md "Finding Presentation" item 8. If the user
+5. **IMMEDIATE RESPONSE RULE** — see AGENTS.md "Finding Presentation" item 9. If the user
    selects "Tell me more" or responds with free text: STOP, research and answer RIGHT NOW.
    **NEVER defer to the end of the findings loop.**
 6. **Track all decisions** internally. Do NOT apply any fix yet — all fixes are applied in Phase 4.
@@ -659,8 +657,8 @@ If the user requests a dry-run (e.g., "dry-run spec T-003", "preview spec"):
 - Run ALL analysis phases (Phase 1, Validation Dimensions, Phase 2) normally
 - Present ALL findings in Phase 3 (interactive resolution)
 - **Do NOT change task status** — skip Step 1.0.5 (status reservation)
-- **Do NOT create workspaces** — skip Step 1.0.6 (workspace creation)
-- **Do NOT increment stats** — skip Step 1.0.8 (stage stats)
+- **Do NOT create workspaces** — skip Step 1.0.5 (workspace creation)
+- **Do NOT increment stats** — skip Step 1.0.7 (stage stats)
 - **Do NOT commit or push anything** — skip Phases 4, 5, 7
 - **Do NOT run convergence loop** — one pass is sufficient for preview
 - Present results as informational: "what would happen" without side effects

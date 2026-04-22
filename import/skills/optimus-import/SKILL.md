@@ -305,7 +305,12 @@ Register `tasksDir`:
 if [ ! -f .optimus/config.json ]; then
   echo '{}' > .optimus/config.json
 fi
-jq --arg dir "$TASKS_DIR" '.tasksDir = $dir' .optimus/config.json > .optimus/config.json.tmp && mv .optimus/config.json.tmp .optimus/config.json
+if jq --arg dir "$TASKS_DIR" '.tasksDir = $dir' .optimus/config.json > .optimus/config.json.tmp; then
+  mv .optimus/config.json.tmp .optimus/config.json
+else
+  rm -f .optimus/config.json.tmp
+  echo "ERROR: Failed to update config.json"
+fi
 ```
 
 ### Step 3.4: Cleanup and Commit
@@ -316,7 +321,7 @@ a TaskSpec before deleting the old file:
 ```bash
 if [ -n "$EXISTING_FILE" ] && [ "$EXISTING_FILE" != ".optimus/tasks.md" ]; then
   # Count tasks with TaskSpec = -
-  MISSING_SPECS=$(grep -c '| - |$' .optimus/tasks.md 2>/dev/null || echo 0)
+  MISSING_SPECS=$(grep -cE '\| -\s*\|\s*$' .optimus/tasks.md 2>/dev/null || echo 0)
   if [ "$MISSING_SPECS" -gt 0 ]; then
     echo "WARNING: $MISSING_SPECS tasks still have no TaskSpec (TaskSpec = -)."
     echo "Keeping old file as reference until all specs are generated."

@@ -260,20 +260,10 @@ make test                    # Unit tests — MANDATORY
 2. Ask the user via `AskUser`: "Unit tests are failing. Fix before continuing, or skip check?"
 3. Do NOT proceed to Phase 3 until unit tests pass or user explicitly chooses to skip
 
-**If unit tests pass:** collect coverage data for analysis using the project's Makefile
-or `.optimus/config.json` commands:
+**If unit tests pass:** collect coverage data for analysis.
 
-```bash
-# Preferred: Makefile target
-make test-coverage 2>/dev/null
-
-# Fallback: stack-specific
-# Go:     go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out
-# Node:   npm test -- --coverage
-# Python: pytest --cov=. --cov-report=term
-```
-
-If no coverage command is available, mark as SKIP.
+Measure coverage — see AGENTS.md Protocol: Coverage Measurement. Use the protocol's
+command resolution order (config.json → Makefile → stack-specific).
 
 **NOTE:** Integration and E2E tests are NOT run here. They run only in Phase 9
 (after convergence loop, before summary) or when the user invokes them directly.
@@ -286,10 +276,9 @@ Parse the coverage output (format varies by stack) to identify:
 - Packages/files with lowest coverage (bottom 20)
 - Functions/methods with 0% coverage (untested)
 
-Create findings for coverage issues:
-- **HIGH**: Business logic functions with 0% coverage
-- **MEDIUM**: Packages below 70% coverage
-- **LOW**: Packages below 85% coverage
+Create findings for coverage issues (aligned with AGENTS.md Protocol: Coverage Measurement):
+- **HIGH**: Unit coverage below 85% threshold, or integration coverage below 70% threshold, or business logic functions with 0% coverage
+- **MEDIUM**: Coverage above threshold but with notable untested functions
 - Infrastructure/generated code with 0% → skip (not a finding)
 
 ### Step 2.4: Test Scenario Gap Analysis
@@ -494,7 +483,7 @@ Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding O
 Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
 **Every AskUser MUST include a "Tell me more" option** alongside the fix/skip options.
 
-**IMMEDIATE RESPONSE RULE** — see AGENTS.md "Finding Presentation" item 8. If the user
+**IMMEDIATE RESPONSE RULE** — see AGENTS.md "Finding Presentation" item 9. If the user
 selects "Tell me more" or responds with free text: STOP, research and answer RIGHT NOW.
 **NEVER defer to the end of the findings loop.**
 
@@ -543,8 +532,16 @@ make lint                    # Lint — runs ONCE after all fixes
 make test                    # Unit tests — final regression check
 ```
 
-If lint fails, fix formatting issues and re-run. If unit tests fail after 3 attempts
-to fix, revert the offending fix and ask the user.
+If lint fails, fix formatting issues and re-run.
+
+**Handling test failures (max 3 attempts per fix):**
+1. **Logic bug** — return to RED, adjust test/fix
+2. **Flaky test** — re-execute at least 3 times in a clean environment to confirm flakiness.
+   Maximum 1 test skipped per fix. Document explicit justification (error message,
+   flakiness evidence) and tag with `pending-test-fix`
+3. **External dependency** — pause and wait for restoration
+
+If tests fail after 3 attempts to fix, revert the offending fix and ask the user.
 
 **NOTE:** Integration and E2E tests do NOT run here — they run in Phase 9 (after convergence loop, before summary).
 

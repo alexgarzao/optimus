@@ -494,9 +494,40 @@ Required output:
 
 ---
 
-## Phase 7: Final Summary
+## Phase 7: Integration and E2E Tests (before push)
 
-After the convergence loop exits:
+**After the convergence loop exits**, run integration and E2E tests. These are slow and
+expensive, so they run ONCE here — not during the fix/convergence cycle.
+
+```bash
+make test-integration        # Integration tests — if target exists
+make test-e2e                # E2E tests — if target exists
+```
+
+| Test Type | Makefile Target | If target exists | If target missing |
+|-----------|----------------|-----------------|-------------------|
+| Integration | `make test-integration` | **HARD BLOCK** if fails | SKIP |
+| E2E | `make test-e2e` | **HARD BLOCK** if fails | SKIP |
+
+**If any test fails:**
+1. Present the failure output (first 30 lines)
+2. Ask via `AskUser`: "Integration/E2E tests are failing. What should I do?"
+   - Fix the issue (dispatch ring droid)
+   - Skip and proceed to summary (user will handle later)
+
+**If all pass (or targets don't exist):** proceed to Phase 8 (Push) or Phase 9 (Final Summary).
+
+---
+
+## Phase 8: Push Commits (optional)
+
+Offer to push commits — see AGENTS.md Protocol: Push Commits.
+
+---
+
+## Phase 9: Final Summary
+
+After all phases complete:
 
 ```markdown
 ## CodeRabbit Review — Summary

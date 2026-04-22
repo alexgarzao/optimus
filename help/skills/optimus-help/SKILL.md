@@ -32,6 +32,11 @@ Lists all available Optimus skills organized by category.
 
 ## Phase 1: Present Skill Catalog
 
+**Prerequisites:** Optimus requires the Ring ecosystem (droids + pre-dev workflow).
+Execution skills (plan, build, check, pr-check, done) and review skills (deep-review,
+coderabbit-review) require Ring droids to be installed. Administrative skills (import,
+report, tasks, resolve, quick-report, help) work without Ring droids.
+
 Present the following catalog to the user. Use the `<json-render>` format for rich
 terminal display when available, otherwise use markdown tables.
 

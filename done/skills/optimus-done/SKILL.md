@@ -195,10 +195,20 @@ git log @{u}..HEAD --oneline
 Check if a PR exists for the current branch or task branch:
 
 ```bash
-PR_JSON=$(gh pr list --head "$(git branch --show-current)" --json number,state,title,reviewDecision --jq '.[0]' 2>/dev/null)
-PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number // empty')
-PR_STATE=$(echo "$PR_JSON" | jq -r '.state // empty')
-PR_TITLE=$(echo "$PR_JSON" | jq -r '.title // empty')
+HEAD_BRANCH=$(git branch --show-current 2>/dev/null)
+if [ -z "$HEAD_BRANCH" ]; then
+  echo "SKIP: Cannot determine current branch (detached HEAD). Skipping PR check."
+  PR_NUMBER=""
+else
+  PR_JSON=$(gh pr list --head "$HEAD_BRANCH" --json number,state,title,reviewDecision --jq '.[0]' 2>/dev/null)
+  if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "null" ]; then
+    PR_NUMBER=""
+  else
+    PR_NUMBER=$(echo "$PR_JSON" | jq -r '.number // empty' 2>/dev/null)
+    PR_STATE=$(echo "$PR_JSON" | jq -r '.state // empty' 2>/dev/null)
+    PR_TITLE=$(echo "$PR_JSON" | jq -r '.title // empty' 2>/dev/null)
+  fi
+fi
 ```
 
 **Store `PR_NUMBER` for use in Check 4.**
@@ -234,10 +244,10 @@ Before running checks 5-8, check for custom commands in `.optimus/config.json`:
 ```bash
 CONFIG_FILE=".optimus/config.json"
 if [ -f "$CONFIG_FILE" ]; then
-  LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE")
-  TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE")
-  TEST_INT_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE")
-  TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE")
+  LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_INT_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
 fi
 ```
 
@@ -420,7 +430,11 @@ TASK_BRANCH=$(jq -r --arg id "$TASK_ID" '.[$id].branch // ""' .optimus/state.jso
 if [ -z "$TASK_BRANCH" ]; then
   TASK_BRANCH=$(git branch --list "*$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')*" 2>/dev/null | head -1 | tr -d ' *')
 fi
-gh pr list --head "$TASK_BRANCH" --json number,state,title,url --jq '.[] | select(.state == "OPEN")'
+if [ -z "$TASK_BRANCH" ]; then
+  echo "No branch found for $TASK_ID in state.json or local branches. Skipping PR cleanup."
+else
+  gh pr list --head "$TASK_BRANCH" --json number,state,title,url --jq '.[] | select(.state == "OPEN")'
+fi
 ```
 
 If an open PR is found, ask via `AskUser`:

@@ -548,7 +548,23 @@ LINT_CMD="${LINT_CMD:-make lint}"
 TEST_UNIT_CMD="${TEST_UNIT_CMD:-make test}"
 ```
 
-### Step 3.2: Dispatch Agents
+### Step 3.2: Baseline Unit Tests
+
+Unit tests should pass before dispatching review agents. This establishes the baseline —
+if tests are already failing, agent findings may be unreliable.
+
+```bash
+$TEST_UNIT_CMD   # from .optimus/config.json, or fallback: make test
+```
+
+**If unit tests fail:**
+1. Present the failure output (first 30 lines)
+2. Ask the user via `AskUser`: "Unit tests are failing. Fix before continuing, or skip?"
+3. Do NOT proceed to agent dispatch until tests pass or user explicitly chooses to skip
+
+**If unit tests pass:** proceed to Step 3.3.
+
+### Step 3.3: Dispatch Agents
 
 Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives:
 - The full content of every changed file
@@ -762,7 +778,7 @@ Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding O
 Use `AskUser`. **BLOCKING** — do not advance until decided.
 **Every AskUser MUST include a "Tell me more" option** alongside the fix/skip options.
 
-**IMMEDIATE RESPONSE RULE** — see AGENTS.md "Finding Presentation" item 8. If the user
+**IMMEDIATE RESPONSE RULE** — see AGENTS.md "Finding Presentation" item 9. If the user
 selects "Tell me more" or responds with free text: STOP, research and answer RIGHT NOW.
 **NEVER defer to the end of the findings loop.**
 
@@ -855,8 +871,10 @@ For each approved fix, classify its complexity and apply accordingly — see AGE
 ### Step 8.3: Handle Test Failures (max 3 attempts)
 
 1. **Logic bug** → Return to RED, adjust test/fix
-2. **Flaky test** → Re-execute 3 times, document, tag with "pending-test-fix"
-3. **External dependency** → Pause and wait
+2. **Flaky test** → Re-execute at least 3 times in a clean environment to confirm
+   flakiness. Maximum 1 test skipped per fix. Document explicit justification
+   (error message, flakiness evidence) and tag with `pending-test-fix`
+3. **External dependency** → Pause and wait for restoration
 
 ### Step 8.4: Commit Each Fix
 

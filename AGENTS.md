@@ -669,6 +669,14 @@ times each stage ran on each task — useful for spotting spec churn and review 
 **NOTE:** Only increment when NOT in dry-run mode.
 
 1. Read `.optimus/stats.json`. If the file does not exist, start with an empty object `{}`.
+   If the file exists but is corrupted, reset it:
+   ```bash
+   STATS_FILE=".optimus/stats.json"
+   if [ -f "$STATS_FILE" ] && ! jq empty "$STATS_FILE" 2>/dev/null; then
+     echo "WARNING: stats.json is corrupted. Resetting counters."
+     echo '{}' > "$STATS_FILE"
+   fi
+   ```
 2. If the task ID key does not exist, initialize it:
    ```json
    { "plan_runs": 0, "check_runs": 0 }
@@ -683,7 +691,7 @@ Skills reference this as: "Increment stage stats — see AGENTS.md Protocol: Inc
 
 ### Protocol: Shell Safety Guidelines
 
-**Referenced by:** plan, build, check, pr-check, done, tasks, import, resolve, batch
+**Referenced by:** plan, batch
 
 All bash examples in AGENTS.md and SKILL.md files are templates that agents execute literally.
 Follow these rules to prevent injection and silent failures:
@@ -706,10 +714,16 @@ Follow these rules to prevent injection and silent failures:
 6. **Validate tool availability** before use: `command -v jq &>/dev/null` before running `jq`
 7. **Validate JSON files** before parsing: `jq empty "$FILE" 2>/dev/null` before reading keys
 8. **Sanitize user-derived values in commit messages** — task titles and descriptions may
-   contain shell metacharacters (backticks, `$(...)`, double quotes). When constructing
-   commit messages, prefer using git's `-m` flag with the message in double quotes and
-   ensure the interpolated values don't contain unescaped special characters. If in doubt,
-   use `printf '%s' "$VALUE"` to safely handle the content.
+   contain shell metacharacters (backticks, `$(...)`, double quotes). **Mandatory pattern:**
+   write the commit message to a temporary file and use `git commit -F`:
+   ```bash
+   COMMIT_MSG_FILE=$(mktemp)
+   printf '%s' "chore(tasks): $OPERATION" > "$COMMIT_MSG_FILE"
+   git commit -F "$COMMIT_MSG_FILE"
+   rm -f "$COMMIT_MSG_FILE"
+   ```
+   This avoids all shell expansion issues. If using `-m` directly, sanitize with:
+   `SAFE_VALUE=$(printf '%s' "$VALUE" | tr -d '`$')` before interpolation.
 
 Skills reference this as: "Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelines."
 
@@ -746,7 +760,12 @@ Each task gets its own file (e.g., `.optimus/sessions/session-T-003.json`).
 ```bash
 SESSION_FILE=".optimus/sessions/session-${TASK_ID}.json"
 if [ -f "$SESSION_FILE" ]; then
-  cat "$SESSION_FILE"
+  if ! jq empty "$SESSION_FILE" 2>/dev/null; then
+    echo "WARNING: Session file is corrupted. Deleting and proceeding fresh."
+    rm -f "$SESSION_FILE"
+  else
+    cat "$SESSION_FILE"
+  fi
 fi
 ```
 
@@ -807,7 +826,11 @@ DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@
 if [ -z "$DEFAULT_BRANCH" ]; then
   DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
 fi
-CURRENT_BRANCH=$(git branch --show-current)
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+if [ -z "$CURRENT_BRANCH" ]; then
+  echo "ERROR: Cannot determine current branch (detached HEAD state). Checkout a branch first."
+  # STOP — do not proceed
+fi
 ```
 
 **Resolution order:**
@@ -902,12 +925,15 @@ After writing a status change to state.json, invoke notification hooks if presen
 2. Write new status to state.json
 3. Invoke hooks with `OLD_STATUS` and new status
 
-**IMPORTANT:** Always quote all arguments to prevent shell injection from user-derived values.
+**IMPORTANT:** Always quote all arguments and sanitize user-derived values to prevent
+shell injection. Hook scripts MUST NOT pass their arguments to `eval` or shell
+interpretation — treat all arguments as untrusted data.
 
 ```bash
+_optimus_sanitize() { printf '%s' "$1" | tr -cd '[:alnum:][:space:]-_./:'; }
 HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
 if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" "$event" "$task_id" "$old_status" "$new_status" 2>/dev/null &
+  "$HOOKS_FILE" "$event" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$old_status")" "$(_optimus_sanitize "$new_status")" 2>/dev/null &
 fi
 ```
 
@@ -1028,9 +1054,19 @@ Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
 1. Read the task's `TaskSpec` column from `tasks.md`
 2. If `TaskSpec` is `-` → **STOP**: "Task T-XXX has no Ring pre-dev spec. Link one via `/optimus-tasks` or `/optimus-import`."
 3. Resolve full path: `TASK_SPEC_PATH = <TASKS_DIR>/<TaskSpec>`
-4. Read the task spec file at `TASK_SPEC_PATH`
-5. Derive subtasks directory: if TaskSpec is `tasks/task_001.md`, subtasks are at `<TASKS_DIR>/subtasks/T-001/`
-6. If subtasks directory exists, read all `.md` files inside it
+4. **Path traversal validation (HARD BLOCK):** Verify the resolved path stays within the project:
+   ```bash
+   PROJECT_ROOT=$(git rev-parse --show-toplevel)
+   RESOLVED_PATH=$(cd "$PROJECT_ROOT" && realpath -m "${TASKS_DIR}/${TASK_SPEC}" 2>/dev/null)
+   case "$RESOLVED_PATH" in
+     "$PROJECT_ROOT"/*) ;; # OK — within project
+     *) echo "ERROR: TaskSpec path traversal detected — resolved path is outside the project root."; exit 1 ;;
+   esac
+   ```
+   Also apply the same validation to `TASKS_DIR` when reading from `.optimus/config.json`.
+5. Read the task spec file at `TASK_SPEC_PATH`
+6. Derive subtasks directory: if TaskSpec is `tasks/task_001.md`, subtasks are at `<TASKS_DIR>/subtasks/T-001/`
+7. If subtasks directory exists, read all `.md` files inside it
 
 Skills reference this as: "Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution."
 
@@ -1165,10 +1201,19 @@ STATE_FILE=".optimus/state.json"
 if [ ! -f "$STATE_FILE" ]; then
   echo '{}' > "$STATE_FILE"
 fi
+if [ -z "$TASK_ID" ] || [ -z "$NEW_STATUS" ]; then
+  echo "ERROR: Cannot write state — TASK_ID or NEW_STATUS is empty."
+  # STOP — do not proceed
+fi
 UPDATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" --arg branch "$BRANCH_NAME" --arg ts "$UPDATED_AT" \
-  '.[$id] = {status: $status, branch: $branch, updated_at: $ts}' "$STATE_FILE" > "${STATE_FILE}.tmp" \
-  && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+if jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" --arg branch "$BRANCH_NAME" --arg ts "$UPDATED_AT" \
+  '.[$id] = {status: $status, branch: $branch, updated_at: $ts}' "$STATE_FILE" > "${STATE_FILE}.tmp"; then
+  mv "${STATE_FILE}.tmp" "$STATE_FILE"
+else
+  rm -f "${STATE_FILE}.tmp"
+  echo "ERROR: jq failed to update state.json"
+  # STOP — do not proceed
+fi
 ```
 
 **Removing entry (for Pendente reset):**
@@ -1178,8 +1223,12 @@ STATE_FILE=".optimus/state.json"
 if [ ! -f "$STATE_FILE" ]; then
   echo "state.json does not exist — task is already implicitly Pendente."
 else
-  jq --arg id "$TASK_ID" 'del(.[$id])' "$STATE_FILE" > "${STATE_FILE}.tmp" \
-    && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  if jq --arg id "$TASK_ID" 'del(.[$id])' "$STATE_FILE" > "${STATE_FILE}.tmp"; then
+    mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  else
+    rm -f "${STATE_FILE}.tmp"
+    echo "ERROR: jq failed to update state.json"
+  fi
 fi
 ```
 

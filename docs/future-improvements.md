@@ -107,4 +107,35 @@ If revisited in the future, consider:
 3. Show both values: `50% (5/10 tasks) | 72% (weighted by estimate)` — let the user
    choose which to trust.
 
+---
+
+## I3: Translate All Portuguese to English
+
+**Status:** Open
+**Affects:** AGENTS.md, all SKILL.md files, README.md
+**Priority:** Medium
+
+### Problem
+
+Status values (Pendente, Validando Spec, Em Andamento, Validando Impl, Revisando PR,
+Cancelado, Concluída), version statuses (Ativa, Próxima, Planejada, Backlog), priority
+values (Alta, Media, Baixa), column headers (Tipo, Depends), and various labels are in
+Portuguese. This creates a barrier for non-Portuguese-speaking users and contributors.
+
+### Scope
+
+1. Status values in AGENTS.md and all SKILL.md files
+2. Version status values
+3. Priority values
+4. Column headers and labels
+5. User-facing messages and AskUser prompts
+6. state.json values (requires migration path for existing users)
+
+### Considerations
+
+- Requires a migration path for state.json (existing status values)
+- tasks.md format marker may need versioning (v1 → v2)
+- All protocol references to status names must be updated atomically
+- Consider keeping Portuguese as an alias during transition period
+
 

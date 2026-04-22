@@ -100,8 +100,16 @@ Ask the user what to verify (or detect from invocation):
 - **Changed files only** — scope checks to files changed since a base branch:
   ```bash
   DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-  git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null || echo "WARNING: Could not fetch latest changes from remote. Diff may use stale reference."
-  CHANGED_FILES=$(git diff --name-only "origin/$DEFAULT_BRANCH"...HEAD)
+  if [ -z "$DEFAULT_BRANCH" ]; then
+    DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
+  fi
+  if [ -z "$DEFAULT_BRANCH" ]; then
+    echo "ERROR: Cannot determine default branch. Falling back to full-project verification."
+    # Use full project scope instead of diff
+  else
+    git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null || echo "WARNING: Could not fetch latest changes from remote. Diff may use stale reference."
+    CHANGED_FILES=$(git diff --name-only "origin/$DEFAULT_BRANCH"...HEAD)
+  fi
   ```
   If `CHANGED_FILES` is empty (no files changed), inform the user and exit early:
   ```
@@ -177,15 +185,12 @@ Run integration tests with coverage profiling. The exact command depends on the 
 - Regardless of result, run `make test-e2e` next
 - Capture output, exit code, and duration for each
 
-### E2E Tests — User Decision
+### E2E Tests
 
-Before running E2E tests, check if they are available (`make test-e2e` target exists). If available, run them. If NOT available, ask the user using `AskUser`:
-
-"E2E tests are not configured for this project. Would you like to skip E2E verification, or should they be implemented?"
-
-Options:
-- Skip E2E for now
-- E2E tests should be implemented (flag as NEEDS_FIX)
+Before running E2E tests, check if they are available (`make test-e2e` target exists).
+If available, run them. If NOT available, mark as **SKIP** in the summary with a note.
+Do NOT ask the user whether to implement E2E — that is a project-level decision, not
+a per-verification decision (consistent with check and done behavior).
 
 ---
 
@@ -219,10 +224,9 @@ go tool cover -func=coverage-unit.out | grep -v "total:" | awk '{print $NF, $1}'
 
 **Node.js/Python:** Parse per-file coverage from the coverage report output.
 
-Flag files/packages below thresholds:
-- **HIGH:** 0% coverage on business logic (handlers, services, domain)
-- **MEDIUM:** < 70% coverage
-- **LOW:** < 85% coverage
+Flag files/packages below thresholds (aligned with AGENTS.md Protocol: Coverage Measurement):
+- **HIGH:** Unit coverage below 85% threshold, or integration coverage below 70% threshold, or business logic with 0% coverage
+- **MEDIUM:** Coverage above threshold but with notable untested functions
 - **SKIP:** 0% coverage on infrastructure/generated code (config, bootstrap, mocks)
 
 ### Step 4.3: Identify Untested Functions

@@ -237,11 +237,17 @@ Collect IDs from ALL sources to avoid collisions with parallel branches:
 2. **Remote:** Fetch and parse IDs from the default branch on origin:
    ```bash
    DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-   git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
-   git show "origin/$DEFAULT_BRANCH:$TASKS_FILE" 2>/dev/null | grep -oE 'T-[0-9]+'
+   if [ -z "$DEFAULT_BRANCH" ]; then
+     DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
+   fi
+   if [ -n "$DEFAULT_BRANCH" ]; then
+     git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
+     git show "origin/$DEFAULT_BRANCH:$TASKS_FILE" 2>/dev/null | grep -oE 'T-[0-9]+'
+   fi
    ```
-   If fetch fails (no network), warn the user: "Could not reach remote — ID may
-   collide with tasks created on other branches. Continuing with local IDs only."
+   If DEFAULT_BRANCH is empty or fetch fails, warn the user: "Could not determine
+   default branch or reach remote — ID may collide with tasks created on other
+   branches. Continuing with local IDs only."
 3. **Worktrees:** Scan parallel worktrees for IDs:
    ```bash
    git worktree list --porcelain 2>/dev/null | grep "^worktree " | while read _ path; do
@@ -794,22 +800,29 @@ Editable fields:
   "Version '<existing>' is currently Ativa. Change it to Próxima and set '<name>' as Ativa?"
 - If setting to `Próxima` and another version is already `Próxima` → ask via `AskUser`:
   "Version '<existing>' is currently Próxima. Change it to Planejada and set '<name>' as Próxima?"
-- If setting to `Concluída` → check tasks in this version:
-  - Classify non-DONE tasks into two groups:
-    - **In progress:** tasks with status other than `DONE` or `Cancelado` (e.g., Pendente, Em Andamento, etc.)
-    - **Cancelled:** tasks with status `Cancelado`
-  - If no in-progress AND no cancelled → proceed (all DONE)
-  - If no in-progress BUT some cancelled → softer warning via `AskUser`:
-    "Version '<name>' has all active tasks DONE, but N tasks were cancelled:
-    - T-XXX: <title> (Cancelado)
-    Mark as Concluída anyway?"
-  - If any in-progress → stronger warning via `AskUser`:
-    "Version '<name>' has N tasks still in progress:
-    - T-XXX: <title> (Status: <status>)
-    - T-YYY: <title> (Status: <status>)
-    [And M cancelled tasks, if any]
-    Mark as Concluída anyway?"
-  - **BLOCKING:** Do NOT proceed without user confirmation
+- If setting to `Concluída`:
+  - **If this version is currently `Ativa`:** check if a `Próxima` version exists:
+    - If yes → ask via `AskUser`: "Version '<name>' is the active version. Setting it to
+      Concluída will leave no active version unless '<próxima-version>' is promoted to
+      Ativa. Promote '<próxima-version>' to Ativa automatically?"
+    - If no → **STOP**: "Version '<name>' is the only active version. Before marking it
+      Concluída, set another version to Ativa via 'edit version <name>, set to Ativa'."
+  - Check tasks in this version:
+    - Classify non-DONE tasks into two groups:
+      - **In progress:** tasks with status other than `DONE` or `Cancelado` (e.g., Pendente, Em Andamento, etc.)
+      - **Cancelled:** tasks with status `Cancelado`
+    - If no in-progress AND no cancelled → proceed (all DONE)
+    - If no in-progress BUT some cancelled → softer warning via `AskUser`:
+      "Version '<name>' has all active tasks DONE, but N tasks were cancelled:
+      - T-XXX: <title> (Cancelado)
+      Mark as Concluída anyway?"
+    - If any in-progress → stronger warning via `AskUser`:
+      "Version '<name>' has N tasks still in progress:
+      - T-XXX: <title> (Status: <status>)
+      - T-YYY: <title> (Status: <status>)
+      [And M cancelled tasks, if any]
+      Mark as Concluída anyway?"
+    - **BLOCKING:** Do NOT proceed without user confirmation
 
 Commit: `chore(tasks): update version <name>`
 
