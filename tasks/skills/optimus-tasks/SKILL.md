@@ -640,10 +640,12 @@ code manually without using stage-2).
 
 ### Step 8.1: Validate Advance
 
-1. **If status is `DONE` or `Cancelado`** → **STOP**: "Task T-XXX is in terminal status '<status>'. Use 'reopen' for DONE tasks."
-1b. **If target status is `DONE`** → **STOP**: "Cannot advance to DONE manually. Use `/optimus-done` which runs the verification checklist."
-1c. **If target status is `Cancelado`** → **STOP**: "Cannot advance to Cancelado. Use the cancel operation (`cancel T-XXX`) which handles cleanup."
-1d. **If current status is `Revisando PR` and no target was specified** → **STOP**: "Task T-XXX is in 'Revisando PR'. The next step is `/optimus-done`, not manual advance."
+1. **Target status validation (check first):**
+   - If target status is `DONE` → **STOP**: "Cannot advance to DONE manually. Use `/optimus-done` which runs the verification checklist."
+   - If target status is `Cancelado` → **STOP**: "Cannot advance to Cancelado. Use the cancel operation (`cancel T-XXX`) which handles cleanup."
+2. **Current status validation:**
+   - If status is `DONE` or `Cancelado` → **STOP**: "Task T-XXX is in terminal status '<status>'. Use 'reopen' for DONE tasks."
+   - If current status is `Revisando PR` and no target was specified → **STOP**: "Task T-XXX is in 'Revisando PR'. The next step is `/optimus-done`, not manual advance."
 2. **Check dependencies (HARD BLOCK):** same rules as stage agents — all dependencies must be `DONE`.
 3. **Workspace check (warning):** If the target status is `Em Andamento` or later, verify
    that a workspace exists for this task:

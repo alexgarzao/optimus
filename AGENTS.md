@@ -88,7 +88,7 @@ rationalize these away.
 ### SKILL.md Files
 - Preserve YAML frontmatter structure (---, name, description, trigger, skip_when, etc.)
 - Keep phase numbering sequential starting from 1 (Phase 1, Phase 2, ...)
-- Step numbering within phases: Step X.Y where X matches the phase number (e.g., Step 1.3, Step 2.2)
+- Step numbering within phases: Step X.Y where X matches the phase number (e.g., Step 1.3, Step 2.2). Sub-steps use X.Y.Z notation (e.g., Step 1.0.3) when a step needs sub-steps for organization. Deeper nesting (X.Y.Z.W) is allowed but discouraged — prefer promoting to a separate step
 - Use `**HARD BLOCK:**` for steps the agent must never skip
 - Use `**CRITICAL:**` for rules that override normal behavior
 - Use `**IMPORTANT:**` for emphasis without hard blocking
@@ -616,6 +616,33 @@ Only `sessions/` and `reports/` are gitignored (temporary state).
 
 Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
 
+### Protocol: Shell Safety Guidelines
+
+**Referenced by:** all skills that execute bash commands
+
+All bash examples in AGENTS.md and SKILL.md files are templates that agents execute literally.
+Follow these rules to prevent injection and silent failures:
+
+1. **Always quote variables:** Use `"$VAR"` not `$VAR` — especially for paths, branch names, and user-derived values
+2. **Check exit codes for critical commands:**
+   ```bash
+   git add "$TASKS_FILE"
+   if ! git commit -m "chore(tasks): $COMMIT_MSG"; then
+     echo "ERROR: git commit failed. Check pre-commit hooks or git config."
+     # STOP — do not proceed
+   fi
+   ```
+3. **Never interpolate user-derived values directly into shell commands** — task titles,
+   branch names, and other user input may contain shell metacharacters
+4. **Use `grep -F` for fixed string matching** — never pass branch names or task IDs
+   as regex patterns to `grep` without `-F`
+5. **Use `grep -E '^\| T-NNN \|'`** to match task rows in tasks.md — plain `grep "T-NNN"`
+   matches titles and dependency columns too
+6. **Validate tool availability** before use: `command -v jq &>/dev/null` before running `jq`
+7. **Validate JSON files** before parsing: `jq empty "$FILE" 2>/dev/null` before reading keys
+
+Skills reference this as: "Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelines."
+
 ### Protocol: Session State
 
 **Referenced by:** all stage agents (1-5)
@@ -623,8 +650,17 @@ Skills reference this as: "Initialize .optimus directory — see AGENTS.md Proto
 Stage agents write a session state file to track progress. This enables resumption
 when a session is interrupted (agent crash, user closes terminal, context window limit).
 
+**IMPORTANT — Write timing:** The session file MUST be written **immediately after the
+status change commit** (before any work begins). This ensures crash recovery has a record
+even if the agent fails between status commit and first work output. Do NOT wait until
+"key phase transitions" to write the initial session file.
+
 **Session file location:** `.optimus/sessions/session-<task-id>.json` (gitignored).
 Each task gets its own file (e.g., `.optimus/sessions/session-T-003.json`).
+
+**Known limitation — multi-developer scenarios:** If two developers work on the same task
+from different machines, their session files share the same name and may overwrite each other.
+This is an accepted limitation — task reservation (Stage-1) is designed to prevent this case.
 
 ```json
 {
@@ -673,9 +709,12 @@ mkdir -p .optimus/sessions .optimus/reports
 if ! grep -q '^\.optimus/sessions/' .gitignore 2>/dev/null; then
   printf '\n.optimus/sessions/\n.optimus/reports/\n' >> .gitignore
 fi
-cat > ".optimus/sessions/session-${TASK_ID}.json" << EOF
-{"task_id":"${TASK_ID}","stage":"<stage-name>","status":"<status>","branch":"$(git branch --show-current)","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","phase":"<current-phase>","notes":"<progress>"}
-EOF
+BRANCH_NAME=$(git branch --show-current 2>/dev/null || echo "detached")
+printf '{"task_id":"%s","stage":"%s","status":"%s","branch":"%s","started_at":"%s","updated_at":"%s","phase":"%s","notes":"%s"}\n' \
+  "${TASK_ID}" "<stage-name>" "<status>" "${BRANCH_NAME}" \
+  "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  "<current-phase>" "<progress>" \
+  > ".optimus/sessions/session-${TASK_ID}.json"
 ```
 
 **On stage completion:** Delete the session file:
@@ -726,7 +765,7 @@ CURRENT_BRANCH=$(git branch --show-current)
      ```
    - After task is identified, locate the worktree:
      ```bash
-     git worktree list | grep "<branch-name>"
+     git worktree list | grep -F "<branch-name>"
      ```
    - **If worktree found** → change working directory to the worktree path.
    - **If worktree NOT found** (branch exists but no worktree) → create the worktree
@@ -886,6 +925,21 @@ If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
 
 Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Title Validation."
 
+### Protocol: TaskSpec Resolution
+
+**Referenced by:** plan, build, check
+
+Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
+
+1. Read the task's `TaskSpec` column from `tasks.md`
+2. If `TaskSpec` is `-` → **STOP**: "Task T-XXX has no Ring pre-dev spec. Link one via `/optimus-tasks` or `/optimus-import`."
+3. Resolve full path: `TASK_SPEC_PATH = <TASKS_DIR>/<TaskSpec>`
+4. Read the task spec file at `TASK_SPEC_PATH`
+5. Derive subtasks directory: if TaskSpec is `tasks/task_001.md`, subtasks are at `<TASKS_DIR>/subtasks/T-001/`
+6. If subtasks directory exists, read all `.md` files inside it
+
+Skills reference this as: "Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution."
+
 ### Protocol: Project Rules Discovery
 
 **Referenced by:** stages 1-4, deep-review, coderabbit-review
@@ -923,17 +977,36 @@ Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Pr
 
 After stage work is complete, offer to push all local commits:
 
+**Step 1 — Check if upstream tracking exists:**
+
 ```bash
-git log @{u}..HEAD --oneline 2>/dev/null
+git rev-parse --abbrev-ref @{u} 2>/dev/null
 ```
 
-If there are unpushed commits, ask via `AskUser`:
-```
-There are N unpushed commits on this branch. Push now?
-```
-Options:
-- **Push now** — `git push` (or `git push -u origin $(git branch --show-current)` if no upstream)
-- **Skip** — I'll push manually later
+- **If command fails (no upstream):** The branch was never pushed. All local commits are unpushed.
+  Ask via `AskUser`:
+  ```
+  Branch has no upstream (never pushed). Push now?
+  ```
+  Options:
+  - **Push now** — `git push -u origin "$(git branch --show-current)"`
+  - **Skip** — I'll push manually later
+
+- **If command succeeds (upstream exists):** Check for unpushed commits:
+  ```bash
+  git log @{u}..HEAD --oneline 2>/dev/null
+  ```
+  If there are unpushed commits, ask via `AskUser`:
+  ```
+  There are N unpushed commits on this branch. Push now?
+  ```
+  Options:
+  - **Push now** — `git push`
+  - **Skip** — I'll push manually later
+
+**Why check upstream first:** `git log @{u}..HEAD` silently produces empty output when no
+upstream exists, making it appear there's nothing to push. Without this check, the push step
+would be silently skipped even though ALL local commits are unpushed.
 
 **After a successful push**, check if the current repo is the Optimus plugin repository
 and update installed plugins to pick up the changes just pushed:
@@ -1002,9 +1075,7 @@ Location: `.optimus/config.json` (versioned)
     "test": "npm test",
     "test-integration": "npm run test:integration",
     "test-e2e": "npx playwright test",
-    "test-coverage": "npm test -- --coverage",
-    "format-check": "npx prettier --check .",
-    "typecheck": "npx tsc --noEmit"
+    "test-coverage": "npm test -- --coverage"
   }
 }
 ```

@@ -8,6 +8,10 @@ trigger: >
   - When user says "optimus help" or "list skills"
 skip_when: >
   - User already knows which skill to use and invoked it directly
+prerequisite: >
+  - None — this skill works without any project context
+NOT_skip_when: >
+  - "I know what I want" -- Help may reveal skills you didn't know existed.
 examples:
   - name: List all skills
     invocation: "What Optimus skills are available?"

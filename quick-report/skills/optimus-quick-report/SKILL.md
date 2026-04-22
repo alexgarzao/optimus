@@ -61,7 +61,7 @@ Check the first line for `<!-- optimus:tasks-v1 -->`. If missing, warn but attem
 ### Step 1.2: Parse Tables
 
 1. Parse the `## Versions` table (Version, Status, Description)
-2. Parse the tasks table (ID, Title, Tipo, Status, Depends, Priority, Version, Branch, Estimate)
+2. Parse the tasks table (ID, Title, Tipo, Status, Depends, Priority, Version, Branch, Estimate, TaskSpec)
 3. Identify the `Ativa` version
 
 ---

@@ -120,6 +120,7 @@ Read `tasks.md` and extract the markdown table. Expected columns:
 | Version | Version/milestone this task belongs to |
 | Branch | Git branch name, or `-` |
 | Estimate | Task size estimate (S, M, L, XL, etc.), or `-` |
+| TaskSpec | Path to Ring pre-dev task spec (optional — `-` if not linked) |
 
 ### Step 1.2.1: Parse Versions Table
 

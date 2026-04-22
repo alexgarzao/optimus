@@ -137,7 +137,8 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
    - If status is `Validando Impl` → proceed (re-execution of this stage)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run plan and build first."
    - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run build first."
-   - If status is `Revisando PR`, `DONE`, or `Cancelado` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage or was cancelled."
+   - If status is `Revisando PR` or `DONE` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage."
+   - If status is `Cancelado` → **STOP**: "Task T-XXX was cancelled. Cannot validate a cancelled task."
 3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:
@@ -332,7 +333,7 @@ Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receiv
 
 Dispatch specialist agents covering the validation domains below. Use the agent selection priority to pick the best available droid for each domain.
 
-**Ring droids are REQUIRED.** If the core review droids are not installed, **STOP** and inform the user:
+**Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. If the core review droids are not installed, **STOP** and inform the user:
 ```
 Required ring droids are not installed. Install them before running this skill:
   - ring-default-code-reviewer

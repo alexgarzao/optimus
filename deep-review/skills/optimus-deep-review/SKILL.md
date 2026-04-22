@@ -106,7 +106,7 @@ Ask the user what to review:
 
 Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives the files in scope plus any reference docs found.
 
-**Ring droids are REQUIRED.** If the core review droids are not installed, **STOP** and inform the user:
+**Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. If the core review droids are not installed, **STOP** and inform the user:
 ```
 Required ring droids are not installed. Install them before running this skill:
   - ring-default-code-reviewer

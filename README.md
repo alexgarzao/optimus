@@ -58,3 +58,5 @@ droid plugin install <plugin-name>@optimus
 Each skill is an installable plugin with:
 - `<plugin>/.factory-plugin/plugin.json` — plugin manifest
 - `<plugin>/skills/optimus-<skill>/SKILL.md` — full instructions with frontmatter (trigger, prerequisite, etc.)
+
+Future improvements are tracked in `docs/future-improvements.md`.

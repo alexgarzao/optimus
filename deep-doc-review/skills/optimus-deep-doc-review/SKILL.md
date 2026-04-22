@@ -83,7 +83,7 @@ Read the full content of each identified doc. Build a mental map of:
 Dispatch specialist agents via `Task` tool to analyze the docs from different perspectives.
 Each agent receives the full content of all docs being reviewed.
 
-**Ring droids are REQUIRED.** If the core review droids are not installed, **STOP** and inform the user:
+**Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. If the core review droids are not installed, **STOP** and inform the user:
 ```
 Required ring droids are not installed. Install them before running this skill:
   - ring-tw-team-docs-reviewer

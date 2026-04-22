@@ -157,10 +157,13 @@ When no task is referenced and no `tasks.md` exists, or the user explicitly want
 
 ### How to detect which mode:
 1. If the user mentions a task ID (T-XXX) → Task Mode
-2. Find `.optimus/tasks.md`. If found:
-   a. If exactly ONE task is in `Validando Impl` or `Revisando PR` → Task Mode (confirm with user via `AskUser`)
-   b. If MULTIPLE tasks are in `Validando Impl` or `Revisando PR` → Task Mode, but ask the user which task to review via `AskUser` (list all candidates with ID, title, version, and branch)
-   c. If NO tasks are in `Validando Impl` or `Revisando PR` → Standalone Mode
+2. Check if `.optimus/tasks.md` exists:
+   - If NOT found → Standalone Mode
+   - If found but INVALID format (first line is not `<!-- optimus:tasks-v1 -->` or format validation fails) → Standalone Mode with warning: "tasks.md exists but is invalid. Running in standalone mode. Consider running `/optimus-import`."
+   - If found and valid:
+     a. If exactly ONE task is in `Validando Impl` or `Revisando PR` → Task Mode (confirm with user via `AskUser`)
+     b. If MULTIPLE tasks are in `Validando Impl` or `Revisando PR` → Task Mode, but ask the user which task to review via `AskUser` (list all candidates with ID, title, version, and branch)
+     c. If NO tasks are in `Validando Impl` or `Revisando PR` → Standalone Mode
 3. If no `.optimus/tasks.md` exists → Standalone Mode
 
 ---
@@ -617,7 +620,7 @@ For EACH finding (new or evaluated), provide:
 | 6 | Ripple effects | Cross-file impacts beyond changed files | `ring-default-ring-consequences-reviewer` |
 | 7 | Dead code | Orphaned code from changes | `ring-default-ring-dead-code-reviewer` |
 
-**Ring droids are REQUIRED.** If the core review droids are not installed, **STOP** and inform the user:
+**Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. If the core review droids are not installed, **STOP** and inform the user:
 ```
 Required ring droids are not installed. Install them before running this skill:
   - ring-default-code-reviewer

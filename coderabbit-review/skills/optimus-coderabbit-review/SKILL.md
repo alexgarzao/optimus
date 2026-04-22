@@ -279,7 +279,7 @@ For fixes that alter execution flow, conditions, method calls, or observable beh
 
 1. **Dispatch review agents in parallel** via `Task` tool. Use the agent selection priority below:
 
-**Ring droids are REQUIRED.** If the core review droids are not installed, **STOP** and inform the user:
+**Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. If the core review droids are not installed, **STOP** and inform the user:
 ```
 Required ring droids are not installed. Install them before running this skill:
   - ring-default-code-reviewer

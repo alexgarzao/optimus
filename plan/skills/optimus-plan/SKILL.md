@@ -252,14 +252,19 @@ generated in Step 1.0.5.
 **Create worktree:**
 ```bash
 REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
-git worktree add ../${REPO_NAME}-<task-id>-<keywords> -b <tipo-prefix>/<task-id>-<keywords>
+git worktree add "${REPO_NAME}-<task-id>-<keywords>" -b "<tipo-prefix>/<task-id>-<keywords>"
 ```
 Then change working directory to the new worktree path for all subsequent steps.
 
 **Rollback on failure:** If worktree creation fails:
 1. Revert the status change on the default branch:
    ```bash
-   git revert HEAD --no-edit
+   if ! git revert HEAD --no-edit; then
+     echo "ERROR: Failed to revert status reservation. Manual cleanup needed."
+     echo "Run: git log --oneline -3   # to see recent commits"
+     echo "Run: git reset HEAD~1       # to undo the status commit"
+     # STOP — do not proceed
+   fi
    git push 2>/dev/null
    ```
 2. **STOP** and report the error to the user
@@ -486,7 +491,7 @@ For EACH new component:
 
 **HARD BLOCK:** Dispatch specialist ring droids in parallel to validate the task spec. Each agent receives the task spec, reference docs, and the gaps/findings identified so far.
 
-**Ring droids are REQUIRED. If any of the droids below are not available, STOP and inform the user:**
+**Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. **If any of the droids below are not available, STOP and inform the user:**
 ```
 Required ring droids are not installed. Install them before running this skill:
   - ring-default-business-logic-reviewer

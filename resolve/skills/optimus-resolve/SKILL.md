@@ -88,7 +88,7 @@ For each 2-way conflict region, classify its content:
 | Content Type | How to Detect | Resolution Strategy |
 |-------------|---------------|---------------------|
 | **Task table rows** | Lines matching `\| T-\d+ \|` pattern | Per-task most-advanced-status |
-| **Versions table** | Lines in the `## Versions` section | Merge both — keep all versions; deduplicate by name (if same version name on both sides, keep the one with more advanced status: Ativa > Próxima > Planejada > Backlog > Concluída) |
+| **Versions table** | Lines in the `## Versions` section | Merge both — keep all versions; deduplicate by name. Rules: same name + different status → keep higher status (Ativa > Próxima > Planejada > Backlog > Concluída); same name + same status + different description → present to user for decision; new version on one side only → keep it (additive merge) |
 | **TaskSpec column** | `TaskSpec` values in task rows | Keep either (should be identical on both sides) |
 | **Format marker / headers** | First line, `# Tasks`, table headers | Keep either (identical) |
 

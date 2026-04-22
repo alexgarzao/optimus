@@ -115,7 +115,9 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 
 1. Read `tasks.md` and find the row for the confirmed task ID
 2. Check the **Status** column:
-   - If status is `Validando Spec` → proceed (plan has completed)
+   - If status is `Validando Spec`:
+     - Check the **Branch** column. If Branch is `-` → **STOP**: "Task T-XXX is in 'Validando Spec' but has no branch. Stage-1 (plan) may have crashed before creating the workspace. Re-run `/optimus-plan T-XXX` to create it."
+     - If Branch has a value → proceed (plan has completed)
    - If status is `Em Andamento` → proceed (re-execution of this stage)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run plan first."
    - If status is `Validando Impl`, `Revisando PR`, `DONE`, or `Cancelado` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage or was cancelled."

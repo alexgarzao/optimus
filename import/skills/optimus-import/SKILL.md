@@ -148,8 +148,8 @@ transparency but cannot be selected.
 **If the user chooses "Use #N":**
 - Parse the selected file's task table into a lookup map keyed by TaskSpec column:
   `{task_spec_path → {ID, Status, Depends, Priority, Version, Branch, Estimate}}`
-- If the existing file uses the old overlay format (no TaskSpec column), read each
-  task's overlay file and extract `## Fonte` → `Task spec` path as the key instead
+- If the existing file does not have a TaskSpec column, match tasks by title similarity
+  (>80% keyword overlap) as a fallback. Present potential matches to the user for confirmation
 - Parse the Versions table and carry it over to the new tasks.md
 - Store this as `EXISTING_DATA` for use in Step 1.4
 - Store the source file path as `EXISTING_FILE` for cleanup in Step 3.4

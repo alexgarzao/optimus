@@ -439,6 +439,15 @@ Options:
 - **Keep open**: Leave the PR for manual merge
 - **Close without merging**: `gh pr close <number>`
 
+**After any merge option (merge/squash/rebase):** Verify if the branch was auto-deleted
+by GitHub (squash and rebase merges often auto-delete the branch):
+```bash
+git fetch origin --prune
+git branch -r --list "origin/$TASK_BRANCH"
+```
+If the branch was auto-deleted, proceed directly to Step 4.3 to update the Branch column
+in tasks.md to `-`. Do not ask the user about branch deletion — it already happened.
+
 **CRITICAL — Safety check for "Close without merging":** If the user chooses to close
 the PR without merging, the DONE status change (committed on the feature branch) will
 NOT be present on the default branch. Before closing, the agent MUST:
