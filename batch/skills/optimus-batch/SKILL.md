@@ -80,9 +80,9 @@ dependencies `DONE`. Prioritize by version (`Ativa` first), then priority, then 
 ### Step 1.3: Validate Eligibility
 
 For each task:
-1. Check that the task's status allows the requested starting stage
+1. **Read status from state.json** — see AGENTS.md Protocol: State Management. Check that the task's status allows the requested starting stage
    - **Exclude tasks with status `Cancelado`** — cancelled tasks cannot be processed through the pipeline
-2. Check that all dependencies are `DONE`
+2. Check that all dependencies are `DONE` (read Depends from tasks.md, status for each dependency from state.json)
 3. If any task is blocked, report it and exclude from the batch
 
 **NOTE:** Eligibility is re-evaluated after each task completes (Step 2.4). Tasks that
@@ -215,7 +215,7 @@ Options:
 
 After completing a task (all stages done), re-evaluate the remaining task pool:
 
-1. Re-read `tasks.md` to get current statuses
+1. Re-read `tasks.md` for structural data and `state.json` for current statuses
 2. Check if any previously ineligible tasks are now eligible (dependencies satisfied by the just-completed task)
 3. If new eligible tasks are found, present via `AskUser`:
    ```

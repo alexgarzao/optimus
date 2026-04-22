@@ -894,7 +894,13 @@ Skills reference this as: "Check tasks.md divergence — see AGENTS.md Protocol:
 
 **Referenced by:** all stage agents (1-5), tasks
 
-After writing a status change to state.json, invoke notification hooks if present:
+After writing a status change to state.json, invoke notification hooks if present.
+
+**IMPORTANT — Capture timing:** Read the current status from state.json and store it as
+`OLD_STATUS` BEFORE writing the new status. The sequence is:
+1. Read current status: `OLD_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")`
+2. Write new status to state.json
+3. Invoke hooks with `OLD_STATUS` and new status
 
 **IMPORTANT:** Always quote all arguments to prevent shell injection from user-derived values.
 
@@ -1141,8 +1147,8 @@ if [ -f "$STATE_FILE" ]; then
   fi
 fi
 if [ -f "$STATE_FILE" ]; then
-  TASK_STATUS=$(jq -r '.["'"$TASK_ID"'"].status // "Pendente"' "$STATE_FILE")
-  TASK_BRANCH=$(jq -r '.["'"$TASK_ID"'"].branch // ""' "$STATE_FILE")
+  TASK_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")
+  TASK_BRANCH=$(jq -r --arg id "$TASK_ID" '.[$id].branch // ""' "$STATE_FILE")
 else
   TASK_STATUS="Pendente"
   TASK_BRANCH=""
@@ -1168,8 +1174,13 @@ jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" --arg branch "$BRANCH_NAME" --
 **Removing entry (for Pendente reset):**
 
 ```bash
-jq --arg id "$TASK_ID" 'del(.[$id])' "$STATE_FILE" > "${STATE_FILE}.tmp" \
-  && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+STATE_FILE=".optimus/state.json"
+if [ ! -f "$STATE_FILE" ]; then
+  echo "state.json does not exist — task is already implicitly Pendente."
+else
+  jq --arg id "$TASK_ID" 'del(.[$id])' "$STATE_FILE" > "${STATE_FILE}.tmp" \
+    && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+fi
 ```
 
 **Listing all tasks with status (for report/quick-report):**
@@ -1177,6 +1188,11 @@ jq --arg id "$TASK_ID" 'del(.[$id])' "$STATE_FILE" > "${STATE_FILE}.tmp" \
 ```bash
 STATE_FILE=".optimus/state.json"
 TASKS_FILE=".optimus/tasks.md"
+# Validate state.json if it exists
+if [ -f "$STATE_FILE" ] && ! jq empty "$STATE_FILE" 2>/dev/null; then
+  echo "WARNING: state.json is corrupted. Treating all tasks as Pendente."
+  rm -f "$STATE_FILE"
+fi
 # Get all task IDs from tasks.md
 TASK_IDS=$(grep -E '^\| T-[0-9]+ \|' "$TASKS_FILE" | awk -F'|' '{print $2}' | tr -d ' ')
 # For each task, read status from state.json (default: Pendente)

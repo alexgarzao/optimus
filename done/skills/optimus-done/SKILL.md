@@ -8,7 +8,7 @@ skip_when: >
   - Task has not been through at least check yet
   - Task is already done
 prerequisite: >
-  - Task exists in tasks.md with status "Validando Impl" or "Revisando PR"
+  - Task exists in tasks.md with status "Validando Impl" or "Revisando PR" in state.json
   - At least check has completed (pr-check is optional)
 NOT_skip_when: >
   - "Everything is already ready" -- Verify it. Do not assume.
@@ -71,7 +71,7 @@ Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 ### Step 1.0.2: Resolve Workspace (HARD BLOCK)
 Resolve workspace — see AGENTS.md Protocol: Workspace Auto-Navigation. Branch-task cross-validation is included in this protocol.
 
-### Step 1.0.2: Identify Task to Close
+### Step 1.0.3: Identify Task to Close
 
 **If the user specified a task ID** (e.g., "close T-012"):
 - Use the provided task ID
@@ -85,7 +85,7 @@ Resolve workspace — see AGENTS.md Protocol: Workspace Auto-Navigation. Branch-
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to close.
 
-### Step 1.0.2.1: Check Session State
+### Step 1.0.3.1: Check Session State
 
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`done`, status=`DONE`.
 

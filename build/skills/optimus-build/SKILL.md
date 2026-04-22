@@ -333,7 +333,7 @@ Offer to push commits — see AGENTS.md Protocol: Push Commits.
 If the user requests a dry-run (e.g., "dry-run impl T-003", "preview implementation"):
 - Run ALL discovery and context-loading phases (Phase 1) normally
 - Present the implementation plan and all questions (Step 1.9)
-- **Do NOT change task status** — skip Step 1.3 (status update in state.json)
+- **Do NOT change task status** — skip the status update in Step 1.3 (state.json write)
 - **Do NOT execute implementation** — skip Phase 2 entirely
 - **Do NOT commit or push anything** — skip Phase 3 commits
 - Present a summary of: what would be implemented, estimated effort, identified risks

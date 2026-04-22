@@ -87,7 +87,7 @@ For each 2-way conflict region, classify its content:
 
 | Content Type | How to Detect | Resolution Strategy |
 |-------------|---------------|---------------------|
-| **Task table rows** | Lines matching `\| T-\d+ \|` pattern | Per-task most-advanced-status |
+| **Task table rows** | Lines matching `\| T-\d+ \|` pattern | Per-task structural merge |
 | **Versions table** | Lines in the `## Versions` section | Merge both — keep all versions; deduplicate by name. Rules: same name + different status → keep higher status (Ativa > Próxima > Planejada > Backlog > Concluída); same name + same status + different description → present to user for decision; new version on one side only → keep it (additive merge) |
 | **TaskSpec column** | `TaskSpec` values in task rows | Keep either (should be identical on both sides) |
 | **Format marker / headers** | First line, `# Tasks`, table headers | Keep either (identical) |
@@ -108,18 +108,11 @@ For tasks that appear on BOTH sides with different values, proceed to Phase 2.
 
 ---
 
-## Phase 2: Resolve Using Most-Advanced-Status Rule
+## Phase 2: Resolve Structural Conflicts
 
-### Step 2.1: Define Status Ordering
-
-The status lifecycle defines a strict ordering from least to most advanced:
-
-```
-Pendente < Validando Spec < Em Andamento < Validando Impl < Revisando PR < DONE
-```
-
-`Cancelado` is a terminal status — it is NOT "more advanced" than any status. It is
-a lateral state change (a decision, not progress). See Step 2.3 for handling.
+Since Status and Branch live in state.json (gitignored, not in tasks.md), conflicts
+are limited to structural columns: ID, Title, Tipo, Depends, Priority, Version,
+Estimate, TaskSpec. No status ordering or "most-advanced-status rule" is needed.
 
 ### Step 2.2: Resolve Each Conflicted Task
 
@@ -154,20 +147,20 @@ Version), flag for user decision via `AskUser`.
 ## tasks.md Conflict Resolution
 
 ### Conflict Regions: N
-### Auto-Resolved: M (using most-advanced-status rule)
+### Auto-Resolved: M
 ### Needs User Decision: K
 
 ### Auto-Resolved Tasks
-| ID | Current Status | Incoming Status | Resolved To | Reason |
-|----|---------------|-----------------|-------------|--------|
-| T-003 | Pendente | Em Andamento | Em Andamento | More advanced status |
-| T-005 | Em Andamento | DONE | DONE | More advanced status |
+| ID | Field | Current | Incoming | Resolved To | Reason |
+|----|-------|---------|----------|-------------|--------|
+| T-003 | Estimate | - | M | M | Non-empty wins |
+| T-005 | TaskSpec | - | tasks/task_005.md | tasks/task_005.md | Non-empty wins |
 
 ### Needs User Decision
-| ID | Current | Incoming | Conflict |
-|----|---------|----------|----------|
-| T-007 | Em Andamento | Cancelado | Terminal vs active |
-| T-009 | Title changed | Priority changed | Both sides edited |
+| ID | Field | Current | Incoming | Conflict |
+|----|-------|---------|----------|----------|
+| T-009 | Title | "Auth API" | "Auth Service" | Both sides edited |
+| T-009 | Priority | Alta | Media | Both sides edited |
 ```
 
 ### Step 3.2: Collect Decisions
