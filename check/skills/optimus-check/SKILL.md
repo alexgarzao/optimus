@@ -413,88 +413,13 @@ Cross-cutting analysis (MANDATORY for all agents):
 
 ### Special Instructions per Agent
 
-**Code Quality agent** (`ring-default-code-reviewer`) must additionally verify:
-- Resilience: external calls have timeout, retry with backoff, circuit breaker where appropriate
-- Resource lifecycle: all opened connections/handles are closed (defer, cleanup, graceful shutdown)
-- Concurrency: shared state has proper synchronization, no goroutine leaks, no deadlock risk
-- Performance: no N+1 queries, no unbounded queries, indexes exist for query patterns, no hot-path allocations
-- Configuration: no hardcoded values that should be environment-configurable, safe defaults
-- Cognitive complexity: functions with >3 nesting levels or >30 lines flagged for decomposition
-- Error handling: errors wrapped with context, consistent with codebase error patterns
-- Domain purity: no infrastructure concerns in domain layer, dependency direction correct
-- Resource leaks: DB connections, HTTP clients, file handles, channels properly closed
+Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists.
 
-**Business Logic agent** (`ring-default-business-logic-reviewer`) must additionally verify:
-- Spec traceability: each code path maps to a spec requirement (flag orphan logic with no spec backing)
-- Data integrity: transaction boundaries correct, partial writes impossible, rollback defined
-- Backward compatibility: existing consumers/contracts not broken by this change
-- API semantics: correct HTTP status codes, idempotent operations marked as such, pagination consistent
-- Domain edge cases: what happens with zero, negative, maximum, duplicate, concurrent values?
-- Business rule completeness: all business rules from spec have implementation AND test
-
-**Security agent** (`ring-default-security-reviewer`) must additionally verify:
-- Data privacy: PII not logged, sensitive fields masked in responses, LGPD/GDPR compliance
-- Error responses: no internal details leaked (stack traces, DB schemas, internal paths, SQL)
-- Rate limiting: high-throughput or public endpoints have rate limiting consideration
-- Input validation: happens at the right layer (not just client-side), consistent with codebase
-- Secrets: no hardcoded credentials, tokens, API keys in code or config files
-- Auth propagation: authentication context properly propagated through the call chain
-
-**Test Quality agent** (`ring-default-ring-test-reviewer`) must additionally verify:
-- Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag tests where assertions only check mock.Called() without verifying output/state
-- False positive risk: could these tests pass while the feature is actually broken?
-- Test coupling: are tests coupled to implementation details (private fields, internal struct layout)?
-- Spec traceability: for each acceptance criterion in the task spec, is there a test?
-- Integration tests: do they use real dependencies (testcontainers/docker) or just mocks?
-- Test isolation: can tests run in parallel without interference? Shared state between tests?
-- Error scenario completeness: each error return path has a corresponding test?
-- Boundary values: min, max, zero, empty, nil, negative tested where applicable?
-
-**Nil/Null Safety agent** (`ring-default-ring-nil-safety-reviewer`) must additionally verify:
-- Resource cleanup: nil checks before Close/Release calls
-- Channel safety: sends to nil/closed channels
-- Map safety: reads/writes to nil maps
-- Slice safety: index bounds after filtering/transforming
-
-**Ripple Effects agent** (`ring-default-ring-consequences-reviewer`) must additionally verify:
-1. Check for values duplicated between files that should be a shared constant
-2. Verify imports follow the project's layer architecture (no circular deps, no backwards imports)
-3. Check that new code follows the same patterns as existing code in the same domain
-4. Backward compatibility: does this change break any existing consumer or API contract?
-5. Configuration drift: new defaults reasonable? existing config overrides still valid?
-6. Migration path: if breaking change, is migration strategy documented?
-7. Shared state: new global/package-level state that could cause issues across modules?
-8. Event/message contracts: changes to event payloads affect downstream consumers?
-
-**Dead Code agent** (`ring-default-ring-dead-code-reviewer`) must additionally verify:
-1. Look for dead code (unused imports, unreachable branches, commented-out code)
-2. Zombie test infrastructure: test helpers, fixtures, mocks no longer used by any test
-3. Feature flags: stale feature flag checks for flags that were already fully rolled out
-4. Deprecated paths: code paths behind deprecated API versions with no remaining consumers
-
-**Spec Compliance agent** (`ring-dev-team-qa-analyst`) must additionally:
+**Spec Compliance agent** (`ring-dev-team-qa-analyst`) must additionally (beyond the protocol):
 1. List every acceptance criterion from the Ring source (via `TaskSpec` column) and mark PASS/FAIL/PARTIAL
 2. List every test ID and verify a corresponding test exists
 3. If the task has API endpoints, verify request/response format matches API contracts
 4. If the task has DB changes, verify column types/constraints match the data model
-5. Testability assessment: is the code structured for testability? (dependency injection, interfaces)
-6. Operational readiness: can ops monitor, debug, and rollback this in production?
-7. Acceptance criteria coverage: each AC has both success AND failure test scenarios
-8. Cross-cutting scenarios: concurrent modifications, large datasets, special characters, timezone handling
-
-**Frontend specialist** (`ring-dev-team-frontend-engineer`) must additionally verify:
-- UX completeness: loading states, empty states, error states all handled
-- Accessibility: keyboard navigation, screen reader support, ARIA labels, color contrast
-- Responsive behavior: works across viewport sizes (mobile, tablet, desktop)
-- i18n readiness: no hardcoded user-facing strings, date/number formatting locale-aware
-- Performance: no unnecessary re-renders, large lists virtualized, images optimized
-
-**Backend specialist** (`ring-dev-team-backend-engineer-golang` or TS equivalent) must additionally verify:
-- Language idiomaticity: follows official style guide conventions
-- Graceful shutdown: SIGTERM handling, in-flight request draining
-- Connection pool sizing: appropriate for expected load
-- Context propagation: request context passed through the full call chain
-- Structured logging: logs include correlation IDs, operation names, durations
 
 ---
 
@@ -561,7 +486,7 @@ Process ONE finding at a time, starting from highest severity. Present ALL findi
 For EACH finding, present with `"Finding X of N"` in the header:
 
 ### Deep Research Before Presenting (MANDATORY)
-Execute deep research before presenting each finding — see AGENTS.md "Common Patterns > Deep Research Before Presenting". All 10 checklist items apply.
+Execute deep research before presenting each finding — see AGENTS.md "Common Patterns > Deep Research Before Presenting". All 12 checklist items apply.
 
 ### Problem Description
 - What is wrong (file, line, code snippet if relevant)
@@ -829,6 +754,7 @@ make test-e2e                # E2E tests — if target exists
 
 ### Test Coverage
 - Unit tests: XX.X% (threshold: 85%) — PASS / FAIL
+- Integration tests: XX.X% (threshold: 70%) — PASS / FAIL / SKIP
 - Untested functions: X (Y business logic, Z infrastructure)
 ```
 

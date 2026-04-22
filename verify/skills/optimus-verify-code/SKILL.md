@@ -315,6 +315,12 @@ Your job:
      - External API calls: are failure, timeout, and retry scenarios tested?
      - Message queue: are publish failure and consume failure scenarios tested?
 
+  Additionally verify test effectiveness:
+     - Do tests verify BEHAVIOR or just mock internals? Flag tests where assertions only check mock.Called() without verifying output/state
+     - Could these tests pass while the feature is actually broken? (false positive risk)
+     - Are tests coupled to implementation details (private fields, internal struct layout)?
+     - Do integration tests use real dependencies (testcontainers/docker) or just mocks?
+
 Required output format:
   ## Unit Test Gaps
   | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |

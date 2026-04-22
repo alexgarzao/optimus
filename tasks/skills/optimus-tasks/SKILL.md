@@ -289,7 +289,7 @@ matches based on keyword overlap with the task title, and let the user select on
 
 1. Add a new row to the table:
    ```
-   | T-NNN | <title> | <tipo> | Pendente | <depends> | <priority> | <version> | - | <estimate or -> | <taskspec or -> |
+   | T-NNN | <title> | <tipo> | <depends> | <priority> | <version> | <estimate or -> | <taskspec or -> |
    ```
 2. Save the file
 

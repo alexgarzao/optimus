@@ -115,10 +115,7 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 
 1. Read `tasks.md` and find the row for the confirmed task ID
 2. Read the task's status from state.json — see AGENTS.md Protocol: State Management.
-   - If status is `Validando Spec`:
-     - Check if a worktree exists for this task: `git worktree list | grep -iF "<task-id>"`
-     - If no worktree found → **STOP**: "Task T-XXX is in 'Validando Spec' but has no workspace. Stage-1 (plan) may have crashed before creating the workspace. Re-run `/optimus-plan T-XXX` to create it."
-     - If worktree exists → proceed (plan has completed)
+   - If status is `Validando Spec` → proceed (plan has completed, workspace will be resolved in Step 1.4 via Workspace Auto-Navigation protocol which handles missing worktrees with branch recovery)
    - If status is `Em Andamento` → proceed (re-execution of this stage)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run plan first."
    - If status is `Validando Impl`, `Revisando PR`, `DONE`, or `Cancelado` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage or was cancelled."

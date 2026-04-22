@@ -666,6 +666,10 @@ Required ring droids are not installed. Install them before running this skill:
 
 All agents MUST be dispatched in a SINGLE message with parallel Task calls.
 
+### Special Instructions per Agent
+
+Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists.
+
 ---
 
 ## Phase 4: Consolidation
@@ -770,7 +774,7 @@ Example: `## Finding 12 of 12 — [LOW] F12 | CodeRabbit + Agent | Style`
 
 #### Deep Research Before Presenting (MANDATORY)
 
-Execute deep research before presenting each finding — see AGENTS.md "Common Patterns > Deep Research Before Presenting". All 10 checklist items apply.
+Execute deep research before presenting each finding — see AGENTS.md "Common Patterns > Deep Research Before Presenting". All 12 checklist items apply.
 
 #### Deep Technical Analysis
 
@@ -1341,7 +1345,7 @@ gh api graphql -f query='
 ### Verification
 - Lint: PASS
 - Unit tests: PASS (X tests) — Coverage: XX.X% (threshold: 85%)
-- Integration tests: PASS/SKIPPED
+- Integration tests: PASS/SKIPPED — Coverage: XX.X% (threshold: 70%) / SKIP
 - E2E tests: PASS/SKIPPED
 
 ### Configuration Changes

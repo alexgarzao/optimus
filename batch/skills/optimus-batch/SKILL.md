@@ -284,7 +284,10 @@ After all tasks are processed (or the user stops):
   ```json
   {"tasks": ["T-003", "T-004", "T-005"], "completed": ["T-003"], "current": "T-004", "current_stage": 3, "worktrees": {"T-003": "../repo-t-003", "T-004": "../repo-t-004"}}
   ```
-  On next invocation, if this file exists, offer to resume from where it stopped.
+  On next invocation, if this file exists:
+  1. **Check staleness:** If `updated_at` (or file modification time) is older than 24h, delete the file and proceed fresh — project state may have changed significantly.
+  2. **Verify task statuses:** Cross-reference remaining tasks' statuses in state.json against the session's `current_stage`. If statuses have changed (tasks progressed through other means), warn the user and suggest starting fresh.
+  3. **If not stale and statuses match:** offer to resume from where it stopped.
 - Stage 4 (PR review) is always offered as optional, never forced
 - Respect dependency order — never process a task before its dependencies are DONE
 - Each stage creates its own commits — the batch orchestrator does NOT commit anything

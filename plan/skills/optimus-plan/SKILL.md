@@ -497,36 +497,15 @@ Cross-cutting analysis (MANDATORY for all agents):
 
 **Special Instructions per Agent:**
 
-**Business Logic agent** (`ring-default-business-logic-reviewer`) must additionally verify:
-- Spec traceability: each requirement maps to a testable acceptance criterion (flag vague criteria)
-- Data integrity: transaction boundaries defined, partial writes considered, rollback strategy specified
-- Backward compatibility: impact on existing consumers/contracts assessed
-- API semantics: correct HTTP methods, status codes, idempotency, pagination consistency specified
-- Domain edge cases: zero, negative, maximum, duplicate, concurrent value scenarios considered
-- Business rule completeness: all business rules have both success AND failure behavior specified
+Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists.
+Adapt checklist items to spec validation context (e.g., "verify X exists in spec" instead of
+"verify X is implemented in code").
 
-**Security agent** (`ring-default-security-reviewer`) must additionally verify:
-- Data privacy: PII handling specified, sensitive field masking defined, LGPD/GDPR compliance considered
-- Error responses: spec ensures no internal details leaked (stack traces, DB schemas, internal paths)
-- Rate limiting: high-throughput or public endpoints have rate limiting consideration
-- Input validation: validation rules explicit (at which layer, what formats, what lengths/ranges)
-- Auth propagation: authentication context flow through the system specified
-
-**QA agent** (`ring-dev-team-qa-analyst`) must additionally verify:
-- Testability assessment: is the spec structured for testable implementation? (interfaces, dependency injection points)
-- Operational readiness: monitoring, debugging, and rollback capabilities considered
-- Acceptance criteria coverage: each AC has both success AND failure test scenarios
-- Cross-cutting scenarios: concurrent modifications, large datasets, special characters, timezone handling
+**QA agent** (`ring-dev-team-qa-analyst`) must additionally (beyond the protocol):
 - Spec quality: are ACs measurable and testable? (not vague like "works correctly")
+- Does each AC specify both success AND failure behavior?
 - Rollback/recovery strategy defined for failure cases
-
-**Code reviewer** (`ring-default-code-reviewer`) must additionally verify:
-- Resilience: external calls have timeout, retry, circuit breaker considerations in the spec
-- Resource lifecycle: connection cleanup, graceful shutdown considerations specified
-- Concurrency: shared state, synchronization, goroutine leak risks identified
-- Performance: potential N+1 queries, unbounded queries, missing index considerations
-- Configuration: values that should be environment-configurable vs hardcoded identified
-- Domain purity: spec maintains clean layer separation, no infrastructure concerns in domain logic
+- Can a developer implement each item WITHOUT asking questions?
 
 Merge agent findings with the findings from Steps 2.1-2.3. Deduplicate and sort by severity before presenting.
 
@@ -542,7 +521,7 @@ Merge agent findings with the findings from Steps 2.1-2.3. Deduplicate and sort 
 
 #### Deep Research Before Presenting (MANDATORY)
 
-Execute deep research before presenting each finding — see AGENTS.md "Common Patterns > Deep Research Before Presenting". All 10 checklist items apply.
+Execute deep research before presenting each finding — see AGENTS.md "Common Patterns > Deep Research Before Presenting". All 12 checklist items apply.
 
 #### Present the Finding
 

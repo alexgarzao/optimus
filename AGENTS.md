@@ -423,7 +423,7 @@ Every stage agent (1-5) MUST validate the tasks.md format before operating:
 6. A markdown table exists with columns: ID, Title, Tipo, Depends, Priority, Version (Estimate and TaskSpec are optional — tables without them are still valid). **Status and Branch columns are NOT expected** — they live in state.json.
 7. All task IDs follow the `T-NNN` pattern
 8. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
-9. All Depends values are either `-` or comma-separated valid task IDs
+9. All Depends values are either `-` or comma-separated valid task IDs that exist as rows in the tasks table (not just matching `T-NNN` pattern — the referenced task must actually exist)
 10. All Priority values are one of: `Alta`, `Media`, `Baixa`
 11. All Version values reference a version name that exists in the Versions table
 12. No duplicate task IDs
@@ -434,10 +434,12 @@ running `/optimus-import` to fix the format. Do NOT attempt to interpret malform
 
 14. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
 15. **Empty table handling:** If the tasks table exists but has zero data rows (only headers),
-format validation PASSES. Stage agents (1-5) should inform the user: "No tasks found in
-tasks.md. Use `/optimus-tasks` to create a task or `/optimus-import` to import from Ring pre-dev."
+format validation PASSES. Stage agents (1-5) MUST check for this condition immediately after
+format validation and before task identification. If zero data rows: **STOP** and inform the
+user: "No tasks found in tasks.md. Use `/optimus-tasks` to create a task or `/optimus-import`
+to import from Ring pre-dev." Do NOT proceed to task identification with an empty table.
 
-**NOTE:** For circular dependency detection (item 14), trace the full dependency chain for
+**NOTE:** For circular dependency detection (item 13), trace the full dependency chain for
 each task. If any task appears twice in the chain, a cycle exists. Report ALL tasks involved
 in the cycle so the user can fix it with `/optimus-tasks`.
 
@@ -607,7 +609,7 @@ in every SKILL.md.
 
 ### Protocol: tasks.md Validation (HARD BLOCK)
 
-**Referenced by:** all stage agents (1-5), tasks, batch, resolve
+**Referenced by:** all stage agents (1-5), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
 
 Every stage agent MUST validate tasks.md before operating. The full validation rules are
 defined in the "Format Validation" section above (items 1-15). This protocol is the
@@ -783,7 +785,20 @@ fi
   - If **Resume**: skip to the phase indicated in the session file
   - If **Start fresh (delete session)**: delete the session file and proceed from the beginning
   - If **Continue (keep session file)**: proceed from the beginning without deleting the session file
-- If the file is stale (>24h) or the task status has changed → delete and proceed normally
+- If the file is stale (>24h) or the task status has changed → delete and proceed normally.
+  **Staleness check example:**
+  ```bash
+  UPDATED=$(jq -r '.updated_at // empty' "$SESSION_FILE" 2>/dev/null)
+  if [ -n "$UPDATED" ]; then
+    NOW_EPOCH=$(date +%s)
+    UPDATED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED" +%s 2>/dev/null || date -d "$UPDATED" +%s 2>/dev/null || echo 0)
+    AGE=$(( NOW_EPOCH - UPDATED_EPOCH ))
+    if [ "$AGE" -gt 86400 ]; then
+      echo "Session file is stale (>24h). Deleting."
+      rm -f "$SESSION_FILE"
+    fi
+  fi
+  ```
 - **External status change detection:** If the session file exists AND the task's status
   does NOT match the session's `status`, check if the difference is explainable by normal
   stage progression (e.g., session says `Em Andamento` but task is now `Validando Impl` —
@@ -1004,7 +1019,7 @@ Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring D
 Measure test coverage using the project's configured commands. Check `.optimus/config.json`
 for custom commands first, then fall back to Makefile targets, then stack-specific commands.
 
-**Command resolution order:**
+**Unit coverage command resolution order:**
 1. `.optimus/config.json` → `commands.test-coverage` (if present)
 2. `make test-coverage` (if Makefile target exists)
 3. Stack-specific fallback:
@@ -1012,7 +1027,17 @@ for custom commands first, then fall back to Makefile targets, then stack-specif
    - Node: `npm test -- --coverage`
    - Python: `pytest --cov=. --cov-report=term`
 
-If no coverage command is available, mark as **SKIP** — do not fail the verification.
+If no unit coverage command is available, mark as **SKIP** — do not fail the verification.
+
+**Integration coverage command resolution order:**
+1. `.optimus/config.json` → `commands.test-integration-coverage` (if present)
+2. `make test-integration-coverage` (if Makefile target exists)
+3. Stack-specific fallback:
+   - Go: `go test -tags=integration -coverprofile=coverage-integration.out ./... && go tool cover -func=coverage-integration.out`
+   - Node: `npm run test:integration -- --coverage`
+   - Python: `pytest -m integration --cov=. --cov-report=term`
+
+If no integration coverage command is available, mark as **SKIP** — do not fail the verification.
 
 **Thresholds:**
 
@@ -1156,7 +1181,7 @@ Skills reference this as: "Execute re-run guard — see AGENTS.md Protocol: Re-r
 
 ### Protocol: Push Commits (optional)
 
-**Referenced by:** all stage agents (1-5)
+**Referenced by:** stages 1-4 (plan, build, check, pr-check), coderabbit-review, deep-review. Note: done handles pushing inline in its own cleanup phase.
 
 After stage work is complete, offer to push all local commits:
 
@@ -1646,8 +1671,8 @@ droids to discover context the orchestrator didn't anticipate (e.g., similar pat
 elsewhere, related test files, existing conventions).
 
 **Per-droid quality checklists:** Each droid type has specific dimensions it MUST verify
-beyond its core domain. These are defined in each SKILL.md's "Special Instructions per
-Agent" section. Skills MUST include these instructions when dispatching droids.
+beyond its core domain. These are defined in Protocol: Per-Droid Quality Checklists below.
+Skills that dispatch review droids MUST reference this protocol in their agent prompts.
 
 **Cross-cutting analysis:** Every droid prompt MUST include the universal cross-cutting
 section:
@@ -1656,6 +1681,94 @@ section:
 3. Does this code trace back to a spec requirement? Flag orphan code without spec backing
 4. How would a new developer understand this code 6 months from now?
 5. Search the codebase for how similar problems were solved — flag inconsistencies
+
+### Protocol: Per-Droid Quality Checklists
+
+**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan
+
+Each droid type has specific dimensions it MUST verify beyond its core domain. Skills
+that dispatch review droids MUST include the applicable checklists in agent prompts.
+
+**Code Quality agent** (`ring-default-code-reviewer`) must additionally verify:
+- Resilience: external calls have timeout, retry with backoff, circuit breaker where appropriate
+- Resource lifecycle: all opened connections/handles are closed (defer, cleanup, graceful shutdown)
+- Concurrency: shared state has proper synchronization, no goroutine leaks, no deadlock risk
+- Performance: no N+1 queries, no unbounded queries, indexes exist for query patterns, no hot-path allocations
+- Configuration: no hardcoded values that should be environment-configurable, safe defaults
+- Cognitive complexity: functions with >3 nesting levels or >30 lines flagged for decomposition
+- Error handling: errors wrapped with context, consistent with codebase error patterns
+- Domain purity: no infrastructure concerns in domain layer, dependency direction correct
+- Resource leaks: DB connections, HTTP clients, file handles, channels properly closed
+
+**Business Logic agent** (`ring-default-business-logic-reviewer`) must additionally verify:
+- Spec traceability: each code path maps to a spec requirement (flag orphan logic with no spec backing)
+- Data integrity: transaction boundaries correct, partial writes impossible, rollback defined
+- Backward compatibility: existing consumers/contracts not broken by this change
+- API semantics: correct HTTP status codes, idempotent operations marked as such, pagination consistent
+- Domain edge cases: what happens with zero, negative, maximum, duplicate, concurrent values?
+- Business rule completeness: all business rules from spec have implementation AND test
+
+**Security agent** (`ring-default-security-reviewer`) must additionally verify:
+- Data privacy: PII not logged, sensitive fields masked in responses, LGPD/GDPR compliance
+- Error responses: no internal details leaked (stack traces, DB schemas, internal paths, SQL)
+- Rate limiting: high-throughput or public endpoints have rate limiting consideration
+- Input validation: happens at the right layer (not just client-side), consistent with codebase
+- Secrets: no hardcoded credentials, tokens, API keys in code or config files
+- Auth propagation: authentication context properly propagated through the call chain
+
+**Test Quality agent** (`ring-default-ring-test-reviewer`) must additionally verify:
+- Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag tests where assertions only check mock.Called() without verifying output/state
+- False positive risk: could these tests pass while the feature is actually broken?
+- Test coupling: are tests coupled to implementation details (private fields, internal struct layout)?
+- Spec traceability: for each acceptance criterion in the task spec, is there a test?
+- Integration tests: do they use real dependencies (testcontainers/docker) or just mocks?
+- Test isolation: can tests run in parallel without interference? Shared state between tests?
+- Error scenario completeness: each error return path has a corresponding test?
+- Boundary values: min, max, zero, empty, nil, negative tested where applicable?
+
+**Nil/Null Safety agent** (`ring-default-ring-nil-safety-reviewer`) must additionally verify:
+- Resource cleanup: nil checks before Close/Release calls
+- Channel safety: sends to nil/closed channels
+- Map safety: reads/writes to nil maps
+- Slice safety: index bounds after filtering/transforming
+
+**Ripple Effects agent** (`ring-default-ring-consequences-reviewer`) must additionally verify:
+- Values duplicated between files that should be a shared constant
+- Imports follow the project's layer architecture (no circular deps, no backwards imports)
+- New code follows the same patterns as existing code in the same domain
+- Backward compatibility: does this change break any existing consumer or API contract?
+- Configuration drift: new defaults reasonable? existing config overrides still valid?
+- Migration path: if breaking change, is migration strategy documented?
+- Shared state: new global/package-level state that could cause issues across modules?
+- Event/message contracts: changes to event payloads affect downstream consumers?
+
+**Dead Code agent** (`ring-default-ring-dead-code-reviewer`) must additionally verify:
+- Dead code: unused imports, unreachable branches, commented-out code
+- Zombie test infrastructure: test helpers, fixtures, mocks no longer used by any test
+- Feature flags: stale feature flag checks for flags that were already fully rolled out
+- Deprecated paths: code paths behind deprecated API versions with no remaining consumers
+
+**Spec Compliance / QA agent** (`ring-dev-team-qa-analyst`) must additionally verify:
+- Testability assessment: is the code structured for testability? (dependency injection, interfaces)
+- Operational readiness: can ops monitor, debug, and rollback this in production?
+- Acceptance criteria coverage: each AC has both success AND failure test scenarios
+- Cross-cutting scenarios: concurrent modifications, large datasets, special characters, timezone handling
+
+**Frontend specialist** (`ring-dev-team-frontend-engineer`) must additionally verify:
+- UX completeness: loading states, empty states, error states all handled
+- Accessibility: keyboard navigation, screen reader support, ARIA labels, color contrast
+- Responsive behavior: works across viewport sizes (mobile, tablet, desktop)
+- i18n readiness: no hardcoded user-facing strings, date/number formatting locale-aware
+- Performance: no unnecessary re-renders, large lists virtualized, images optimized
+
+**Backend specialist** (`ring-dev-team-backend-engineer-golang` or TS equivalent) must additionally verify:
+- Language idiomaticity: follows official style guide conventions
+- Graceful shutdown: SIGTERM handling, in-flight request draining
+- Connection pool sizing: appropriate for expected load
+- Context propagation: request context passed through the full call chain
+- Structured logging: logs include correlation IDs, operation names, durations
+
+Skills reference this as: "Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists."
 
 ## Known Issues and Decisions
 

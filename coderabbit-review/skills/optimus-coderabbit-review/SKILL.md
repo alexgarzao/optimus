@@ -199,6 +199,8 @@ is done SILENTLY — do not show the research process. Present only the conclusi
 8. **Engineering best practices:** SOLID principles, DRY, separation of concerns, error handling, resilience, observability, testability
 9. **Language-specific best practices:** Use `WebSearch` to research idioms for the specific language (Go, TypeScript, etc.) — official style guides, linter rules, community patterns
 10. **Correctness over convenience:** Always recommend the correct approach, regardless of effort
+11. **Production resilience:** Would this code survive production conditions? Consider: timeouts on external calls, retry with backoff, circuit breakers, graceful degradation, resource cleanup, graceful shutdown, and behavior under load
+12. **Data integrity and privacy:** Are transaction boundaries correct? Could partial writes occur? Is PII properly handled (not logged, masked in responses)? LGPD/GDPR compliance?
 
 **After research, form your recommendation:** Option A MUST be the approach you believe is correct based on all the research above, backed by evidence.
 
@@ -326,46 +328,7 @@ Cross-cutting analysis (MANDATORY for all agents):
 
 **Special Instructions per Agent:**
 
-**Code Quality agent** (`ring-default-code-reviewer`) must additionally verify:
-- Resilience: external calls have timeout, retry with backoff, circuit breaker where appropriate
-- Resource lifecycle: all opened connections/handles are closed (defer, cleanup, graceful shutdown)
-- Concurrency: shared state has proper synchronization, no goroutine leaks, no deadlock risk
-- Performance: no N+1 queries, no unbounded queries, indexes exist for query patterns, no hot-path allocations
-- Configuration: no hardcoded values that should be environment-configurable, safe defaults
-- Error handling: errors wrapped with context, consistent with codebase error patterns
-- Domain purity: no infrastructure concerns in domain layer, dependency direction correct
-
-**Business Logic agent** (`ring-default-business-logic-reviewer`) must additionally verify:
-- Spec traceability: each code path maps to a spec requirement (flag orphan logic)
-- Data integrity: transaction boundaries correct, partial writes impossible, rollback defined
-- Backward compatibility: existing consumers/contracts not broken by this change
-- API semantics: correct HTTP status codes, idempotent operations, pagination consistent
-
-**Security agent** (`ring-default-security-reviewer`) must additionally verify:
-- Data privacy: PII not logged, sensitive fields masked, LGPD/GDPR compliance
-- Error responses: no internal details leaked (stack traces, DB schemas, internal paths)
-- Rate limiting: high-throughput or public endpoints have rate limiting consideration
-- Auth propagation: authentication context properly propagated through the call chain
-
-**Test Quality agent** (`ring-default-ring-test-reviewer`) must additionally verify:
-- Test effectiveness: do tests verify BEHAVIOR or just mock internals?
-- False positive risk: could these tests pass while the feature is actually broken?
-- Test coupling: are tests coupled to implementation details?
-- Error scenario completeness: each error return path has a corresponding test?
-
-**Nil/Null Safety agent** (`ring-default-ring-nil-safety-reviewer`) must additionally verify:
-- Resource cleanup: nil checks before Close/Release calls
-- Channel safety: sends to nil/closed channels
-- Map/slice safety: reads/writes to nil maps, index bounds after filtering
-
-**Ripple Effects agent** (`ring-default-ring-consequences-reviewer`) must additionally verify:
-- Backward compatibility: does this change break any existing consumer or API contract?
-- Configuration drift: new defaults reasonable? existing config overrides still valid?
-- Shared state: new global/package-level state that could cause issues across modules?
-
-**Dead Code agent** (`ring-default-ring-dead-code-reviewer`) must additionally verify:
-- Zombie test infrastructure: test helpers, fixtures, mocks no longer used
-- Feature flags: stale feature flag checks for flags already fully rolled out
+Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists.
 
 2. **Skip agent validation** for purely cosmetic fixes (comments, rename, formatting, DRY without logic change)
 
@@ -631,6 +594,7 @@ After all phases complete:
 
 ### Test Coverage
 - Unit tests: XX.X% (threshold: 85%) — PASS / FAIL
+- Integration tests: XX.X% (threshold: 70%) — PASS / FAIL / SKIP
 - Untested functions: X (Y business logic, Z infrastructure)
 
 ### Test Results
