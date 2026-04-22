@@ -17,7 +17,7 @@ examples:
   - name: Import Ring pre-dev artifacts
     invocation: "Import pre-dev"
     expected_flow: >
-      1. Resolve tasksDir from .optimus.json (or ask user)
+      1. Resolve tasksDir from .optimus/config.json (or ask user)
       2. Discover task specs in <tasksDir>/tasks/
       3. Present inventory of Ring tasks found
       4. User confirms and chooses version assignment
@@ -59,9 +59,9 @@ from Ring — only references it via the TaskSpec column.
 **CRITICAL:** This agent NEVER deletes original Ring files. It creates/updates tasks.md,
 leaving Ring pre-dev artifacts untouched.
 
-**NOTE:** The output location is configurable via `.optimus.json`:
-- `tasksFile`: path to tasks.md (default: `docs/tasks.md`)
+**NOTE:** Configuration is stored in `.optimus/config.json`:
 - `tasksDir`: path to Ring pre-dev artifacts root (default: `docs/pre-dev`)
+- Tasks file is always `.optimus/tasks.md` (not configurable)
 
 ---
 
@@ -69,7 +69,7 @@ leaving Ring pre-dev artifacts untouched.
 
 ### Step 1.1: Resolve tasksDir
 
-Read `.optimus.json` for `tasksDir`. If not configured, ask the user:
+Read `.optimus/config.json` for `tasksDir`. If not configured, ask the user:
 
 ```
 Where are the Ring pre-dev artifacts located?
@@ -102,7 +102,7 @@ workflow first (`ring:pre-dev-full` or `ring:pre-dev-feature`) to generate task 
 
 ### Step 1.3: Check Existing tasks.md
 
-Read `.optimus.json` for `tasksFile`, fallback to `docs/tasks.md`.
+Check if `.optimus/tasks.md` exists.
 
 **If tasks.md exists in optimus format** (first line is `<!-- optimus:tasks-v1 -->`):
 - Read existing tasks from the table
@@ -198,6 +198,24 @@ Options via `AskUser`:
 If tasks.md already exists, use the `Ativa` version by default. Ask via `AskUser`
 if the user wants a different version.
 
+### Step 1.6: Generate Specs for Tasks Without TaskSpec
+
+If `EXISTING_DATA` contains tasks with `TaskSpec = -` (created via `/optimus-tasks`
+without Ring pre-dev specs):
+
+1. Count tasks without specs
+2. Ask via `AskUser`:
+   ```
+   N tasks have no Ring pre-dev spec. Generate specs now?
+   ```
+   Options:
+   - **Generate all** — invoke `ring:pre-dev-feature` for each task
+   - **Skip** — keep TaskSpec as `-`, generate specs later
+3. If "Generate all":
+   - For each task, invoke `ring:pre-dev-feature` passing title and tipo
+   - After Ring generates the spec, update the task's TaskSpec value
+4. If Ring is not available, warn and keep TaskSpec as `-`
+
 ---
 
 ## Phase 2: Present Inventory
@@ -240,25 +258,15 @@ Options:
 
 ## Phase 3: Create Tracking Layer
 
-### Step 3.1: Choose Output Location (first run only)
+### Step 3.1: Initialize .optimus Directory
 
-If tasks.md does not exist yet, ask via `AskUser`:
-
-```
-Where should I create tasks.md?
-```
-
-Options:
-- **docs/tasks.md** (default)
-- **Custom path** — user specifies
-
-Store the chosen path as `TASKS_FILE`.
+Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
 
 ### Step 3.2: Write tasks.md
 
 **If creating from scratch:**
 
-Create `TASKS_FILE` with:
+Create `.optimus/tasks.md` with:
 1. Format marker: `<!-- optimus:tasks-v1 -->` (MUST be the first line)
 2. H1 heading: `# Tasks`
 3. `## Versions` section with the versions table (from Step 1.5)
@@ -268,16 +276,15 @@ Create `TASKS_FILE` with:
 
 Add new rows to the existing table. Do not modify existing rows.
 
-### Step 3.3: Register in .optimus.json
+### Step 3.3: Register in .optimus/config.json
 
-Register both `tasksFile` and `tasksDir`:
+Register `tasksDir`:
 
 ```bash
-if [ ! -f .optimus.json ]; then
-  echo '{}' > .optimus.json
+if [ ! -f .optimus/config.json ]; then
+  echo '{}' > .optimus/config.json
 fi
-jq --arg file "$TASKS_FILE" --arg dir "$TASKS_DIR" \
-  '.tasksFile = $file | .tasksDir = $dir' .optimus.json > .optimus.json.tmp && mv .optimus.json.tmp .optimus.json
+jq --arg dir "$TASKS_DIR" '.tasksDir = $dir' .optimus/config.json > .optimus/config.json.tmp && mv .optimus/config.json.tmp .optimus/config.json
 ```
 
 ### Step 3.4: Cleanup and Commit
@@ -286,7 +293,7 @@ jq --arg file "$TASKS_FILE" --arg dir "$TASKS_DIR" \
 overlay directory (if any) now that the new tasks.md has been written:
 
 ```bash
-if [ -n "$EXISTING_FILE" ] && [ "$EXISTING_FILE" != "$TASKS_FILE" ]; then
+if [ -n "$EXISTING_FILE" ] && [ "$EXISTING_FILE" != ".optimus/tasks.md" ]; then
   EXISTING_OVERLAY_DIR="$(dirname "$EXISTING_FILE")/tasks"
   git rm -r "$EXISTING_FILE" 2>/dev/null || rm -f "$EXISTING_FILE"
   git rm -r "$EXISTING_OVERLAY_DIR" 2>/dev/null || rm -rf "$EXISTING_OVERLAY_DIR"
@@ -296,7 +303,7 @@ fi
 The old file is recoverable from git history if needed.
 
 ```bash
-git add "$TASKS_FILE" .optimus.json
+git add .optimus/
 git commit -m "chore: import Ring pre-dev tasks to optimus format
 
 Imported N tasks from $TASKS_DIR/tasks/.
@@ -312,8 +319,8 @@ Original Ring files preserved."
 
 - **Tasks imported:** N
 - **Ring source:** <TASKS_DIR>/tasks/ (N task specs, M subtask files)
-- **Tracking created:** <TASKS_FILE>
-- **Registered in:** .optimus.json (tasksFile + tasksDir)
+- **Tracking created:** .optimus/tasks.md
+- **Registered in:** .optimus/config.json (tasksDir)
 - **Ring files:** NOT modified
 
 ### Next Steps

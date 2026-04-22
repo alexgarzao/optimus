@@ -80,7 +80,7 @@ For operations that do not use `gh` (create, edit, remove, reorder, version mana
 ### Step 1.0.1: Find and Validate tasks.md
 
 1. **Find tasks.md:** Resolve the path using the AGENTS.md Protocol: tasks.md Validation
-   (reads `tasksFile` from `.optimus.json`, falls back to `docs/tasks.md`).
+   (tasks.md is always at `.optimus/tasks.md`).
 
    If not found, ask the user via `AskUser`:
 
@@ -105,11 +105,7 @@ For operations that do not use `gh` (create, edit, remove, reorder, version mana
       | ID | Title | Tipo | Status | Depends | Priority | Version | Branch | Estimate |
       |----|-------|------|--------|---------|----------|---------|--------|----------|
       ```
-   5. If `TASKS_FILE` is not the default (`docs/tasks.md`), register it in `.optimus.json`:
-      ```bash
-      if [ ! -f .optimus.json ]; then echo '{}' > .optimus.json; fi
-      jq --arg path "$TASKS_FILE" '.tasksFile = $path' .optimus.json > .optimus.json.tmp && mv .optimus.json.tmp .optimus.json
-      ```
+   5. Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
    6. Commit: `chore(tasks): initialize tasks.md`
 
 2. **Validate format (HARD BLOCK):** See AGENTS.md Protocol: tasks.md Validation.
@@ -589,7 +585,7 @@ To resolve, run `/optimus-tasks`:
    - From `Cancelado`: always `Pendente` (must restart from stage-1)
 2. If reopening from `Cancelado`, also clear the **Branch** column to `-` (any previous
    branch is stale and should not be reused)
-3. Clean stale session state: `rm -f ".optimus/session-${TASK_ID}.json"`
+3. Clean stale session state: `rm -f ".optimus/sessions/session-${TASK_ID}.json"`
 4. Save and commit: `chore(tasks): reopen T-XXX — <reason> (from <previous status>, now <target status>)`
 4. **Invoke notification hooks (if present):**
    ```bash

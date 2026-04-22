@@ -54,7 +54,7 @@ and blocked tasks.
 
 ### Step 1.1: Locate and Validate
 
-Resolve the tasks.md path: read `tasksFile` from `.optimus.json` (fallback: `docs/tasks.md`). If not found, inform the user and suggest `/optimus-import`.
+Tasks file is always at `.optimus/tasks.md`. If not found, inform the user and suggest `/optimus-import`.
 
 Check the first line for `<!-- optimus:tasks-v1 -->`. If missing, warn but attempt best-effort parsing.
 

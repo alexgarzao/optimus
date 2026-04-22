@@ -258,7 +258,7 @@ After all tasks are processed (or the user stops):
 - **NEVER run stages in parallel** — tasks are processed sequentially to avoid conflicts
 - **NEVER duplicate stage logic** — this skill only chains stages, each stage skill handles its own validation
 - If a stage fails (task blocked, tests failing, etc.), stop at that task and report
-- If the user stops the batch, write progress to `.optimus/session-batch.json`:
+- If the user stops the batch, write progress to `.optimus/sessions/session-batch.json`:
   ```json
   {"tasks": ["T-003", "T-004", "T-005"], "completed": ["T-003"], "current": "T-004", "current_stage": 3, "worktrees": {"T-003": "../repo-t-003", "T-004": "../repo-t-004"}}
   ```

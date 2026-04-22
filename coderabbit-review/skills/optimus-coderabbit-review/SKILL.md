@@ -110,12 +110,12 @@ the same interactive resolution flow from Phase 3 onward.
 ### Step 1.3: Load Project Context
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
-2. **Identify test commands:** Check `.optimus.json` for custom commands first. If found, use configured commands (empty string means skip). Fall back to `Makefile`, `package.json` scripts, or CI config.
+2. **Identify test commands:** Check `.optimus/config.json` for custom commands first. If found, use configured commands (empty string means skip). Fall back to `Makefile`, `package.json` scripts, or CI config.
 3. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
 
 Store discovered commands:
 ```bash
-CONFIG_FILE=".optimus.json"
+CONFIG_FILE=".optimus/config.json"
 if [ -f "$CONFIG_FILE" ]; then
   LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
   TEST_UNIT_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
@@ -349,7 +349,7 @@ After all findings have been processed through the TDD cycle:
 
 **Run lint ONCE** after all fixes are applied, using the resolved command from Step 1.3:
 ```bash
-$LINT_CMD   # from .optimus.json, or fallback: make lint
+$LINT_CMD   # from .optimus/config.json, or fallback: make lint
 ```
 If lint fails, fix formatting issues and re-run.
 

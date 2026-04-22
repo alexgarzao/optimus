@@ -60,8 +60,7 @@ always "most advanced status wins" for each task independently.
 Check if `tasks.md` has merge conflict markers:
 
 ```bash
-TASKS_FILE=$(cat .optimus.json 2>/dev/null | jq -r '.tasksFile // empty')
-TASKS_FILE="${TASKS_FILE:-docs/tasks.md}"
+TASKS_FILE=".optimus/tasks.md"
 grep -c '<<<<<<<' "$TASKS_FILE" 2>/dev/null
 ```
 

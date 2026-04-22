@@ -229,7 +229,7 @@ This determines which specialist agents to dispatch in Phase 3.
 
 Run ALL applicable checks simultaneously. Capture stdout, stderr, exit code for each.
 
-Check `.optimus.json` for custom commands first. If `commands.lint` exists, use it. If a command key is present but empty (`""`), skip that check entirely. If missing, fall back to auto-detection below.
+Check `.optimus/config.json` for custom commands first. If `commands.lint` exists, use it. If a command key is present but empty (`""`), skip that check entirely. If missing, fall back to auto-detection below.
 
 | # | Check | Command (discover from project) | What it detects |
 |---|-------|---------------------------------|-----------------|
@@ -253,7 +253,7 @@ Skip checks whose commands don't exist in the project (e.g., skip `go vet` in a 
 Unit tests should pass before proceeding to agent dispatch. This establishes
 the baseline — if unit tests are already failing, review findings may be unreliable.
 
-Check `.optimus.json` for custom `commands.test` first. Fall back to `make test` if not configured.
+Check `.optimus/config.json` for custom `commands.test` first. Fall back to `make test` if not configured.
 
 ```bash
 make test                    # Unit tests — MANDATORY
@@ -265,7 +265,7 @@ make test                    # Unit tests — MANDATORY
 3. Do NOT proceed to Phase 3 until unit tests pass or user explicitly chooses to skip
 
 **If unit tests pass:** collect coverage data for analysis using the project's Makefile
-or `.optimus.json` commands:
+or `.optimus/config.json` commands:
 
 ```bash
 # Preferred: Makefile target

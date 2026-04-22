@@ -54,9 +54,9 @@ into the agent's context as instructions.
 Optimus requires the Ring ecosystem (droids + pre-dev workflow). All tasks flow
 through Ring's pre-dev for specification, and Ring droids for execution. There is
 no standalone mode. Ring pre-dev artifacts are the source of truth for task content.
-The location of Ring artifacts is configurable via `tasksDir` in `.optimus.json`
+The location of Ring artifacts is configurable via `tasksDir` in `.optimus/config.json`
 (default: `docs/pre-dev`). Optimus only tracks operational state (status, dependencies,
-branches) in `tasks.md`, with a `TaskSpec` column pointing to each task's Ring spec.
+branches) in `.optimus/tasks.md`, with a `TaskSpec` column pointing to each task's Ring spec.
 
 ### 1. User Authority Over Decisions
 The agent NEVER decides whether a finding should be fixed or skipped. ALL findings
@@ -137,30 +137,37 @@ source of truth for task tracking.
 
 ### File Location
 
-Project configuration is stored at the project root in `.optimus.json`:
+All Optimus files live in the `.optimus/` directory at the project root:
+
+```
+.optimus/
+├── config.json          # versionado — tasksDir, commands
+├── tasks.md             # versionado — task tracking with TaskSpec column
+├── sessions/            # gitignored — session state for crash recovery
+└── reports/             # gitignored — exported reports
+```
+
+**Configuration** is stored in `.optimus/config.json`:
 
 ```json
 {
-  "tasksFile": "docs/tasks.md",
   "tasksDir": "docs/pre-dev"
 }
 ```
 
-- **`tasksFile`**: Path to the Optimus tasks.md file. Default: `docs/tasks.md`.
 - **`tasksDir`**: Path to the Ring pre-dev artifacts root. Default: `docs/pre-dev`.
   The import and stage agents look for task specs at `<tasksDir>/tasks/` and subtasks
   at `<tasksDir>/subtasks/`.
 
-Agents resolve paths using this priority:
-1. **Read `.optimus.json`** at the project root.
-2. **Fallback:** `docs/tasks.md` for tasksFile, `docs/pre-dev` for tasksDir.
+**Tasks file** is always `.optimus/tasks.md` — not configurable.
+
+Agents resolve paths:
+1. **Read `.optimus/config.json`** for `tasksDir`. Fallback: `docs/pre-dev`.
+2. **Tasks file:** `.optimus/tasks.md` (fixed path).
 3. **If tasks.md not found:** **STOP** and suggest running `import` to create one.
 
-The `.optimus/` directory is used exclusively for temporary state files (sessions,
-reports). It should be fully gitignored:
-```
-.optimus/
-```
+The `.optimus/sessions/` and `.optimus/reports/` subdirectories are gitignored
+(temporary state). The `.optimus/config.json` and `.optimus/tasks.md` are versioned.
 
 ### Format Marker
 
@@ -529,8 +536,8 @@ Before marking done, done runs 8 checks:
 2. No unpushed commits (`git log @{u}..HEAD` = empty)
 3. PR ready to merge (if PR exists) — includes PR title validation (Conventional Commits)
 4. CI passing (if PR exists)
-5. `make lint` passes (or command from `.optimus.json`)
-6. `make test` passes (or command from `.optimus.json`)
+5. `make lint` passes (or command from `.optimus/config.json`)
+6. `make test` passes (or command from `.optimus/config.json`)
 7. `make test-integration` passes (if target exists, or from config.json)
 8. `make test-e2e` passes (if target exists, or from config.json)
 
@@ -565,10 +572,9 @@ Every stage agent MUST validate tasks.md before operating. The full validation r
 defined in the "Format Validation" section above (items 1-15). This protocol is the
 executable version:
 
-1. **Resolve paths from `.optimus.json`:**
-   - Read `.optimus.json` at project root.
-   - If `tasksFile` key exists, use that path. Otherwise, use `docs/tasks.md` (default).
-   - If `tasksDir` key exists, use that path. Otherwise, use `docs/pre-dev` (default).
+1. **Resolve paths:**
+   - `TASKS_FILE` is always `.optimus/tasks.md` (fixed path).
+   - Read `.optimus/config.json`. If `tasksDir` key exists, use that path. Otherwise, use `docs/pre-dev` (default).
    - Store as `TASKS_FILE` and `TASKS_DIR`.
 2. **Find tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus-import`.
 3. **Validate format:** Execute all 15 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-import`.
@@ -593,19 +599,20 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 
 ### Protocol: Initialize .optimus Directory
 
-**Referenced by:** all skills that create temporary state files
+**Referenced by:** all skills that create files in `.optimus/`
 
-Before creating ANY file inside `.optimus/`, ensure the directory exists and is fully
-gitignored (`.optimus/` contains only temporary state — no versioned files):
+Before creating ANY file inside `.optimus/`, ensure the directory structure exists
+and temporary subdirectories are gitignored:
 
 ```bash
-mkdir -p .optimus
-if ! grep -q '^\.optimus/' .gitignore 2>/dev/null; then
-  printf '\n.optimus/\n' >> .gitignore
+mkdir -p .optimus/sessions .optimus/reports
+if ! grep -q '^\.optimus/sessions/' .gitignore 2>/dev/null; then
+  printf '\n.optimus/sessions/\n.optimus/reports/\n' >> .gitignore
 fi
 ```
 
-This MUST run before writing session files or report exports.
+The `.optimus/config.json` and `.optimus/tasks.md` are versioned (NOT gitignored).
+Only `sessions/` and `reports/` are gitignored (temporary state).
 
 Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
 
@@ -616,8 +623,8 @@ Skills reference this as: "Initialize .optimus directory — see AGENTS.md Proto
 Stage agents write a session state file to track progress. This enables resumption
 when a session is interrupted (agent crash, user closes terminal, context window limit).
 
-**Session file location:** `.optimus/session-<task-id>.json` (project root, gitignored).
-Each task gets its own file (e.g., `.optimus/session-T-003.json`).
+**Session file location:** `.optimus/sessions/session-<task-id>.json` (gitignored).
+Each task gets its own file (e.g., `.optimus/sessions/session-T-003.json`).
 
 ```json
 {
@@ -635,7 +642,7 @@ Each task gets its own file (e.g., `.optimus/session-T-003.json`).
 **On stage start (after task ID is known):**
 
 ```bash
-SESSION_FILE=".optimus/session-${TASK_ID}.json"
+SESSION_FILE=".optimus/sessions/session-${TASK_ID}.json"
 if [ -f "$SESSION_FILE" ]; then
   cat "$SESSION_FILE"
 fi
@@ -662,18 +669,18 @@ fi
 
 ```bash
 # Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
-mkdir -p .optimus
-if ! grep -q '^\.optimus/' .gitignore 2>/dev/null; then
-  printf '\n.optimus/\n' >> .gitignore
+mkdir -p .optimus/sessions .optimus/reports
+if ! grep -q '^\.optimus/sessions/' .gitignore 2>/dev/null; then
+  printf '\n.optimus/sessions/\n.optimus/reports/\n' >> .gitignore
 fi
-cat > ".optimus/session-${TASK_ID}.json" << EOF
+cat > ".optimus/sessions/session-${TASK_ID}.json" << EOF
 {"task_id":"${TASK_ID}","stage":"<stage-name>","status":"<status>","branch":"$(git branch --show-current)","started_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","updated_at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","phase":"<current-phase>","notes":"<progress>"}
 EOF
 ```
 
 **On stage completion:** Delete the session file:
 ```bash
-rm -f ".optimus/session-${TASK_ID}.json"
+rm -f ".optimus/sessions/session-${TASK_ID}.json"
 ```
 
 Skills reference this as: "Execute session state protocol from AGENTS.md using stage=`<name>`, status=`<status>`."
@@ -745,8 +752,7 @@ DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@
 if [ -z "$DEFAULT_BRANCH" ]; then
   DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
 fi
-TASKS_FILE=$(cat .optimus.json 2>/dev/null | jq -r '.tasksFile // empty')
-TASKS_FILE="${TASKS_FILE:-docs/tasks.md}"
+TASKS_FILE=".optimus/tasks.md"
 git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
 git diff "origin/$DEFAULT_BRANCH" -- "$TASKS_FILE" 2>/dev/null | head -20
 ```
@@ -836,11 +842,11 @@ Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring D
 
 **Referenced by:** check, pr-check, coderabbit-review, verify
 
-Measure test coverage using the project's configured commands. Check `.optimus.json`
+Measure test coverage using the project's configured commands. Check `.optimus/config.json`
 for custom commands first, then fall back to Makefile targets, then stack-specific commands.
 
 **Command resolution order:**
-1. `.optimus.json` → `commands.test-coverage` (if present)
+1. `.optimus/config.json` → `commands.test-coverage` (if present)
 2. `make test-coverage` (if Makefile target exists)
 3. Stack-specific fallback:
    - Go: `go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out`
@@ -981,16 +987,15 @@ Skills reference this as: "Check active version guard — see AGENTS.md Protocol
 
 ## Verification Command Configuration
 
-Projects can customize verification commands via `.optimus.json` instead of relying
+Projects can customize verification commands via `.optimus/config.json` instead of relying
 on auto-detection from Makefile or stack conventions.
 
 ### Config File
 
-Location: `.optimus.json` (project root, versioned)
+Location: `.optimus/config.json` (versioned)
 
 ```json
 {
-  "tasksFile": "docs/tasks.md",
   "tasksDir": "docs/pre-dev",
   "commands": {
     "lint": "npm run lint",
@@ -1007,7 +1012,7 @@ Location: `.optimus.json` (project root, versioned)
 ### Behavior
 
 All skills that run verification commands (verify, done, build,
-check, pr-check, coderabbit-review) MUST check for `.optimus.json` BEFORE auto-detecting
+check, pr-check, coderabbit-review) MUST check for `.optimus/config.json` BEFORE auto-detecting
 commands. If the config file exists, use its commands instead of auto-detection.
 
 If a command key is missing from the config, fall back to auto-detection for that command.

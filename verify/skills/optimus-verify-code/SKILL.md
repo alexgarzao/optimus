@@ -83,10 +83,10 @@ AND Node.js lint + typecheck + format + tests.
 
 ### Step 1.1.1: Check for Custom Commands
 
-Check if `.optimus.json` exists and contains a `commands` section:
+Check if `.optimus/config.json` exists and contains a `commands` section:
 
 ```bash
-cat .optimus.json 2>/dev/null | jq '.commands' 2>/dev/null
+cat .optimus/config.json 2>/dev/null | jq '.commands' 2>/dev/null
 ```
 
 If found, use the configured commands instead of auto-detection. Missing keys fall back

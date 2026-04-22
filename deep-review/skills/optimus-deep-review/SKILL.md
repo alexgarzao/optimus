@@ -318,10 +318,10 @@ For each approved fix, apply the change. After each fix, confirm what changed in
 For fixes that alter execution flow, conditions, or observable behavior, run unit tests
 after the fix to verify no regressions.
 
-Check `.optimus.json` for custom commands before running any verification:
+Check `.optimus/config.json` for custom commands before running any verification:
 
 ```bash
-CONFIG_FILE=".optimus.json"
+CONFIG_FILE=".optimus/config.json"
 if [ -f "$CONFIG_FILE" ]; then
   LINT_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands.lint // empty')
   TEST_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands.test // empty')
@@ -329,13 +329,13 @@ fi
 ```
 
 Use configured commands if present (empty string means skip that check). Fall back to
-`make lint` / `make test` if `.optimus.json` is missing or the key is absent.
+`make lint` / `make test` if `.optimus/config.json` is missing or the key is absent.
 
 ### Step 6.3: Final Lint Check
 
 After ALL fixes are applied, run lint once (if available):
 ```bash
-$LINT_CMD   # from .optimus.json, or fallback:
+$LINT_CMD   # from .optimus/config.json, or fallback:
 make lint
 ```
 If lint fails, fix formatting issues.

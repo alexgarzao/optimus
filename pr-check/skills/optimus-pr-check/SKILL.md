@@ -528,13 +528,13 @@ Read the full content of each changed file for the review agents.
 ### Step 3.1: Discover Project Context
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
-2. **Identify test commands:** Check `.optimus.json` for custom commands first. If found, use configured commands (empty string means skip). Fall back to `Makefile`, `package.json` scripts, or CI config.
+2. **Identify test commands:** Check `.optimus/config.json` for custom commands first. If found, use configured commands (empty string means skip). Fall back to `Makefile`, `package.json` scripts, or CI config.
 3. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
 4. **Identify reference docs:** Look for PRD, TRD, API design
 
 Store discovered commands:
 ```bash
-CONFIG_FILE=".optimus.json"
+CONFIG_FILE=".optimus/config.json"
 if [ -f "$CONFIG_FILE" ]; then
   LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
   TEST_UNIT_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
@@ -872,7 +872,7 @@ After each successful TDD cycle:
 
 **After ALL fixes are committed**, run lint once using the resolved command from Step 3.1:
 ```bash
-$LINT_CMD   # from .optimus.json, or fallback: make lint
+$LINT_CMD   # from .optimus/config.json, or fallback: make lint
 ```
 If lint fails, fix formatting issues, amend the last commit or create a `chore: fix lint` commit.
 
