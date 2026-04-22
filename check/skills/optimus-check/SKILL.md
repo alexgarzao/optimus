@@ -173,6 +173,10 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 
 **Why commit immediately:** If the session is interrupted or the agent crashes before any review fixes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of the review outcome.
 
+### Step 1.0.9: Increment Stage Stats
+
+Increment stage stats — see AGENTS.md Protocol: Increment Stage Stats. Use counter=`check_runs`, timestamp=`last_check`.
+
 ### Step 1.1: Discover Project Structure
 
 Before loading docs, discover the project's structure and tooling (reuse discoveries from optimus-build if available):
@@ -832,6 +836,7 @@ If the user requests a dry-run (e.g., "dry-run review T-012", "preview review"):
 - Present ALL findings in Phase 6 (interactive resolution)
 - **Do NOT apply any fixes** — skip Phase 7 (batch apply) entirely
 - **Do NOT change task status** — skip the status update in Step 1.0.8
+- **Do NOT increment stats** — skip Step 1.0.9 (stage stats)
 - **Do NOT run the convergence loop** — one pass is sufficient for estimation
 - Present a summary showing: total findings, severity breakdown, estimated fix effort
 - This allows the user to see what would happen before committing to a full review

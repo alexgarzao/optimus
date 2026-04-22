@@ -488,6 +488,51 @@ Average time per stage (from N completed tasks):
 
 ---
 
+## Phase 9.5: Stage Execution Stats (Churn Metrics)
+
+Read `.optimus/stats.json` to display stage execution counters. If the file does not
+exist, skip this phase silently.
+
+### Step 9.5.1: Load Stats
+
+```bash
+STATS_FILE=".optimus/stats.json"
+if [ -f "$STATS_FILE" ]; then
+  cat "$STATS_FILE"
+fi
+```
+
+### Step 9.5.2: Present Churn Dashboard
+
+Only show this section if stats.json exists AND has at least one task entry.
+
+**Highlight tasks with above-average churn** — tasks where `plan_runs > avg_plan_runs`
+or `check_runs > avg_check_runs` are flagged as high-churn.
+
+```
+┌─────────────────────────────────────────────────┐
+│ STAGE EXECUTION STATS                            │
+├─────────────────────────────────────────────────┤
+│ Average plan runs:  1.5 per task                 │
+│ Average check runs: 2.0 per task                 │
+│                                                  │
+│ High-churn tasks:                                │
+│   T-003: plan ×4, check ×3  ← spec issues?      │
+│   T-007: plan ×1, check ×5  ← review cycles?    │
+│                                                  │
+│ All tasks:                                       │
+│   T-001: plan ×1, check ×1                       │
+│   T-002: plan ×2, check ×2                       │
+│   T-003: plan ×4, check ×3  ⚠                   │
+│   T-007: plan ×1, check ×5  ⚠                   │
+└─────────────────────────────────────────────────┘
+```
+
+**If only 1-2 tasks exist**, skip the averages and high-churn section — just show the
+per-task counts.
+
+---
+
 ## Phase 10: Warnings and Recommendations
 
 After the dashboard, present any issues found:

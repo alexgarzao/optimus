@@ -284,6 +284,10 @@ Then change working directory to the new worktree path for all subsequent steps.
 
 Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 
+### Step 1.0.8: Increment Stage Stats
+
+Increment stage stats — see AGENTS.md Protocol: Increment Stage Stats. Use counter=`plan_runs`, timestamp=`last_plan`.
+
 ### Step 1.1: Discover Project Structure
 
 Before loading docs, discover the project's structure:
@@ -713,6 +717,7 @@ If the user requests a dry-run (e.g., "dry-run spec T-003", "preview spec"):
 - Present ALL findings in Phase 3 (interactive resolution)
 - **Do NOT change task status** — skip Step 1.0.5 (status reservation)
 - **Do NOT create workspaces** — skip Step 1.0.6 (workspace creation)
+- **Do NOT increment stats** — skip Step 1.0.8 (stage stats)
 - **Do NOT commit or push anything** — skip Phases 4, 5, 7
 - **Do NOT run convergence loop** — one pass is sufficient for preview
 - Present results as informational: "what would happen" without side effects

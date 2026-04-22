@@ -143,6 +143,7 @@ All Optimus files live in the `.optimus/` directory at the project root:
 .optimus/
 ├── config.json          # versionado — tasksDir, commands
 ├── tasks.md             # versionado — task tracking with TaskSpec column
+├── stats.json           # versionado — stage execution counters per task
 ├── sessions/            # gitignored — session state for crash recovery
 └── reports/             # gitignored — exported reports
 ```
@@ -160,6 +161,22 @@ All Optimus files live in the `.optimus/` directory at the project root:
   at `<tasksDir>/subtasks/`.
 
 **Tasks file** is always `.optimus/tasks.md` — not configurable.
+
+**Stage execution stats** are stored in `.optimus/stats.json` (versioned):
+
+```json
+{
+  "T-001": { "plan_runs": 2, "check_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_check": "2025-01-16T14:00:00Z" },
+  "T-002": { "plan_runs": 1, "check_runs": 0 }
+}
+```
+
+- Each key is a task ID. Values track how many times `plan` and `check` executed on the task.
+- A high `plan_runs` signals unclear or problematic specs. A high `check_runs` signals
+  complex review cycles or specification gaps.
+- The file is created on first use by `plan` or `check`. If missing, agents treat all
+  counters as 0.
+- `report` reads this file to display churn metrics.
 
 Agents resolve paths:
 1. **Read `.optimus/config.json`** for `tasksDir`. Fallback: `docs/pre-dev`.
@@ -619,6 +636,31 @@ The `.optimus/config.json` and `.optimus/tasks.md` are versioned (NOT gitignored
 Only `sessions/` and `reports/` are gitignored (temporary state).
 
 Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
+
+### Protocol: Increment Stage Stats
+
+**Referenced by:** plan, check
+
+After the status change commit (and BEFORE any analysis work begins), increment the
+execution counter for the current stage in `.optimus/stats.json`. This tracks how many
+times each stage ran on each task — useful for spotting spec churn and review cycles.
+
+**NOTE:** Only increment when NOT in dry-run mode.
+
+1. Read `.optimus/stats.json`. If the file does not exist, start with an empty object `{}`.
+2. If the task ID key does not exist, initialize it:
+   ```json
+   { "plan_runs": 0, "check_runs": 0 }
+   ```
+3. Increment the appropriate counter (`plan_runs` for plan, `check_runs` for check).
+4. Set the timestamp field (`last_plan` or `last_check`) to the current UTC ISO 8601 time.
+5. Write the updated JSON back to `.optimus/stats.json` (pretty-printed, sorted keys).
+6. **Do NOT commit** — the stats update is included in the next code commit made by the
+   stage (e.g., spec corrections in plan, fix applications in check). If the stage makes
+   no commits (all findings skipped), the stats file remains as an uncommitted local change
+   and will be picked up by the next commit on this branch.
+
+Skills reference this as: "Increment stage stats — see AGENTS.md Protocol: Increment Stage Stats."
 
 ### Protocol: Shell Safety Guidelines
 
