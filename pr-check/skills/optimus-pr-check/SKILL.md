@@ -546,6 +546,8 @@ if [ -f "$CONFIG_FILE" ]; then
 fi
 LINT_CMD="${LINT_CMD:-make lint}"
 TEST_UNIT_CMD="${TEST_UNIT_CMD:-make test}"
+TEST_INTEGRATION_CMD="${TEST_INTEGRATION_CMD:-make test-integration}"
+TEST_E2E_CMD="${TEST_E2E_CMD:-make test-e2e}"
 ```
 
 ### Step 3.2: Baseline Unit Tests
