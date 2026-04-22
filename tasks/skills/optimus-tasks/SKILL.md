@@ -498,16 +498,17 @@ Show the new table order.
 2. Remove the `branch` field from the task's entry in state.json (if branch was deleted in Step 6.1).
 4. **Invoke notification hooks (if present):**
    ```bash
+   _optimus_sanitize() { printf '%s' "$1" | tr -cd '[:alnum:][:space:]-_./:'; }
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-     "$HOOKS_FILE" task-cancelled T-XXX "<old status>" "Cancelado" 2>/dev/null &
+     "$HOOKS_FILE" task-cancelled "$(_optimus_sanitize "T-XXX")" "$(_optimus_sanitize "<old status>")" "$(_optimus_sanitize "Cancelado")" 2>/dev/null &
    fi
    ```
 5. **Fire `task-blocked` hook for affected dependents:** For each non-cancelled task that
    depends on T-XXX (identified in Step 6.1, item 3), fire the `task-blocked` hook:
    ```bash
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-     "$HOOKS_FILE" task-blocked T-YYY "<dep-status>" "<dep-status>" "blocked by T-XXX (Cancelado)" 2>/dev/null &
+     "$HOOKS_FILE" task-blocked "$(_optimus_sanitize "T-YYY")" "$(_optimus_sanitize "<dep-status>")" "$(_optimus_sanitize "<dep-status>")" "$(_optimus_sanitize "blocked by T-XXX (Cancelado)")" 2>/dev/null &
    fi
    ```
 
@@ -601,9 +602,10 @@ To resolve, run `/optimus-tasks`:
 3. Clean stale session state: `rm -f ".optimus/sessions/session-${TASK_ID}.json"`
 4. **Invoke notification hooks (if present):**
    ```bash
+   _optimus_sanitize() { printf '%s' "$1" | tr -cd '[:alnum:][:space:]-_./:'; }
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-     "$HOOKS_FILE" status-change T-XXX "DONE" "<target status>" 2>/dev/null &
+     "$HOOKS_FILE" status-change "$(_optimus_sanitize "T-XXX")" "$(_optimus_sanitize "DONE")" "$(_optimus_sanitize "<target status>")" 2>/dev/null &
    fi
    ```
 
@@ -684,9 +686,10 @@ code manually without using stage-2).
 1. Update the status in state.json to the target status — see AGENTS.md Protocol: State Management.
 2. **Invoke notification hooks (if present):**
    ```bash
+   _optimus_sanitize() { printf '%s' "$1" | tr -cd '[:alnum:][:space:]-_./:'; }
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-     "$HOOKS_FILE" status-change T-XXX "<old status>" "<target status>" 2>/dev/null &
+     "$HOOKS_FILE" status-change "$(_optimus_sanitize "T-XXX")" "$(_optimus_sanitize "<old status>")" "$(_optimus_sanitize "<target status>")" 2>/dev/null &
    fi
    ```
 
@@ -741,9 +744,10 @@ that significant rework is needed and the task should go back to implementation)
 1. Update the status in state.json to the target status — see AGENTS.md Protocol: State Management.
 3. **Invoke notification hooks (if present):**
    ```bash
+   _optimus_sanitize() { printf '%s' "$1" | tr -cd '[:alnum:][:space:]-_./:'; }
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-     "$HOOKS_FILE" status-change T-XXX "<old status>" "<target status>" 2>/dev/null &
+     "$HOOKS_FILE" status-change "$(_optimus_sanitize "T-XXX")" "$(_optimus_sanitize "<old status>")" "$(_optimus_sanitize "<target status>")" 2>/dev/null &
    fi
    ```
 
@@ -1041,7 +1045,7 @@ in the cycle so the user can fix it with `/optimus-tasks`.
 
 ### Protocol: Initialize .optimus Directory
 
-**Referenced by:** import, tasks, report (export), all stage agents (1-5) for session files
+**Referenced by:** import, tasks, report (export), quick-report, batch, all stage agents (1-5) for session files
 
 Before creating ANY file inside `.optimus/`, ensure the directory structure exists
 and operational/temporary files are gitignored:
@@ -1062,14 +1066,14 @@ Skills reference this as: "Initialize .optimus directory — see AGENTS.md Proto
 
 ### Protocol: State Management
 
-**Referenced by:** all stage agents (1-5), tasks, report, quick-report
+**Referenced by:** all stage agents (1-5), tasks, report, quick-report, import, batch
 
 All status and branch data is stored in `.optimus/state.json` (gitignored).
 
 **Prerequisites:**
 
 ```bash
-if ! command -v jq &>/dev/null; then
+if ! command -v jq >/dev/null 2>&1; then
   echo "ERROR: jq is required for state management but not installed."
   # STOP — do not proceed
 fi

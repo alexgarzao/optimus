@@ -338,14 +338,14 @@ These operations require explicit user confirmation.
 
 ### Protocol: State Management
 
-**Referenced by:** all stage agents (1-5), tasks, report, quick-report
+**Referenced by:** all stage agents (1-5), tasks, report, quick-report, import, batch
 
 All status and branch data is stored in `.optimus/state.json` (gitignored).
 
 **Prerequisites:**
 
 ```bash
-if ! command -v jq &>/dev/null; then
+if ! command -v jq >/dev/null 2>&1; then
   echo "ERROR: jq is required for state management but not installed."
   # STOP — do not proceed
 fi

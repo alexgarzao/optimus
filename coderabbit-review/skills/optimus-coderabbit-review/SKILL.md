@@ -628,7 +628,7 @@ All cycle review skills follow this pattern:
 
 ### Protocol: Coverage Measurement
 
-**Referenced by:** check, pr-check, coderabbit-review, verify
+**Referenced by:** check, pr-check, coderabbit-review, verify, deep-review
 
 Measure test coverage using the project's configured commands. Check `.optimus/config.json`
 for custom commands first, then fall back to Makefile targets, then stack-specific commands.
@@ -790,7 +790,7 @@ Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Pr
 
 ### Protocol: Push Commits (optional)
 
-**Referenced by:** stages 1-4 (plan, build, check, pr-check), coderabbit-review, deep-review. Note: done handles pushing inline in its own cleanup phase.
+**Referenced by:** plan, build, check, coderabbit-review. Note: done handles pushing inline in its own cleanup phase. pr-check and deep-review have their own push phases.
 
 After stage work is complete, offer to push all local commits:
 
@@ -829,7 +829,7 @@ would be silently skipped even though ALL local commits are unpushed.
 and update installed plugins to pick up the changes just pushed:
 
 ```bash
-if jq -e '.name == "optimus"' .factory-plugin/marketplace.json &>/dev/null; then
+if jq -e '.name == "optimus"' .factory-plugin/marketplace.json >/dev/null 2>&1; then
   echo "Optimus repo detected — updating installed plugins..."
   for skill in $(droid plugin list 2>&1 | grep optimus | awk '{print $1}'); do
     droid plugin update "$skill" 2>/dev/null

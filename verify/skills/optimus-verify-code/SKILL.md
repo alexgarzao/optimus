@@ -83,10 +83,17 @@ AND Node.js lint + typecheck + format + tests.
 
 ### Step 1.1.1: Check for Custom Commands
 
-Check if `.optimus/config.json` exists and contains a `commands` section:
+Check if `.optimus/config.json` exists and read specific command keys:
 
 ```bash
-jq '.commands' .optimus/config.json 2>/dev/null
+CONFIG_FILE=".optimus/config.json"
+if [ -f "$CONFIG_FILE" ]; then
+  LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_COVERAGE_CMD=$(jq -r '.commands["test-coverage"] // empty' "$CONFIG_FILE" 2>/dev/null)
+fi
 ```
 
 If found, use the configured commands instead of auto-detection. Missing keys fall back
@@ -174,15 +181,20 @@ Run sequentially, continue even if one fails:
 | 7 | E2E tests | `make test-e2e` | `npm run test:e2e` or `npx playwright test` | `pytest tests/e2e/` | `make test-e2e` |
 
 **Integration test command:**
-Run integration tests with coverage profiling. The exact command depends on the project:
+If `$TEST_INTEGRATION_CMD` is set from `.optimus/config.json` (Step 1.1.1), use it. Otherwise
+auto-detect from the stack:
 - **Go:** If `make test-integration` exists: use it. Otherwise: `go test -tags=integration -coverprofile=coverage-integration.out ./...`
 - **Node.js:** `npm run test:integration` (if script exists)
 - **Python:** `pytest tests/integration/ --cov=. --cov-report=term` (if directory exists)
 - **Generic:** `make test-integration` (if target exists)
 
+**E2E test command:**
+If `$TEST_E2E_CMD` is set from `.optimus/config.json` (Step 1.1.1), use it. Otherwise
+auto-detect from the stack table above.
+
 **Execution rules:**
 - Run integration tests first
-- Regardless of result, run `make test-e2e` next
+- Regardless of result, run E2E tests next
 - Capture output, exit code, and duration for each
 
 ### E2E Tests
@@ -461,7 +473,7 @@ extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
 ### Protocol: Coverage Measurement
 
-**Referenced by:** check, pr-check, coderabbit-review, verify
+**Referenced by:** check, pr-check, coderabbit-review, verify, deep-review
 
 Measure test coverage using the project's configured commands. Check `.optimus/config.json`
 for custom commands first, then fall back to Makefile targets, then stack-specific commands.

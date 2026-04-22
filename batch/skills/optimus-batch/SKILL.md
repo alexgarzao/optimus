@@ -460,7 +460,7 @@ Follow these rules to prevent injection and silent failures:
    as regex patterns to `grep` without `-F`
 5. **Use `grep -E '^\| T-NNN \|'`** to match task rows in tasks.md — plain `grep "T-NNN"`
    matches titles and dependency columns too
-6. **Validate tool availability** before use: `command -v jq &>/dev/null` before running `jq`
+6. **Validate tool availability** before use: `command -v jq >/dev/null 2>&1` before running `jq`
 7. **Validate JSON files** before parsing: `jq empty "$FILE" 2>/dev/null` before reading keys
 8. **Sanitize user-derived values in commit messages** — task titles and descriptions may
    contain shell metacharacters (backticks, `$(...)`, double quotes). **Mandatory pattern:**
@@ -479,14 +479,14 @@ Skills reference this as: "Follow shell safety guidelines — see AGENTS.md Prot
 
 ### Protocol: State Management
 
-**Referenced by:** all stage agents (1-5), tasks, report, quick-report
+**Referenced by:** all stage agents (1-5), tasks, report, quick-report, import, batch
 
 All status and branch data is stored in `.optimus/state.json` (gitignored).
 
 **Prerequisites:**
 
 ```bash
-if ! command -v jq &>/dev/null; then
+if ! command -v jq >/dev/null 2>&1; then
   echo "ERROR: jq is required for state management but not installed."
   # STOP — do not proceed
 fi

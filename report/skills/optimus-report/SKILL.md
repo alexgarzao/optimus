@@ -77,7 +77,10 @@ Detect if the report is being run on the default branch:
 
 ```bash
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-CURRENT_BRANCH=$(git branch --show-current)
+if [ -z "$DEFAULT_BRANCH" ]; then
+  DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
+fi
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
 ```
 
 If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`):
@@ -740,7 +743,7 @@ These operations require explicit user confirmation.
 
 ### Protocol: Initialize .optimus Directory
 
-**Referenced by:** import, tasks, report (export), all stage agents (1-5) for session files
+**Referenced by:** import, tasks, report (export), quick-report, batch, all stage agents (1-5) for session files
 
 Before creating ANY file inside `.optimus/`, ensure the directory structure exists
 and operational/temporary files are gitignored:
@@ -761,14 +764,14 @@ Skills reference this as: "Initialize .optimus directory — see AGENTS.md Proto
 
 ### Protocol: State Management
 
-**Referenced by:** all stage agents (1-5), tasks, report, quick-report
+**Referenced by:** all stage agents (1-5), tasks, report, quick-report, import, batch
 
 All status and branch data is stored in `.optimus/state.json` (gitignored).
 
 **Prerequisites:**
 
 ```bash
-if ! command -v jq &>/dev/null; then
+if ! command -v jq >/dev/null 2>&1; then
   echo "ERROR: jq is required for state management but not installed."
   # STOP — do not proceed
 fi

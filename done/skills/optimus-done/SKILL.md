@@ -510,6 +510,13 @@ Options:
 **IMPORTANT:** You cannot delete a branch you are currently on. Before deleting, switch to the default branch and sync with remote (the merge in Step 4.2 may have changed `tasks.md` on the remote):
 ```bash
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+if [ -z "$DEFAULT_BRANCH" ]; then
+  DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
+fi
+if [ -z "$DEFAULT_BRANCH" ]; then
+  echo "ERROR: Cannot determine default branch. Set it with: git remote set-head origin <branch>"
+  # STOP — do not proceed with branch deletion
+fi
 git checkout "$DEFAULT_BRANCH"
 git pull
 git branch -d <branch> 2>/dev/null || git branch -D <branch>
@@ -771,9 +778,14 @@ DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@
 if [ -z "$DEFAULT_BRANCH" ]; then
   DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
 fi
-TASKS_FILE=".optimus/tasks.md"
-git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
-git diff "origin/$DEFAULT_BRANCH" -- "$TASKS_FILE" 2>/dev/null | head -20
+if [ -z "$DEFAULT_BRANCH" ]; then
+  echo "WARNING: Cannot determine default branch. Skipping divergence check."
+  # Skip — this is a warning, not a HARD BLOCK
+else
+  TASKS_FILE=".optimus/tasks.md"
+  git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
+  git diff "origin/$DEFAULT_BRANCH" -- "$TASKS_FILE" 2>/dev/null | head -20
+fi
 ```
 
 - If diff output is non-empty → warn via `AskUser`:
@@ -840,7 +852,7 @@ Events and their parameter signatures:
 When a dependency check fails:
 ```bash
 if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" "task-blocked" "$task_id" "$current_status" "$current_status" "blocked by $dep_id ($dep_status)" 2>/dev/null &
+  "$HOOKS_FILE" "task-blocked" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "blocked by $dep_id ($dep_status)")" 2>/dev/null &
 fi
 ```
 
@@ -972,14 +984,14 @@ Skills reference this as: "Execute session state protocol from AGENTS.md using s
 
 ### Protocol: State Management
 
-**Referenced by:** all stage agents (1-5), tasks, report, quick-report
+**Referenced by:** all stage agents (1-5), tasks, report, quick-report, import, batch
 
 All status and branch data is stored in `.optimus/state.json` (gitignored).
 
 **Prerequisites:**
 
 ```bash
-if ! command -v jq &>/dev/null; then
+if ! command -v jq >/dev/null 2>&1; then
   echo "ERROR: jq is required for state management but not installed."
   # STOP — do not proceed
 fi

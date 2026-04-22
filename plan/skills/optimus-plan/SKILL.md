@@ -1073,9 +1073,14 @@ DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@
 if [ -z "$DEFAULT_BRANCH" ]; then
   DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
 fi
-TASKS_FILE=".optimus/tasks.md"
-git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
-git diff "origin/$DEFAULT_BRANCH" -- "$TASKS_FILE" 2>/dev/null | head -20
+if [ -z "$DEFAULT_BRANCH" ]; then
+  echo "WARNING: Cannot determine default branch. Skipping divergence check."
+  # Skip — this is a warning, not a HARD BLOCK
+else
+  TASKS_FILE=".optimus/tasks.md"
+  git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
+  git diff "origin/$DEFAULT_BRANCH" -- "$TASKS_FILE" 2>/dev/null | head -20
+fi
 ```
 
 - If diff output is non-empty → warn via `AskUser`:
@@ -1174,7 +1179,7 @@ Events and their parameter signatures:
 When a dependency check fails:
 ```bash
 if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" "task-blocked" "$task_id" "$current_status" "$current_status" "blocked by $dep_id ($dep_status)" 2>/dev/null &
+  "$HOOKS_FILE" "task-blocked" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "blocked by $dep_id ($dep_status)")" 2>/dev/null &
 fi
 ```
 
@@ -1307,7 +1312,7 @@ Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Pr
 
 ### Protocol: Push Commits (optional)
 
-**Referenced by:** stages 1-4 (plan, build, check, pr-check), coderabbit-review, deep-review. Note: done handles pushing inline in its own cleanup phase.
+**Referenced by:** plan, build, check, coderabbit-review. Note: done handles pushing inline in its own cleanup phase. pr-check and deep-review have their own push phases.
 
 After stage work is complete, offer to push all local commits:
 
@@ -1346,7 +1351,7 @@ would be silently skipped even though ALL local commits are unpushed.
 and update installed plugins to pick up the changes just pushed:
 
 ```bash
-if jq -e '.name == "optimus"' .factory-plugin/marketplace.json &>/dev/null; then
+if jq -e '.name == "optimus"' .factory-plugin/marketplace.json >/dev/null 2>&1; then
   echo "Optimus repo detected — updating installed plugins..."
   for skill in $(droid plugin list 2>&1 | grep optimus | awk '{print $1}'); do
     droid plugin update "$skill" 2>/dev/null
@@ -1577,7 +1582,7 @@ Follow these rules to prevent injection and silent failures:
    as regex patterns to `grep` without `-F`
 5. **Use `grep -E '^\| T-NNN \|'`** to match task rows in tasks.md — plain `grep "T-NNN"`
    matches titles and dependency columns too
-6. **Validate tool availability** before use: `command -v jq &>/dev/null` before running `jq`
+6. **Validate tool availability** before use: `command -v jq >/dev/null 2>&1` before running `jq`
 7. **Validate JSON files** before parsing: `jq empty "$FILE" 2>/dev/null` before reading keys
 8. **Sanitize user-derived values in commit messages** — task titles and descriptions may
    contain shell metacharacters (backticks, `$(...)`, double quotes). **Mandatory pattern:**
@@ -1596,14 +1601,14 @@ Skills reference this as: "Follow shell safety guidelines — see AGENTS.md Prot
 
 ### Protocol: State Management
 
-**Referenced by:** all stage agents (1-5), tasks, report, quick-report
+**Referenced by:** all stage agents (1-5), tasks, report, quick-report, import, batch
 
 All status and branch data is stored in `.optimus/state.json` (gitignored).
 
 **Prerequisites:**
 
 ```bash
-if ! command -v jq &>/dev/null; then
+if ! command -v jq >/dev/null 2>&1; then
   echo "ERROR: jq is required for state management but not installed."
   # STOP — do not proceed
 fi
@@ -1724,7 +1729,8 @@ Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
 4. **Path traversal validation (HARD BLOCK):** Verify the resolved path stays within the project:
    ```bash
    PROJECT_ROOT=$(git rev-parse --show-toplevel)
-   RESOLVED_PATH=$(cd "$PROJECT_ROOT" && realpath -m "${TASKS_DIR}/${TASK_SPEC}" 2>/dev/null)
+   RESOLVED_PATH=$(cd "$PROJECT_ROOT" && realpath -m "${TASKS_DIR}/${TASK_SPEC}" 2>/dev/null \
+     || python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "${TASKS_DIR}/${TASK_SPEC}" 2>/dev/null)
    case "$RESOLVED_PATH" in
      "$PROJECT_ROOT"/*) ;; # OK — within project
      *) echo "ERROR: TaskSpec path traversal detected — resolved path is outside the project root."; exit 1 ;;
