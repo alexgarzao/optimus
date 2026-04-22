@@ -126,7 +126,6 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
    **On stage completion** (after Phase 14 final summary): delete the session file.
 5. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Revisando PR`) AND the user did NOT specify the task ID explicitly (auto-detect):
-     - Read the task's overlay file (`docs/tasks/T-XXX.md`)
      - Present to the user via `AskUser`:
        ```
        I'm about to change task T-XXX status from '<current>' to 'Revisando PR'.
@@ -190,7 +189,7 @@ Options:
 
 If the user chooses **Create PR**:
 1. Generate PR title from task Tipo + ID + title (e.g., `feat(T-003): add user registration API`)
-2. Generate PR body from Ring source (read via `## Fonte` in `docs/tasks/T-XXX.md`)
+2. Generate PR body from Ring source (read via `TaskSpec` column in tasks.md)
 3. Push the branch if not yet pushed: `git push -u origin $(git branch --show-current)`
 4. Create the PR:
    ```bash

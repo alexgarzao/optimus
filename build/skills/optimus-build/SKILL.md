@@ -130,7 +130,6 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 3.1. **Active version guard:** Check active version guard — see AGENTS.md Protocol: Active Version Guard.
 4. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Em Andamento`) AND the user did NOT specify the task ID explicitly (auto-detect):
-     - Read the task's overlay file (`docs/tasks/T-XXX.md`)
      - Present to the user via `AskUser`:
        ```
        I'm about to change task T-XXX status from '<current>' to 'Em Andamento'.
@@ -179,14 +178,11 @@ Before loading docs, discover the project's structure and tooling:
 
 ### Step 1.7: Load All Reference Documents
 
-Read the task's overlay file (`docs/tasks/T-XXX.md`) and follow the `## Fonte` links
-to load all Ring pre-dev artifacts:
-
-- **Task spec** (`docs/pre-dev/tasks/task_NNN.md`) — objective, acceptance criteria,
-  API contracts, data model, and implementation guidance
-- **Subtask files** (`docs/pre-dev/subtasks/T-NNN/*.md`) — step-by-step implementation
-  instructions with exact code examples, file paths, and commands. Read ALL files.
-- **Execution plan** (`PARALLEL-PLAN.md`) — parallelization strategy and phase ordering
+Read the task's `TaskSpec` column from tasks.md and resolve the full path as
+`<TASKS_DIR>/<TaskSpec>`. Load the Ring pre-dev task spec for objective, acceptance
+criteria, API contracts, data model, and implementation guidance. Derive the subtasks
+directory automatically and read ALL subtask files for step-by-step implementation
+instructions. Check for `PARALLEL-PLAN.md` in the subtasks directory.
 
 Also load other project reference docs:
 - API contracts

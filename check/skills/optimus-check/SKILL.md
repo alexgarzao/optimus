@@ -149,7 +149,6 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 3.1. **Active version guard:** Check active version guard — see AGENTS.md Protocol: Active Version Guard.
 4. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Validando Impl`) AND the user did NOT specify the task ID explicitly (auto-detect):
-     - Read the task's overlay file (`docs/tasks/T-XXX.md`)
      - Present to the user via `AskUser`:
        ```
        I'm about to change task T-XXX status from '<current>' to 'Validando Impl'.
@@ -193,9 +192,9 @@ TEST_E2E_CMD=<discovered E2E test command>
 
 ### Step 1.2: Load Reference Documents
 
-Read the task's overlay file (`docs/tasks/T-XXX.md`) and follow the `## Fonte` links
-to load Ring pre-dev artifacts (task spec, subtask files). Also load:
-- Task spec (via Fonte link): scope, acceptance criteria, testing strategy, DoD
+Read the task's `TaskSpec` column from tasks.md and resolve the full path as
+`<TASKS_DIR>/<TaskSpec>`. Load the Ring pre-dev task spec and derive subtask files. Also load:
+- Task spec: scope, acceptance criteria, testing strategy, DoD
 - API contracts (if backend task)
 - DB schema / data model (if backend task)
 - Technical architecture
@@ -395,7 +394,7 @@ Required output format:
 ### Special Instructions per Agent
 
 **Spec Compliance agent** must additionally:
-1. List every acceptance criterion from the Ring source (via `## Fonte` in the overlay) and mark PASS/FAIL/PARTIAL
+1. List every acceptance criterion from the Ring source (via `TaskSpec` column) and mark PASS/FAIL/PARTIAL
 2. List every test ID and verify a corresponding test exists
 4. If the task has API endpoints, verify request/response format matches API contracts
 5. If the task has DB changes, verify column types/constraints match the data model
@@ -760,7 +759,7 @@ The `--assignee @me` flag assigns the PR to the authenticated GitHub user automa
 
 The body should include:
 - Task ID and title
-- Objective (from Ring source via `## Fonte` in overlay)
+- Objective (from Ring source via `TaskSpec` column)
 - Link to the task section in tasks.md
 
 ### Step 12.4: Confirm

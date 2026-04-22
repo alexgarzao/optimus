@@ -131,7 +131,6 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 3.1. **Active version guard:** Check active version guard — see AGENTS.md Protocol: Active Version Guard.
 4. **Expanded confirmation before status change:**
    - **If status will change** (current status is NOT `Validando Spec`) AND the user did NOT specify the task ID explicitly (auto-detect):
-     - Read the task's overlay file (`docs/tasks/T-XXX.md`)
      - Present to the user via `AskUser`:
        ```
        I'm about to change task T-XXX status from '<current>' to 'Validando Spec'.
@@ -284,12 +283,10 @@ Before loading docs, discover the project's structure:
 
 ### Step 1.2: Load Documents
 
-Read the task's overlay file (`docs/tasks/T-XXX.md`) and follow the `## Fonte` links
-to load all Ring pre-dev artifacts:
-- **Task spec** (`docs/pre-dev/tasks/task_NNN.md`) — objective, acceptance criteria,
-  API contracts, and data model
-- **Subtask files** (`docs/pre-dev/subtasks/T-NNN/*.md`) — implementation details,
-  code examples, and step-by-step instructions
+Read the task's `TaskSpec` column from tasks.md and resolve the full path as
+`<TASKS_DIR>/<TaskSpec>`. Load the Ring pre-dev task spec for objective, acceptance
+criteria, API contracts, and data model. Derive the subtasks directory automatically
+(e.g., `tasks/task_001.md` → `<TASKS_DIR>/subtasks/T-001/`). Read all subtask files.
 
 Also load other project reference docs:
 - API contracts
@@ -299,8 +296,7 @@ Also load other project reference docs:
 - Coding standards (source of truth)
 - Dependency relationships
 
-Ring pre-dev artifacts are the primary specification source. The validator uses them
-to assess completeness — not the overlay file (which only tracks progress).
+Ring pre-dev artifacts are the primary specification source.
 
 ### Step 1.3: Verify Existing Code
 

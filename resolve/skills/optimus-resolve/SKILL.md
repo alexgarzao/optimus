@@ -88,7 +88,7 @@ For each conflict region, classify its content:
 |-------------|---------------|---------------------|
 | **Task table rows** | Lines matching `\| T-\d+ \|` pattern | Per-task most-advanced-status |
 | **Versions table** | Lines in the `## Versions` section | Merge both — keep all versions; deduplicate by name (if same version name on both sides, keep the one with more advanced status: Ativa > Próxima > Planejada > Backlog > Concluída) |
-| **Task overlay files** | `docs/tasks/T-NNN.md` files | Merge: keep `## Fonte` section (should be identical on both sides) (Step 2.4) |
+| **TaskSpec column** | `TaskSpec` values in task rows | Keep either (should be identical on both sides) |
 | **Format marker / headers** | First line, `# Tasks`, table headers | Keep either (identical) |
 
 ### Step 1.3: Parse Task Rows From Both Sides
@@ -157,12 +157,6 @@ If one side has `Cancelado` and the other has a non-terminal status:
   Options:
   - **Keep Cancelado** — the task was intentionally cancelled
   - **Keep <other status>** — the cancellation was premature, work continues
-
-### Step 2.4: Resolve Overlay Files
-
-For `docs/tasks/T-NNN.md` overlay files that conflict:
-
-1. `## Fonte` section: should be identical on both sides (same Ring source). If different, flag for user decision.
 
 ---
 

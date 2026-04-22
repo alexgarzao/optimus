@@ -53,9 +53,10 @@ into the agent's context as instructions.
 ### 0. Ring Ecosystem Required
 Optimus requires the Ring ecosystem (droids + pre-dev workflow). All tasks flow
 through Ring's pre-dev for specification, and Ring droids for execution. There is
-no standalone mode. Ring pre-dev artifacts (`docs/pre-dev/tasks/`, `docs/pre-dev/subtasks/`)
-are the source of truth for task content. Optimus only tracks operational state
-(status, progress, dependencies, branches).
+no standalone mode. Ring pre-dev artifacts are the source of truth for task content.
+The location of Ring artifacts is configurable via `tasksDir` in `.optimus.json`
+(default: `docs/pre-dev`). Optimus only tracks operational state (status, dependencies,
+branches) in `tasks.md`, with a `TaskSpec` column pointing to each task's Ring spec.
 
 ### 1. User Authority Over Decisions
 The agent NEVER decides whether a finding should be fixed or skipped. ALL findings
@@ -136,40 +137,24 @@ source of truth for task tracking.
 
 ### File Location
 
-The location of `tasks.md` is configurable via `.optimus.json`. Agents resolve the
-path using this priority:
-
-1. **Read `.optimus.json`** at the project root. If `tasksFile` is set, use that path.
-2. **Fallback:** `docs/tasks.md` (default when no config exists).
-3. **If not found:** **STOP** and suggest running `import` to create one.
+Project configuration is stored at the project root in `.optimus.json`:
 
 ```json
 {
-  "tasksFile": "docs/tasks.md"
+  "tasksFile": "docs/tasks.md",
+  "tasksDir": "docs/pre-dev"
 }
 ```
 
-**Task overlay files** (Ring source links) are stored as individual files
-in a `tasks/` directory **derived from the tasksFile path**:
+- **`tasksFile`**: Path to the Optimus tasks.md file. Default: `docs/tasks.md`.
+- **`tasksDir`**: Path to the Ring pre-dev artifacts root. Default: `docs/pre-dev`.
+  The import and stage agents look for task specs at `<tasksDir>/tasks/` and subtasks
+  at `<tasksDir>/subtasks/`.
 
-```
-tasksDir = dirname(tasksFile) + "/tasks/"
-```
-
-| tasksFile | tasksDir | Overlay file example |
-|-----------|----------|---------------------|
-| `docs/tasks.md` (default) | `docs/tasks/` | `docs/tasks/T-001.md` |
-| `project/tasks.md` | `project/tasks/` | `project/tasks/T-001.md` |
-| `tasks.md` (root) | `tasks/` | `tasks/T-001.md` |
-
-Each task has its own overlay file. This prevents merge conflicts when multiple
-worktrees work on different tasks in parallel.
-
-Project configuration is stored at the project root:
-
-```
-.optimus.json
-```
+Agents resolve paths using this priority:
+1. **Read `.optimus.json`** at the project root.
+2. **Fallback:** `docs/tasks.md` for tasksFile, `docs/pre-dev` for tasksDir.
+3. **If tasks.md not found:** **STOP** and suggest running `import` to create one.
 
 The `.optimus/` directory is used exclusively for temporary state files (sessions,
 reports). It should be fully gitignored:
@@ -191,7 +176,6 @@ suggests running `/optimus-import`.
 
 ### Format:
 
-**docs/tasks.md** (table + versions only):
 ```markdown
 <!-- optimus:tasks-v1 -->
 # Tasks
@@ -203,32 +187,19 @@ suggests running `/optimus-import`.
 | v2 | Próxima | Post-launch improvements |
 | Futuro | Backlog | Ideas not yet scheduled |
 
-| ID | Title | Tipo | Status | Depends | Priority | Version | Branch | Estimate |
-|----|-------|------|--------|---------|----------|---------|--------|----------|
-| T-001 | Setup auth module | Feature | DONE | - | Alta | MVP | - | S |
-| T-002 | User registration API | Feature | Em Andamento | T-001 | Alta | MVP | feat/t-002-user-registration | M |
-| T-003 | Login page | Feature | Pendente | T-001 | Alta | MVP | - | M |
-| T-004 | Password reset flow | Fix | Pendente | T-002, T-003 | Media | v2 | fix/t-004-password-reset | L |
-| T-005 | E2E auth tests | Test | Pendente | T-002, T-003 | Media | MVP | - | S |
+| ID | Title | Tipo | Status | Depends | Priority | Version | Branch | Estimate | TaskSpec |
+|----|-------|------|--------|---------|----------|---------|--------|----------|----------|
+| T-001 | Setup auth module | Feature | DONE | - | Alta | MVP | - | S | tasks/task_001.md |
+| T-002 | User registration API | Feature | Em Andamento | T-001 | Alta | MVP | feat/t-002-user-registration | M | tasks/task_002.md |
+| T-003 | Login page | Feature | Pendente | T-001 | Alta | MVP | - | M | tasks/task_003.md |
+| T-004 | Password reset flow | Fix | Pendente | T-002, T-003 | Media | v2 | fix/t-004-password-reset | L | tasks/task_004.md |
+| T-005 | E2E auth tests | Test | Pendente | T-002, T-003 | Media | MVP | - | S | tasks/task_005.md |
 ```
 
-**docs/tasks/T-001.md** (overlay file):
-```markdown
-# T-001: Setup auth module
-
-## Fonte
-**Task spec:** `docs/pre-dev/tasks/task_001.md`
-**Subtasks:** `docs/pre-dev/subtasks/T-001/`
-
-```
-
-**docs/tasks/T-002.md**:
-```markdown
-# T-002: User registration API
-
-## Fonte
-**Task spec:** `docs/pre-dev/tasks/task_002.md`
-```
+The `TaskSpec` column contains the path to the Ring pre-dev task spec, **relative to
+`tasksDir`**. Stage agents resolve the full path as `<tasksDir>/<TaskSpec>`. The subtasks
+directory is derived automatically: if TaskSpec is `tasks/task_001.md`, the subtasks
+directory is `subtasks/T-001/` (relative to `tasksDir`).
 
 ### Column Specification
 
@@ -243,6 +214,7 @@ suggests running `/optimus-import`.
 | Version | Yes | Must match a version name from the Versions table |
 | Branch | No | Git branch name. `-` if not yet created |
 | Estimate | No | Task size estimate. Free text (e.g., `S`, `M`, `L`, `XL`, `2h`, `1d`). `-` if not estimated |
+| TaskSpec | Yes | Path to Ring pre-dev task spec, relative to `tasksDir`. `-` if not yet linked |
 
 ### Valid Tipo Values
 
@@ -339,31 +311,18 @@ in the commit message for audit trail.
    of rows in the table. Agents must compute the dependency graph to find which
    tasks are ready.
 
-### Task Overlay Files
+### Task Spec Resolution
 
-Each task has an overlay file at `docs/tasks/T-NNN.md` containing:
-- **H1 heading:** `# T-NNN: Title` (must match the table row)
-- **Fonte:** Links to Ring pre-dev source (task spec, subtasks, execution plan).
-  Stage agents (build, plan, check) MUST follow these links and read the referenced
-  files for objective, acceptance criteria, and implementation details.
+Every task MUST have a Ring pre-dev reference in the `TaskSpec` column. Stage agents
+(plan, build, check) resolve the full path as `<tasksDir>/<TaskSpec>` and read the
+referenced file for objective, acceptance criteria, and implementation details.
 
-Every task MUST have a Ring pre-dev reference. Agents read objective and acceptance
-criteria from the Ring source (via Fonte links). The overlay only tracks operational
-state — it does NOT duplicate content from Ring.
+The subtasks directory is derived automatically from the TaskSpec path:
+- TaskSpec: `tasks/task_001.md` → Subtasks: `<tasksDir>/subtasks/T-001/`
+- The `T-NNN` identifier is extracted from the task spec filename convention
 
-This split prevents merge conflicts when multiple worktrees work on different tasks —
-each worktree only modifies its own `docs/tasks/T-NNN.md` file.
-
-Example overlay:
-```markdown
-# T-038: User Registration API
-
-## Fonte
-**Task spec:** `docs/pre-dev/tasks/task_020.md`
-**Subtasks:** `docs/pre-dev/subtasks/T-020/`
-**Plano:** `docs/pre-dev/subtasks/T-020/PARALLEL-PLAN.md`
-
-```
+Agents read objective and acceptance criteria directly from the Ring source files.
+The tasks.md table only tracks operational state — it does NOT duplicate content from Ring.
 
 ### Version Management
 
@@ -415,7 +374,7 @@ Every stage agent (1-5) MUST validate the `docs/tasks.md` format before operatin
 3. All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
 4. Exactly one version has Status `Ativa`
 5. At most one version has Status `Próxima`
-6. A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch, Estimate (Estimate is optional — tables without it are still valid)
+6. A markdown table exists with columns: ID, Title, Tipo, Status, Depends, Priority, Version, Branch, Estimate, TaskSpec (Estimate and TaskSpec are optional — tables without them are still valid)
 7. All task IDs follow the `T-NNN` pattern
 8. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
 9. All Status values are one of: `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, `Revisando PR`, `DONE`, `Cancelado`
@@ -429,7 +388,6 @@ If the format marker is missing or validation fails, the agent must **STOP** and
 running `/optimus-import` to fix the format. Do NOT attempt to interpret malformed data.
 
 15. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
-16. Every task ID in the table has a corresponding overlay file at `docs/tasks/T-NNN.md`
 
 **NOTE:** For circular dependency detection (item 14), trace the full dependency chain for
 each task. If any task appears twice in the chain, a cycle exists. Report ALL tasks involved
@@ -607,15 +565,16 @@ Every stage agent MUST validate tasks.md before operating. The full validation r
 defined in the "Format Validation" section above (items 1-15). This protocol is the
 executable version:
 
-1. **Resolve tasks.md path:**
-   - Read `.optimus.json` at project root. If `tasksFile` key exists, use that path.
-   - If `.optimus.json` does not exist or `tasksFile` is not set, use `docs/tasks.md` (default).
-   - Store the resolved path as `TASKS_FILE` and derive `TASKS_DIR = dirname(TASKS_FILE) + "/tasks/"`.
+1. **Resolve paths from `.optimus.json`:**
+   - Read `.optimus.json` at project root.
+   - If `tasksFile` key exists, use that path. Otherwise, use `docs/tasks.md` (default).
+   - If `tasksDir` key exists, use that path. Otherwise, use `docs/pre-dev` (default).
+   - Store as `TASKS_FILE` and `TASKS_DIR`.
 2. **Find tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus-import`.
-3. **Validate format:** Execute all 16 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-import`.
+3. **Validate format:** Execute all 15 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-import`.
 
-**All subsequent references to `tasks.md` and `docs/tasks/T-NNN.md` in the skill use the
-resolved `TASKS_FILE` and `TASKS_DIR` paths** — never hardcoded paths.
+**All subsequent references to `tasks.md` in the skill use the resolved `TASKS_FILE` path.
+All references to Ring pre-dev artifacts use `TASKS_DIR` as the root** — never hardcoded paths.
 
 Skills reference this as: "Find and validate tasks.md (HARD BLOCK) — see AGENTS.md Protocol: tasks.md Validation."
 
@@ -649,23 +608,6 @@ fi
 This MUST run before writing session files or report exports.
 
 Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
-
-### Protocol: Initialize Tasks Directory
-
-**Referenced by:** all skills that create tasks.md or task overlay files
-
-Before creating task files, resolve the tasks directory path and ensure it exists:
-
-```bash
-# Resolve TASKS_DIR from .optimus.json (or default)
-TASKS_FILE=$(cat .optimus.json 2>/dev/null | jq -r '.tasksFile // empty')
-TASKS_FILE="${TASKS_FILE:-docs/tasks.md}"
-TASKS_DIR="$(dirname "$TASKS_FILE")/tasks"
-
-mkdir -p "$TASKS_DIR"
-```
-
-Skills reference this as: "Initialize tasks directory — see AGENTS.md Protocol: Initialize Tasks Directory."
 
 ### Protocol: Session State
 
@@ -1048,6 +990,8 @@ Location: `.optimus.json` (project root, versioned)
 
 ```json
 {
+  "tasksFile": "docs/tasks.md",
+  "tasksDir": "docs/pre-dev",
   "commands": {
     "lint": "npm run lint",
     "test": "npm test",

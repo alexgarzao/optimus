@@ -12,7 +12,7 @@ Skills are classified as **Administrative** (run anywhere) or **Execution** (req
 
 | Skill | Description | Command |
 |-------|-------------|---------|
-| `import` | Import Ring pre-dev artifacts into optimus format. Creates tracking overlays (tasks.md + T-NNN.md). Re-runnable — only imports what's new | `/optimus-import` |
+| `import` | Import Ring pre-dev artifacts into optimus format. Creates tasks.md with TaskSpec column. Re-runnable — only imports what's new | `/optimus-import` |
 | `report` | Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only | `/optimus-report` |
 | `tasks` | Create, edit, remove, reorder, cancel, and reopen tasks. Manage versions and move tasks between versions. Runs on any branch | `/optimus-tasks` |
 | `batch` | Pipeline orchestrator: chains stages 1-5 for one or more tasks with user checkpoints between stages | `/optimus-batch` |

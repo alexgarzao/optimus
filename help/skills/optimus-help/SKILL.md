@@ -35,7 +35,7 @@ terminal display when available, otherwise use markdown tables.
 
 | Skill | Command | When to Use |
 |-------|---------|-------------|
-| **import** | `/optimus-import` | Import Ring pre-dev artifacts into optimus format. Creates tracking overlays (tasks.md + T-NNN.md). Re-runnable. |
+| **import** | `/optimus-import` | Import Ring pre-dev artifacts into optimus format. Creates tasks.md with TaskSpec column. Re-runnable. |
 | **report** | `/optimus-report` | Checking project status — shows progress, active/blocked/ready tasks, dependency graph, parallelization opportunities, and velocity metrics. Read-only. |
 | **tasks** | `/optimus-tasks` | Creating, editing, removing, reordering, cancelling, or reopening tasks. Managing versions. Any administrative task management. |
 | **resolve** | `/optimus-resolve` | Resolving merge conflicts in `tasks.md` caused by parallel task execution across feature branches. |

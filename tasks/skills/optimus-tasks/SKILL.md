@@ -27,7 +27,7 @@ examples:
       1. Parse tasks.md
       2. Generate next ID (T-NNN)
       3. Ask for details (priority, dependencies)
-      4. Add row to table and create overlay file
+      4. Add row to table with TaskSpec column
       5. Validate and save
   - name: Edit task priority
     invocation: "Change T-003 priority to Alta"
@@ -41,7 +41,7 @@ examples:
     expected_flow: >
       1. Parse tasks.md
       2. Check no other tasks depend on T-004
-      3. Remove row and overlay file
+      3. Remove row from table
       4. Save
 related:
   complementary:
@@ -91,8 +91,7 @@ For operations that do not use `gh` (create, edit, remove, reorder, version mana
 
    If the user chooses to create:
    1. Determine the path (`TASKS_FILE`) — default or custom
-   2. Initialize the tasks directory (see AGENTS.md Protocol: Initialize Tasks Directory)
-   3. Ask for an initial version name via `AskUser` (e.g., "MVP", "v1")
+   2. Ask for an initial version name via `AskUser` (e.g., "MVP", "v1")
    4. Write `TASKS_FILE` with:
       ```markdown
       <!-- optimus:tasks-v1 -->
@@ -166,8 +165,8 @@ Options:
 
 #### Built-in Templates
 
-Templates pre-fill Tipo and Priority. When a Ring pre-dev reference is linked
-(Step 2.3.1), the overlay will include Fonte links to the Ring source.
+Templates pre-fill Tipo and Priority. The task creation flow delegates to Ring
+pre-dev to generate the spec (Step 2.3.1).
 
 **API Endpoint template:** Tipo: `Feature`, Priority: `Alta`
 **Bug Fix template:** Tipo: `Fix`, Priority: `Alta`
@@ -200,7 +199,7 @@ Before creating, search existing tasks for potential duplicates:
    keywords with an existing title (ignore articles, prepositions, and generic words like
    "implement", "add", "create", "update", "fix")
 2. **Compare by Ring source:** If a Ring pre-dev task was linked, check if any existing task's
-   `## Fonte` already references the same Ring task spec file
+   `TaskSpec` column already references the same Ring task spec file
 
 If similar tasks are found, present them to the user via `AskUser`:
 
@@ -264,54 +263,33 @@ If the user specified dependencies:
 2. Check for circular dependencies: if T-NEW depends on T-X, and T-X (directly or transitively) would depend on T-NEW → reject
 3. If any dependency ID is invalid → ask the user to correct it
 
-### Step 2.3.1: Link Ring Pre-Dev Artifacts
+### Step 2.3.1: Generate Ring Pre-Dev Spec
 
-Search for Ring pre-dev artifacts to link to this task:
+Delegate to Ring to generate the task spec:
 
-1. Scan `docs/pre-dev/tasks/*.md` for task files
-2. Extract 3-5 significant keywords from the new task's title
-3. Calculate keyword overlap and sort by relevance
+1. Invoke `ring:pre-dev-feature` via `Skill` tool, passing the task title and type
+2. Ring generates the spec file in `<TASKS_DIR>/tasks/`
+3. After Ring completes, capture the generated spec file path (relative to `TASKS_DIR`)
+4. Store as the `TaskSpec` value for this task
 
-**If matches found** (1+ keyword in common), present via `AskUser`:
+**If Ring pre-dev is not available** (skill not installed), ask via `AskUser`:
 ```
-Found ring pre-dev tasks that may be related to "<new task title>":
-
-  [1] task_020.md — "Painel UI Redesign (Sidebar + Topbar)" (3 keywords)
-      Subtasks: 13 files in docs/pre-dev/subtasks/T-020/
-  [2] task_022.md — "Formularios Responsivos com Abas" (1 keyword)
-
-Link to one of these?
+Ring pre-dev skill is not available. How should I proceed?
 ```
 Options:
-- **[N] task_NNN.md** — link this ring task
-- **Show all ring tasks** — list every task for manual selection
+- **Link existing spec** — search `<TASKS_DIR>/tasks/` for matching specs
+- **Create with empty TaskSpec** — set TaskSpec to `-`, link later
 
-**If no matches found**, show all ring tasks for manual selection.
+**If "Link existing spec"**, search `<TASKS_DIR>/tasks/*.md` for task files, present
+matches based on keyword overlap with the task title, and let the user select one.
 
-**If `docs/pre-dev/tasks/` does not exist or is empty** → **STOP**:
-```
-No Ring pre-dev artifacts found. Run Ring pre-dev workflow first
-(ring:pre-dev-full or ring:pre-dev-feature) to generate task specs.
-Tasks cannot be created without a Ring reference.
-```
+### Step 2.4: Add to tasks.md
 
-### Step 2.4: Add to tasks.md and create overlay file
-
-1. Add a new row to the table in `docs/tasks.md`:
+1. Add a new row to the table:
    ```
-   | T-NNN | <title> | <tipo> | Pendente | <depends> | <priority> | <version> | - | <estimate or -> |
+   | T-NNN | <title> | <tipo> | Pendente | <depends> | <priority> | <version> | - | <estimate or -> | <taskspec or -> |
    ```
-2. Create the overlay file `docs/tasks/T-NNN.md`:
-   ```markdown
-   # T-NNN: <title>
-
-   ## Fonte
-   **Task spec:** `docs/pre-dev/tasks/task_NNN.md`
-   **Subtasks:** `docs/pre-dev/subtasks/T-NNN/`
-   ```
-   Omit the Subtasks line if no subtasks directory exists.
-   Omit the Plano line if no PARALLEL-PLAN.md exists.
-3. Save both files
+2. Save the file
 
 ### Step 2.5: Confirm
 
@@ -337,7 +315,7 @@ Determine which field(s) to edit. Editable fields:
 
 | Field | Allowed? | Notes |
 |-------|----------|-------|
-| Title | Yes | Updates both table row and `docs/tasks/T-NNN.md` heading |
+| Title | Yes | Updates table row |
 | Tipo | Yes | Must be `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, or `Test` |
 | Priority | Yes | Must be `Alta`, `Media`, or `Baixa` |
 | Version | Yes | Must reference a version in the Versions table |
@@ -359,9 +337,8 @@ task, use "reopen T-XXX".
 ### Step 3.1: Apply Changes
 
 1. Update the relevant column(s) in the table row in `docs/tasks.md`
-2. If Title changed, also update the heading in `docs/tasks/T-NNN.md`
-3. If Depends changed, validate all references exist and no circular dependencies
-4. Save the file(s)
+2. If Depends changed, validate all references exist and no circular dependencies
+3. Save the file
 
 ### Step 3.2: Confirm
 
@@ -404,11 +381,10 @@ may cause data loss. Are you sure?
 
 Use `AskUser` for confirmation.
 
-### Step 4.2: Remove from tasks.md and delete overlay file
+### Step 4.2: Remove from tasks.md
 
 1. Remove the table row for T-XXX from `docs/tasks.md`
-2. Delete the overlay file `docs/tasks/T-NNN.md`
-3. Save
+2. Save
 
 **NOTE:** Do NOT renumber remaining task IDs. IDs are permanent identifiers.
 
@@ -433,8 +409,7 @@ Options:
 
 1. Rearrange table rows according to the requested order
 2. Do NOT change any cell values (ID, Title, Tipo, Status, Depends, Priority, Branch stay the same)
-3. Overlay files in `docs/tasks/` are not affected by reordering
-4. Save the file
+3. Save the file
 
 ### Step 5.2: Confirm
 
@@ -771,7 +746,7 @@ If the user provides multiple tasks to create at once (e.g., a list of tasks), p
 
 1. Generate IDs for all tasks first (to allow cross-references in dependencies)
 2. Validate all dependencies
-3. Add all rows to `docs/tasks.md` and create all `docs/tasks/T-NNN.md` overlay files
+3. Add all rows to `docs/tasks.md`
 4. Show summary of all created tasks
 
 ## Phase 11: Version Management

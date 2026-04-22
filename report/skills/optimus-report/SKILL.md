@@ -128,7 +128,7 @@ Read the `## Versions` section and extract the versions table. Expected columns:
 
 Identify the version with Status `Ativa` — this is the **active version** used for default filtering.
 
-For each task, also check if an overlay file exists at `docs/tasks/T-NNN.md` to verify completeness.
+For each task, check if the `TaskSpec` column has a value (not `-`) to verify completeness.
 
 ### Step 1.3: Validate Dependencies
 
@@ -146,7 +146,7 @@ If the user's invocation matches quick status triggers ("quick status", "what am
 
 1. Parse tasks.md (Phase 1 still runs fully)
 2. Find tasks with status other than `Pendente`, `DONE`, and `Cancelado` (active tasks)
-3. For each active task, read its overlay file (`docs/tasks/T-NNN.md`) for context
+3. For each active task, read its Ring source via the `TaskSpec` column for context
 4. Present ONLY:
 
 ```
@@ -490,7 +490,7 @@ Average time per stage (from N completed tasks):
 After the dashboard, present any issues found:
 
 ### Warnings
-- Tasks with missing overlay files (`docs/tasks/T-NNN.md`)
+- Tasks with missing TaskSpec (column value is `-`)
 - Circular dependencies
 - Invalid dependency references (pointing to non-existent task IDs)
 - Tasks blocked by a cancelled dependency (see "Blocked by Cancelled" section below)

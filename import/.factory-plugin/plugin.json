@@ -1,6 +1,6 @@
 {
   "name": "import",
-  "description": "Import Ring pre-dev artifacts into optimus format. Creates tracking overlays (tasks.md + T-NNN.md). Re-runnable — only imports what's new.",
+  "description": "Import Ring pre-dev artifacts into optimus format. Creates tasks.md with TaskSpec column. Re-runnable — only imports what's new.",
   "version": "1.0.0",
   "author": {
     "name": "Alex Garzao"
