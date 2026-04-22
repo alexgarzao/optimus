@@ -93,9 +93,9 @@ Executes a validated task specification end-to-end: identifies the task, loads c
 - Confirm with the user using `AskUser`: "I'll execute task T-012: [task title]. Correct?"
 
 **If the user did NOT specify a task ID** (e.g., "execute the next task", or just invoked the skill):
-1. **Identify the next task ready for implementation:** Scan the table for the first task that:
+1. **Identify the next task ready for implementation:** Read state.json and scan for the first task that:
    - Has status `Validando Spec` (plan completed) or `Em Andamento` (re-execution)
-   - Has all dependencies (Depends column) with status `DONE` (or Depends is `-`)
+   - Has all dependencies (Depends column from tasks.md) with status `DONE` in state.json (or Depends is `-`)
    - **Version priority:** prefer tasks from the `Ativa` version first. If none found, try `Próxima`. If none found, pick from any version and warn the user: "No eligible tasks in the active version (<name>). Suggesting T-XXX from version '<other>'."
 2. **If multiple candidates exist in the same version priority**, pick the one with highest Priority (`Alta` > `Media` > `Baixa`), then lowest ID
 3. **Suggest to the user** using `AskUser`: "I identified the next task to execute: T-XXX — [task title]. Is this correct, or would you like to execute a different task?"
@@ -114,16 +114,17 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
 1. Read `tasks.md` and find the row for the confirmed task ID
-2. Check the **Status** column:
+2. Read the task's status from state.json — see AGENTS.md Protocol: State Management.
    - If status is `Validando Spec`:
-     - Check the **Branch** column. If Branch is `-` → **STOP**: "Task T-XXX is in 'Validando Spec' but has no branch. Stage-1 (plan) may have crashed before creating the workspace. Re-run `/optimus-plan T-XXX` to create it."
-     - If Branch has a value → proceed (plan has completed)
+     - Check if a worktree exists for this task: `git worktree list | grep -iF "<task-id>"`
+     - If no worktree found → **STOP**: "Task T-XXX is in 'Validando Spec' but has no workspace. Stage-1 (plan) may have crashed before creating the workspace. Re-run `/optimus-plan T-XXX` to create it."
+     - If worktree exists → proceed (plan has completed)
    - If status is `Em Andamento` → proceed (re-execution of this stage)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run plan first."
    - If status is `Validando Impl`, `Revisando PR`, `DONE`, or `Cancelado` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage or was cancelled."
-3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
+3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task from tasks.md.
    - If Depends is `-` → proceed (no dependencies)
-   - For each dependency ID listed, check its Status in the table:
+   - For each dependency ID listed, read its status from state.json:
      - If ALL dependencies have status `DONE` → proceed
      - If ANY dependency is NOT `DONE`:
        - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
@@ -144,15 +145,8 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
      - **BLOCKING:** Do NOT change status until the user confirms
    - **If re-execution** (status is already `Em Andamento`) OR the user specified the task ID explicitly:
      - Skip expanded confirmation (user already has context)
-5. Update the Status column to `Em Andamento` (if not already)
-6. Commit the status change immediately:
-   ```bash
-   git add "$TASKS_FILE"
-   git commit -m "chore(tasks): set T-XXX status to Em Andamento"
-   ```
-7. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
-
-**Why commit immediately:** If the session is interrupted or the agent crashes before any code changes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of what happens during implementation.
+5. Update status to `Em Andamento` in state.json (if not already) — see AGENTS.md Protocol: State Management.
+6. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
 
 ### Step 1.3.1: Check tasks.md Divergence (warning)
 
@@ -339,7 +333,7 @@ Offer to push commits — see AGENTS.md Protocol: Push Commits.
 If the user requests a dry-run (e.g., "dry-run impl T-003", "preview implementation"):
 - Run ALL discovery and context-loading phases (Phase 1) normally
 - Present the implementation plan and all questions (Step 1.9)
-- **Do NOT change task status** — skip Step 1.3 (status update)
+- **Do NOT change task status** — skip Step 1.3 (status update in state.json)
 - **Do NOT execute implementation** — skip Phase 2 entirely
 - **Do NOT commit or push anything** — skip Phase 3 commits
 - Present a summary of: what would be implemented, estimated effort, identified risks

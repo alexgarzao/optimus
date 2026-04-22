@@ -101,8 +101,8 @@ For operations that do not use `gh` (create, edit, remove, reorder, version mana
       |---------|--------|-------------|
       | <user-provided> | Ativa | <ask user for description> |
 
-      | ID | Title | Tipo | Status | Depends | Priority | Version | Branch | Estimate | TaskSpec |
-      |----|-------|------|--------|---------|----------|---------|--------|----------|----------|
+      | ID | Title | Tipo | Depends | Priority | Version | Estimate | TaskSpec |
+      |----|-------|------|---------|----------|---------|----------|----------|
       ```
    5. Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
    6. Commit: `chore(tasks): initialize tasks.md`
@@ -488,9 +488,8 @@ Show the new table order.
 
 ### Step 6.2: Apply Cancellation
 
-1. Update the **Status** column to `Cancelado`
-2. Update the **Branch** column to `-` (if branch was deleted in Step 6.1)
-3. Save and commit: `chore(tasks): cancel T-XXX`
+1. Update the status to `Cancelado` in state.json — see AGENTS.md Protocol: State Management.
+2. Remove the `branch` field from the task's entry in state.json (if branch was deleted in Step 6.1).
 4. **Invoke notification hooks (if present):**
    ```bash
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
@@ -588,13 +587,12 @@ To resolve, run `/optimus-tasks`:
 
 ### Step 7.2: Apply Reopen
 
-1. Update the **Status** column to the target status determined in Step 7.1:
-   - From `DONE`: `Em Andamento` if workspace exists, `Pendente` if not
-   - From `Cancelado`: always `Pendente` (must restart from stage-1)
-2. If reopening from `Cancelado`, also clear the **Branch** column to `-` (any previous
+1. Update the status in state.json to the target status determined in Step 7.1:
+   - From `DONE`: `Em Andamento` if workspace exists, remove entry (= `Pendente`) if not
+   - From `Cancelado`: remove entry from state.json (= `Pendente`, must restart from stage-1)
+2. If reopening from `Cancelado`, also remove the `branch` field from state.json (any previous
    branch is stale and should not be reused)
 3. Clean stale session state: `rm -f ".optimus/sessions/session-${TASK_ID}.json"`
-4. Save and commit: `chore(tasks): reopen T-XXX — <reason> (from <previous status>, now <target status>)`
 4. **Invoke notification hooks (if present):**
    ```bash
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
@@ -677,9 +675,8 @@ code manually without using stage-2).
 
 ### Step 8.2: Apply Advance
 
-1. Update the **Status** column to the target status
-2. Save and commit: `chore(tasks): advance T-XXX to <target status> (manual override)`
-3. **Invoke notification hooks (if present):**
+1. Update the status in state.json to the target status — see AGENTS.md Protocol: State Management.
+2. **Invoke notification hooks (if present):**
    ```bash
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
@@ -735,8 +732,7 @@ that significant rework is needed and the task should go back to implementation)
 
 ### Step 9.2: Apply Demotion
 
-1. Update the **Status** column to the target status
-2. Save and commit: `chore(tasks): demote T-XXX to <target status> — <reason>`
+1. Update the status in state.json to the target status — see AGENTS.md Protocol: State Management.
 3. **Invoke notification hooks (if present):**
    ```bash
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
@@ -887,13 +883,13 @@ Confirm move?
 
 ## Rules
 
-1. **Status changes are restricted** — the Edit operation cannot change Status (use Reopen, Advance, or Demote operations instead, which include validation and audit trail). Branch is managed exclusively by stage agents and close cleanup.
+1. **Status changes are restricted** — the Edit operation cannot change status (use Reopen, Advance, or Demote operations instead, which write to state.json). Status and Branch live in state.json, not in tasks.md.
 2. **Always validate format** after any modification (re-check marker, columns, IDs, deps, versions)
 3. **IDs are permanent** — never renumber or reuse deleted IDs
 4. **Circular dependency detection is mandatory** — check before saving
 5. **Confirm destructive operations** (remove) with the user before executing
 6. **Preserve format marker** — first line must always be `<!-- optimus:tasks-v1 -->`
-7. **Commit changes** — after any modification, commit with message: `chore(tasks): <operation> T-XXX`
+7. **Commit changes** — after any structural modification to tasks.md, commit with message: `chore(tasks): <operation> T-XXX`. Status changes (state.json) are NOT committed — state.json is gitignored.
 8. **Version validation** — every task must reference a version that exists in the Versions table
 9. **Exactly one Ativa version** — when setting a version to `Ativa`, the current `Ativa` must be demoted (ask user)
 10. **At most one Próxima version** — when setting a version to `Próxima`, the current `Próxima` must be demoted to `Planejada` (ask user)

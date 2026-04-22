@@ -132,16 +132,16 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
 1. Read `tasks.md` and find the row for the confirmed task ID
-2. Check the **Status** column:
+2. Read the task's status from state.json — see AGENTS.md Protocol: State Management.
    - If status is `Em Andamento` → proceed (build has completed)
    - If status is `Validando Impl` → proceed (re-execution of this stage)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run plan and build first."
    - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run build first."
    - If status is `Revisando PR` or `DONE` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage."
    - If status is `Cancelado` → **STOP**: "Task T-XXX was cancelled. Cannot validate a cancelled task."
-3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
+3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task from tasks.md.
    - If Depends is `-` → proceed (no dependencies)
-   - For each dependency ID listed, check its Status in the table:
+   - For each dependency ID listed, read its status from state.json:
      - If ALL dependencies have status `DONE` → proceed
      - If ANY dependency is NOT `DONE`:
        - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
@@ -162,16 +162,8 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
      - **BLOCKING:** Do NOT change status until the user confirms
    - **If re-execution** (status is already `Validando Impl`) OR the user specified the task ID explicitly:
      - Skip expanded confirmation (user already has context)
-5. Update the Status column to `Validando Impl` (if not already)
-6. Commit the status change immediately:
-   ```bash
-   git add "$TASKS_FILE"
-   git commit -m "chore(tasks): set T-XXX status to Validando Impl"
-   ```
-   Where `TASKS_FILE` is the resolved path from the tasks.md Validation protocol.
-7. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
-
-**Why commit immediately:** If the session is interrupted or the agent crashes before any review fixes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of the review outcome.
+5. Update status to `Validando Impl` in state.json (if not already) — see AGENTS.md Protocol: State Management.
+6. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
 
 ### Step 1.0.9: Increment Stage Stats
 

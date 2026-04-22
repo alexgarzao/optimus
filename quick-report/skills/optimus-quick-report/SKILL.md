@@ -61,8 +61,9 @@ Check the first line for `<!-- optimus:tasks-v1 -->`. If missing, warn but attem
 ### Step 1.2: Parse Tables
 
 1. Parse the `## Versions` table (Version, Status, Description)
-2. Parse the tasks table (ID, Title, Tipo, Status, Depends, Priority, Version, Branch, Estimate, TaskSpec)
-3. Identify the `Ativa` version
+2. Parse the tasks table (ID, Title, Tipo, Depends, Priority, Version, Estimate, TaskSpec)
+3. Read status and branch for each task from `.optimus/state.json` — see AGENTS.md Protocol: State Management. Tasks with no entry are `Pendente`.
+4. Identify the `Ativa` version
 
 ---
 
@@ -173,6 +174,10 @@ Examples: `[█░░░░] 1/5`, `[██░░░] 2/5`, `[███░░] 3
 ### Section Format
 
 ```
+  ✓ DONE (N)
+    T-NNN <title>
+    T-NNN <title>
+
   ⚙ ACTIVE (N)
     T-NNN <status>       — <title>              [██░░░] 2/5
     T-NNN <status>       — <title>              [███░░] 3/5
@@ -187,10 +192,6 @@ Examples: `[█░░░░] 1/5`, `[██░░░] 2/5`, `[███░░] 3
         └── T-YYY [◇ <dep-status>]
     T-NNN <title>
         └── T-XXX [✓ DONE pending refresh]
-
-  ✓ DONE (N)
-    T-NNN <title>
-    T-NNN <title>
 ```
 
 ### Rules
@@ -198,7 +199,7 @@ Examples: `[█░░░░] 1/5`, `[██░░░] 2/5`, `[███░░] 3
 1. **Version progress** shows the `Ativa` version. Progress = Done / (Total - Cancelled).
    The progress bar counts only tasks from the active version.
 
-2. **All sections (ACTIVE, READY, BLOCKED, DONE)** show only tasks from the filtered
+2. **All sections (DONE, ACTIVE, READY, BLOCKED)** show only tasks from the filtered
    version(s) selected in Step 2.2.
 
 3. **Active tasks** are sorted by status advancement (Revisando PR first, then Validando Impl,

@@ -97,7 +97,7 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
 1. Read `tasks.md` and find the row for the confirmed task ID
-2. Check the **Status** column:
+2. Read the task's status from state.json — see AGENTS.md Protocol: State Management.
    - If status is `Validando Impl` → proceed (check has completed, pr-check was skipped)
    - If status is `Revisando PR` → proceed (pr-check has completed)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. It must go through plan, build, and check first."
@@ -105,9 +105,9 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
    - If status is `Em Andamento` → **STOP**: "Task T-XXX is in 'Em Andamento'. Run check first."
    - If status is `DONE` → **STOP**: "Task T-XXX is already done. Re-execution of done is not supported."
    - If status is `Cancelado` → **STOP**: "Task T-XXX was cancelled. Cannot close a cancelled task."
-3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
+3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task from tasks.md.
    - If Depends is `-` → proceed (no dependencies)
-   - For each dependency ID listed, check its Status in the table:
+   - For each dependency ID listed, read its status from state.json:
      - If ALL dependencies have status `DONE` → proceed
      - If ANY dependency is NOT `DONE`:
        - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
@@ -324,17 +324,10 @@ All prerequisites met. Marking task as DONE.
 ```
 
 Then:
-1. Update the Status column in `tasks.md` to `DONE` (from either `Validando Impl` or `Revisando PR`)
-2. Commit: `chore(tasks): mark T-XXX as done`
-3. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
-4. Invoke notification hooks (event=`task-done`) — see AGENTS.md Protocol: Notification Hooks.
-5. Push the commit
-6. Proceed to Phase 4 (cleanup).
-
-**Why `chore(tasks):` and not the Tipo prefix:** Marking a task as DONE is an administrative
-status change in `tasks.md`, not a code change. The Tipo prefix (`feat`, `fix`, etc.) applies
-to PR titles and code commits, not to task management operations. All status change commits
-across stages 1-5 use `chore(tasks):` for consistency.
+1. Update status to `DONE` in state.json — see AGENTS.md Protocol: State Management.
+2. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
+3. Invoke notification hooks (event=`task-done`) — see AGENTS.md Protocol: Notification Hooks.
+4. Proceed to Phase 4 (cleanup).
 
 ### If ANY check fails:
 
@@ -448,47 +441,24 @@ git branch -r --list "origin/$TASK_BRANCH"
 If the branch was auto-deleted, proceed directly to Step 4.3 to update the Branch column
 in tasks.md to `-`. Do not ask the user about branch deletion — it already happened.
 
-**CRITICAL — Safety check for "Close without merging":** If the user chooses to close
-the PR without merging, the DONE status change (committed on the feature branch) will
-NOT be present on the default branch. Before closing, the agent MUST:
-1. Switch to the default branch: `git checkout <default_branch> && git pull`
-2. Cherry-pick ONLY the tasks.md DONE status commit from the feature branch:
-   ```bash
-   git cherry-pick <done-commit-sha> --no-commit
-   git checkout -- . ":!$TASKS_FILE"   # keep only tasks.md changes
-   git add "$TASKS_FILE"
-   git commit -m "chore(tasks): mark T-XXX as done"
-   git push
-   ```
-3. **If the cherry-pick fails** (conflict because tasks.md diverged significantly):
-   - Do NOT abort silently. Inform the user:
-     ```
-     Cherry-pick of DONE status failed due to merge conflict in tasks.md.
-     tasks.md has diverged too much between this branch and <default_branch>.
-     ```
-   - Offer resolution via `AskUser`:
-     - **Resolve manually** — open tasks.md, show the conflict markers, let user fix
-     - **Apply status directly** — instead of cherry-pick, read the current tasks.md on
-       the default branch, find the row for T-XXX, update its Status to `DONE`, commit
-       and push. This bypasses the cherry-pick entirely.
-     - **Skip** — close the PR without preserving status. User will update tasks.md manually.
-   - **BLOCKING:** Do NOT proceed until the conflict is resolved or the user chooses to skip.
-4. Then close the PR: `gh pr close <number>`
-5. Switch back to continue with branch cleanup
-
-This ensures the DONE status is preserved on the default branch even when the PR is
-not merged. Without this, deleting the branch would lose the status change entirely.
+**"Close without merging":** Since status lives in state.json (local, gitignored), closing
+the PR without merging does NOT lose the DONE status. Simply close the PR:
+```bash
+gh pr close <number>
+```
 
 ### Step 4.3: Check for Task Branch
 
-Identify the task's branch from the **Branch column** in `tasks.md` (primary source). If the column is `-` or empty, fall back to convention:
+Identify the task's branch from state.json (primary) or by searching git branches:
 
 ```bash
-# Primary: read Branch column from tasks.md for this task ID
-TASK_BRANCH=$(grep -E '^\| T-XXX \|' "$TASKS_FILE" | awk -F'|' '{print $9}' | tr -d ' ')
+# Primary: read branch from state.json
+TASK_BRANCH=$(jq -r '.["T-XXX"].branch // ""' .optimus/state.json 2>/dev/null)
 
-# Fallback: search by convention (any Tipo prefix)
-git branch --list "feat/*T-XXX*" "feat/*t-xxx*" "fix/*T-XXX*" "fix/*t-xxx*" "refactor/*T-XXX*" "refactor/*t-xxx*" "chore/*T-XXX*" "chore/*t-xxx*" "docs/*T-XXX*" "docs/*t-xxx*" "test/*T-XXX*" "test/*t-xxx*"
+# Fallback: search by task ID pattern
+if [ -z "$TASK_BRANCH" ]; then
+  TASK_BRANCH=$(git branch --list "*t-xxx*" 2>/dev/null | head -1 | tr -d ' *')
+fi
 
 # Check if branch exists locally
 git branch --list "$TASK_BRANCH"
@@ -533,12 +503,8 @@ git push origin --delete <branch>
 
 **Why `git pull` after checkout:** If the PR was merged (especially squash merge), the remote `main` has a different version of `tasks.md` than the local `main`. Without pulling, the Branch column cleanup would operate on a stale version and could conflict or lose the DONE status change.
 
-**After branch deletion:** Update the Branch column in `tasks.md` to `-` (the branch no longer exists, keeping the old name would be misleading). Commit and push (this is an administrative commit directly on the default branch — acceptable because the feature branch no longer exists):
-```bash
-git add "$TASKS_FILE"
-git commit -m "chore(tasks): clear branch for T-XXX after cleanup"
-git push
-```
+**After branch deletion:** Remove the `branch` field from the task's entry in state.json
+(or remove the entry entirely if status is DONE).
 
 ### Step 4.4: Cleanup Summary
 
@@ -561,7 +527,7 @@ git push
 - Do NOT change task status unless ALL checks pass (SKIP counts as pass)
 - Do NOT skip checks because "they probably pass"
 - The agent NEVER decides to close a task without running the full checklist
-- After marking as done, always commit and push the status change
+- After marking as done, update state.json (no commit needed — it's gitignored)
 - **Next step suggestion:** After the cleanup summary, inform the user: "Task T-XXX is done.
   Run `/optimus-report` to see updated project status and what to work on next."
 
@@ -595,8 +561,7 @@ If the user requests a force close (e.g., "force close T-012", "force done T-012
 - **IMPORTANT — Worktree edge case:** If force-close is executed while inside the task's
   worktree, the agent must `cd` to the main repository before attempting any worktree or
   branch deletion during cleanup (same edge case handling as Steps 4.1 and 4.3).
-- **If confirmed:** mark as `DONE`, commit, push, then run cleanup (Phase 4) normally
-- **Commit message:** `chore(tasks): force-close T-XXX as done (checklist skipped)`
+- **If confirmed:** mark as `DONE` in state.json, then run cleanup (Phase 4) normally
 - **NOTE:** Force-close still validates task status (Step 1.1) and dependencies — it only
   skips the quality/git checks in Phase 2
 

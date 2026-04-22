@@ -165,13 +165,14 @@ For each Ring pre-dev task not yet imported:
 | **ID** | Generate next available `T-NNN` | Sequential |
 | **Title** | From Ring task spec heading | Required |
 | **Tipo** | Infer from title prefix (`feat:` → Feature, `fix:` → Fix, etc.) | `Feature` |
-| **Status** | From `EXISTING_DATA` if available, else `Pendente` | `Pendente` |
 | **Depends** | From `EXISTING_DATA` if available, else `-` | `-` |
 | **Priority** | From `EXISTING_DATA` if available, else `Media` | `Media` |
 | **Version** | From `EXISTING_DATA` if available, else user-chosen (Step 1.5) | Required |
-| **Branch** | From `EXISTING_DATA` if available, else `-` | `-` |
 | **Estimate** | From `EXISTING_DATA` if available, else `-` | `-` |
 | **TaskSpec** | Path to Ring task spec, relative to `TASKS_DIR` | Required |
+
+**NOTE:** Status and Branch are NOT stored in tasks.md. If `EXISTING_DATA` contains
+status/branch info, import it into `.optimus/state.json` (see AGENTS.md Protocol: State Management).
 
 **When `EXISTING_DATA` is available** (from Step 1.3), match Ring pre-dev tasks to
 existing tasks by TaskSpec path. For matched tasks,

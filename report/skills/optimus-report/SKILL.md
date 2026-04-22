@@ -82,28 +82,10 @@ CURRENT_BRANCH=$(git branch --show-current)
 
 If `CURRENT_BRANCH` equals `DEFAULT_BRANCH` (or is `main`/`master`):
 
-1. **Check for active feature branches:** Scan the Branch column of all tasks in the table.
-   For each task where Branch is NOT `-`, check if that branch exists locally:
-   ```bash
-   git branch --list "<branch>"
-   ```
-2. **If any active branches are found**, display a warning at the TOP of the dashboard
-   (before any tables or metrics):
-   ```
-   WARNING: You are on the default branch (main). Status changes made on feature
-   branches are not visible here until their PRs are merged. The following tasks
-   may have a more advanced status on their feature branches:
-   ```
-   Then list each task with an active branch, marking it with `*`:
-   ```
-   - T-003 (Pendente*) — branch feat/t-003-user-auth exists locally
-   - T-005 (Pendente*) — branch fix/t-005-login-bug exists locally
-   ```
-3. **In all dashboard tables**, append `*` to the Status of any task that has an active
-   feature branch. Example: `Pendente*` instead of `Pendente`.
-4. **Add a legend** to the dashboard: `* = task has an active feature branch; status may be more advanced there`
+Since status lives in `.optimus/state.json` (local), it is always up-to-date regardless
+of which branch is checked out. No branch-specific warning is needed.
 
-If NOT on the default branch, skip this step silently.
+Skip this step silently.
 
 ### Step 1.2: Parse the Tasks Table
 
@@ -114,13 +96,14 @@ Read `tasks.md` and extract the markdown table. Expected columns:
 | ID | Task identifier (e.g., T-001) |
 | Title | Short description |
 | Tipo | Task type: Feature, Fix, Refactor, Chore, Docs, or Test |
-| Status | Current status (Pendente, Validando Spec, Em Andamento, Validando Impl, Revisando PR, DONE, Cancelado) |
 | Depends | Comma-separated dependency IDs, or `-` for none |
 | Priority | Alta, Media, or Baixa |
 | Version | Version/milestone this task belongs to |
-| Branch | Git branch name, or `-` |
 | Estimate | Task size estimate (S, M, L, XL, etc.), or `-` |
 | TaskSpec | Path to Ring pre-dev task spec (optional — `-` if not linked) |
+
+**Status and Branch** are read from `.optimus/state.json` — see AGENTS.md Protocol: State Management.
+Tasks with no entry in state.json are `Pendente`.
 
 ### Step 1.2.1: Parse Versions Table
 
@@ -577,8 +560,8 @@ git worktree list
 
 For each worktree (excluding the main repository entry):
 1. Extract the branch name from the worktree entry
-2. Find the corresponding task in tasks.md (match by Branch column)
-3. Check the task's Status
+2. Match to a task by searching for the task ID pattern in the branch name (e.g., `t-003` in `feat/t-003-user-auth`)
+3. Read the task's status from state.json
 
 Flag worktrees as potentially orphaned if:
 - The task is `DONE` — worktree should have been cleaned up by done

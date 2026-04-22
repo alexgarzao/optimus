@@ -91,9 +91,9 @@ spec validation only to discover `gh` is not set up when they try to run Stage-2
 - Confirm with the user using `AskUser`: "I'll validate task T-006: [task title]. Correct?"
 
 **If the user did NOT specify a task ID** (e.g., "validate the next task", or just invoked the skill):
-1. **Identify the next eligible task:** Scan the table for the first task that:
-   - Has status `Pendente` or `Validando Spec` (re-execution)
-   - Has all dependencies (Depends column) with status `DONE` (or Depends is `-`)
+1. **Identify the next eligible task:** Read state.json and scan for the first task that:
+   - Has status `Pendente` (no entry in state.json) or `Validando Spec` (re-execution)
+   - Has all dependencies (Depends column from tasks.md) with status `DONE` in state.json (or Depends is `-`)
    - **Version priority:** prefer tasks from the `Ativa` version first. If none found, try `Próxima`. If none found, pick from any version and warn the user: "No eligible tasks in the active version (<name>). Suggesting T-XXX from version '<other>'."
 2. **If multiple candidates exist in the same version priority**, pick the one with highest Priority (`Alta` > `Media` > `Baixa`), then lowest ID
 3. **Suggest to the user** using `AskUser`: "I identified the next task to validate: T-XXX — [task title]. Is this correct, or would you like to validate a different task?"
@@ -112,17 +112,17 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
 1. Read `tasks.md` and find the row for the confirmed task ID
-2. Check the **Status** column:
-   - If status is `Pendente` → proceed
+2. Read the task's status from state.json — see AGENTS.md Protocol: State Management.
+   - If status is `Pendente` (or no entry) → proceed
    - If status is `Validando Spec` → proceed (re-execution of this stage)
    - If status is anything else → **STOP** and tell the user:
      ```
      Task T-XXX is in '<current_status>'. To run plan,
      it must be in 'Pendente' or 'Validando Spec'. This task has already moved past this stage.
      ```
-3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
+3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task from tasks.md.
    - If Depends is `-` → proceed (no dependencies)
-   - For each dependency ID listed, check its Status in the table:
+   - For each dependency ID listed, read its status from state.json:
      - If ALL dependencies have status `DONE` → proceed
      - If ANY dependency is NOT `DONE`:
        - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
@@ -151,23 +151,21 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 **ALWAYS run this step** — regardless of task status. This detects orphaned workspaces
 from a previous run that was interrupted (crash, user closed terminal, etc.).
 
-1. Read the **Branch** column for this task in tasks.md
-2. Check if any branch or worktree already exists for this task:
+1. Check if any branch or worktree already exists for this task:
    ```bash
-   # Check Branch column value
-   BRANCH_IN_TABLE="<branch-column-value>"
    # Check for any branch matching the task ID
    git branch --list "*<task-id>*" 2>/dev/null
    # Check for any worktree matching the task ID
    git worktree list | grep -iF "<task-id>"
    ```
-3. **If a branch or worktree exists** (regardless of whether Branch column is `-` or populated):
+2. Also read the `branch` field from state.json if available.
+3. **If a branch or worktree exists:**
    - Ask via `AskUser`:
      ```
      Task T-XXX has an existing workspace from a previous run:
-       Branch: <branch> (tasks.md says: <branch-column-value>)
+       Branch: <branch>
        Worktree: <path> (if applicable)
-       Status in tasks.md: <current-status>
+       Status in state.json: <current-status>
 
      What should I do?
      ```
@@ -188,97 +186,42 @@ from a previous run that was interrupted (crash, user closed terminal, etc.).
    If the user chooses **Clean and reset to Pendente**:
    1. Remove worktree if exists: `git worktree remove <path>`
    2. Delete branch: `git branch -D <branch>` and `git push origin --delete <branch>` (if pushed)
-   3. Update tasks.md on default branch: set Status to `Pendente`, Branch to `-`
-   4. Commit and push: `chore(tasks): reset T-XXX — clean abandoned workspace`
-   5. **STOP** — task is back to Pendente, user can re-run stage-1 when ready
+   3. Remove the task entry from state.json (resets to Pendente)
+   4. **STOP** — task is back to Pendente, user can re-run stage-1 when ready
 
 4. **If no branch or worktree exists** → proceed to Step 1.0.5
 
-### Step 1.0.5: Reserve Task on Default Branch (Status + Branch)
+### Step 1.0.5: Reserve Task and Create Workspace
 
 Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelines.
-
-**IMPORTANT:** This step updates tasks.md on the **default branch** BEFORE creating the
-worktree. This prevents race conditions where another agent or session picks the same
-task while the worktree is being created.
 
 **If already on a feature branch** (not default/main/master): skip to Step 1.0.6
 (the task was already reserved in a previous run or by the user manually).
 
 **If on the default branch:**
 
-1. **Generate branch name** from the task's **Tipo** and ID:
-   - Pattern: `<tipo-prefix>/<task-id>-<keywords>` where keywords are 2-4 lowercase words from the title
-   - The `<tipo-prefix>` is derived from the task's Tipo column using the same mapping as Conventional Commits:
-     - Feature → `feat`, Fix → `fix`, Refactor → `refactor`, Chore → `chore`, Docs → `docs`, Test → `test`
-   - Examples: `feat/t-003-user-auth-jwt`, `fix/t-007-duplicate-login`, `refactor/t-012-extract-middleware`
-   - Strip articles, prepositions, and generic words (implement, add, create, update)
+1. **Derive branch name** — see AGENTS.md Protocol: Branch Name Derivation.
 
-2. **Update tasks.md on the default branch:**
-   - Set **Status** to `Validando Spec`
-   - Set **Branch** to the generated branch name
-   - Commit immediately:
-     ```bash
-     git add "$TASKS_FILE"
-     git commit -m "chore(tasks): start T-XXX — set status to Validando Spec"
-     ```
+2. **Update state.json:**
+   Write status `Validando Spec` and the derived branch name to state.json — see
+   AGENTS.md Protocol: State Management.
 
-3. **Push to remote (best-effort):**
+3. **Invoke notification hooks** (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
+
+4. **Create worktree:**
    ```bash
-   git push 2>/dev/null
+   REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
+   git worktree add "../${REPO_NAME}-<task-id>-<keywords>" -b "<tipo-prefix>/<task-id>-<keywords>"
    ```
-   - If push succeeds → the reservation is visible to all agents/sessions
-   - If push fails (protected branch, no permissions, conflict, etc.):
-     1. **Check for race condition:** Re-fetch the remote and verify the task wasn't reserved by another agent:
-        ```bash
-        git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
-        REMOTE_STATUS=$(git show "origin/$DEFAULT_BRANCH:$TASKS_FILE" 2>/dev/null | grep -E '^\| T-XXX \|' | awk -F'|' '{print $5}' | tr -d ' ')
-        ```
-        If `REMOTE_STATUS` is NOT `Pendente` → **STOP**: "Task T-XXX was reserved by another agent (status: $REMOTE_STATUS on remote). Pick a different task."
-     2. If the task is still `Pendente` on remote → warn the user:
-        ```
-        Could not push status change to remote (branch may be protected).
-        The status is committed locally and will be visible in the worktree.
-        Other agents on different machines may not see this reservation until the PR is merged.
-        ```
-   - **Do NOT block on push failure** (unless race condition detected) — the local commit already prevents re-picks on this machine
+   Then change working directory to the new worktree path for all subsequent steps.
 
-4. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
-
-**Why commit on default first:** If the status update happens only on the feature branch,
-the task remains `Pendente` on the default branch until the PR is merged. During that window
-another agent could pick the same task. Committing on default eliminates this race condition.
-The feature branch inherits this commit as part of its history (the worktree is created from
-the default branch HEAD, which now includes the status change).
-
-### Step 1.0.6: Create Workspace (if on default branch)
-
-**If already on a feature branch** (not default/main/master): proceed to Step 1.0.7.
-
-**If on the default branch:** Create a worktree for the task using the branch name
-generated in Step 1.0.5.
-
-**Create worktree:**
-```bash
-REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
-git worktree add "${REPO_NAME}-<task-id>-<keywords>" -b "<tipo-prefix>/<task-id>-<keywords>"
-```
-Then change working directory to the new worktree path for all subsequent steps.
-
-**Rollback on failure:** If worktree creation fails:
-1. Revert the status change on the default branch:
-   ```bash
-   if ! git revert HEAD --no-edit; then
-     echo "ERROR: Failed to revert status reservation. Manual cleanup needed."
-     echo "Run: git log --oneline -3   # to see recent commits"
-     echo "Run: git reset HEAD~1       # to undo the status commit"
-     # STOP — do not proceed
-   fi
-   git push 2>/dev/null
-   ```
-2. **STOP** and report the error to the user
+5. **Rollback on failure:** If worktree creation fails:
+   - Remove the entry from state.json
+   - **STOP** and report the error to the user
 
 **BLOCKING**: Do NOT proceed until the worktree is created.
+
+### Step 1.0.6: Skip (reserved for compatibility)
 
 ### Step 1.0.7: Check tasks.md Divergence (warning)
 

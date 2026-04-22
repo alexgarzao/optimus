@@ -111,7 +111,7 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
 
 1. **Find and validate tasks.md** — see AGENTS.md Protocol: tasks.md Validation.
 2. **Resolve workspace (HARD BLOCK):** See AGENTS.md Protocol: Workspace Auto-Navigation. Branch-task cross-validation is included in this protocol.
-3. **Validate status:**
+3. **Validate status** (read from state.json — see AGENTS.md Protocol: State Management):
    - If status is `Validando Impl` → proceed (check completed)
    - If status is `Revisando PR` → proceed (re-execution of this stage)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run plan, build, and check first."
@@ -119,9 +119,9 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
    - If status is `Em Andamento` → **STOP**: "Task T-XXX is in 'Em Andamento'. Run check first."
    - If status is `DONE` → **STOP**: "Task T-XXX is already done."
    - If status is `Cancelado` → **STOP**: "Task T-XXX was cancelled. Cannot review a cancelled task."
-4. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
+4. **Check dependencies (HARD BLOCK):** Read the Depends column for this task from tasks.md.
    - If Depends is `-` → proceed (no dependencies)
-   - For each dependency ID listed, check its Status in the table:
+   - For each dependency ID listed, read its status from state.json:
      - If ALL dependencies have status `DONE` → proceed
      - If ANY dependency is NOT `DONE`:
        - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
@@ -145,16 +145,9 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
      - **BLOCKING:** Do NOT change status until the user confirms
    - **If re-execution** (status is already `Revisando PR`) OR the user specified the task ID explicitly:
      - Skip expanded confirmation (user already has context)
-6. **Update status:** Change the task status in `tasks.md` to `Revisando PR` (if not already).
-7. Commit the status change immediately:
-   ```bash
-   git add "$TASKS_FILE"
-   git commit -m "chore(tasks): set T-XXX status to Revisando PR"
-   ```
-8. **Invoke notification hooks** (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
-9. **Check tasks.md divergence (warning):** Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
-
-   **Why commit immediately:** If the session is interrupted or the agent crashes before any review fixes are committed, the status update would be lost. Committing now ensures the status change is persisted regardless of the review outcome.
+6. **Update status** to `Revisando PR` in state.json (if not already) — see AGENTS.md Protocol: State Management.
+7. **Invoke notification hooks** (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
+8. **Check tasks.md divergence (warning):** Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 **NOTE:** At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes done next.
 
 ### Standalone Mode (no task)
