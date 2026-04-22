@@ -321,3 +321,75 @@ After the convergence loop exits and all findings are processed:
 - Reference exact locations (file, section, line when possible)
 - Tradeoffs must be honest — do not minimize the cost of a correction
 - If a doc references existing code, verify that the code matches the doc
+
+
+<!-- INLINE-PROTOCOLS:START -->
+## Shared Protocols (from AGENTS.md)
+
+The following protocols are referenced by this skill. They are
+extracted from the Optimus AGENTS.md to make this plugin self-contained.
+
+### Convergence Loop (Full Roster Model)
+Applies to: plan, check, pr-check, coderabbit-review, deep-review, deep-doc-review
+
+The convergence loop eliminates false convergence by dispatching the **same agent roster**
+as round 1 in every subsequent round:
+- **Round 1:** Orchestrator dispatches all specialist agents in parallel (with full session context)
+- **Rounds 2-5:** The **same agent roster** as round 1 is dispatched in parallel via `Task`
+  tool, each with zero prior context. Each agent reads all files fresh from disk.
+- **Round 2 is MANDATORY** — the "zero new findings" stop condition only applies from round 3 onward
+- **Sub-agents do NOT receive the findings ledger.** Dedup is performed entirely by the
+  orchestrator after agents return, using **strict matching**: same file + same line range
+  (±5 lines) + same category. "Description similarity" is NOT sufficient for dedup — the
+  file, location, and category must all match.
+- Stop only when: zero new findings (round 3+), round 5 reached, or user explicitly stops
+- LOW severity findings are NOT a reason to stop — ALL findings are presented to the user
+
+**Why full roster, not a single agent:** A single generalist agent structurally cannot
+replicate the coverage of 8-10 domain specialists. The security-reviewer catches injection
+risks a code-reviewer won't. The nil-safety-reviewer catches empty guards a QA analyst won't.
+Dispatching a single agent in rounds 2+ creates false convergence — the agent declares
+"zero new findings" because it lacks the domain depth, not because the code is clean.
+
+
+### Protocol: Ring Droid Requirement Check
+
+**Referenced by:** check, pr-check, deep-review, deep-doc-review, coderabbit-review, plan (build delegates droid dispatch to dev-cycle)
+
+Before dispatching ring droids, verify the required droids are available. If any required
+droid is not installed, **STOP** and list missing droids.
+
+**Core review droids** (required by check, pr-check, deep-review, coderabbit-review):
+- `ring-default-code-reviewer`
+- `ring-default-business-logic-reviewer`
+- `ring-default-security-reviewer`
+- `ring-default-ring-test-reviewer`
+
+**Extended review droids** (required by check, pr-check, deep-review, coderabbit-review):
+- `ring-default-ring-nil-safety-reviewer`
+- `ring-default-ring-consequences-reviewer`
+- `ring-default-ring-dead-code-reviewer`
+
+**QA droids** (required by check, deep-review):
+- `ring-dev-team-qa-analyst`
+
+**Documentation droids** (required by deep-doc-review):
+- `ring-tw-team-docs-reviewer`
+- `ring-default-business-logic-reviewer`
+- `ring-default-code-reviewer`
+
+**Implementation droids** (required by build):
+- `ring-dev-team-backend-engineer-golang` (Go)
+- `ring-dev-team-backend-engineer-typescript` (TypeScript)
+- `ring-dev-team-frontend-engineer` (React/Next.js)
+
+**Spec validation droids** (required by plan):
+- `ring-default-business-logic-reviewer`
+- `ring-default-security-reviewer`
+- `ring-dev-team-qa-analyst`
+- `ring-default-code-reviewer`
+
+Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check."
+
+
+<!-- INLINE-PROTOCOLS:END -->

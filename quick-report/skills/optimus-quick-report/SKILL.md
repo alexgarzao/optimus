@@ -235,3 +235,224 @@ Examples: `[█░░░░] 1/5`, `[██░░░] 2/5`, `[███░░] 3
 - **NEVER invoke other skills** — only report
 - Present the dashboard even if there's only 1 task
 - If tasks.md has no table or invalid format, suggest `/optimus-import`
+
+
+<!-- INLINE-PROTOCOLS:START -->
+## Shared Protocols (from AGENTS.md)
+
+The following protocols are referenced by this skill. They are
+extracted from the Optimus AGENTS.md to make this plugin self-contained.
+
+### File Location
+
+All Optimus files live in the `.optimus/` directory at the project root:
+
+```
+.optimus/
+├── config.json          # versionado — tasksDir, commands
+├── tasks.md             # versionado — structural task data (NO status, NO branch)
+├── state.json           # gitignored — operational state (status, branch per task)
+├── stats.json           # gitignored — stage execution counters per task
+├── sessions/            # gitignored — session state for crash recovery
+└── reports/             # gitignored — exported reports
+```
+
+**Configuration** is stored in `.optimus/config.json`:
+
+```json
+{
+  "tasksDir": "docs/pre-dev"
+}
+```
+
+- **`tasksDir`**: Path to the Ring pre-dev artifacts root. Default: `docs/pre-dev`.
+  The import and stage agents look for task specs at `<tasksDir>/tasks/` and subtasks
+  at `<tasksDir>/subtasks/`.
+
+**Tasks file** is always `.optimus/tasks.md` — not configurable.
+
+**Operational state** is stored in `.optimus/state.json` (gitignored):
+
+```json
+{
+  "T-001": { "status": "DONE", "branch": "feat/t-001-setup-auth", "updated_at": "2025-01-15T10:30:00Z" },
+  "T-003": { "status": "Em Andamento", "branch": "feat/t-003-user-registration", "updated_at": "2025-01-16T14:00:00Z" }
+}
+```
+
+- Each key is a task ID. A task with no entry is `Pendente` (implicit default).
+- `status`: current pipeline stage (see Valid Status Values).
+- `branch`: the derived branch name, stored for quick reference (always re-derivable).
+- Stage agents read and write this file — never tasks.md — for status changes.
+- If state.json is lost, status can be reconstructed: task with a worktree = in progress,
+  without = Pendente. The agent asks the user to confirm before proceeding.
+
+**Stage execution stats** are stored in `.optimus/stats.json` (gitignored):
+
+```json
+{
+  "T-001": { "plan_runs": 2, "check_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_check": "2025-01-16T14:00:00Z" },
+  "T-002": { "plan_runs": 1, "check_runs": 0 }
+}
+```
+
+- Each key is a task ID. Values track how many times `plan` and `check` executed on the task.
+- A high `plan_runs` signals unclear or problematic specs. A high `check_runs` signals
+  complex review cycles or specification gaps.
+- The file is created on first use by `plan` or `check`. If missing, agents treat all
+  counters as 0.
+- `report` reads this file to display churn metrics.
+
+Agents resolve paths:
+1. **Read `.optimus/config.json`** for `tasksDir`. Fallback: `docs/pre-dev`.
+2. **Tasks file:** `.optimus/tasks.md` (fixed path).
+3. **If tasks.md not found:** **STOP** and suggest running `import` to create one.
+
+The `.optimus/state.json`, `.optimus/stats.json`, `.optimus/sessions/`, and
+`.optimus/reports/` are gitignored (operational/temporary state).
+The `.optimus/config.json` and `.optimus/tasks.md` are versioned (structural data).
+
+
+### Valid Status Values (stored in state.json)
+
+Status lives in `.optimus/state.json`, NOT in tasks.md. A task with no entry in
+state.json is implicitly `Pendente`.
+
+| Status | Set by | Meaning |
+|--------|--------|---------|
+| `Pendente` | Initial (implicit) | Not started — no entry in state.json |
+| `Validando Spec` | plan | Spec being validated |
+| `Em Andamento` | build | Implementation in progress |
+| `Validando Impl` | check | Implementation being reviewed |
+| `Revisando PR` | pr-check | PR being reviewed (optional stage) |
+| `DONE` | done | Completed |
+| `Cancelado` | tasks | Task abandoned, will not be implemented |
+
+**Administrative status operations** (managed by tasks, not by stage agents):
+- **Reopen:** `DONE` → `Pendente` (remove entry from state.json) or `Em Andamento` (if worktree exists) — when a bug is found after close. Also accepts `Cancelado` → `Pendente` — when a cancellation decision is reversed.
+- **Advance:** move forward one stage — when work was done manually outside the pipeline
+- **Demote:** move backward one stage — when rework is needed after review
+- **Cancel:** any non-terminal → `Cancelado` — task will not be implemented
+
+These operations require explicit user confirmation.
+
+
+### Protocol: State Management
+
+**Referenced by:** all stage agents (1-5), tasks, report, quick-report
+
+All status and branch data is stored in `.optimus/state.json` (gitignored).
+
+**Prerequisites:**
+
+```bash
+if ! command -v jq &>/dev/null; then
+  echo "ERROR: jq is required for state management but not installed."
+  # STOP — do not proceed
+fi
+```
+
+**Reading state:**
+
+```bash
+STATE_FILE=".optimus/state.json"
+if [ -f "$STATE_FILE" ]; then
+  # Validate JSON integrity before reading
+  if ! jq empty "$STATE_FILE" 2>/dev/null; then
+    echo "WARNING: state.json is corrupted. Running reconciliation."
+    rm -f "$STATE_FILE"
+    # Fall through to missing-file handling below
+  fi
+fi
+if [ -f "$STATE_FILE" ]; then
+  TASK_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")
+  TASK_BRANCH=$(jq -r --arg id "$TASK_ID" '.[$id].branch // ""' "$STATE_FILE")
+else
+  TASK_STATUS="Pendente"
+  TASK_BRANCH=""
+fi
+```
+
+A task with no entry in state.json is implicitly `Pendente`.
+
+**Writing state:**
+
+```bash
+# Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
+STATE_FILE=".optimus/state.json"
+if [ ! -f "$STATE_FILE" ]; then
+  echo '{}' > "$STATE_FILE"
+fi
+if [ -z "$TASK_ID" ] || [ -z "$NEW_STATUS" ]; then
+  echo "ERROR: Cannot write state — TASK_ID or NEW_STATUS is empty."
+  # STOP — do not proceed
+fi
+UPDATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+if jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" --arg branch "$BRANCH_NAME" --arg ts "$UPDATED_AT" \
+  '.[$id] = {status: $status, branch: $branch, updated_at: $ts}' "$STATE_FILE" > "${STATE_FILE}.tmp"; then
+  mv "${STATE_FILE}.tmp" "$STATE_FILE"
+else
+  rm -f "${STATE_FILE}.tmp"
+  echo "ERROR: jq failed to update state.json"
+  # STOP — do not proceed
+fi
+```
+
+**Removing entry (for Pendente reset):**
+
+```bash
+STATE_FILE=".optimus/state.json"
+if [ ! -f "$STATE_FILE" ]; then
+  echo "state.json does not exist — task is already implicitly Pendente."
+else
+  if jq --arg id "$TASK_ID" 'del(.[$id])' "$STATE_FILE" > "${STATE_FILE}.tmp"; then
+    mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  else
+    rm -f "${STATE_FILE}.tmp"
+    echo "ERROR: jq failed to update state.json"
+  fi
+fi
+```
+
+**Listing all tasks with status (for report/quick-report):**
+
+```bash
+STATE_FILE=".optimus/state.json"
+TASKS_FILE=".optimus/tasks.md"
+# Validate state.json if it exists
+if [ -f "$STATE_FILE" ] && ! jq empty "$STATE_FILE" 2>/dev/null; then
+  echo "WARNING: state.json is corrupted. Treating all tasks as Pendente."
+  rm -f "$STATE_FILE"
+fi
+# Get all task IDs from tasks.md
+TASK_IDS=$(grep -E '^\| T-[0-9]+ \|' "$TASKS_FILE" | awk -F'|' '{print $2}' | tr -d ' ')
+# For each task, read status from state.json (default: Pendente)
+for TASK_ID in $TASK_IDS; do
+  if [ -f "$STATE_FILE" ]; then
+    STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")
+  else
+    STATUS="Pendente"
+  fi
+  echo "$TASK_ID: $STATUS"
+done
+```
+
+**state.json is NEVER committed.** It is gitignored. No `git add` or `git commit`
+for state changes.
+
+**Reconciliation (if state.json is lost or empty):**
+1. List all worktrees: `git worktree list`
+2. For each worktree matching a task ID pattern (e.g., `t-003` in the path),
+   infer status as `Em Andamento` (most common in-progress status)
+3. Tasks without worktrees are `Pendente`
+4. Ask the user to confirm before proceeding
+
+**Automatic mismatch detection:** Stage agents SHOULD check for inconsistencies on startup:
+if state.json is missing or empty AND worktrees exist for known task IDs, warn the user
+and offer to run reconciliation before proceeding. This prevents tasks from silently
+appearing as `Pendente` when they actually have active worktrees.
+
+Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: State Management."
+
+
+<!-- INLINE-PROTOCOLS:END -->

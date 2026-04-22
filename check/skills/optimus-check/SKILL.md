@@ -893,3 +893,1154 @@ If the user requests a dry-run (e.g., "dry-run review T-012", "preview review"):
 - **Re-run guard:** After the convergence loop exits, execute the Re-run Guard protocol
   (Phase 9) instead of unconditionally suggesting the next stage. The next stage is only
   suggested when the analysis produces 0 findings. See AGENTS.md Protocol: Re-run Guard.
+
+
+<!-- INLINE-PROTOCOLS:START -->
+## Shared Protocols (from AGENTS.md)
+
+The following protocols are referenced by this skill. They are
+extracted from the Optimus AGENTS.md to make this plugin self-contained.
+
+### File Location
+
+All Optimus files live in the `.optimus/` directory at the project root:
+
+```
+.optimus/
+├── config.json          # versionado — tasksDir, commands
+├── tasks.md             # versionado — structural task data (NO status, NO branch)
+├── state.json           # gitignored — operational state (status, branch per task)
+├── stats.json           # gitignored — stage execution counters per task
+├── sessions/            # gitignored — session state for crash recovery
+└── reports/             # gitignored — exported reports
+```
+
+**Configuration** is stored in `.optimus/config.json`:
+
+```json
+{
+  "tasksDir": "docs/pre-dev"
+}
+```
+
+- **`tasksDir`**: Path to the Ring pre-dev artifacts root. Default: `docs/pre-dev`.
+  The import and stage agents look for task specs at `<tasksDir>/tasks/` and subtasks
+  at `<tasksDir>/subtasks/`.
+
+**Tasks file** is always `.optimus/tasks.md` — not configurable.
+
+**Operational state** is stored in `.optimus/state.json` (gitignored):
+
+```json
+{
+  "T-001": { "status": "DONE", "branch": "feat/t-001-setup-auth", "updated_at": "2025-01-15T10:30:00Z" },
+  "T-003": { "status": "Em Andamento", "branch": "feat/t-003-user-registration", "updated_at": "2025-01-16T14:00:00Z" }
+}
+```
+
+- Each key is a task ID. A task with no entry is `Pendente` (implicit default).
+- `status`: current pipeline stage (see Valid Status Values).
+- `branch`: the derived branch name, stored for quick reference (always re-derivable).
+- Stage agents read and write this file — never tasks.md — for status changes.
+- If state.json is lost, status can be reconstructed: task with a worktree = in progress,
+  without = Pendente. The agent asks the user to confirm before proceeding.
+
+**Stage execution stats** are stored in `.optimus/stats.json` (gitignored):
+
+```json
+{
+  "T-001": { "plan_runs": 2, "check_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_check": "2025-01-16T14:00:00Z" },
+  "T-002": { "plan_runs": 1, "check_runs": 0 }
+}
+```
+
+- Each key is a task ID. Values track how many times `plan` and `check` executed on the task.
+- A high `plan_runs` signals unclear or problematic specs. A high `check_runs` signals
+  complex review cycles or specification gaps.
+- The file is created on first use by `plan` or `check`. If missing, agents treat all
+  counters as 0.
+- `report` reads this file to display churn metrics.
+
+Agents resolve paths:
+1. **Read `.optimus/config.json`** for `tasksDir`. Fallback: `docs/pre-dev`.
+2. **Tasks file:** `.optimus/tasks.md` (fixed path).
+3. **If tasks.md not found:** **STOP** and suggest running `import` to create one.
+
+The `.optimus/state.json`, `.optimus/stats.json`, `.optimus/sessions/`, and
+`.optimus/reports/` are gitignored (operational/temporary state).
+The `.optimus/config.json` and `.optimus/tasks.md` are versioned (structural data).
+
+
+### Valid Status Values (stored in state.json)
+
+Status lives in `.optimus/state.json`, NOT in tasks.md. A task with no entry in
+state.json is implicitly `Pendente`.
+
+| Status | Set by | Meaning |
+|--------|--------|---------|
+| `Pendente` | Initial (implicit) | Not started — no entry in state.json |
+| `Validando Spec` | plan | Spec being validated |
+| `Em Andamento` | build | Implementation in progress |
+| `Validando Impl` | check | Implementation being reviewed |
+| `Revisando PR` | pr-check | PR being reviewed (optional stage) |
+| `DONE` | done | Completed |
+| `Cancelado` | tasks | Task abandoned, will not be implemented |
+
+**Administrative status operations** (managed by tasks, not by stage agents):
+- **Reopen:** `DONE` → `Pendente` (remove entry from state.json) or `Em Andamento` (if worktree exists) — when a bug is found after close. Also accepts `Cancelado` → `Pendente` — when a cancellation decision is reversed.
+- **Advance:** move forward one stage — when work was done manually outside the pipeline
+- **Demote:** move backward one stage — when rework is needed after review
+- **Cancel:** any non-terminal → `Cancelado` — task will not be implemented
+
+These operations require explicit user confirmation.
+
+
+### Task Spec Resolution
+
+Every task MUST have a Ring pre-dev reference in the `TaskSpec` column. Stage agents
+(plan, build, check) resolve the full path as `<tasksDir>/<TaskSpec>` and read the
+referenced file for objective, acceptance criteria, and implementation details.
+
+The subtasks directory is derived automatically from the TaskSpec path:
+- TaskSpec: `tasks/task_001.md` → Subtasks: `<tasksDir>/subtasks/T-001/`
+- The `T-NNN` identifier is extracted from the task spec filename convention
+
+Agents read objective and acceptance criteria directly from the Ring source files.
+The tasks.md table only tracks structural data (dependencies, versions, priorities)
+— it does NOT duplicate content from Ring.
+
+
+### Format Validation
+
+Every stage agent (1-5) MUST validate the tasks.md format before operating:
+1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
+2. A `## Versions` section exists with a table containing columns: Version, Status, Description
+3. All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
+4. Exactly one version has Status `Ativa`
+5. At most one version has Status `Próxima`
+6. A markdown table exists with columns: ID, Title, Tipo, Depends, Priority, Version (Estimate and TaskSpec are optional — tables without them are still valid). **Status and Branch columns are NOT expected** — they live in state.json.
+7. All task IDs follow the `T-NNN` pattern
+8. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
+9. All Depends values are either `-` or comma-separated valid task IDs that exist as rows in the tasks table (not just matching `T-NNN` pattern — the referenced task must actually exist)
+10. All Priority values are one of: `Alta`, `Media`, `Baixa`
+11. All Version values reference a version name that exists in the Versions table
+12. No duplicate task IDs
+13. No circular dependencies in the dependency graph (e.g., T-001 → T-002 → T-001)
+
+If the format marker is missing or validation fails, the agent must **STOP** and suggest
+running `/optimus-import` to fix the format. Do NOT attempt to interpret malformed data.
+
+14. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
+15. **Empty table handling:** If the tasks table exists but has zero data rows (only headers),
+format validation PASSES. Stage agents (1-5) MUST check for this condition immediately after
+format validation and before task identification. If zero data rows: **STOP** and inform the
+user: "No tasks found in tasks.md. Use `/optimus-tasks` to create a task or `/optimus-import`
+to import from Ring pre-dev." Do NOT proceed to task identification with an empty table.
+
+**NOTE:** For circular dependency detection (item 13), trace the full dependency chain for
+each task. If any task appears twice in the chain, a cycle exists. Report ALL tasks involved
+in the cycle so the user can fix it with `/optimus-tasks`.
+
+
+### Convergence Loop (Full Roster Model)
+Applies to: plan, check, pr-check, coderabbit-review, deep-review, deep-doc-review
+
+The convergence loop eliminates false convergence by dispatching the **same agent roster**
+as round 1 in every subsequent round:
+- **Round 1:** Orchestrator dispatches all specialist agents in parallel (with full session context)
+- **Rounds 2-5:** The **same agent roster** as round 1 is dispatched in parallel via `Task`
+  tool, each with zero prior context. Each agent reads all files fresh from disk.
+- **Round 2 is MANDATORY** — the "zero new findings" stop condition only applies from round 3 onward
+- **Sub-agents do NOT receive the findings ledger.** Dedup is performed entirely by the
+  orchestrator after agents return, using **strict matching**: same file + same line range
+  (±5 lines) + same category. "Description similarity" is NOT sufficient for dedup — the
+  file, location, and category must all match.
+- Stop only when: zero new findings (round 3+), round 5 reached, or user explicitly stops
+- LOW severity findings are NOT a reason to stop — ALL findings are presented to the user
+
+**Why full roster, not a single agent:** A single generalist agent structurally cannot
+replicate the coverage of 8-10 domain specialists. The security-reviewer catches injection
+risks a code-reviewer won't. The nil-safety-reviewer catches empty guards a QA analyst won't.
+Dispatching a single agent in rounds 2+ creates false convergence — the agent declares
+"zero new findings" because it lacks the domain depth, not because the code is clean.
+
+
+### Deep Research Before Presenting (MANDATORY for cycle review skills)
+Applies to: plan, check, pr-check, coderabbit-review
+
+**BEFORE presenting any finding to the user, the agent MUST research it deeply.** This
+research is done SILENTLY — do not show the research process. Present only the conclusions.
+
+**Research checklist (ALL items, every finding):**
+
+1. **Project patterns:** Read the affected file(s) fully. Check how similar cases are handled
+   elsewhere in the codebase. Identify existing conventions the finding might violate or follow.
+2. **Architectural decisions:** Review project rules (AGENTS.md, PROJECT_RULES.md, etc.) and
+   architecture docs (TRD, ADRs). Understand WHY the project is structured this way before
+   suggesting changes.
+3. **Existing codebase:** Search for precedent. If the codebase already does the same thing
+   in 10 other places without issue, that context changes the finding's weight.
+4. **Current task focus:** Is this finding within the scope of the task being worked on?
+   Tangential findings should be flagged as such (not dismissed, but contextualized).
+5. **User/consumer use cases:** Who consumes this code — end users, other services, internal
+   modules? How does the finding affect them? Trace the impact to real user scenarios.
+6. **UX impact:** For user-facing changes, evaluate usability, accessibility, error messaging,
+   and workflows. Would the user notice? Would it block their work?
+7. **API best practices:** For API changes, check REST conventions, error handling patterns,
+   idempotency, status codes, pagination, versioning, and backward compatibility.
+8. **Engineering best practices:** SOLID principles, DRY, separation of concerns, error
+   handling, resilience patterns, observability, testability.
+9. **Language-specific best practices:** Use `WebSearch` to research idioms and conventions
+   for the specific language (Go, TypeScript, Python, etc.). Check official style guides,
+   common linter rules, and community-accepted patterns.
+10. **Correctness over convenience:** Always recommend the correct approach, regardless of
+    effort. The easy option may be presented as an alternative, but Option A must be what
+    the agent believes is right based on all the research above.
+11. **Production resilience:** Would this code survive production conditions? Consider:
+    timeouts on external calls, retry with backoff, circuit breakers, graceful degradation,
+    resource cleanup (connections, handles, goroutines), graceful shutdown, and behavior
+    under load (N+1 queries, unbounded queries, connection pool exhaustion).
+12. **Data integrity and privacy:** Are transaction boundaries correct? Could partial writes
+    occur? Is PII properly handled (not logged, masked in responses)? LGPD/GDPR compliance?
+
+**After research, form the recommendation:** Option A MUST be the approach the agent
+believes is correct based on the research. It must be backed by evidence (project patterns,
+best practice references, official documentation), not just a generic suggestion.
+
+
+### Finding Option Format (MANDATORY for cycle review skills)
+
+Every finding must present 2-3 options with this structure:
+
+```
+**Option A: [name] (RECOMMENDED)**
+[Concrete steps — what to do, which files to change, what code to write]
+- Why recommended: [reference to research — best practice, project pattern, official docs]
+- Impact: [UX / Task focus / Project focus / Engineering quality]
+- Effort: [low / medium / high / very high]
+- Estimated time: [< 5 min / 5-15 min / 15-60 min / 1-4h / > 4h]
+
+**Option B: [name]**
+[Alternative approach]
+- Impact: [UX / Task focus / Project focus / Engineering quality]
+- Effort: [low / medium / high / very high]
+- Estimated time: [< 5 min / 5-15 min / 15-60 min / 1-4h / > 4h]
+```
+
+**Effort scale:**
+- **Low:** Localized change, single file, no tests needed
+- **Medium:** Multiple files, straightforward, may need test updates
+- **High:** Significant refactoring, new tests, multiple modules affected
+- **Very high:** Architectural change, many files, extensive testing, risk of regressions
+
+
+### Finding Presentation (Unified Model)
+All cycle review skills follow this pattern:
+1. Collect findings from agents/tools
+2. Consolidate and deduplicate
+3. **Group same-nature findings** — after deduplication, identify findings that share the
+   same root cause or fix pattern (e.g., "missing error handling" in 5 handlers, "inconsistent
+   import path" in 4 files). If 2+ findings are of the same nature, merge them into a **single
+   grouped entry** listing all affected files/locations. Each group counts as ONE item in the
+   "Finding X of N" sequence. The user makes ONE decision for the entire group.
+4. Announce total findings count: `"### Total findings to review: N"` (where N reflects
+   grouped entries — a group of 5 same-nature findings counts as 1)
+5. Present overview table with severity counts
+6. **Deep research BEFORE presenting each finding** (see research checklist below)
+7. Walk through findings ONE AT A TIME with `"Finding X of N"` header, ordered by severity
+   (CRITICAL first, then HIGH, MEDIUM, LOW). **ALL findings MUST be presented regardless of
+   severity** — the agent NEVER skips, filters, or auto-resolves any finding. The decision to
+   fix or skip is ALWAYS the user's. For grouped entries, list all affected files/locations
+   within the single presentation.
+8. For each finding: present research-backed analysis + options, collect decision via AskUser.
+   **Every AskUser for a finding decision MUST include a "Tell me more" option.** This option
+   is always the **second-to-last** option (right before the free-text input that AskUser
+   provides automatically). This lets the user request deeper analysis with one click.
+9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
+   (a question, disagreement, or request for clarification) instead of a decision:**
+   **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
+   Research the user's concern RIGHT NOW using `WebSearch`, codebase analysis, or both.
+   Provide a thorough answer with evidence (links, code references, best practice citations).
+   Only AFTER the user is satisfied, re-present the options and ask for their decision again.
+   This may go back and forth multiple times — that is expected and correct behavior.
+   **NEVER defer the response to the end of the findings loop.**
+10. After ALL N decisions collected: apply ALL approved fixes (see below)
+11. Run verification (see Verification Timing below)
+12. Present final summary
+
+
+### Fix Implementation (Complexity-Based Dispatch)
+
+Fixes are classified by complexity. **Simple fixes** are applied directly by the
+orchestrator. **Complex fixes** (or fixes whose complexity cannot be determined) are
+delegated to specialist ring droids.
+
+#### Complexity Classification
+
+For each approved fix, assess complexity BEFORE applying:
+
+**Simple fix (apply directly):**
+- The review agent already provided the exact code change needed
+- Single file, localized change (few lines)
+- Obvious resolution: typo, missing error check, wrong variable name, missing nil guard,
+  import fix, formatting, adding a log line, renaming, removing dead code
+- No new logic, no architectural impact, no new test scenarios needed
+
+**Complex fix (dispatch ring droid):**
+- Multiple files affected
+- Requires understanding broader codebase context or architectural decisions
+- New functionality, significant refactoring, or new integration points
+- Requires new test scenarios (not just updating existing ones)
+- Security-sensitive changes (auth, crypto, input validation)
+- Database schema, API contract, or config changes
+- The orchestrator is unsure how to fix it
+
+**When in doubt → dispatch ring droid.** If you cannot confidently classify a fix as
+simple, treat it as complex.
+
+#### Direct Fix (simple findings)
+
+The orchestrator applies the fix directly using Edit/MultiEdit tools. After applying:
+1. Run unit tests to verify no regression
+2. If tests fail, revert and escalate to ring droid dispatch
+
+#### Ring Droid Dispatch (complex findings)
+
+**Code fixes** → dispatch ring backend/frontend/QA droids with **TDD cycle** (RED-GREEN-REFACTOR):
+- `ring-dev-team-backend-engineer-golang` (Go), `ring-dev-team-backend-engineer-typescript` (TS),
+  `ring-dev-team-frontend-engineer` (React/Next.js), `ring-dev-team-qa-analyst` (tests)
+
+**Documentation fixes** → dispatch ring documentation droids **without TDD** (no tests for docs):
+- `ring-tw-team-functional-writer` (guides), `ring-tw-team-api-writer` (API docs),
+  `ring-tw-team-docs-reviewer` (quality fixes)
+
+**Ring droids are REQUIRED for complex fixes** — there is no alternative dispatch mechanism. If the
+required droids are not installed and a complex fix is needed, the skill MUST stop and
+inform the user which droids need to be installed.
+
+
+### Protocol: Active Version Guard
+
+**Referenced by:** all stage agents (1-5)
+
+After the task ID is confirmed and dependencies are validated, check if the task belongs
+to the `Ativa` version. If not, present options before proceeding.
+
+1. Read the task's **Version** column from `tasks.md`
+2. Read the **Versions** table and find the version with Status `Ativa`
+   - **If no version has Status `Ativa`** → **STOP**: "No active version found in the Versions table. Run `/optimus-tasks` to set a version as Ativa before proceeding."
+3. **If the task's version matches the `Ativa` version** → proceed silently
+4. **If the task's version does NOT match the `Ativa` version** → present via `AskUser`:
+   ```
+   Task T-XXX is in version '<task_version>' (<version_status>),
+   but the active version is '<active_version>'.
+   To execute this task, it must be moved to the active version first.
+   ```
+   Options:
+   - **Move to active version and continue** — updates the Version column to the active version, commits, and proceeds
+   - **Cancel** — stops execution
+
+5. **If "Move to active version and continue":**
+   - Update the task's Version column in `tasks.md` to the `Ativa` version name
+   - Commit:
+     ```bash
+     git add "$TASKS_FILE"
+     git commit -m "chore(tasks): move T-XXX to active version <active_version>"
+     ```
+   - Proceed with the stage
+
+6. **If "Cancel":** **STOP** — do not proceed with the stage
+
+Skills reference this as: "Check active version guard — see AGENTS.md Protocol: Active Version Guard."
+
+
+### Protocol: Coverage Measurement
+
+**Referenced by:** check, pr-check, coderabbit-review, verify
+
+Measure test coverage using the project's configured commands. Check `.optimus/config.json`
+for custom commands first, then fall back to Makefile targets, then stack-specific commands.
+
+**Unit coverage command resolution order:**
+1. `.optimus/config.json` → `commands.test-coverage` (if present)
+2. `make test-coverage` (if Makefile target exists)
+3. Stack-specific fallback:
+   - Go: `go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out`
+   - Node: `npm test -- --coverage`
+   - Python: `pytest --cov=. --cov-report=term`
+
+If no unit coverage command is available, mark as **SKIP** — do not fail the verification.
+
+**Integration coverage command resolution order:**
+1. `.optimus/config.json` → `commands.test-integration-coverage` (if present)
+2. `make test-integration-coverage` (if Makefile target exists)
+3. Stack-specific fallback:
+   - Go: `go test -tags=integration -coverprofile=coverage-integration.out ./... && go tool cover -func=coverage-integration.out`
+   - Node: `npm run test:integration -- --coverage`
+   - Python: `pytest -m integration --cov=. --cov-report=term`
+
+If no integration coverage command is available, mark as **SKIP** — do not fail the verification.
+
+**Thresholds:**
+
+| Test Type | Threshold | Verdict if Below |
+|-----------|-----------|-----------------|
+| Unit tests | 85% | NEEDS_FIX / HIGH finding |
+| Integration tests | 70% | NEEDS_FIX / HIGH finding |
+
+**Coverage gap analysis:** Parse the coverage output to identify untested functions/methods
+(0% coverage). Flag business-logic functions with 0% as HIGH, infrastructure/generated
+code with 0% as SKIP.
+
+Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage Measurement."
+
+
+### Protocol: Divergence Warning
+
+**Referenced by:** all stage agents (1-5)
+
+Since status and branch data live in state.json (gitignored), tasks.md rarely changes
+on feature branches. This protocol detects the uncommon case where tasks.md WAS modified
+(e.g., Active Version Guard moved a task).
+
+```bash
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+if [ -z "$DEFAULT_BRANCH" ]; then
+  DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
+fi
+TASKS_FILE=".optimus/tasks.md"
+git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
+git diff "origin/$DEFAULT_BRANCH" -- "$TASKS_FILE" 2>/dev/null | head -20
+```
+
+- If diff output is non-empty → warn via `AskUser`:
+  ```
+  tasks.md has diverged between your branch and <default_branch>.
+  This may cause merge conflicts when the PR is merged.
+  ```
+  Options:
+  - **Sync now** — run `git merge origin/<default_branch>` to incorporate changes
+  - **Continue without syncing** — I'll handle conflicts later
+- If diff output is empty → proceed silently (files are in sync)
+- **NOTE:** This is a warning, not a HARD BLOCK. The user may choose to continue.
+
+Skills reference this as: "Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning."
+
+
+### Protocol: GitHub CLI Check (HARD BLOCK)
+
+**Referenced by:** all stage agents (1-5), tasks, batch
+
+```bash
+gh auth status 2>/dev/null
+```
+
+If this command fails (exit code != 0), **STOP** immediately:
+```
+GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
+```
+
+
+### Protocol: Increment Stage Stats
+
+**Referenced by:** plan, check
+
+After the status change in state.json (and BEFORE any analysis work begins), increment
+the execution counter for the current stage in `.optimus/stats.json`. This tracks how many
+times each stage ran on each task — useful for spotting spec churn and review cycles.
+
+**NOTE:** Only increment when NOT in dry-run mode.
+
+1. Read `.optimus/stats.json`. If the file does not exist, start with an empty object `{}`.
+   If the file exists but is corrupted, reset it:
+   ```bash
+   STATS_FILE=".optimus/stats.json"
+   if [ -f "$STATS_FILE" ] && ! jq empty "$STATS_FILE" 2>/dev/null; then
+     echo "WARNING: stats.json is corrupted. Resetting counters."
+     echo '{}' > "$STATS_FILE"
+   fi
+   ```
+2. If the task ID key does not exist, initialize it:
+   ```json
+   { "plan_runs": 0, "check_runs": 0 }
+   ```
+3. Increment the appropriate counter (`plan_runs` for plan, `check_runs` for check).
+4. Set the timestamp field (`last_plan` or `last_check`) to the current UTC ISO 8601 time.
+5. Write the updated JSON back to `.optimus/stats.json` (pretty-printed, sorted keys).
+
+**NOTE:** stats.json is gitignored — no commit needed.
+
+Skills reference this as: "Increment stage stats — see AGENTS.md Protocol: Increment Stage Stats."
+
+
+### Protocol: Notification Hooks
+
+**Referenced by:** all stage agents (1-5), tasks
+
+After writing a status change to state.json, invoke notification hooks if present.
+
+**IMPORTANT — Capture timing:** Read the current status from state.json and store it as
+`OLD_STATUS` BEFORE writing the new status. The sequence is:
+1. Read current status: `OLD_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")`
+2. Write new status to state.json
+3. Invoke hooks with `OLD_STATUS` and new status
+
+**IMPORTANT:** Always quote all arguments and sanitize user-derived values to prevent
+shell injection. Hook scripts MUST NOT pass their arguments to `eval` or shell
+interpretation — treat all arguments as untrusted data.
+
+```bash
+_optimus_sanitize() { printf '%s' "$1" | tr -cd '[:alnum:][:space:]-_./:'; }
+HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+  "$HOOKS_FILE" "$event" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$old_status")" "$(_optimus_sanitize "$new_status")" 2>/dev/null &
+fi
+```
+
+Events and their parameter signatures:
+
+| Event | Parameters | Description |
+|-------|-----------|-------------|
+| `status-change` | `event task_id old_status new_status` | Any status transition |
+| `task-done` | `event task_id old_status "DONE"` | Task marked as done |
+| `task-cancelled` | `event task_id old_status "Cancelado"` | Task cancelled |
+| `task-blocked` | `event task_id current_status current_status reason` | Dependency check failed (5 args — includes reason) |
+
+When a dependency check fails:
+```bash
+if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+  "$HOOKS_FILE" "task-blocked" "$task_id" "$current_status" "$current_status" "blocked by $dep_id ($dep_status)" 2>/dev/null &
+fi
+```
+
+Hooks run in background (`&`) and their failure does NOT block the pipeline.
+If `tasks-hooks.sh` does not exist, hooks are silently skipped.
+
+Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol: Notification Hooks."
+
+
+### Protocol: PR Title Validation
+
+**Referenced by:** stages 2-5
+
+Check if a PR exists for the current branch:
+```bash
+gh pr view --json number,title --jq '{number, title}' 2>/dev/null
+```
+
+If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
+- Regex: `^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$`
+- Cross-check the type against the task's **Tipo** column (Feature→`feat`, Fix→`fix`, Refactor→`refactor`, Chore→`chore`, Docs→`docs`, Test→`test`)
+- **If title is invalid:** warn via `AskUser`: "PR #N title `<current>` does not follow Conventional Commits. Suggested: `<corrected>`. Fix now with `gh pr edit <number> --title \"<corrected>\"`?"
+- **If title is valid:** proceed silently
+- If no PR exists, skip.
+
+Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Title Validation."
+
+
+### Protocol: Per-Droid Quality Checklists
+
+**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan
+
+Each droid type has specific dimensions it MUST verify beyond its core domain. Skills
+that dispatch review droids MUST include the applicable checklists in agent prompts.
+
+**Code Quality agent** (`ring-default-code-reviewer`) must additionally verify:
+- Resilience: external calls have timeout, retry with backoff, circuit breaker where appropriate
+- Resource lifecycle: all opened connections/handles are closed (defer, cleanup, graceful shutdown)
+- Concurrency: shared state has proper synchronization, no goroutine leaks, no deadlock risk
+- Performance: no N+1 queries, no unbounded queries, indexes exist for query patterns, no hot-path allocations
+- Configuration: no hardcoded values that should be environment-configurable, safe defaults
+- Cognitive complexity: functions with >3 nesting levels or >30 lines flagged for decomposition
+- Error handling: errors wrapped with context, consistent with codebase error patterns
+- Domain purity: no infrastructure concerns in domain layer, dependency direction correct
+- Resource leaks: DB connections, HTTP clients, file handles, channels properly closed
+
+**Business Logic agent** (`ring-default-business-logic-reviewer`) must additionally verify:
+- Spec traceability: each code path maps to a spec requirement (flag orphan logic with no spec backing)
+- Data integrity: transaction boundaries correct, partial writes impossible, rollback defined
+- Backward compatibility: existing consumers/contracts not broken by this change
+- API semantics: correct HTTP status codes, idempotent operations marked as such, pagination consistent
+- Domain edge cases: what happens with zero, negative, maximum, duplicate, concurrent values?
+- Business rule completeness: all business rules from spec have implementation AND test
+
+**Security agent** (`ring-default-security-reviewer`) must additionally verify:
+- Data privacy: PII not logged, sensitive fields masked in responses, LGPD/GDPR compliance
+- Error responses: no internal details leaked (stack traces, DB schemas, internal paths, SQL)
+- Rate limiting: high-throughput or public endpoints have rate limiting consideration
+- Input validation: happens at the right layer (not just client-side), consistent with codebase
+- Secrets: no hardcoded credentials, tokens, API keys in code or config files
+- Auth propagation: authentication context properly propagated through the call chain
+
+**Test Quality agent** (`ring-default-ring-test-reviewer`) must additionally verify:
+- Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag tests where assertions only check mock.Called() without verifying output/state
+- False positive risk: could these tests pass while the feature is actually broken?
+- Test coupling: are tests coupled to implementation details (private fields, internal struct layout)?
+- Spec traceability: for each acceptance criterion in the task spec, is there a test?
+- Integration tests: do they use real dependencies (testcontainers/docker) or just mocks?
+- Test isolation: can tests run in parallel without interference? Shared state between tests?
+- Error scenario completeness: each error return path has a corresponding test?
+- Boundary values: min, max, zero, empty, nil, negative tested where applicable?
+
+**Nil/Null Safety agent** (`ring-default-ring-nil-safety-reviewer`) must additionally verify:
+- Resource cleanup: nil checks before Close/Release calls
+- Channel safety: sends to nil/closed channels
+- Map safety: reads/writes to nil maps
+- Slice safety: index bounds after filtering/transforming
+
+**Ripple Effects agent** (`ring-default-ring-consequences-reviewer`) must additionally verify:
+- Values duplicated between files that should be a shared constant
+- Imports follow the project's layer architecture (no circular deps, no backwards imports)
+- New code follows the same patterns as existing code in the same domain
+- Backward compatibility: does this change break any existing consumer or API contract?
+- Configuration drift: new defaults reasonable? existing config overrides still valid?
+- Migration path: if breaking change, is migration strategy documented?
+- Shared state: new global/package-level state that could cause issues across modules?
+- Event/message contracts: changes to event payloads affect downstream consumers?
+
+**Dead Code agent** (`ring-default-ring-dead-code-reviewer`) must additionally verify:
+- Dead code: unused imports, unreachable branches, commented-out code
+- Zombie test infrastructure: test helpers, fixtures, mocks no longer used by any test
+- Feature flags: stale feature flag checks for flags that were already fully rolled out
+- Deprecated paths: code paths behind deprecated API versions with no remaining consumers
+
+**Spec Compliance / QA agent** (`ring-dev-team-qa-analyst`) must additionally verify:
+- Testability assessment: is the code structured for testability? (dependency injection, interfaces)
+- Operational readiness: can ops monitor, debug, and rollback this in production?
+- Acceptance criteria coverage: each AC has both success AND failure test scenarios
+- Cross-cutting scenarios: concurrent modifications, large datasets, special characters, timezone handling
+
+**Frontend specialist** (`ring-dev-team-frontend-engineer`) must additionally verify:
+- UX completeness: loading states, empty states, error states all handled
+- Accessibility: keyboard navigation, screen reader support, ARIA labels, color contrast
+- Responsive behavior: works across viewport sizes (mobile, tablet, desktop)
+- i18n readiness: no hardcoded user-facing strings, date/number formatting locale-aware
+- Performance: no unnecessary re-renders, large lists virtualized, images optimized
+
+**Backend specialist** (`ring-dev-team-backend-engineer-golang` or TS equivalent) must additionally verify:
+- Language idiomaticity: follows official style guide conventions
+- Graceful shutdown: SIGTERM handling, in-flight request draining
+- Connection pool sizing: appropriate for expected load
+- Context propagation: request context passed through the full call chain
+- Structured logging: logs include correlation IDs, operation names, durations
+
+Skills reference this as: "Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists."
+
+
+### Protocol: Project Rules Discovery
+
+**Referenced by:** stages 1-4, deep-review, coderabbit-review
+
+Every skill that reviews, validates, or generates code MUST search for project rules
+and AI instruction files before starting. Search for these files in order and read ALL
+that exist:
+
+```
+AGENTS.md                    # Primary agent instructions
+CLAUDE.md                    # Claude-specific rules
+DROIDS.md                    # Droid-specific rules
+.cursorrules                 # Cursor-specific rules
+PROJECT_RULES.md             # Coding standards (root or docs/)
+docs/PROJECT_RULES.md
+.editorconfig                # Editor formatting rules
+docs/coding-standards.md     # Explicit coding conventions
+docs/conventions.md
+.github/CONTRIBUTING.md      # Contribution guidelines
+CONTRIBUTING.md
+.eslintrc*                   # Linter configs (implicit rules)
+biome.json
+.golangci.yml
+.prettierrc*
+```
+
+If NONE exist, warn the user. If any are found, they become the source of truth
+for coding standards and must be passed to every dispatched sub-agent.
+
+Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Project Rules Discovery."
+
+
+### Protocol: Push Commits (optional)
+
+**Referenced by:** stages 1-4 (plan, build, check, pr-check), coderabbit-review, deep-review. Note: done handles pushing inline in its own cleanup phase.
+
+After stage work is complete, offer to push all local commits:
+
+**Step 1 — Check if upstream tracking exists:**
+
+```bash
+git rev-parse --abbrev-ref @{u} 2>/dev/null
+```
+
+- **If command fails (no upstream):** The branch was never pushed. All local commits are unpushed.
+  Ask via `AskUser`:
+  ```
+  Branch has no upstream (never pushed). Push now?
+  ```
+  Options:
+  - **Push now** — `git push -u origin "$(git branch --show-current)"`
+  - **Skip** — I'll push manually later
+
+- **If command succeeds (upstream exists):** Check for unpushed commits:
+  ```bash
+  git log @{u}..HEAD --oneline 2>/dev/null
+  ```
+  If there are unpushed commits, ask via `AskUser`:
+  ```
+  There are N unpushed commits on this branch. Push now?
+  ```
+  Options:
+  - **Push now** — `git push`
+  - **Skip** — I'll push manually later
+
+**Why check upstream first:** `git log @{u}..HEAD` silently produces empty output when no
+upstream exists, making it appear there's nothing to push. Without this check, the push step
+would be silently skipped even though ALL local commits are unpushed.
+
+**After a successful push**, check if the current repo is the Optimus plugin repository
+and update installed plugins to pick up the changes just pushed:
+
+```bash
+if jq -e '.name == "optimus"' .factory-plugin/marketplace.json &>/dev/null; then
+  echo "Optimus repo detected — updating installed plugins..."
+  for skill in $(droid plugin list 2>&1 | grep optimus | awk '{print $1}'); do
+    droid plugin update "$skill" 2>/dev/null
+  done
+fi
+```
+
+This ensures that agents running in the Optimus repo itself always use the latest
+skill versions after pushing changes.
+
+Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Push Commits."
+
+
+### Protocol: Re-run Guard
+
+**Referenced by:** plan, check
+
+After the convergence loop exits and the final report/summary is presented, evaluate
+whether to suggest advancement or offer a re-run. This protocol replaces the static
+"Next step suggestion" in plan and check.
+
+**Logic:**
+
+1. Count `total_findings` produced during this execution (all findings from round 1 AND
+   all subsequent convergence rounds, from all agents and static analysis — regardless of
+   whether they were fixed or skipped by the user). If findings were grouped (per Finding
+   Presentation item 3), count grouped entries, not individual occurrences.
+2. **If `total_findings == 0`:** The analysis is clean. Suggest the next stage:
+   - plan: "Spec validation clean — 0 findings. Next step: run `/optimus-build` to implement this task."
+   - check: "Implementation review clean — 0 findings. Next step: run `/optimus-pr-check` for PR review (optional), or `/optimus-done` to close this task."
+3. **If `total_findings > 0`:** Ask via `AskUser`:
+   ```
+   Validation found N findings (X fixed, Y skipped).
+   Re-running dispatches ALL review agents again with clean context (no memory of
+   previous findings — findings you previously skipped will reappear for review).
+   This will consume similar tokens to the initial run. Workspace and status are preserved.
+   ```
+   Options:
+   - **Re-run with clean context** — re-analyze from scratch
+   - **Advance to next stage** — proceed despite findings
+
+4. **If "Re-run with clean context":**
+   - Increment stage stats (new execution)
+   - **Skip:** GitHub CLI check, tasks.md validation, task identification, session state
+     check, status validation/change, workspace creation, divergence check
+   - **Re-execute:** project structure discovery, document loading, static analysis,
+     coverage profiling, agent dispatch (ALL agents), finding presentation, fix application,
+     convergence loop
+   - **Session file:** After re-run starts, the session protocol (Protocol: Session State)
+     resumes normal operation — update the session file at each phase transition as usual.
+     This ensures crash recovery during a re-run resumes from the correct phase.
+   - After the re-run completes, apply this protocol again (evaluate findings count)
+   - There is no limit on re-runs — the user controls when to stop
+
+5. **If "Advance to next stage":** Proceed to push commits and present the next step suggestion.
+
+**NOTE:** "0 findings" means the analysis produced zero findings — not that all findings
+were resolved. If the user skipped findings in a previous run, they will reappear on
+re-run (clean context has no memory of previous decisions). This is by design.
+
+**NOTE:** Re-run analyzes the current codebase state, including any fixes applied and
+committed during the previous run. It does NOT revert commits. This validates that
+applied fixes are correct and checks for any issues introduced by the fixes.
+
+Skills reference this as: "Execute re-run guard — see AGENTS.md Protocol: Re-run Guard."
+
+
+### Protocol: Ring Droid Requirement Check
+
+**Referenced by:** check, pr-check, deep-review, deep-doc-review, coderabbit-review, plan (build delegates droid dispatch to dev-cycle)
+
+Before dispatching ring droids, verify the required droids are available. If any required
+droid is not installed, **STOP** and list missing droids.
+
+**Core review droids** (required by check, pr-check, deep-review, coderabbit-review):
+- `ring-default-code-reviewer`
+- `ring-default-business-logic-reviewer`
+- `ring-default-security-reviewer`
+- `ring-default-ring-test-reviewer`
+
+**Extended review droids** (required by check, pr-check, deep-review, coderabbit-review):
+- `ring-default-ring-nil-safety-reviewer`
+- `ring-default-ring-consequences-reviewer`
+- `ring-default-ring-dead-code-reviewer`
+
+**QA droids** (required by check, deep-review):
+- `ring-dev-team-qa-analyst`
+
+**Documentation droids** (required by deep-doc-review):
+- `ring-tw-team-docs-reviewer`
+- `ring-default-business-logic-reviewer`
+- `ring-default-code-reviewer`
+
+**Implementation droids** (required by build):
+- `ring-dev-team-backend-engineer-golang` (Go)
+- `ring-dev-team-backend-engineer-typescript` (TypeScript)
+- `ring-dev-team-frontend-engineer` (React/Next.js)
+
+**Spec validation droids** (required by plan):
+- `ring-default-business-logic-reviewer`
+- `ring-default-security-reviewer`
+- `ring-dev-team-qa-analyst`
+- `ring-default-code-reviewer`
+
+Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check."
+
+
+### Protocol: Session State
+
+**Referenced by:** all stage agents (1-5)
+
+Stage agents write a session state file to track progress. This enables resumption
+when a session is interrupted (agent crash, user closes terminal, context window limit).
+
+**IMPORTANT — Write timing:** The session file MUST be written **immediately after the
+status change in state.json** (before any work begins). This ensures crash recovery has
+a record even if the agent fails before producing any output. Do NOT wait until
+"key phase transitions" to write the initial session file.
+
+**Session file location:** `.optimus/sessions/session-<task-id>.json` (gitignored).
+Each task gets its own file (e.g., `.optimus/sessions/session-T-003.json`).
+
+```json
+{
+  "task_id": "T-003",
+  "stage": "<stage-name>",
+  "status": "<stage-output-status>",
+  "branch": "feat/t-003-user-auth",
+  "started_at": "2025-01-15T10:30:00Z",
+  "updated_at": "2025-01-15T11:45:00Z",
+  "phase": "Phase 1: Implementation",
+  "notes": "Implementation in progress"
+}
+```
+
+**On stage start (after task ID is known):**
+
+```bash
+SESSION_FILE=".optimus/sessions/session-${TASK_ID}.json"
+if [ -f "$SESSION_FILE" ]; then
+  if ! jq empty "$SESSION_FILE" 2>/dev/null; then
+    echo "WARNING: Session file is corrupted. Deleting and proceeding fresh."
+    rm -f "$SESSION_FILE"
+  else
+    cat "$SESSION_FILE"
+  fi
+fi
+```
+
+- If the file exists AND the task's status in `state.json` matches the session's `status`:
+  - Present via `AskUser`:
+    ```
+    Previous session found:
+      Task: T-XXX — [title]
+      Stage: <stage-name>
+      Last active: <time since updated_at>
+      Progress: <phase from session>
+    Resume this session?
+    ```
+    Options: Resume / Start fresh (delete session) / Continue (keep session file)
+  - If **Resume**: skip to the phase indicated in the session file
+  - If **Start fresh (delete session)**: delete the session file and proceed from the beginning
+  - If **Continue (keep session file)**: proceed from the beginning without deleting the session file
+- If the file is stale (>24h) or the task status has changed → delete and proceed normally.
+  **Staleness check example:**
+  ```bash
+  UPDATED=$(jq -r '.updated_at // empty' "$SESSION_FILE" 2>/dev/null)
+  if [ -n "$UPDATED" ]; then
+    NOW_EPOCH=$(date +%s)
+    UPDATED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED" +%s 2>/dev/null || date -d "$UPDATED" +%s 2>/dev/null || echo 0)
+    AGE=$(( NOW_EPOCH - UPDATED_EPOCH ))
+    if [ "$AGE" -gt 86400 ]; then
+      echo "Session file is stale (>24h). Deleting."
+      rm -f "$SESSION_FILE"
+    fi
+  fi
+  ```
+- **External status change detection:** If the session file exists AND the task's status
+  does NOT match the session's `status`, check if the difference is explainable by normal
+  stage progression (e.g., session says `Em Andamento` but task is now `Validando Impl` —
+  the task was advanced externally via `/optimus-tasks`). If the status change is NOT
+  explainable by forward progression, treat the session as stale and delete it.
+- If no file exists → proceed normally
+
+**On stage progress (at key phase transitions):**
+
+```bash
+# Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
+mkdir -p .optimus/sessions .optimus/reports
+BRANCH_NAME=$(git branch --show-current 2>/dev/null || echo "detached")
+jq -n \
+  --arg task_id "${TASK_ID}" --arg stage "<stage-name>" --arg status "<status>" \
+  --arg branch "${BRANCH_NAME}" --arg started "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --arg updated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg phase "<current-phase>" \
+  --arg notes "<progress>" \
+  '{task_id: $task_id, stage: $stage, status: $status, branch: $branch,
+    started_at: $started, updated_at: $updated, phase: $phase, notes: $notes}' \
+  > ".optimus/sessions/session-${TASK_ID}.json"
+```
+
+**On stage completion:** Delete the session file:
+```bash
+rm -f ".optimus/sessions/session-${TASK_ID}.json"
+```
+
+Skills reference this as: "Execute session state protocol from AGENTS.md using stage=`<name>`, status=`<status>`."
+
+
+### Protocol: State Management
+
+**Referenced by:** all stage agents (1-5), tasks, report, quick-report
+
+All status and branch data is stored in `.optimus/state.json` (gitignored).
+
+**Prerequisites:**
+
+```bash
+if ! command -v jq &>/dev/null; then
+  echo "ERROR: jq is required for state management but not installed."
+  # STOP — do not proceed
+fi
+```
+
+**Reading state:**
+
+```bash
+STATE_FILE=".optimus/state.json"
+if [ -f "$STATE_FILE" ]; then
+  # Validate JSON integrity before reading
+  if ! jq empty "$STATE_FILE" 2>/dev/null; then
+    echo "WARNING: state.json is corrupted. Running reconciliation."
+    rm -f "$STATE_FILE"
+    # Fall through to missing-file handling below
+  fi
+fi
+if [ -f "$STATE_FILE" ]; then
+  TASK_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")
+  TASK_BRANCH=$(jq -r --arg id "$TASK_ID" '.[$id].branch // ""' "$STATE_FILE")
+else
+  TASK_STATUS="Pendente"
+  TASK_BRANCH=""
+fi
+```
+
+A task with no entry in state.json is implicitly `Pendente`.
+
+**Writing state:**
+
+```bash
+# Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
+STATE_FILE=".optimus/state.json"
+if [ ! -f "$STATE_FILE" ]; then
+  echo '{}' > "$STATE_FILE"
+fi
+if [ -z "$TASK_ID" ] || [ -z "$NEW_STATUS" ]; then
+  echo "ERROR: Cannot write state — TASK_ID or NEW_STATUS is empty."
+  # STOP — do not proceed
+fi
+UPDATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+if jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" --arg branch "$BRANCH_NAME" --arg ts "$UPDATED_AT" \
+  '.[$id] = {status: $status, branch: $branch, updated_at: $ts}' "$STATE_FILE" > "${STATE_FILE}.tmp"; then
+  mv "${STATE_FILE}.tmp" "$STATE_FILE"
+else
+  rm -f "${STATE_FILE}.tmp"
+  echo "ERROR: jq failed to update state.json"
+  # STOP — do not proceed
+fi
+```
+
+**Removing entry (for Pendente reset):**
+
+```bash
+STATE_FILE=".optimus/state.json"
+if [ ! -f "$STATE_FILE" ]; then
+  echo "state.json does not exist — task is already implicitly Pendente."
+else
+  if jq --arg id "$TASK_ID" 'del(.[$id])' "$STATE_FILE" > "${STATE_FILE}.tmp"; then
+    mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  else
+    rm -f "${STATE_FILE}.tmp"
+    echo "ERROR: jq failed to update state.json"
+  fi
+fi
+```
+
+**Listing all tasks with status (for report/quick-report):**
+
+```bash
+STATE_FILE=".optimus/state.json"
+TASKS_FILE=".optimus/tasks.md"
+# Validate state.json if it exists
+if [ -f "$STATE_FILE" ] && ! jq empty "$STATE_FILE" 2>/dev/null; then
+  echo "WARNING: state.json is corrupted. Treating all tasks as Pendente."
+  rm -f "$STATE_FILE"
+fi
+# Get all task IDs from tasks.md
+TASK_IDS=$(grep -E '^\| T-[0-9]+ \|' "$TASKS_FILE" | awk -F'|' '{print $2}' | tr -d ' ')
+# For each task, read status from state.json (default: Pendente)
+for TASK_ID in $TASK_IDS; do
+  if [ -f "$STATE_FILE" ]; then
+    STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")
+  else
+    STATUS="Pendente"
+  fi
+  echo "$TASK_ID: $STATUS"
+done
+```
+
+**state.json is NEVER committed.** It is gitignored. No `git add` or `git commit`
+for state changes.
+
+**Reconciliation (if state.json is lost or empty):**
+1. List all worktrees: `git worktree list`
+2. For each worktree matching a task ID pattern (e.g., `t-003` in the path),
+   infer status as `Em Andamento` (most common in-progress status)
+3. Tasks without worktrees are `Pendente`
+4. Ask the user to confirm before proceeding
+
+**Automatic mismatch detection:** Stage agents SHOULD check for inconsistencies on startup:
+if state.json is missing or empty AND worktrees exist for known task IDs, warn the user
+and offer to run reconciliation before proceeding. This prevents tasks from silently
+appearing as `Pendente` when they actually have active worktrees.
+
+Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: State Management."
+
+
+### Protocol: TaskSpec Resolution
+
+**Referenced by:** plan, build, check
+
+Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
+
+1. Read the task's `TaskSpec` column from `tasks.md`
+2. If `TaskSpec` is `-` → **STOP**: "Task T-XXX has no Ring pre-dev spec. Link one via `/optimus-tasks` or `/optimus-import`."
+3. Resolve full path: `TASK_SPEC_PATH = <TASKS_DIR>/<TaskSpec>`
+4. **Path traversal validation (HARD BLOCK):** Verify the resolved path stays within the project:
+   ```bash
+   PROJECT_ROOT=$(git rev-parse --show-toplevel)
+   RESOLVED_PATH=$(cd "$PROJECT_ROOT" && realpath -m "${TASKS_DIR}/${TASK_SPEC}" 2>/dev/null)
+   case "$RESOLVED_PATH" in
+     "$PROJECT_ROOT"/*) ;; # OK — within project
+     *) echo "ERROR: TaskSpec path traversal detected — resolved path is outside the project root."; exit 1 ;;
+   esac
+   ```
+   Also apply the same validation to `TASKS_DIR` when reading from `.optimus/config.json`.
+5. Read the task spec file at `TASK_SPEC_PATH`
+6. Derive subtasks directory: if TaskSpec is `tasks/task_001.md`, subtasks are at `<TASKS_DIR>/subtasks/T-001/`
+7. If subtasks directory exists, read all `.md` files inside it
+
+Skills reference this as: "Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution."
+
+
+### Protocol: Workspace Auto-Navigation (HARD BLOCK)
+
+**Referenced by:** stages 2-5
+
+Execution stages (2-5) resolve the correct workspace automatically. The agent MUST
+be in the task's worktree before proceeding with any work.
+
+```bash
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+if [ -z "$DEFAULT_BRANCH" ]; then
+  DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
+fi
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
+if [ -z "$CURRENT_BRANCH" ]; then
+  echo "ERROR: Cannot determine current branch (detached HEAD state). Checkout a branch first."
+  # STOP — do not proceed
+fi
+```
+
+**Resolution order:**
+
+1. **Already on a feature branch?**
+   - Derive the expected branch name from the task's Tipo + ID + Title (see Protocol:
+     Branch Name Derivation). Also read the `branch` field from state.json if available.
+   - Cross-validate: check that `CURRENT_BRANCH` matches the expected/derived branch.
+   - If matches → proceed silently.
+   - If does not match → warn via `AskUser`: "Expected branch `<expected>` for T-XXX,
+     but you are on `<current>`. Continue on current branch, or switch?"
+
+2. **On the default branch (auto-navigate)?**
+   - Read state.json and list tasks with status compatible with the current stage
+     (use the Transition Table to determine which statuses are valid).
+     Tasks with no entry in state.json are `Pendente`.
+   - **If 0 eligible tasks** → **STOP**: "No tasks in `<expected-status>` found."
+   - **If 1 eligible task** → suggest via `AskUser`: "Found task T-XXX — [title] in
+     worktree `<path>`. Continue with this task?"
+   - **If N eligible tasks** → list all with worktree paths via `AskUser`:
+     ```
+     Multiple tasks available:
+       T-001 — User auth (Em Andamento) → /projeto-t-001-.../
+       T-002 — Login page (Em Andamento) → /projeto-t-002-.../
+     Which task should I continue?
+     ```
+   - After task is identified, locate the worktree by task ID:
+     ```bash
+     git worktree list | grep -iF "<task-id>"
+     ```
+   - **If worktree found** → change working directory to the worktree path.
+   - **If worktree NOT found** → derive the branch name (Protocol: Branch Name Derivation)
+     and verify it exists:
+     ```bash
+     if ! git rev-parse --verify "<branch-name>" >/dev/null 2>&1; then
+       # Branch doesn't exist — ask user for recovery
+       # AskUser: "No worktree or branch found for T-XXX.
+       #   This may indicate stage-1 crashed before creating it.
+       #   Options: Create branch from HEAD / Re-run /optimus-plan"
+     fi
+     ```
+     If the branch exists, create the worktree automatically:
+     ```bash
+     REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
+     WORKTREE_DIR="../${REPO_NAME}-$(echo <task-id> | tr '[:upper:]' '[:lower:]')-<keywords>"
+     git worktree add "$WORKTREE_DIR" "<branch-name>"
+     ```
+     Then change working directory to the new worktree.
+
+Skills reference this as: "Resolve workspace (HARD BLOCK) — see AGENTS.md Protocol: Workspace Auto-Navigation."
+
+
+### Protocol: tasks.md Validation (HARD BLOCK)
+
+**Referenced by:** all stage agents (1-5), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
+
+Every stage agent MUST validate tasks.md before operating. The full validation rules are
+defined in the "Format Validation" section above (items 1-15). This protocol is the
+executable version:
+
+1. **Resolve paths:**
+   - `TASKS_FILE` is always `.optimus/tasks.md` (fixed path).
+   - Read `.optimus/config.json`. If `tasksDir` key exists, use that path. Otherwise, use `docs/pre-dev` (default).
+   - Store as `TASKS_FILE` and `TASKS_DIR`.
+2. **Find tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus-import`.
+3. **Validate format:** Execute all 15 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-import`.
+
+**All subsequent references to `tasks.md` in the skill use the resolved `TASKS_FILE` path.
+All references to Ring pre-dev artifacts use `TASKS_DIR` as the root** — never hardcoded paths.
+
+Skills reference this as: "Find and validate tasks.md (HARD BLOCK) — see AGENTS.md Protocol: tasks.md Validation."
+
+
+<!-- INLINE-PROTOCOLS:END -->

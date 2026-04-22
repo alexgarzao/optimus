@@ -291,3 +291,330 @@ After all tasks are processed (or the user stops):
 - Stage 4 (PR review) is always offered as optional, never forced
 - Respect dependency order — never process a task before its dependencies are DONE
 - Each stage creates its own commits — the batch orchestrator does NOT commit anything
+
+
+<!-- INLINE-PROTOCOLS:START -->
+## Shared Protocols (from AGENTS.md)
+
+The following protocols are referenced by this skill. They are
+extracted from the Optimus AGENTS.md to make this plugin self-contained.
+
+### File Location
+
+All Optimus files live in the `.optimus/` directory at the project root:
+
+```
+.optimus/
+├── config.json          # versionado — tasksDir, commands
+├── tasks.md             # versionado — structural task data (NO status, NO branch)
+├── state.json           # gitignored — operational state (status, branch per task)
+├── stats.json           # gitignored — stage execution counters per task
+├── sessions/            # gitignored — session state for crash recovery
+└── reports/             # gitignored — exported reports
+```
+
+**Configuration** is stored in `.optimus/config.json`:
+
+```json
+{
+  "tasksDir": "docs/pre-dev"
+}
+```
+
+- **`tasksDir`**: Path to the Ring pre-dev artifacts root. Default: `docs/pre-dev`.
+  The import and stage agents look for task specs at `<tasksDir>/tasks/` and subtasks
+  at `<tasksDir>/subtasks/`.
+
+**Tasks file** is always `.optimus/tasks.md` — not configurable.
+
+**Operational state** is stored in `.optimus/state.json` (gitignored):
+
+```json
+{
+  "T-001": { "status": "DONE", "branch": "feat/t-001-setup-auth", "updated_at": "2025-01-15T10:30:00Z" },
+  "T-003": { "status": "Em Andamento", "branch": "feat/t-003-user-registration", "updated_at": "2025-01-16T14:00:00Z" }
+}
+```
+
+- Each key is a task ID. A task with no entry is `Pendente` (implicit default).
+- `status`: current pipeline stage (see Valid Status Values).
+- `branch`: the derived branch name, stored for quick reference (always re-derivable).
+- Stage agents read and write this file — never tasks.md — for status changes.
+- If state.json is lost, status can be reconstructed: task with a worktree = in progress,
+  without = Pendente. The agent asks the user to confirm before proceeding.
+
+**Stage execution stats** are stored in `.optimus/stats.json` (gitignored):
+
+```json
+{
+  "T-001": { "plan_runs": 2, "check_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_check": "2025-01-16T14:00:00Z" },
+  "T-002": { "plan_runs": 1, "check_runs": 0 }
+}
+```
+
+- Each key is a task ID. Values track how many times `plan` and `check` executed on the task.
+- A high `plan_runs` signals unclear or problematic specs. A high `check_runs` signals
+  complex review cycles or specification gaps.
+- The file is created on first use by `plan` or `check`. If missing, agents treat all
+  counters as 0.
+- `report` reads this file to display churn metrics.
+
+Agents resolve paths:
+1. **Read `.optimus/config.json`** for `tasksDir`. Fallback: `docs/pre-dev`.
+2. **Tasks file:** `.optimus/tasks.md` (fixed path).
+3. **If tasks.md not found:** **STOP** and suggest running `import` to create one.
+
+The `.optimus/state.json`, `.optimus/stats.json`, `.optimus/sessions/`, and
+`.optimus/reports/` are gitignored (operational/temporary state).
+The `.optimus/config.json` and `.optimus/tasks.md` are versioned (structural data).
+
+
+### Valid Status Values (stored in state.json)
+
+Status lives in `.optimus/state.json`, NOT in tasks.md. A task with no entry in
+state.json is implicitly `Pendente`.
+
+| Status | Set by | Meaning |
+|--------|--------|---------|
+| `Pendente` | Initial (implicit) | Not started — no entry in state.json |
+| `Validando Spec` | plan | Spec being validated |
+| `Em Andamento` | build | Implementation in progress |
+| `Validando Impl` | check | Implementation being reviewed |
+| `Revisando PR` | pr-check | PR being reviewed (optional stage) |
+| `DONE` | done | Completed |
+| `Cancelado` | tasks | Task abandoned, will not be implemented |
+
+**Administrative status operations** (managed by tasks, not by stage agents):
+- **Reopen:** `DONE` → `Pendente` (remove entry from state.json) or `Em Andamento` (if worktree exists) — when a bug is found after close. Also accepts `Cancelado` → `Pendente` — when a cancellation decision is reversed.
+- **Advance:** move forward one stage — when work was done manually outside the pipeline
+- **Demote:** move backward one stage — when rework is needed after review
+- **Cancel:** any non-terminal → `Cancelado` — task will not be implemented
+
+These operations require explicit user confirmation.
+
+
+### Format Validation
+
+Every stage agent (1-5) MUST validate the tasks.md format before operating:
+1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
+2. A `## Versions` section exists with a table containing columns: Version, Status, Description
+3. All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
+4. Exactly one version has Status `Ativa`
+5. At most one version has Status `Próxima`
+6. A markdown table exists with columns: ID, Title, Tipo, Depends, Priority, Version (Estimate and TaskSpec are optional — tables without them are still valid). **Status and Branch columns are NOT expected** — they live in state.json.
+7. All task IDs follow the `T-NNN` pattern
+8. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
+9. All Depends values are either `-` or comma-separated valid task IDs that exist as rows in the tasks table (not just matching `T-NNN` pattern — the referenced task must actually exist)
+10. All Priority values are one of: `Alta`, `Media`, `Baixa`
+11. All Version values reference a version name that exists in the Versions table
+12. No duplicate task IDs
+13. No circular dependencies in the dependency graph (e.g., T-001 → T-002 → T-001)
+
+If the format marker is missing or validation fails, the agent must **STOP** and suggest
+running `/optimus-import` to fix the format. Do NOT attempt to interpret malformed data.
+
+14. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
+15. **Empty table handling:** If the tasks table exists but has zero data rows (only headers),
+format validation PASSES. Stage agents (1-5) MUST check for this condition immediately after
+format validation and before task identification. If zero data rows: **STOP** and inform the
+user: "No tasks found in tasks.md. Use `/optimus-tasks` to create a task or `/optimus-import`
+to import from Ring pre-dev." Do NOT proceed to task identification with an empty table.
+
+**NOTE:** For circular dependency detection (item 13), trace the full dependency chain for
+each task. If any task appears twice in the chain, a cycle exists. Report ALL tasks involved
+in the cycle so the user can fix it with `/optimus-tasks`.
+
+
+### Protocol: GitHub CLI Check (HARD BLOCK)
+
+**Referenced by:** all stage agents (1-5), tasks, batch
+
+```bash
+gh auth status 2>/dev/null
+```
+
+If this command fails (exit code != 0), **STOP** immediately:
+```
+GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
+```
+
+
+### Protocol: Shell Safety Guidelines
+
+**Referenced by:** plan, batch
+
+All bash examples in AGENTS.md and SKILL.md files are templates that agents execute literally.
+Follow these rules to prevent injection and silent failures:
+
+1. **Always quote variables:** Use `"$VAR"` not `$VAR` — especially for paths, branch names, and user-derived values
+2. **Check exit codes for critical commands:**
+   ```bash
+   git add "$TASKS_FILE"
+   if ! git commit -m "chore(tasks): $COMMIT_MSG"; then
+     echo "ERROR: git commit failed. Check pre-commit hooks or git config."
+     # STOP — do not proceed
+   fi
+   ```
+3. **Never interpolate user-derived values directly into shell commands** — task titles,
+   branch names, and other user input may contain shell metacharacters
+4. **Use `grep -F` for fixed string matching** — never pass branch names or task IDs
+   as regex patterns to `grep` without `-F`
+5. **Use `grep -E '^\| T-NNN \|'`** to match task rows in tasks.md — plain `grep "T-NNN"`
+   matches titles and dependency columns too
+6. **Validate tool availability** before use: `command -v jq &>/dev/null` before running `jq`
+7. **Validate JSON files** before parsing: `jq empty "$FILE" 2>/dev/null` before reading keys
+8. **Sanitize user-derived values in commit messages** — task titles and descriptions may
+   contain shell metacharacters (backticks, `$(...)`, double quotes). **Mandatory pattern:**
+   write the commit message to a temporary file and use `git commit -F`:
+   ```bash
+   COMMIT_MSG_FILE=$(mktemp)
+   printf '%s' "chore(tasks): $OPERATION" > "$COMMIT_MSG_FILE"
+   git commit -F "$COMMIT_MSG_FILE"
+   rm -f "$COMMIT_MSG_FILE"
+   ```
+   This avoids all shell expansion issues. If using `-m` directly, sanitize with:
+   `SAFE_VALUE=$(printf '%s' "$VALUE" | tr -d '`$')` before interpolation.
+
+Skills reference this as: "Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelines."
+
+
+### Protocol: State Management
+
+**Referenced by:** all stage agents (1-5), tasks, report, quick-report
+
+All status and branch data is stored in `.optimus/state.json` (gitignored).
+
+**Prerequisites:**
+
+```bash
+if ! command -v jq &>/dev/null; then
+  echo "ERROR: jq is required for state management but not installed."
+  # STOP — do not proceed
+fi
+```
+
+**Reading state:**
+
+```bash
+STATE_FILE=".optimus/state.json"
+if [ -f "$STATE_FILE" ]; then
+  # Validate JSON integrity before reading
+  if ! jq empty "$STATE_FILE" 2>/dev/null; then
+    echo "WARNING: state.json is corrupted. Running reconciliation."
+    rm -f "$STATE_FILE"
+    # Fall through to missing-file handling below
+  fi
+fi
+if [ -f "$STATE_FILE" ]; then
+  TASK_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")
+  TASK_BRANCH=$(jq -r --arg id "$TASK_ID" '.[$id].branch // ""' "$STATE_FILE")
+else
+  TASK_STATUS="Pendente"
+  TASK_BRANCH=""
+fi
+```
+
+A task with no entry in state.json is implicitly `Pendente`.
+
+**Writing state:**
+
+```bash
+# Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
+STATE_FILE=".optimus/state.json"
+if [ ! -f "$STATE_FILE" ]; then
+  echo '{}' > "$STATE_FILE"
+fi
+if [ -z "$TASK_ID" ] || [ -z "$NEW_STATUS" ]; then
+  echo "ERROR: Cannot write state — TASK_ID or NEW_STATUS is empty."
+  # STOP — do not proceed
+fi
+UPDATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+if jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" --arg branch "$BRANCH_NAME" --arg ts "$UPDATED_AT" \
+  '.[$id] = {status: $status, branch: $branch, updated_at: $ts}' "$STATE_FILE" > "${STATE_FILE}.tmp"; then
+  mv "${STATE_FILE}.tmp" "$STATE_FILE"
+else
+  rm -f "${STATE_FILE}.tmp"
+  echo "ERROR: jq failed to update state.json"
+  # STOP — do not proceed
+fi
+```
+
+**Removing entry (for Pendente reset):**
+
+```bash
+STATE_FILE=".optimus/state.json"
+if [ ! -f "$STATE_FILE" ]; then
+  echo "state.json does not exist — task is already implicitly Pendente."
+else
+  if jq --arg id "$TASK_ID" 'del(.[$id])' "$STATE_FILE" > "${STATE_FILE}.tmp"; then
+    mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  else
+    rm -f "${STATE_FILE}.tmp"
+    echo "ERROR: jq failed to update state.json"
+  fi
+fi
+```
+
+**Listing all tasks with status (for report/quick-report):**
+
+```bash
+STATE_FILE=".optimus/state.json"
+TASKS_FILE=".optimus/tasks.md"
+# Validate state.json if it exists
+if [ -f "$STATE_FILE" ] && ! jq empty "$STATE_FILE" 2>/dev/null; then
+  echo "WARNING: state.json is corrupted. Treating all tasks as Pendente."
+  rm -f "$STATE_FILE"
+fi
+# Get all task IDs from tasks.md
+TASK_IDS=$(grep -E '^\| T-[0-9]+ \|' "$TASKS_FILE" | awk -F'|' '{print $2}' | tr -d ' ')
+# For each task, read status from state.json (default: Pendente)
+for TASK_ID in $TASK_IDS; do
+  if [ -f "$STATE_FILE" ]; then
+    STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")
+  else
+    STATUS="Pendente"
+  fi
+  echo "$TASK_ID: $STATUS"
+done
+```
+
+**state.json is NEVER committed.** It is gitignored. No `git add` or `git commit`
+for state changes.
+
+**Reconciliation (if state.json is lost or empty):**
+1. List all worktrees: `git worktree list`
+2. For each worktree matching a task ID pattern (e.g., `t-003` in the path),
+   infer status as `Em Andamento` (most common in-progress status)
+3. Tasks without worktrees are `Pendente`
+4. Ask the user to confirm before proceeding
+
+**Automatic mismatch detection:** Stage agents SHOULD check for inconsistencies on startup:
+if state.json is missing or empty AND worktrees exist for known task IDs, warn the user
+and offer to run reconciliation before proceeding. This prevents tasks from silently
+appearing as `Pendente` when they actually have active worktrees.
+
+Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: State Management."
+
+
+### Protocol: tasks.md Validation (HARD BLOCK)
+
+**Referenced by:** all stage agents (1-5), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
+
+Every stage agent MUST validate tasks.md before operating. The full validation rules are
+defined in the "Format Validation" section above (items 1-15). This protocol is the
+executable version:
+
+1. **Resolve paths:**
+   - `TASKS_FILE` is always `.optimus/tasks.md` (fixed path).
+   - Read `.optimus/config.json`. If `tasksDir` key exists, use that path. Otherwise, use `docs/pre-dev` (default).
+   - Store as `TASKS_FILE` and `TASKS_DIR`.
+2. **Find tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus-import`.
+3. **Validate format:** Execute all 15 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-import`.
+
+**All subsequent references to `tasks.md` in the skill use the resolved `TASKS_FILE` path.
+All references to Ring pre-dev artifacts use `TASKS_DIR` as the root** — never hardcoded paths.
+
+Skills reference this as: "Find and validate tasks.md (HARD BLOCK) — see AGENTS.md Protocol: tasks.md Validation."
+
+
+<!-- INLINE-PROTOCOLS:END -->

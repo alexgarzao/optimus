@@ -561,3 +561,327 @@ After all phases complete:
 - ALL findings (CRITICAL, HIGH, MEDIUM, and LOW) MUST be presented to the user for decision
 - The agent may recommend an option, but MUST wait for user approval via AskUser before proceeding
 - Do NOT auto-skip, auto-dismiss, or auto-resolve any finding regardless of severity
+
+
+<!-- INLINE-PROTOCOLS:START -->
+## Shared Protocols (from AGENTS.md)
+
+The following protocols are referenced by this skill. They are
+extracted from the Optimus AGENTS.md to make this plugin self-contained.
+
+### Convergence Loop (Full Roster Model)
+Applies to: plan, check, pr-check, coderabbit-review, deep-review, deep-doc-review
+
+The convergence loop eliminates false convergence by dispatching the **same agent roster**
+as round 1 in every subsequent round:
+- **Round 1:** Orchestrator dispatches all specialist agents in parallel (with full session context)
+- **Rounds 2-5:** The **same agent roster** as round 1 is dispatched in parallel via `Task`
+  tool, each with zero prior context. Each agent reads all files fresh from disk.
+- **Round 2 is MANDATORY** — the "zero new findings" stop condition only applies from round 3 onward
+- **Sub-agents do NOT receive the findings ledger.** Dedup is performed entirely by the
+  orchestrator after agents return, using **strict matching**: same file + same line range
+  (±5 lines) + same category. "Description similarity" is NOT sufficient for dedup — the
+  file, location, and category must all match.
+- Stop only when: zero new findings (round 3+), round 5 reached, or user explicitly stops
+- LOW severity findings are NOT a reason to stop — ALL findings are presented to the user
+
+**Why full roster, not a single agent:** A single generalist agent structurally cannot
+replicate the coverage of 8-10 domain specialists. The security-reviewer catches injection
+risks a code-reviewer won't. The nil-safety-reviewer catches empty guards a QA analyst won't.
+Dispatching a single agent in rounds 2+ creates false convergence — the agent declares
+"zero new findings" because it lacks the domain depth, not because the code is clean.
+
+
+### Finding Presentation (Unified Model)
+All cycle review skills follow this pattern:
+1. Collect findings from agents/tools
+2. Consolidate and deduplicate
+3. **Group same-nature findings** — after deduplication, identify findings that share the
+   same root cause or fix pattern (e.g., "missing error handling" in 5 handlers, "inconsistent
+   import path" in 4 files). If 2+ findings are of the same nature, merge them into a **single
+   grouped entry** listing all affected files/locations. Each group counts as ONE item in the
+   "Finding X of N" sequence. The user makes ONE decision for the entire group.
+4. Announce total findings count: `"### Total findings to review: N"` (where N reflects
+   grouped entries — a group of 5 same-nature findings counts as 1)
+5. Present overview table with severity counts
+6. **Deep research BEFORE presenting each finding** (see research checklist below)
+7. Walk through findings ONE AT A TIME with `"Finding X of N"` header, ordered by severity
+   (CRITICAL first, then HIGH, MEDIUM, LOW). **ALL findings MUST be presented regardless of
+   severity** — the agent NEVER skips, filters, or auto-resolves any finding. The decision to
+   fix or skip is ALWAYS the user's. For grouped entries, list all affected files/locations
+   within the single presentation.
+8. For each finding: present research-backed analysis + options, collect decision via AskUser.
+   **Every AskUser for a finding decision MUST include a "Tell me more" option.** This option
+   is always the **second-to-last** option (right before the free-text input that AskUser
+   provides automatically). This lets the user request deeper analysis with one click.
+9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
+   (a question, disagreement, or request for clarification) instead of a decision:**
+   **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
+   Research the user's concern RIGHT NOW using `WebSearch`, codebase analysis, or both.
+   Provide a thorough answer with evidence (links, code references, best practice citations).
+   Only AFTER the user is satisfied, re-present the options and ask for their decision again.
+   This may go back and forth multiple times — that is expected and correct behavior.
+   **NEVER defer the response to the end of the findings loop.**
+10. After ALL N decisions collected: apply ALL approved fixes (see below)
+11. Run verification (see Verification Timing below)
+12. Present final summary
+
+
+### Protocol: Coverage Measurement
+
+**Referenced by:** check, pr-check, coderabbit-review, verify
+
+Measure test coverage using the project's configured commands. Check `.optimus/config.json`
+for custom commands first, then fall back to Makefile targets, then stack-specific commands.
+
+**Unit coverage command resolution order:**
+1. `.optimus/config.json` → `commands.test-coverage` (if present)
+2. `make test-coverage` (if Makefile target exists)
+3. Stack-specific fallback:
+   - Go: `go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out`
+   - Node: `npm test -- --coverage`
+   - Python: `pytest --cov=. --cov-report=term`
+
+If no unit coverage command is available, mark as **SKIP** — do not fail the verification.
+
+**Integration coverage command resolution order:**
+1. `.optimus/config.json` → `commands.test-integration-coverage` (if present)
+2. `make test-integration-coverage` (if Makefile target exists)
+3. Stack-specific fallback:
+   - Go: `go test -tags=integration -coverprofile=coverage-integration.out ./... && go tool cover -func=coverage-integration.out`
+   - Node: `npm run test:integration -- --coverage`
+   - Python: `pytest -m integration --cov=. --cov-report=term`
+
+If no integration coverage command is available, mark as **SKIP** — do not fail the verification.
+
+**Thresholds:**
+
+| Test Type | Threshold | Verdict if Below |
+|-----------|-----------|-----------------|
+| Unit tests | 85% | NEEDS_FIX / HIGH finding |
+| Integration tests | 70% | NEEDS_FIX / HIGH finding |
+
+**Coverage gap analysis:** Parse the coverage output to identify untested functions/methods
+(0% coverage). Flag business-logic functions with 0% as HIGH, infrastructure/generated
+code with 0% as SKIP.
+
+Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage Measurement."
+
+
+### Protocol: Per-Droid Quality Checklists
+
+**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan
+
+Each droid type has specific dimensions it MUST verify beyond its core domain. Skills
+that dispatch review droids MUST include the applicable checklists in agent prompts.
+
+**Code Quality agent** (`ring-default-code-reviewer`) must additionally verify:
+- Resilience: external calls have timeout, retry with backoff, circuit breaker where appropriate
+- Resource lifecycle: all opened connections/handles are closed (defer, cleanup, graceful shutdown)
+- Concurrency: shared state has proper synchronization, no goroutine leaks, no deadlock risk
+- Performance: no N+1 queries, no unbounded queries, indexes exist for query patterns, no hot-path allocations
+- Configuration: no hardcoded values that should be environment-configurable, safe defaults
+- Cognitive complexity: functions with >3 nesting levels or >30 lines flagged for decomposition
+- Error handling: errors wrapped with context, consistent with codebase error patterns
+- Domain purity: no infrastructure concerns in domain layer, dependency direction correct
+- Resource leaks: DB connections, HTTP clients, file handles, channels properly closed
+
+**Business Logic agent** (`ring-default-business-logic-reviewer`) must additionally verify:
+- Spec traceability: each code path maps to a spec requirement (flag orphan logic with no spec backing)
+- Data integrity: transaction boundaries correct, partial writes impossible, rollback defined
+- Backward compatibility: existing consumers/contracts not broken by this change
+- API semantics: correct HTTP status codes, idempotent operations marked as such, pagination consistent
+- Domain edge cases: what happens with zero, negative, maximum, duplicate, concurrent values?
+- Business rule completeness: all business rules from spec have implementation AND test
+
+**Security agent** (`ring-default-security-reviewer`) must additionally verify:
+- Data privacy: PII not logged, sensitive fields masked in responses, LGPD/GDPR compliance
+- Error responses: no internal details leaked (stack traces, DB schemas, internal paths, SQL)
+- Rate limiting: high-throughput or public endpoints have rate limiting consideration
+- Input validation: happens at the right layer (not just client-side), consistent with codebase
+- Secrets: no hardcoded credentials, tokens, API keys in code or config files
+- Auth propagation: authentication context properly propagated through the call chain
+
+**Test Quality agent** (`ring-default-ring-test-reviewer`) must additionally verify:
+- Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag tests where assertions only check mock.Called() without verifying output/state
+- False positive risk: could these tests pass while the feature is actually broken?
+- Test coupling: are tests coupled to implementation details (private fields, internal struct layout)?
+- Spec traceability: for each acceptance criterion in the task spec, is there a test?
+- Integration tests: do they use real dependencies (testcontainers/docker) or just mocks?
+- Test isolation: can tests run in parallel without interference? Shared state between tests?
+- Error scenario completeness: each error return path has a corresponding test?
+- Boundary values: min, max, zero, empty, nil, negative tested where applicable?
+
+**Nil/Null Safety agent** (`ring-default-ring-nil-safety-reviewer`) must additionally verify:
+- Resource cleanup: nil checks before Close/Release calls
+- Channel safety: sends to nil/closed channels
+- Map safety: reads/writes to nil maps
+- Slice safety: index bounds after filtering/transforming
+
+**Ripple Effects agent** (`ring-default-ring-consequences-reviewer`) must additionally verify:
+- Values duplicated between files that should be a shared constant
+- Imports follow the project's layer architecture (no circular deps, no backwards imports)
+- New code follows the same patterns as existing code in the same domain
+- Backward compatibility: does this change break any existing consumer or API contract?
+- Configuration drift: new defaults reasonable? existing config overrides still valid?
+- Migration path: if breaking change, is migration strategy documented?
+- Shared state: new global/package-level state that could cause issues across modules?
+- Event/message contracts: changes to event payloads affect downstream consumers?
+
+**Dead Code agent** (`ring-default-ring-dead-code-reviewer`) must additionally verify:
+- Dead code: unused imports, unreachable branches, commented-out code
+- Zombie test infrastructure: test helpers, fixtures, mocks no longer used by any test
+- Feature flags: stale feature flag checks for flags that were already fully rolled out
+- Deprecated paths: code paths behind deprecated API versions with no remaining consumers
+
+**Spec Compliance / QA agent** (`ring-dev-team-qa-analyst`) must additionally verify:
+- Testability assessment: is the code structured for testability? (dependency injection, interfaces)
+- Operational readiness: can ops monitor, debug, and rollback this in production?
+- Acceptance criteria coverage: each AC has both success AND failure test scenarios
+- Cross-cutting scenarios: concurrent modifications, large datasets, special characters, timezone handling
+
+**Frontend specialist** (`ring-dev-team-frontend-engineer`) must additionally verify:
+- UX completeness: loading states, empty states, error states all handled
+- Accessibility: keyboard navigation, screen reader support, ARIA labels, color contrast
+- Responsive behavior: works across viewport sizes (mobile, tablet, desktop)
+- i18n readiness: no hardcoded user-facing strings, date/number formatting locale-aware
+- Performance: no unnecessary re-renders, large lists virtualized, images optimized
+
+**Backend specialist** (`ring-dev-team-backend-engineer-golang` or TS equivalent) must additionally verify:
+- Language idiomaticity: follows official style guide conventions
+- Graceful shutdown: SIGTERM handling, in-flight request draining
+- Connection pool sizing: appropriate for expected load
+- Context propagation: request context passed through the full call chain
+- Structured logging: logs include correlation IDs, operation names, durations
+
+Skills reference this as: "Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists."
+
+
+### Protocol: Project Rules Discovery
+
+**Referenced by:** stages 1-4, deep-review, coderabbit-review
+
+Every skill that reviews, validates, or generates code MUST search for project rules
+and AI instruction files before starting. Search for these files in order and read ALL
+that exist:
+
+```
+AGENTS.md                    # Primary agent instructions
+CLAUDE.md                    # Claude-specific rules
+DROIDS.md                    # Droid-specific rules
+.cursorrules                 # Cursor-specific rules
+PROJECT_RULES.md             # Coding standards (root or docs/)
+docs/PROJECT_RULES.md
+.editorconfig                # Editor formatting rules
+docs/coding-standards.md     # Explicit coding conventions
+docs/conventions.md
+.github/CONTRIBUTING.md      # Contribution guidelines
+CONTRIBUTING.md
+.eslintrc*                   # Linter configs (implicit rules)
+biome.json
+.golangci.yml
+.prettierrc*
+```
+
+If NONE exist, warn the user. If any are found, they become the source of truth
+for coding standards and must be passed to every dispatched sub-agent.
+
+Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Project Rules Discovery."
+
+
+### Protocol: Push Commits (optional)
+
+**Referenced by:** stages 1-4 (plan, build, check, pr-check), coderabbit-review, deep-review. Note: done handles pushing inline in its own cleanup phase.
+
+After stage work is complete, offer to push all local commits:
+
+**Step 1 — Check if upstream tracking exists:**
+
+```bash
+git rev-parse --abbrev-ref @{u} 2>/dev/null
+```
+
+- **If command fails (no upstream):** The branch was never pushed. All local commits are unpushed.
+  Ask via `AskUser`:
+  ```
+  Branch has no upstream (never pushed). Push now?
+  ```
+  Options:
+  - **Push now** — `git push -u origin "$(git branch --show-current)"`
+  - **Skip** — I'll push manually later
+
+- **If command succeeds (upstream exists):** Check for unpushed commits:
+  ```bash
+  git log @{u}..HEAD --oneline 2>/dev/null
+  ```
+  If there are unpushed commits, ask via `AskUser`:
+  ```
+  There are N unpushed commits on this branch. Push now?
+  ```
+  Options:
+  - **Push now** — `git push`
+  - **Skip** — I'll push manually later
+
+**Why check upstream first:** `git log @{u}..HEAD` silently produces empty output when no
+upstream exists, making it appear there's nothing to push. Without this check, the push step
+would be silently skipped even though ALL local commits are unpushed.
+
+**After a successful push**, check if the current repo is the Optimus plugin repository
+and update installed plugins to pick up the changes just pushed:
+
+```bash
+if jq -e '.name == "optimus"' .factory-plugin/marketplace.json &>/dev/null; then
+  echo "Optimus repo detected — updating installed plugins..."
+  for skill in $(droid plugin list 2>&1 | grep optimus | awk '{print $1}'); do
+    droid plugin update "$skill" 2>/dev/null
+  done
+fi
+```
+
+This ensures that agents running in the Optimus repo itself always use the latest
+skill versions after pushing changes.
+
+Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Push Commits."
+
+
+### Protocol: Ring Droid Requirement Check
+
+**Referenced by:** check, pr-check, deep-review, deep-doc-review, coderabbit-review, plan (build delegates droid dispatch to dev-cycle)
+
+Before dispatching ring droids, verify the required droids are available. If any required
+droid is not installed, **STOP** and list missing droids.
+
+**Core review droids** (required by check, pr-check, deep-review, coderabbit-review):
+- `ring-default-code-reviewer`
+- `ring-default-business-logic-reviewer`
+- `ring-default-security-reviewer`
+- `ring-default-ring-test-reviewer`
+
+**Extended review droids** (required by check, pr-check, deep-review, coderabbit-review):
+- `ring-default-ring-nil-safety-reviewer`
+- `ring-default-ring-consequences-reviewer`
+- `ring-default-ring-dead-code-reviewer`
+
+**QA droids** (required by check, deep-review):
+- `ring-dev-team-qa-analyst`
+
+**Documentation droids** (required by deep-doc-review):
+- `ring-tw-team-docs-reviewer`
+- `ring-default-business-logic-reviewer`
+- `ring-default-code-reviewer`
+
+**Implementation droids** (required by build):
+- `ring-dev-team-backend-engineer-golang` (Go)
+- `ring-dev-team-backend-engineer-typescript` (TypeScript)
+- `ring-dev-team-frontend-engineer` (React/Next.js)
+
+**Spec validation droids** (required by plan):
+- `ring-default-business-logic-reviewer`
+- `ring-default-security-reviewer`
+- `ring-dev-team-qa-analyst`
+- `ring-default-code-reviewer`
+
+Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check."
+
+
+<!-- INLINE-PROTOCOLS:END -->

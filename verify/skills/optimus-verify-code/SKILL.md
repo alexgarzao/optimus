@@ -452,3 +452,53 @@ For each failed command:
 - Always show the full summary even if everything passes
 - Duration must be measured for each command individually
 - Auto-detect the stack from project files — do NOT assume Go
+
+
+<!-- INLINE-PROTOCOLS:START -->
+## Shared Protocols (from AGENTS.md)
+
+The following protocols are referenced by this skill. They are
+extracted from the Optimus AGENTS.md to make this plugin self-contained.
+
+### Protocol: Coverage Measurement
+
+**Referenced by:** check, pr-check, coderabbit-review, verify
+
+Measure test coverage using the project's configured commands. Check `.optimus/config.json`
+for custom commands first, then fall back to Makefile targets, then stack-specific commands.
+
+**Unit coverage command resolution order:**
+1. `.optimus/config.json` → `commands.test-coverage` (if present)
+2. `make test-coverage` (if Makefile target exists)
+3. Stack-specific fallback:
+   - Go: `go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out`
+   - Node: `npm test -- --coverage`
+   - Python: `pytest --cov=. --cov-report=term`
+
+If no unit coverage command is available, mark as **SKIP** — do not fail the verification.
+
+**Integration coverage command resolution order:**
+1. `.optimus/config.json` → `commands.test-integration-coverage` (if present)
+2. `make test-integration-coverage` (if Makefile target exists)
+3. Stack-specific fallback:
+   - Go: `go test -tags=integration -coverprofile=coverage-integration.out ./... && go tool cover -func=coverage-integration.out`
+   - Node: `npm run test:integration -- --coverage`
+   - Python: `pytest -m integration --cov=. --cov-report=term`
+
+If no integration coverage command is available, mark as **SKIP** — do not fail the verification.
+
+**Thresholds:**
+
+| Test Type | Threshold | Verdict if Below |
+|-----------|-----------|-----------------|
+| Unit tests | 85% | NEEDS_FIX / HIGH finding |
+| Integration tests | 70% | NEEDS_FIX / HIGH finding |
+
+**Coverage gap analysis:** Parse the coverage output to identify untested functions/methods
+(0% coverage). Flag business-logic functions with 0% as HIGH, infrastructure/generated
+code with 0% as SKIP.
+
+Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage Measurement."
+
+
+<!-- INLINE-PROTOCOLS:END -->
