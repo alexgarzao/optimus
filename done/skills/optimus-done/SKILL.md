@@ -416,7 +416,7 @@ This also applies to Step 4.3 — if the agent is inside a worktree, `git checko
 **IMPORTANT:** PR must be merged BEFORE branch deletion. If the branch is deleted first, all code commits on it are lost.
 
 ```bash
-TASK_BRANCH=$(jq -r '.["'"$TASK_ID"'"].branch // ""' .optimus/state.json 2>/dev/null)
+TASK_BRANCH=$(jq -r --arg id "$TASK_ID" '.[$id].branch // ""' .optimus/state.json 2>/dev/null)
 if [ -z "$TASK_BRANCH" ]; then
   TASK_BRANCH=$(git branch --list "*$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')*" 2>/dev/null | head -1 | tr -d ' *')
 fi

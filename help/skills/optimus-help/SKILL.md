@@ -96,7 +96,7 @@ on their situation:
 - Use `/optimus-report` with "quick status" — shows only current task and next-up
 
 ### "I have a merge conflict in tasks.md"
-- Use `/optimus-resolve` to auto-resolve using most-advanced-status rule
+- Use `/optimus-resolve` to auto-resolve structural conflicts (each task row is independent)
 
 ### "I completed a task outside the pipeline"
 - Use `/optimus-done` with "force close T-XXX" to skip the checklist
