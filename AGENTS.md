@@ -1101,6 +1101,59 @@ for coding standards and must be passed to every dispatched sub-agent.
 
 Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Project Rules Discovery."
 
+### Protocol: Re-run Guard
+
+**Referenced by:** plan, check
+
+After the convergence loop exits and the final report/summary is presented, evaluate
+whether to suggest advancement or offer a re-run. This protocol replaces the static
+"Next step suggestion" in plan and check.
+
+**Logic:**
+
+1. Count `total_findings` produced during this execution (all findings from round 1 AND
+   all subsequent convergence rounds, from all agents and static analysis — regardless of
+   whether they were fixed or skipped by the user). If findings were grouped (per Finding
+   Presentation item 3), count grouped entries, not individual occurrences.
+2. **If `total_findings == 0`:** The analysis is clean. Suggest the next stage:
+   - plan: "Spec validation clean — 0 findings. Next step: run `/optimus-build` to implement this task."
+   - check: "Implementation review clean — 0 findings. Next step: run `/optimus-pr-check` for PR review (optional), or `/optimus-done` to close this task."
+3. **If `total_findings > 0`:** Ask via `AskUser`:
+   ```
+   Validation found N findings (X fixed, Y skipped).
+   Re-running dispatches ALL review agents again with clean context (no memory of
+   previous findings — findings you previously skipped will reappear for review).
+   This will consume similar tokens to the initial run. Workspace and status are preserved.
+   ```
+   Options:
+   - **Re-run with clean context** — re-analyze from scratch
+   - **Advance to next stage** — proceed despite findings
+
+4. **If "Re-run with clean context":**
+   - Increment stage stats (new execution)
+   - **Skip:** GitHub CLI check, tasks.md validation, task identification, session state
+     check, status validation/change, workspace creation, divergence check
+   - **Re-execute:** project structure discovery, document loading, static analysis,
+     coverage profiling, agent dispatch (ALL agents), finding presentation, fix application,
+     convergence loop
+   - **Session file:** After re-run starts, the session protocol (Protocol: Session State)
+     resumes normal operation — update the session file at each phase transition as usual.
+     This ensures crash recovery during a re-run resumes from the correct phase.
+   - After the re-run completes, apply this protocol again (evaluate findings count)
+   - There is no limit on re-runs — the user controls when to stop
+
+5. **If "Advance to next stage":** Proceed to push commits and present the next step suggestion.
+
+**NOTE:** "0 findings" means the analysis produced zero findings — not that all findings
+were resolved. If the user skipped findings in a previous run, they will reappear on
+re-run (clean context has no memory of previous decisions). This is by design.
+
+**NOTE:** Re-run analyzes the current codebase state, including any fixes applied and
+committed during the previous run. It does NOT revert commits. This validates that
+applied fixes are correct and checks for any issues introduced by the fixes.
+
+Skills reference this as: "Execute re-run guard — see AGENTS.md Protocol: Re-run Guard."
+
 ### Protocol: Push Commits (optional)
 
 **Referenced by:** all stage agents (1-5)
@@ -1529,6 +1582,12 @@ research is done SILENTLY — do not show the research process. Present only the
 10. **Correctness over convenience:** Always recommend the correct approach, regardless of
     effort. The easy option may be presented as an alternative, but Option A must be what
     the agent believes is right based on all the research above.
+11. **Production resilience:** Would this code survive production conditions? Consider:
+    timeouts on external calls, retry with backoff, circuit breakers, graceful degradation,
+    resource cleanup (connections, handles, goroutines), graceful shutdown, and behavior
+    under load (N+1 queries, unbounded queries, connection pool exhaustion).
+12. **Data integrity and privacy:** Are transaction boundaries correct? Could partial writes
+    occur? Is PII properly handled (not logged, masked in responses)? LGPD/GDPR compliance?
 
 **After research, form the recommendation:** Option A MUST be the approach the agent
 believes is correct based on the research. It must be backed by evidence (project patterns,
@@ -1579,6 +1638,24 @@ Skills dispatch specialist ring droids in parallel via Task tool:
 
 **Ring droids are REQUIRED** — there is no fallback. If the required droids are not
 installed, the skill MUST stop and list which droids need to be installed.
+
+**Navigation-enabled prompts:** All agent prompts use a path-based model. Instead of
+pasting full file content into the prompt, skills provide file paths and instruct droids
+to use Read, Grep, and Glob tools to explore the codebase autonomously. This enables
+droids to discover context the orchestrator didn't anticipate (e.g., similar patterns
+elsewhere, related test files, existing conventions).
+
+**Per-droid quality checklists:** Each droid type has specific dimensions it MUST verify
+beyond its core domain. These are defined in each SKILL.md's "Special Instructions per
+Agent" section. Skills MUST include these instructions when dispatching droids.
+
+**Cross-cutting analysis:** Every droid prompt MUST include the universal cross-cutting
+section:
+1. What would break in production under load with this code?
+2. What's MISSING that should be here? (not just what's wrong)
+3. Does this code trace back to a spec requirement? Flag orphan code without spec backing
+4. How would a new developer understand this code 6 months from now?
+5. Search the codebase for how similar problems were solved — flag inconsistencies
 
 ## Known Issues and Decisions
 

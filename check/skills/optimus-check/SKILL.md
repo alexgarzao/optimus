@@ -125,7 +125,7 @@ Validate PR title — see AGENTS.md Protocol: PR Title Validation.
 ### Step 1.0.7: Check Session State
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`check`, status=`Validando Impl`.
 
-**On stage completion** (after Phase 10 validation summary): delete the session file.
+**On stage completion** (after Phase 9 Re-run Guard resolves to advance): delete the session file.
 
 ### Step 1.0.8: Validate and Update Task Status
 
@@ -265,8 +265,8 @@ make test                    # Unit tests — MANDATORY
 Measure coverage — see AGENTS.md Protocol: Coverage Measurement. Use the protocol's
 command resolution order (config.json → Makefile → stack-specific).
 
-**NOTE:** Integration and E2E tests are NOT run here. They run only in Phase 9
-(after convergence loop, before summary) or when the user invokes them directly.
+**NOTE:** Integration and E2E tests are NOT run here. They run only in Phase 10
+(after re-run guard, before summary) or when the user invokes them directly.
 This avoids slow test suites blocking the review loop.
 
 ### Step 2.3: Analyze Coverage
@@ -285,10 +285,23 @@ Create findings for coverage issues (aligned with AGENTS.md Protocol: Coverage M
 
 Dispatch a test gap analyzer via `Task` tool. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
 
-The agent receives: source files, test files, and coverage output (if available).
+The agent receives file paths and can navigate the codebase autonomously.
 
 ```
 Goal: Cross-reference implemented tests with source code to find missing scenarios.
+
+Context:
+  - Project root: <absolute path to project worktree>
+  - Task spec: <TASKS_DIR>/<TaskSpec> (READ this file for acceptance criteria)
+  - Changed source files: [list of file paths] (READ each file)
+  - Test files: [list of test file paths] (READ each file)
+  - Coverage output: [coverage command output if available]
+
+IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
+  - Read files at the paths above
+  - Search for existing test patterns in the project
+  - Find related test files not listed above
+  - Discover how similar functions are tested elsewhere in the codebase
 
 For each public function changed/added by this task:
   - Happy path tested?
@@ -296,6 +309,13 @@ For each public function changed/added by this task:
   - Edge cases (nil, empty, boundary values)?
   - Validation failures?
   - Integration points (DB failure, timeout, retry)?
+
+Additionally verify test effectiveness:
+  - Do tests verify BEHAVIOR or just mock internals? Flag tests where assertions only check mock.Called()
+  - Could these tests pass while the feature is actually broken? (false positive risk)
+  - Are tests coupled to implementation details (private fields, internal struct layout)?
+  - For each acceptance criterion in the task spec, is there a corresponding test?
+  - Do integration tests use real dependencies (testcontainers/docker) or just mocks?
 
 Report: function, existing scenarios, missing scenarios, priority (HIGH/MEDIUM/LOW)
 ```
@@ -311,7 +331,7 @@ These are presented alongside agent review findings in Phase 5 (overview) and Ph
 
 ## Phase 3: Parallel Agent Dispatch
 
-Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives the full content of every changed file plus the task spec excerpt.
+Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives file paths and can navigate the codebase autonomously to gather context.
 
 ### Agent Roster
 
@@ -353,11 +373,19 @@ Each agent dispatch MUST include this information:
 Goal: Post-task validation of T-XXX — [your validation domain]
 
 Context:
-  - Task ID: T-XXX
-  - Task spec excerpt: [paste the full task section from the tasks file]
-  - Coding standards: [paste relevant sections for this agent's domain]
-  - Changed files (full content follows):
-    [paste full content of each changed file with filename header]
+  - Project root: <absolute path to project worktree>
+  - Task spec: <TASKS_DIR>/<TaskSpec> (READ this file)
+  - Subtasks dir: <TASKS_DIR>/subtasks/T-XXX/ (READ all .md files if dir exists)
+  - Reference docs dir: <TASKS_DIR>/ (explore for PRD, TRD, API design, data model)
+  - Project rules: AGENTS.md, PROJECT_RULES.md, docs/PROJECT_RULES.md (READ all that exist)
+  - Changed files: [list of file paths] (READ each file)
+
+IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
+  - Read files at the paths above
+  - Search the codebase for patterns similar to the code under review
+  - Find how the same problem was solved elsewhere in the project
+  - Discover test patterns, error handling conventions, and architectural styles
+  - Explore related files not listed above when needed for context
 
 Your job:
   Validate the implementation against the spec, coding standards, and engineering
@@ -374,23 +402,99 @@ Required output format:
 
   If no issues found, state "PASS — no issues in [domain]"
   Always include a "What Was Done Well" section acknowledging good practices.
+
+Cross-cutting analysis (MANDATORY for all agents):
+  1. What would break in production under load with this code?
+  2. What's MISSING that should be here? (not just what's wrong)
+  3. Does this code trace back to a spec requirement? Flag orphan code without spec backing
+  4. How would a new developer understand this code 6 months from now?
+  5. Search the codebase for how similar problems were solved — flag inconsistencies with existing patterns
 ```
 
 ### Special Instructions per Agent
 
-**Spec Compliance agent** must additionally:
-1. List every acceptance criterion from the Ring source (via `TaskSpec` column) and mark PASS/FAIL/PARTIAL
-2. List every test ID and verify a corresponding test exists
-4. If the task has API endpoints, verify request/response format matches API contracts
-5. If the task has DB changes, verify column types/constraints match the data model
+**Code Quality agent** (`ring-default-code-reviewer`) must additionally verify:
+- Resilience: external calls have timeout, retry with backoff, circuit breaker where appropriate
+- Resource lifecycle: all opened connections/handles are closed (defer, cleanup, graceful shutdown)
+- Concurrency: shared state has proper synchronization, no goroutine leaks, no deadlock risk
+- Performance: no N+1 queries, no unbounded queries, indexes exist for query patterns, no hot-path allocations
+- Configuration: no hardcoded values that should be environment-configurable, safe defaults
+- Cognitive complexity: functions with >3 nesting levels or >30 lines flagged for decomposition
+- Error handling: errors wrapped with context, consistent with codebase error patterns
+- Domain purity: no infrastructure concerns in domain layer, dependency direction correct
+- Resource leaks: DB connections, HTTP clients, file handles, channels properly closed
 
-**Ripple Effects agent** (`ring-default-ring-consequences-reviewer`) must additionally:
+**Business Logic agent** (`ring-default-business-logic-reviewer`) must additionally verify:
+- Spec traceability: each code path maps to a spec requirement (flag orphan logic with no spec backing)
+- Data integrity: transaction boundaries correct, partial writes impossible, rollback defined
+- Backward compatibility: existing consumers/contracts not broken by this change
+- API semantics: correct HTTP status codes, idempotent operations marked as such, pagination consistent
+- Domain edge cases: what happens with zero, negative, maximum, duplicate, concurrent values?
+- Business rule completeness: all business rules from spec have implementation AND test
+
+**Security agent** (`ring-default-security-reviewer`) must additionally verify:
+- Data privacy: PII not logged, sensitive fields masked in responses, LGPD/GDPR compliance
+- Error responses: no internal details leaked (stack traces, DB schemas, internal paths, SQL)
+- Rate limiting: high-throughput or public endpoints have rate limiting consideration
+- Input validation: happens at the right layer (not just client-side), consistent with codebase
+- Secrets: no hardcoded credentials, tokens, API keys in code or config files
+- Auth propagation: authentication context properly propagated through the call chain
+
+**Test Quality agent** (`ring-default-ring-test-reviewer`) must additionally verify:
+- Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag tests where assertions only check mock.Called() without verifying output/state
+- False positive risk: could these tests pass while the feature is actually broken?
+- Test coupling: are tests coupled to implementation details (private fields, internal struct layout)?
+- Spec traceability: for each acceptance criterion in the task spec, is there a test?
+- Integration tests: do they use real dependencies (testcontainers/docker) or just mocks?
+- Test isolation: can tests run in parallel without interference? Shared state between tests?
+- Error scenario completeness: each error return path has a corresponding test?
+- Boundary values: min, max, zero, empty, nil, negative tested where applicable?
+
+**Nil/Null Safety agent** (`ring-default-ring-nil-safety-reviewer`) must additionally verify:
+- Resource cleanup: nil checks before Close/Release calls
+- Channel safety: sends to nil/closed channels
+- Map safety: reads/writes to nil maps
+- Slice safety: index bounds after filtering/transforming
+
+**Ripple Effects agent** (`ring-default-ring-consequences-reviewer`) must additionally verify:
 1. Check for values duplicated between files that should be a shared constant
 2. Verify imports follow the project's layer architecture (no circular deps, no backwards imports)
 3. Check that new code follows the same patterns as existing code in the same domain
+4. Backward compatibility: does this change break any existing consumer or API contract?
+5. Configuration drift: new defaults reasonable? existing config overrides still valid?
+6. Migration path: if breaking change, is migration strategy documented?
+7. Shared state: new global/package-level state that could cause issues across modules?
+8. Event/message contracts: changes to event payloads affect downstream consumers?
 
-**Dead Code agent** (`ring-default-ring-dead-code-reviewer`) must additionally:
+**Dead Code agent** (`ring-default-ring-dead-code-reviewer`) must additionally verify:
 1. Look for dead code (unused imports, unreachable branches, commented-out code)
+2. Zombie test infrastructure: test helpers, fixtures, mocks no longer used by any test
+3. Feature flags: stale feature flag checks for flags that were already fully rolled out
+4. Deprecated paths: code paths behind deprecated API versions with no remaining consumers
+
+**Spec Compliance agent** (`ring-dev-team-qa-analyst`) must additionally:
+1. List every acceptance criterion from the Ring source (via `TaskSpec` column) and mark PASS/FAIL/PARTIAL
+2. List every test ID and verify a corresponding test exists
+3. If the task has API endpoints, verify request/response format matches API contracts
+4. If the task has DB changes, verify column types/constraints match the data model
+5. Testability assessment: is the code structured for testability? (dependency injection, interfaces)
+6. Operational readiness: can ops monitor, debug, and rollback this in production?
+7. Acceptance criteria coverage: each AC has both success AND failure test scenarios
+8. Cross-cutting scenarios: concurrent modifications, large datasets, special characters, timezone handling
+
+**Frontend specialist** (`ring-dev-team-frontend-engineer`) must additionally verify:
+- UX completeness: loading states, empty states, error states all handled
+- Accessibility: keyboard navigation, screen reader support, ARIA labels, color contrast
+- Responsive behavior: works across viewport sizes (mobile, tablet, desktop)
+- i18n readiness: no hardcoded user-facing strings, date/number formatting locale-aware
+- Performance: no unnecessary re-renders, large lists virtualized, images optimized
+
+**Backend specialist** (`ring-dev-team-backend-engineer-golang` or TS equivalent) must additionally verify:
+- Language idiomaticity: follows official style guide conventions
+- Graceful shutdown: SIGTERM handling, in-flight request draining
+- Connection pool sizing: appropriate for expected load
+- Context propagation: request context passed through the full call chain
+- Structured logging: logs include correlation IDs, operation names, durations
 
 ---
 
@@ -543,7 +647,7 @@ If lint fails, fix formatting issues and re-run.
 
 If tests fail after 3 attempts to fix, revert the offending fix and ask the user.
 
-**NOTE:** Integration and E2E tests do NOT run here — they run in Phase 9 (after convergence loop, before summary).
+**NOTE:** Integration and E2E tests do NOT run here — they run in Phase 10 (after re-run guard, before summary).
 
 ### Step 7.4: Coverage Verification
 
@@ -560,20 +664,23 @@ After coverage measurement, dispatch an agent to cross-reference the task spec's
 
 **Dispatch a test gap analyzer** via `Task` tool. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
 
-The agent receives:
-1. **Task spec** — acceptance criteria, testing strategy, test IDs
-2. **Source files changed by this task** — full content
-3. **Test files for changed source** — full content
-4. **Coverage profile** — coverage command output (if available)
+The agent receives file paths and can navigate the codebase autonomously.
 
 ```
 Goal: Cross-reference task spec with implemented tests to find scenario gaps.
 
 Context:
-  - Task spec: [paste task section with acceptance criteria and test IDs]
-  - Source files: [full content]
-  - Test files: [full content]
-  - Coverage profile: [coverage command output]
+  - Project root: <absolute path to project worktree>
+  - Task spec: <TASKS_DIR>/<TaskSpec> (READ this file for acceptance criteria and test IDs)
+  - Changed source files: [list of file paths] (READ each file)
+  - Test files: [list of test file paths] (READ each file)
+  - Coverage profile: [coverage command output if available]
+
+IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
+  - Read files at the paths above
+  - Search for existing test patterns in the project
+  - Find related test files not listed above
+  - Discover how similar functions are tested elsewhere in the codebase
 
 Your job:
   1. For each acceptance criterion in the task spec, verify:
@@ -587,6 +694,11 @@ Your job:
   3. For integration points (DB, external APIs, message queues):
      - Are failure, timeout, and retry scenarios tested?
      - Are rollback and constraint violation scenarios tested?
+  4. Test effectiveness analysis:
+     - Do tests verify BEHAVIOR or just mock internals? Flag false confidence tests
+     - Could these tests pass while the feature is actually broken?
+     - Are tests coupled to implementation details rather than behavior?
+     - Do integration tests use real dependencies or just mocks?
 
 Required output format:
   ## Acceptance Criteria Coverage
@@ -600,6 +712,10 @@ Required output format:
   ## Integration Test Gaps
   | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
   |---|------|----------|--------------------|-------------------|----------|
+
+  ## Test Effectiveness Issues
+  | # | File | Test | Issue | Risk | Priority |
+  |---|------|------|-------|------|----------|
 ```
 
 **Gap findings become part of Phase 6** (interactive resolution) — each HIGH gap is presented as a finding for user decision (fix now or defer).
@@ -618,17 +734,32 @@ convergence round failed.
 
 **Stage-specific scope for fresh sub-agent dispatch (rounds 2+):**
 Use any available ring review droid (e.g., `ring-default-code-reviewer`). The sub-agent receives:
-1. All changed files (re-read fresh from disk)
-2. Task spec (re-read from tasks.md)
-3. Project rules (re-read fresh)
+1. File paths to all changed files (sub-agent reads fresh via Read/Grep/Glob tools)
+2. File paths to task spec and reference docs (sub-agent reads fresh)
+3. File paths to project rules (sub-agent reads fresh)
 4. The findings ledger (for dedup only)
 5. Analysis instructions: code quality, business logic, security, test quality, spec compliance, cross-file consistency
+6. Cross-cutting analysis instructions (same 5 items from Phase 3 prompt)
 
-When the loop exits, proceed to Phase 9 (integration/E2E tests).
+When the loop exits, proceed to Phase 9 (Re-run Guard).
 
 ---
 
-## Phase 9: Integration and E2E Tests (before push)
+## Phase 9: Re-run Guard
+
+### Step 9.1: Evaluate Re-run or Advance
+
+Execute re-run guard — see AGENTS.md Protocol: Re-run Guard.
+
+- If the user chooses **Re-run with clean context**: go back to Step 1.1 (Discover Project
+  Structure). Skip all prior setup steps (GitHub CLI check, tasks.md validation, workspace
+  resolution, task identification, session state, status validation, divergence check).
+  Increment stage stats before re-starting analysis.
+- If the user chooses **Advance** (or 0 findings): proceed to Phase 10 (integration/E2E tests).
+
+---
+
+## Phase 10: Integration and E2E Tests (before push)
 
 **After the convergence loop exits**, run integration and E2E tests. These are slow and
 expensive, so they run ONCE at the end — not during the fix/convergence cycle.
@@ -653,7 +784,7 @@ make test-e2e                # E2E tests — if target exists
 
 ---
 
-## Phase 10: Validation Summary
+## Phase 11: Validation Summary
 
 ```markdown
 ## Post-Task Validation Summary: T-XXX
@@ -693,8 +824,8 @@ make test-e2e                # E2E tests — if target exists
 ### Verification
 - Lint: PASS
 - Unit tests: PASS (X tests)
-- Integration tests: PASS / SKIPPED (Phase 9)
-- E2E tests: PASS / SKIPPED (Phase 9)
+- Integration tests: PASS / SKIPPED (Phase 10)
+- E2E tests: PASS / SKIPPED (Phase 10)
 
 ### Test Coverage
 - Unit tests: XX.X% (threshold: 85%) — PASS / FAIL
@@ -703,26 +834,26 @@ make test-e2e                # E2E tests — if target exists
 
 ---
 
-## Phase 11: Push Commits (optional)
+## Phase 12: Push Commits (optional)
 Offer to push commits — see AGENTS.md Protocol: Push Commits.
 
 ---
 
-## Phase 12: Offer PR Creation
+## Phase 13: Offer PR Creation
 
 After the validation summary is presented and the verdict is APPROVED or APPROVED WITH CAVEATS,
 offer to create a PR for the task.
 
-### Step 12.1: Check if PR Already Exists
+### Step 13.1: Check if PR Already Exists
 
 ```bash
 gh pr list --head "$(git branch --show-current)" --json number,state,url --jq '.[]'
 ```
 
 - **If PR already exists (any state):** skip PR creation — inform the user: "PR #X already exists: <url>"
-- **If no PR exists:** proceed to Step 12.2
+- **If no PR exists:** proceed to Step 13.2
 
-### Step 12.2: Generate PR Title (Conventional Commits)
+### Step 13.2: Generate PR Title (Conventional Commits)
 
 Derive the PR title from the task's **Tipo** column and title:
 
@@ -735,7 +866,7 @@ Derive the PR title from the task's **Tipo** column and title:
 
 **Example:** Task T-003 "User registration API" with Tipo "Feature" → `feat(T-003): add user registration API`
 
-### Step 12.3: Offer to Create
+### Step 13.3: Offer to Create
 
 Ask via `AskUser`:
 ```
@@ -761,7 +892,7 @@ The body should include:
 - Objective (from Ring source via `TaskSpec` column)
 - Link to the task section in tasks.md
 
-### Step 12.4: Confirm
+### Step 13.4: Confirm
 
 If created, show: "PR #N created: <url> (assigned to you)"
 
@@ -775,7 +906,7 @@ context. The agent NEVER creates a PR without explicit user approval.
 ### Agent Dispatch
 - ALWAYS dispatch agents for: Code Quality, Business Logic, Security, QA, Cross-File Consistency, Spec Compliance
 - Dispatch Frontend/Backend specialists based on task scope (Step 1.4)
-- Each agent receives the FULL content of ALL changed files — never partial content
+- Each agent receives file paths and can navigate the codebase autonomously via Read/Grep/Glob tools
 - Agents run in PARALLEL — do not wait for one before dispatching another
 - Ring droids are required — do not proceed without them
 
@@ -834,6 +965,6 @@ If the user requests a dry-run (e.g., "dry-run review T-012", "preview review"):
 - Be specific: "line 42 of file.tsx uses X, but coding standards section Y requires Z"
 - Be constructive: always provide a concrete fix, not just criticism
 - Be honest about effort: don't say "trivial" for something that requires refactoring multiple files
-- **Next step suggestion:** After the validation summary (Phase 10) and optional PR creation (Phase 12),
-  inform the user: "Implementation review complete. Next step: run `/optimus-pr-check`
-  for PR review (optional), or `/optimus-done` to close this task."
+- **Re-run guard:** After the convergence loop exits, execute the Re-run Guard protocol
+  (Phase 9) instead of unconditionally suggesting the next stage. The next stage is only
+  suggested when the analysis produces 0 findings. See AGENTS.md Protocol: Re-run Guard.

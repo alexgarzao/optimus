@@ -186,7 +186,7 @@ If no PR is found, offer to create one via `AskUser`:
 No PR exists for the current branch (<branch>). What should I do?
 ```
 Options:
-- **Create PR** — create a PR against the default branch with a Conventional Commits title derived from the task's Tipo and title (same logic as check Phase 12)
+- **Create PR** — create a PR against the default branch with a Conventional Commits title derived from the task's Tipo and title (same logic as check Phase 13)
 - **Provide URL** — I have a PR URL to use
 - **Cancel** — stop the review
 
@@ -566,11 +566,7 @@ $TEST_UNIT_CMD   # from .optimus/config.json, or fallback: make test
 
 ### Step 3.3: Dispatch Agents
 
-Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives:
-- The full content of every changed file
-- The PR context (description, linked issues)
-- ALL existing PR comments from ALL sources (Codacy, DeepSource, CodeRabbit, human)
-- Coding standards and reference docs
+Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives file paths and can navigate the codebase autonomously.
 
 **Agent prompt MUST include:**
 
@@ -580,6 +576,19 @@ PR Context:
   - Purpose: <PR description summary>
   - Linked issues: <list>
   - Base branch: <base>
+
+  - Project root: <absolute path to project worktree>
+  - Task spec: <TASKS_DIR>/<TaskSpec> (READ this file if task-linked PR)
+  - Reference docs dir: <TASKS_DIR>/ (explore for PRD, TRD, API design, data model)
+  - Project rules: AGENTS.md, PROJECT_RULES.md, docs/PROJECT_RULES.md (READ all that exist)
+  - Changed files: [list of file paths] (READ each file)
+
+IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
+  - Read files at the paths above
+  - Search the codebase for patterns similar to the code under review
+  - Find how the same problem was solved elsewhere in the project
+  - Discover test patterns, error handling conventions, and architectural styles
+  - Explore related files not listed above when needed for context
 
 Existing PR Comments — evaluate ALL of these (validate or contest each one):
 
@@ -622,19 +631,26 @@ For EACH finding (new or evaluated), provide:
     - Project focus: MVP-critical or gold-plating?
     - Engineering quality: Maintainability, testability, reliability impact
   - Recommendation with tradeoffs
+
+Cross-cutting analysis (MANDATORY for all agents):
+  1. What would break in production under load with this code?
+  2. What's MISSING that should be here? (not just what's wrong)
+  3. Does this code trace back to a spec requirement? Flag orphan code without spec backing
+  4. How would a new developer understand this code 6 months from now?
+  5. Search the codebase for how similar problems were solved — flag inconsistencies with existing patterns
 ```
 
 ### Agents (always dispatch ALL)
 
 | # | Agent | Focus | Ring Droid |
 |---|-------|-------|------------|
-| 1 | Code quality | Architecture, SOLID, DRY, maintainability | `ring-default-code-reviewer` |
-| 2 | Business logic | Domain correctness, edge cases | `ring-default-business-logic-reviewer` |
-| 3 | Security | Vulnerabilities, OWASP, input validation | `ring-default-security-reviewer` |
-| 4 | Test quality | Coverage gaps, error scenarios, flaky patterns | `ring-default-ring-test-reviewer` |
-| 5 | Nil/null safety | Nil pointer risks, unsafe dereferences | `ring-default-ring-nil-safety-reviewer` |
-| 6 | Ripple effects | Cross-file impacts beyond changed files | `ring-default-ring-consequences-reviewer` |
-| 7 | Dead code | Orphaned code from changes | `ring-default-ring-dead-code-reviewer` |
+| 1 | Code quality | Architecture, SOLID, DRY, maintainability, resilience, resource lifecycle, concurrency, performance, configuration, cognitive complexity, error handling, domain purity | `ring-default-code-reviewer` |
+| 2 | Business logic | Domain correctness, edge cases, spec traceability, data integrity, backward compatibility, API semantics | `ring-default-business-logic-reviewer` |
+| 3 | Security | Vulnerabilities, OWASP, input validation, data privacy, error response leakage, rate limiting, auth propagation | `ring-default-security-reviewer` |
+| 4 | Test quality | Coverage gaps, error scenarios, flaky patterns, test effectiveness, false positive risk, test coupling, spec traceability | `ring-default-ring-test-reviewer` |
+| 5 | Nil/null safety | Nil pointer risks, unsafe dereferences, resource cleanup nil checks, channel/map/slice safety | `ring-default-ring-nil-safety-reviewer` |
+| 6 | Ripple effects | Cross-file impacts, backward compatibility, configuration drift, migration paths, shared state, event contracts | `ring-default-ring-consequences-reviewer` |
+| 7 | Dead code | Orphaned code, zombie test infrastructure, stale feature flags, deprecated paths | `ring-default-ring-dead-code-reviewer` |
 
 **Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. If the core review droids are not installed, **STOP** and inform the user:
 ```
@@ -939,24 +955,30 @@ Measure coverage — see AGENTS.md Protocol: Coverage Measurement.
 
 Dispatch a test gap analyzer via `Task` tool. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
 
-The agent receives:
-1. **Changed source files** -- full content (non-test files only)
-2. **Test files for changed source** -- full content
-3. **Coverage profile** -- coverage command output (if available)
+The agent receives file paths and can navigate the codebase autonomously.
 
 ```
 Goal: Cross-reference implemented tests with source code to find missing scenarios.
 
 Context:
-  - Source files changed: [full content]
-  - Test files: [full content]
-  - Coverage profile: [coverage command output]
+  - Project root: <absolute path to project worktree>
+  - Changed source files: [list of file paths] (READ each file)
+  - Test files: [list of test file paths] (READ each file)
+  - Coverage profile: [coverage command output if available]
+
+IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
+  - Read files at the paths above
+  - Search for existing test patterns in the project
+  - Find related test files not listed above
+  - Discover how similar functions are tested elsewhere in the codebase
 
 Your job:
   For each public function changed/added:
   1. Unit tests: check for happy path, error paths, edge cases, validation failures
   2. Integration tests: check for DB failure, timeout, retry, rollback scenarios
   3. Report what EXISTS and what is MISSING
+  4. Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag false confidence tests
+  5. Could these tests pass while the feature is actually broken?
 
 Required output format:
   ## Unit Test Gaps
@@ -967,10 +989,15 @@ Required output format:
   | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
   |---|------|----------|--------------------|-------------------|----------|
 
+  ## Test Effectiveness Issues
+  | # | File | Test | Issue | Risk | Priority |
+  |---|------|------|-------|------|----------|
+
   ## Summary
   - Functions analyzed: X
   - Fully covered: X | Partial: X | No tests: X
   - Missing scenarios: X HIGH, Y MEDIUM, Z LOW
+  - Effectiveness issues: X
 ```
 
 HIGH priority gaps are presented as findings for user decision.
@@ -983,11 +1010,12 @@ Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Lo
 
 **Stage-specific scope for fresh sub-agent dispatch (rounds 2+):**
 Use any available ring review droid (e.g., `ring-default-code-reviewer`). The sub-agent receives:
-1. All changed files (re-read fresh from disk)
+1. File paths to all changed files (sub-agent reads fresh via Read/Grep/Glob tools)
 2. PR context (description, linked issues, base branch)
-3. Project rules (re-read fresh)
+3. File paths to project rules (sub-agent reads fresh)
 4. The findings ledger (for dedup only)
 5. Existing PR comments from all sources (reuse data from Phase 1 — do NOT re-fetch)
+6. Cross-cutting analysis instructions (same 5 items from Step 3.3 prompt)
 
 **Do NOT re-fetch** Codacy/DeepSource comments — they only update after push.
 

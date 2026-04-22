@@ -105,7 +105,7 @@ spec validation only to discover `gh` is not set up when they try to run Stage-2
 
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`plan`, status=`Validando Spec`.
 
-**On stage completion** (after Phase 6 convergence loop exits): delete the session file.
+**On stage completion** (after Phase 7 Re-run Guard resolves to advance): delete the session file.
 
 ### Step 1.0.3: Validate Task Status (DO NOT modify yet)
 
@@ -441,7 +441,7 @@ For EACH new component:
 
 ### Step 2.4: Dispatch Validation Agents (MANDATORY)
 
-**HARD BLOCK:** Dispatch specialist ring droids in parallel to validate the task spec. Each agent receives the task spec, reference docs, and the gaps/findings identified so far.
+**HARD BLOCK:** Dispatch specialist ring droids in parallel to validate the task spec. Each agent receives file paths and can navigate the codebase autonomously.
 
 **Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. **If any of the droids below are not available, STOP and inform the user:**
 ```
@@ -464,9 +464,19 @@ Required ring droids are not installed. Install them before running this skill:
 Goal: Pre-implementation validation of task T-XXX — [your domain]
 
 Context:
-  - Task spec: [full task content]
-  - Reference docs: [relevant sections]
+  - Project root: <absolute path to project worktree>
+  - Task spec: <TASKS_DIR>/<TaskSpec> (READ this file)
+  - Subtasks dir: <TASKS_DIR>/subtasks/T-XXX/ (READ all .md files if dir exists)
+  - Reference docs dir: <TASKS_DIR>/ (explore for PRD, TRD, API design, data model)
+  - Project rules: AGENTS.md, PROJECT_RULES.md, docs/PROJECT_RULES.md (READ all that exist)
   - Gaps already identified: [list from Steps 2.1-2.3]
+
+IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
+  - Read files at the paths above
+  - Search the codebase for patterns similar to what the spec describes
+  - Find how similar features were implemented in the project
+  - Discover existing test patterns, error handling conventions, and architectural styles
+  - Explore related files not listed above when needed for context
 
 Your job:
   Validate the task spec from your domain perspective BEFORE implementation.
@@ -476,7 +486,47 @@ Your job:
 Required output:
   For each finding: severity, category, description, recommendation
   If no issues: "PASS — [domain] validation clean"
+
+Cross-cutting analysis (MANDATORY):
+  1. What would break in production under load if this spec is implemented as-is?
+  2. What's MISSING from the spec that should be there? (not just what's wrong)
+  3. Does this spec trace back to business requirements? Flag orphan requirements
+  4. How would a new developer understand and implement this spec 6 months from now?
+  5. Search the codebase for how similar features were built — flag inconsistencies with existing patterns
 ```
+
+**Special Instructions per Agent:**
+
+**Business Logic agent** (`ring-default-business-logic-reviewer`) must additionally verify:
+- Spec traceability: each requirement maps to a testable acceptance criterion (flag vague criteria)
+- Data integrity: transaction boundaries defined, partial writes considered, rollback strategy specified
+- Backward compatibility: impact on existing consumers/contracts assessed
+- API semantics: correct HTTP methods, status codes, idempotency, pagination consistency specified
+- Domain edge cases: zero, negative, maximum, duplicate, concurrent value scenarios considered
+- Business rule completeness: all business rules have both success AND failure behavior specified
+
+**Security agent** (`ring-default-security-reviewer`) must additionally verify:
+- Data privacy: PII handling specified, sensitive field masking defined, LGPD/GDPR compliance considered
+- Error responses: spec ensures no internal details leaked (stack traces, DB schemas, internal paths)
+- Rate limiting: high-throughput or public endpoints have rate limiting consideration
+- Input validation: validation rules explicit (at which layer, what formats, what lengths/ranges)
+- Auth propagation: authentication context flow through the system specified
+
+**QA agent** (`ring-dev-team-qa-analyst`) must additionally verify:
+- Testability assessment: is the spec structured for testable implementation? (interfaces, dependency injection points)
+- Operational readiness: monitoring, debugging, and rollback capabilities considered
+- Acceptance criteria coverage: each AC has both success AND failure test scenarios
+- Cross-cutting scenarios: concurrent modifications, large datasets, special characters, timezone handling
+- Spec quality: are ACs measurable and testable? (not vague like "works correctly")
+- Rollback/recovery strategy defined for failure cases
+
+**Code reviewer** (`ring-default-code-reviewer`) must additionally verify:
+- Resilience: external calls have timeout, retry, circuit breaker considerations in the spec
+- Resource lifecycle: connection cleanup, graceful shutdown considerations specified
+- Concurrency: shared state, synchronization, goroutine leak risks identified
+- Performance: potential N+1 queries, unbounded queries, missing index considerations
+- Configuration: values that should be environment-configurable vs hardcoded identified
+- Domain purity: spec maintains clean layer separation, no infrastructure concerns in domain logic
 
 Merge agent findings with the findings from Steps 2.1-2.3. Deduplicate and sort by severity before presenting.
 
@@ -546,15 +596,28 @@ Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Lo
 
 **Stage-specific scope for fresh sub-agent dispatch (rounds 2+):**
 Use `ring-default-business-logic-reviewer` for spec validation. The sub-agent receives:
-1. Task spec, reference docs, tasks.md, project rules (re-read fresh)
+1. File paths to task spec, reference docs, tasks.md, project rules (sub-agent reads fresh via Read/Grep/Glob tools)
 2. The findings ledger (for dedup only)
 3. Analysis instructions: cross-reference (Step 2.1), test gaps (Step 2.2), observability (Step 2.3), DoD, ambiguities
+4. Cross-cutting analysis instructions (same 5 items from Step 2.4 prompt)
 
-When the loop exits, proceed to Phase 7 (Push).
+When the loop exits, proceed to Phase 7 (Re-run Guard).
 
-## Phase 7: Push Commits
+## Phase 7: Re-run Guard
 
-### Step 7.1: Push Commits (optional)
+### Step 7.1: Evaluate Re-run or Advance
+
+Execute re-run guard — see AGENTS.md Protocol: Re-run Guard.
+
+- If the user chooses **Re-run with clean context**: go back to Step 1.1 (Discover Project
+  Structure). Skip all prior setup steps (GitHub CLI check, tasks.md validation, task
+  identification, session state, status validation, workspace creation, divergence check).
+  Increment stage stats before re-starting analysis.
+- If the user chooses **Advance** (or 0 findings): proceed to Phase 8 (Push).
+
+## Phase 8: Push Commits
+
+### Step 8.1: Push Commits (optional)
 
 Offer to push commits — see AGENTS.md Protocol: Push Commits.
 
@@ -648,9 +711,9 @@ Components verified: [list each component checked]
 - ALL findings (CRITICAL, HIGH, MEDIUM, and LOW) MUST be presented to the user for decision
 - The agent may recommend an option, but MUST wait for user approval via AskUser before proceeding
 - Do NOT auto-skip, auto-dismiss, or auto-resolve any finding regardless of severity
-- **Next step suggestion:** After the convergence loop exits and the final report is presented,
-  inform the user: "Spec validation complete. Next step: run `/optimus-build` to
-  implement this task."
+- **Re-run guard:** After the convergence loop exits, execute the Re-run Guard protocol
+  (Phase 7) instead of unconditionally suggesting the next stage. The next stage is only
+  suggested when the analysis produces 0 findings. See AGENTS.md Protocol: Re-run Guard.
 
 ### Dry-Run Mode
 If the user requests a dry-run (e.g., "dry-run spec T-003", "preview spec"):
@@ -659,6 +722,6 @@ If the user requests a dry-run (e.g., "dry-run spec T-003", "preview spec"):
 - **Do NOT change task status** — skip Step 1.0.5 (status reservation)
 - **Do NOT create workspaces** — skip Step 1.0.5 (workspace creation)
 - **Do NOT increment stats** — skip Step 1.0.7 (stage stats)
-- **Do NOT commit or push anything** — skip Phases 4, 5, 7
+- **Do NOT commit, push, or re-run** — skip Phases 4, 5, 7, 8
 - **Do NOT run convergence loop** — one pass is sufficient for preview
 - Present results as informational: "what would happen" without side effects
