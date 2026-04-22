@@ -344,84 +344,19 @@ If lint fails, fix formatting issues.
 
 ## Phase 7: Convergence Loop (MANDATORY)
 
-After Phase 6, automatically re-validate using fresh sub-agents to eliminate session bias.
+Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Loop".
 
-**CRITICAL — Why Fresh Sub-Agents:**
+**Stage-specific scope for fresh sub-agent dispatch (rounds 2+):**
+Use `ring-default-code-reviewer` or any available ring review droid. The sub-agent receives:
+1. All files in scope (re-read fresh from disk)
+2. Project rules and coding standards (re-read fresh)
+3. The findings ledger (for dedup only)
+4. Review type (Initial/Final) and scope from Phase 1
 
-The primary failure mode of convergence loops is **false convergence**: the orchestrator
-re-runs analysis in the same session, with the same mental model, and declares "zero new
-findings" — not because there are none, but because it can't see past its own prior reasoning.
+**Failure handling:** If the fresh sub-agent dispatch fails, treat as "zero new findings"
+for that round but warn the user. Do NOT fail the entire review.
 
-The solution: **rounds 2+ are executed by a fresh sub-agent** dispatched via `Task` tool.
-The sub-agent has zero context from prior rounds, reads all files from scratch, and returns
-findings independently. The orchestrator then deduplicates against the cumulative ledger.
-
-**Round structure:**
-
-| Round | Who analyzes | How |
-|-------|-------------|-----|
-| **1** (initial) | Orchestrator (this agent) | Phase 2 (parallel agent dispatch) + Phase 3 (consolidate) — normal flow |
-| **2** (mandatory) | **Fresh sub-agent** via `Task` | Sub-agent reads all files from scratch, reviews independently, returns findings |
-| **3-5** | **Fresh sub-agent** via `Task` | Same as round 2 — only triggered if round 2+ found new findings |
-
-**Round 2 is MANDATORY.** The "zero new findings" stop condition can only trigger starting from round 3.
-
-**Fresh sub-agent dispatch (rounds 2+):**
-
-Dispatch a single sub-agent via `Task` tool (use `ring-default-code-reviewer` or any
-available ring review droid). The sub-agent receives:
-
-1. **All files in scope** — full content, re-read fresh from disk
-2. **Project rules and coding standards** — re-read fresh
-3. **The findings ledger** — for deduplication ONLY
-
-```
-Goal: Independent code review (convergence round X of 5)
-
-You are a FRESH reviewer with NO prior context. Review from scratch.
-
-Context:
-  - Review type: Initial / Final
-  - Files to review: [full content — re-read from disk]
-  - Project rules: [full content — re-read from files]
-
-Previously identified findings (for DEDUP ONLY):
-  [list of findings with IDs and descriptions]
-
-CRITICAL: Analyze INDEPENDENTLY. Do NOT skip areas because previous rounds
-"already covered" them. The orchestrator will dedup.
-
-Required output:
-  For each finding: severity, file, line, category, description, recommendation
-  If no issues: "PASS — all domains clean"
-```
-
-**Orchestrator deduplication after sub-agent returns:**
-
-1. Compare each sub-agent finding against the cumulative ledger (match by file + topic + description similarity)
-2. **Genuinely new findings** → add to ledger, present to user via Phase 5 (interactive resolution)
-3. **Duplicates** → discard silently
-
-**Loop rules:**
-- Max 5 rounds (initial = round 1)
-- **Round 2 is MANDATORY** — always dispatch a fresh sub-agent regardless of round 1 results
-- Show `"=== Re-validation round X of 5 (fresh sub-agent) ==="` at start
-- **If new findings exist:** Present them using Phase 5, fix via Phase 6, then loop again
-- **Stop conditions (any one triggers exit):**
-  1. Zero new findings — **only valid from round 3 onward** (round 2 is mandatory)
-  2. Round 5 completed (hard limit)
-  3. User explicitly requests to stop
-- **LOW severity findings are NOT a reason to stop** — ALL findings are presented to the user
-
-**Round summary (show after each round):**
-
-```markdown
-### Round X of 5 (fresh sub-agent) — Summary
-- New findings this round: N (C critical, H high, M medium, L low)
-- Cumulative: X total findings across Y rounds
-- Fixed: A | Skipped: B | Deferred: C
-- Status: CONVERGED / CONTINUING / HARD LIMIT REACHED
-```
+When the loop exits, proceed to Phase 8 (Final Summary).
 
 ---
 

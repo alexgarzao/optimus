@@ -69,7 +69,7 @@ Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
 **HARD BLOCK:** Find and validate tasks.md — see AGENTS.md Protocol: tasks.md Validation.
 
-### Step 1.0.1.2: Resolve Workspace (HARD BLOCK)
+### Step 1.0.2: Resolve Workspace (HARD BLOCK)
 Resolve workspace — see AGENTS.md Protocol: Workspace Auto-Navigation. Branch-task cross-validation is included in this protocol.
 
 ### Step 1.0.2: Identify Task to Close
@@ -147,7 +147,7 @@ git rev-parse --abbrev-ref @{u} 2>/dev/null
 
 - **If command fails (no upstream):** The branch was never pushed. Push with `-u` to create the upstream:
   ```bash
-  git push -u origin $(git branch --show-current)
+  git push -u origin "$(git branch --show-current)"
   ```
 - **If command succeeds (upstream exists):** Check for unpushed commits:
   ```bash
@@ -188,7 +188,7 @@ git log @{u}..HEAD --oneline
 ```
 
 - **PASS:** Upstream exists AND output of `git log` is empty (local is in sync with remote)
-- **FAIL (no upstream):** "Branch has no upstream tracking. Run `git push -u origin $(git branch --show-current)` first."
+- **FAIL (no upstream):** "Branch has no upstream tracking. Run `git push -u origin \"$(git branch --show-current)\"` first."
 - **FAIL (unpushed commits):** List the unpushed commits
 
 #### Check 3: PR Ready to Merge (if applicable)
@@ -378,7 +378,7 @@ X checks failed. I can attempt to fix some of these automatically. What should I
 Options:
 - **Auto-fix what I can** — the agent will attempt to fix the following actionable failures:
   - Uncommitted changes (Check 1) → `git add -A && git commit -m "chore: commit pending changes for T-XXX"`
-  - Unpushed commits (Check 2) → `git push` (or `git push -u origin $(git branch --show-current)`)
+  - Unpushed commits (Check 2) → `git push` (or `git push -u origin "$(git branch --show-current)"`)
   - Lint failures (Check 5) → run auto-fix (`make lint-fix` or equivalent), commit, and re-check
   - PR title invalid (Check 3) → `gh pr edit <number> --title "<corrected>"`
 - **Just report** — show the list and I'll fix manually
@@ -401,7 +401,7 @@ resources and asks the user what to do. The agent NEVER cleans up automatically.
 **IMPORTANT:** Worktree must be removed BEFORE attempting branch deletion. Git refuses to delete a branch that is checked out in a worktree.
 
 ```bash
-git worktree list | grep -i "T-XXX"
+git worktree list | grep -iF "T-XXX"
 ```
 
 If a worktree is found, ask via `AskUser`:
@@ -424,7 +424,7 @@ This also applies to Step 4.3 — if the agent is inside a worktree, `git checko
 **IMPORTANT:** PR must be merged BEFORE branch deletion. If the branch is deleted first, all commits on it (including the DONE status change) are lost.
 
 ```bash
-TASK_BRANCH=$(grep "T-XXX" "$TASKS_FILE" | ... extract Branch column ...)
+TASK_BRANCH=$(grep -E '^\| T-XXX \|' "$TASKS_FILE" | awk -F'|' '{print $9}' | tr -d ' ')
 gh pr list --head "$TASK_BRANCH" --json number,state,title,url --jq '.[] | select(.state == "OPEN")'
 ```
 
@@ -485,7 +485,7 @@ Identify the task's branch from the **Branch column** in `tasks.md` (primary sou
 
 ```bash
 # Primary: read Branch column from tasks.md for this task ID
-TASK_BRANCH=$(grep "T-XXX" "$TASKS_FILE" | ... extract Branch column ...)
+TASK_BRANCH=$(grep -E '^\| T-XXX \|' "$TASKS_FILE" | awk -F'|' '{print $9}' | tr -d ' ')
 
 # Fallback: search by convention (any Tipo prefix)
 git branch --list "feat/*T-XXX*" "feat/*t-xxx*" "fix/*T-XXX*" "fix/*t-xxx*" "refactor/*T-XXX*" "refactor/*t-xxx*" "chore/*T-XXX*" "chore/*t-xxx*" "docs/*T-XXX*" "docs/*t-xxx*" "test/*T-XXX*" "test/*t-xxx*"
@@ -592,6 +592,9 @@ If the user requests a force close (e.g., "force close T-012", "force done T-012
   Type the task ID to confirm: T-XXX
   ```
   The user must type the exact task ID (not just "yes") to prevent accidental force-closes.
+- **IMPORTANT — Worktree edge case:** If force-close is executed while inside the task's
+  worktree, the agent must `cd` to the main repository before attempting any worktree or
+  branch deletion during cleanup (same edge case handling as Steps 4.1 and 4.3).
 - **If confirmed:** mark as `DONE`, commit, push, then run cleanup (Phase 4) normally
 - **Commit message:** `chore(tasks): force-close T-XXX as done (checklist skipped)`
 - **NOTE:** Force-close still validates task status (Step 1.1) and dependencies — it only

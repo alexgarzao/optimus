@@ -81,6 +81,7 @@ dependencies `DONE`. Prioritize by version (`Ativa` first), then priority, then 
 
 For each task:
 1. Check that the task's status allows the requested starting stage
+   - **Exclude tasks with status `Cancelado`** — cancelled tasks cannot be processed through the pipeline
 2. Check that all dependencies are `DONE`
 3. If any task is blocked, report it and exclude from the batch
 
@@ -143,6 +144,10 @@ starting the next task.
 For each task in the execution order:
 
 ### Step 2.1: Stage Dispatch
+
+**Before dispatching any stage,** verify the stage skill is available. If the skill fails
+to load or is not installed, **STOP**: "Stage X skill (optimus-&lt;stage&gt;) is not installed.
+Install it with `droid plugin install <stage>@optimus` before running batch."
 
 Invoke each stage sequentially. **CRITICAL:** Always pass the task ID explicitly to each
 stage to prevent auto-detect from picking the wrong task.
@@ -254,6 +259,7 @@ After all tasks are processed (or the user stops):
 
 ## Rules
 
+- Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelines.
 - **NEVER skip user checkpoints** — the user must approve every stage transition
 - **NEVER run stages in parallel** — tasks are processed sequentially to avoid conflicts
 - **NEVER duplicate stage logic** — this skill only chains stages, each stage skill handles its own validation

@@ -180,11 +180,10 @@ Before loading docs, discover the project's structure and tooling:
 
 ### Step 1.7: Load All Reference Documents
 
-Read the task's `TaskSpec` column from tasks.md and resolve the full path as
-`<TASKS_DIR>/<TaskSpec>`. Load the Ring pre-dev task spec for objective, acceptance
-criteria, API contracts, data model, and implementation guidance. Derive the subtasks
-directory automatically and read ALL subtask files for step-by-step implementation
-instructions. Check for `PARALLEL-PLAN.md` in the subtasks directory.
+Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution. Load the Ring pre-dev
+task spec for objective, acceptance criteria, API contracts, data model, and implementation
+guidance. Read ALL subtask files for step-by-step implementation instructions. Check for
+`PARALLEL-PLAN.md` in the subtasks directory.
 
 Also load other project reference docs:
 - API contracts

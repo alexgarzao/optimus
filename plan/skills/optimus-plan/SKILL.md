@@ -159,7 +159,7 @@ from a previous run that was interrupted (crash, user closed terminal, etc.).
    # Check for any branch matching the task ID
    git branch --list "*<task-id>*" 2>/dev/null
    # Check for any worktree matching the task ID
-   git worktree list | grep -i "<task-id>"
+   git worktree list | grep -iF "<task-id>"
    ```
 3. **If a branch or worktree exists** (regardless of whether Branch column is `-` or populated):
    - Ask via `AskUser`:
@@ -196,6 +196,8 @@ from a previous run that was interrupted (crash, user closed terminal, etc.).
 
 ### Step 1.0.5: Reserve Task on Default Branch (Status + Branch)
 
+Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelines.
+
 **IMPORTANT:** This step updates tasks.md on the **default branch** BEFORE creating the
 worktree. This prevents race conditions where another agent or session picks the same
 task while the worktree is being created.
@@ -226,13 +228,20 @@ task while the worktree is being created.
    git push 2>/dev/null
    ```
    - If push succeeds → the reservation is visible to all agents/sessions
-   - If push fails (protected branch, no permissions, etc.) → warn the user:
-     ```
-     Could not push status change to remote (branch may be protected).
-     The status is committed locally and will be visible in the worktree.
-     Other agents on different machines may not see this reservation until the PR is merged.
-     ```
-   - **Do NOT block on push failure** — the local commit already prevents re-picks on this machine
+   - If push fails (protected branch, no permissions, conflict, etc.):
+     1. **Check for race condition:** Re-fetch the remote and verify the task wasn't reserved by another agent:
+        ```bash
+        git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
+        REMOTE_STATUS=$(git show "origin/$DEFAULT_BRANCH:$TASKS_FILE" 2>/dev/null | grep -E '^\| T-XXX \|' | awk -F'|' '{print $5}' | tr -d ' ')
+        ```
+        If `REMOTE_STATUS` is NOT `Pendente` → **STOP**: "Task T-XXX was reserved by another agent (status: $REMOTE_STATUS on remote). Pick a different task."
+     2. If the task is still `Pendente` on remote → warn the user:
+        ```
+        Could not push status change to remote (branch may be protected).
+        The status is committed locally and will be visible in the worktree.
+        Other agents on different machines may not see this reservation until the PR is merged.
+        ```
+   - **Do NOT block on push failure** (unless race condition detected) — the local commit already prevents re-picks on this machine
 
 4. Invoke notification hooks (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
 
@@ -288,10 +297,8 @@ Before loading docs, discover the project's structure:
 
 ### Step 1.2: Load Documents
 
-Read the task's `TaskSpec` column from tasks.md and resolve the full path as
-`<TASKS_DIR>/<TaskSpec>`. Load the Ring pre-dev task spec for objective, acceptance
-criteria, API contracts, and data model. Derive the subtasks directory automatically
-(e.g., `tasks/task_001.md` → `<TASKS_DIR>/subtasks/T-001/`). Read all subtask files.
+Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution. Load the Ring pre-dev
+task spec for objective, acceptance criteria, API contracts, and data model.
 
 Also load other project reference docs:
 - API contracts

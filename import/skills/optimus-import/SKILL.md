@@ -174,7 +174,7 @@ For each Ring pre-dev task not yet imported:
 | **TaskSpec** | Path to Ring task spec, relative to `TASKS_DIR` | Required |
 
 **When `EXISTING_DATA` is available** (from Step 1.3), match Ring pre-dev tasks to
-existing tasks by TaskSpec path (or Fonte link for old-format files). For matched tasks,
+existing tasks by TaskSpec path. For matched tasks,
 carry over Status, Depends, Priority, Version, Branch, and Estimate. For unmatched
 tasks (new in Ring but not in existing data), use defaults.
 
@@ -306,9 +306,9 @@ if [ -n "$EXISTING_FILE" ] && [ "$EXISTING_FILE" != ".optimus/tasks.md" ]; then
     echo "WARNING: $MISSING_SPECS tasks still have no TaskSpec (TaskSpec = -)."
     echo "Keeping old file as reference until all specs are generated."
   else
-    EXISTING_OVERLAY_DIR="$(dirname "$EXISTING_FILE")/tasks"
+    EXISTING_TASKS_DIR="$(dirname "$EXISTING_FILE")/tasks"
     git rm -r "$EXISTING_FILE" 2>/dev/null || rm -f "$EXISTING_FILE"
-    git rm -r "$EXISTING_OVERLAY_DIR" 2>/dev/null || rm -rf "$EXISTING_OVERLAY_DIR"
+    git rm -r "$EXISTING_TASKS_DIR" 2>/dev/null || rm -rf "$EXISTING_TASKS_DIR"
   fi
 fi
 ```

@@ -448,7 +448,7 @@ Show the new table order.
    Git refuses to delete a branch that is checked out in a worktree.
 
    ```bash
-   git worktree list | grep -i "T-XXX"
+   git worktree list | grep -iF "T-XXX"
    ```
 
    If a worktree is found, ask via `AskUser`:
@@ -647,8 +647,9 @@ code manually without using stage-2).
    - If status is `DONE` or `Cancelado` → **STOP**: "Task T-XXX is in terminal status '<status>'. Use 'reopen' for DONE tasks."
    - If current status is `Revisando PR` and no target was specified → **STOP**: "Task T-XXX is in 'Revisando PR'. The next step is `/optimus-done`, not manual advance."
 2. **Check dependencies (HARD BLOCK):** same rules as stage agents — all dependencies must be `DONE`.
-3. **Workspace check (warning):** If the target status is `Em Andamento` or later, verify
-   that a workspace exists for this task:
+3. **Workspace check (warning):** If the target status is `Validando Spec` or later, verify
+   that a workspace exists for this task (stage-1 normally creates the workspace when
+   setting `Validando Spec` — advancing manually bypasses this):
    - Read the Branch column for the task
    - If Branch is `-` or the branch does not exist locally → warn via `AskUser`:
      ```

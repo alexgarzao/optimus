@@ -100,6 +100,7 @@ Ask the user what to verify (or detect from invocation):
 - **Changed files only** — scope checks to files changed since a base branch:
   ```bash
   DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+  git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null || echo "WARNING: Could not fetch latest changes from remote. Diff may use stale reference."
   CHANGED_FILES=$(git diff --name-only "origin/$DEFAULT_BRANCH"...HEAD)
   ```
   If `CHANGED_FILES` is empty (no files changed), inform the user and exit early:

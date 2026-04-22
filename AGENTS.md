@@ -395,6 +395,9 @@ If the format marker is missing or validation fails, the agent must **STOP** and
 running `/optimus-import` to fix the format. Do NOT attempt to interpret malformed data.
 
 15. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
+16. **Empty table handling:** If the tasks table exists but has zero data rows (only headers),
+format validation PASSES. Stage agents (1-5) should inform the user: "No tasks found in
+tasks.md. Use `/optimus-tasks` to create a task or `/optimus-import` to import from Ring pre-dev."
 
 **NOTE:** For circular dependency detection (item 14), trace the full dependency chain for
 each task. If any task appears twice in the chain, a cycle exists. Report ALL tasks involved
@@ -554,6 +557,7 @@ All stage agents (1-5) support **dry-run mode**. When the user includes "dry-run
 4. **Do NOT create workspaces** — skip branch/worktree creation (stage-1)
 5. **Do NOT apply fixes** — skip batch-apply phases
 6. **Present results as informational** — "what would happen" without side effects
+7. **Do NOT write session files** — session state is for crash recovery of real executions, not previews
 
 This allows users to preview what a stage would do before committing to it.
 
@@ -599,7 +603,7 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 
 ### Protocol: Initialize .optimus Directory
 
-**Referenced by:** all skills that create files in `.optimus/`
+**Referenced by:** import, tasks, report (export), all stage agents (1-5) for session files
 
 Before creating ANY file inside `.optimus/`, ensure the directory structure exists
 and temporary subdirectories are gitignored:
@@ -618,7 +622,7 @@ Skills reference this as: "Initialize .optimus directory — see AGENTS.md Proto
 
 ### Protocol: Shell Safety Guidelines
 
-**Referenced by:** all skills that execute bash commands
+**Referenced by:** plan, build, check, pr-check, done, tasks, import, resolve, batch
 
 All bash examples in AGENTS.md and SKILL.md files are templates that agents execute literally.
 Follow these rules to prevent injection and silent failures:
@@ -640,6 +644,11 @@ Follow these rules to prevent injection and silent failures:
    matches titles and dependency columns too
 6. **Validate tool availability** before use: `command -v jq &>/dev/null` before running `jq`
 7. **Validate JSON files** before parsing: `jq empty "$FILE" 2>/dev/null` before reading keys
+8. **Sanitize user-derived values in commit messages** — task titles and descriptions may
+   contain shell metacharacters (backticks, `$(...)`, double quotes). When constructing
+   commit messages, prefer using git's `-m` flag with the message in double quotes and
+   ensure the interpolated values don't contain unescaped special characters. If in doubt,
+   use `printf '%s' "$VALUE"` to safely handle the content.
 
 Skills reference this as: "Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelines."
 
@@ -699,6 +708,11 @@ fi
   - If **Start fresh (delete session)**: delete the session file and proceed from the beginning
   - If **Continue (keep session file)**: proceed from the beginning without deleting the session file
 - If the file is stale (>24h) or the task status has changed → delete and proceed normally
+- **External status change detection:** If the session file exists AND the task's status
+  does NOT match the session's `status`, check if the difference is explainable by normal
+  stage progression (e.g., session says `Em Andamento` but task is now `Validando Impl` —
+  the task was advanced externally via `/optimus-tasks`). If the status change is NOT
+  explainable by forward progression, treat the session as stale and delete it.
 - If no file exists → proceed normally
 
 **On stage progress (at key phase transitions):**
@@ -768,12 +782,20 @@ CURRENT_BRANCH=$(git branch --show-current)
      git worktree list | grep -F "<branch-name>"
      ```
    - **If worktree found** → change working directory to the worktree path.
-   - **If worktree NOT found** (branch exists but no worktree) → create the worktree
-     automatically:
+   - **If worktree NOT found** → verify the branch exists before creating a worktree:
+     ```bash
+     if ! git rev-parse --verify "<branch-name>" >/dev/null 2>&1; then
+       # Branch doesn't exist — ask user for recovery
+       # AskUser: "Branch '<branch>' is recorded in tasks.md but doesn't exist.
+       #   This may indicate stage-1 crashed before creating it.
+       #   Options: Create branch from HEAD / Re-run /optimus-plan"
+     fi
+     ```
+     If the branch exists, create the worktree automatically:
      ```bash
      REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
      WORKTREE_DIR="../${REPO_NAME}-$(echo <task-id> | tr '[:upper:]' '[:lower:]')-<keywords>"
-     git worktree add "$WORKTREE_DIR" <branch-name>
+     git worktree add "$WORKTREE_DIR" "<branch-name>"
      ```
      Then change working directory to the new worktree.
 
@@ -824,7 +846,14 @@ if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
 fi
 ```
 
-Events: `status-change`, `task-done`, `task-cancelled`, `task-blocked`.
+Events and their parameter signatures:
+
+| Event | Parameters | Description |
+|-------|-----------|-------------|
+| `status-change` | `event task_id old_status new_status` | Any status transition |
+| `task-done` | `event task_id old_status "DONE"` | Task marked as done |
+| `task-cancelled` | `event task_id old_status "Cancelado"` | Task cancelled |
+| `task-blocked` | `event task_id current_status current_status reason` | Dependency check failed (5 args — includes reason) |
 
 When a dependency check fails:
 ```bash
@@ -840,7 +869,7 @@ Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol:
 
 ### Protocol: Ring Droid Requirement Check
 
-**Referenced by:** check, pr-check, deep-review, deep-doc-review, coderabbit-review, plan, build
+**Referenced by:** check, pr-check, deep-review, deep-doc-review, coderabbit-review, plan (build delegates droid dispatch to dev-cycle)
 
 Before dispatching ring droids, verify the required droids are available. If any required
 droid is not installed, **STOP** and list missing droids.
@@ -1034,6 +1063,7 @@ to the `Ativa` version. If not, present options before proceeding.
 
 1. Read the task's **Version** column from `tasks.md`
 2. Read the **Versions** table and find the version with Status `Ativa`
+   - **If no version has Status `Ativa`** → **STOP**: "No active version found in the Versions table. Run `/optimus-tasks` to set a version as Ativa before proceeding."
 3. **If the task's version matches the `Ativa` version** → proceed silently
 4. **If the task's version does NOT match the `Ativa` version** → present via `AskUser`:
    ```

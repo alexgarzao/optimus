@@ -111,7 +111,14 @@ When the user references a task (e.g., "review PR for T-012") or a `tasks.md` ex
 
 1. **Find and validate tasks.md** — see AGENTS.md Protocol: tasks.md Validation.
 2. **Resolve workspace (HARD BLOCK):** See AGENTS.md Protocol: Workspace Auto-Navigation. Branch-task cross-validation is included in this protocol.
-3. **Validate status:** The task MUST be in status `Validando Impl` (set by check) or `Revisando PR` (re-execution). If not, STOP and tell the user which agent to run first.
+3. **Validate status:**
+   - If status is `Validando Impl` → proceed (check completed)
+   - If status is `Revisando PR` → proceed (re-execution of this stage)
+   - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run plan, build, and check first."
+   - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run build and check first."
+   - If status is `Em Andamento` → **STOP**: "Task T-XXX is in 'Em Andamento'. Run check first."
+   - If status is `DONE` → **STOP**: "Task T-XXX is already done."
+   - If status is `Cancelado` → **STOP**: "Task T-XXX was cancelled. Cannot review a cancelled task."
 4. **Check dependencies (HARD BLOCK):** Read the Depends column for this task.
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, check its Status in the table:
@@ -193,10 +200,10 @@ Options:
 If the user chooses **Create PR**:
 1. Generate PR title from task Tipo + ID + title (e.g., `feat(T-003): add user registration API`)
 2. Generate PR body from Ring source (read via `TaskSpec` column in tasks.md)
-3. Push the branch if not yet pushed: `git push -u origin $(git branch --show-current)`
+3. Push the branch if not yet pushed: `git push -u origin "$(git branch --show-current)"`
 4. Create the PR:
    ```bash
-   gh pr create --title "<title>" --body "<body>" --base <default_branch> --assignee @me
+   gh pr create --title "<title>" --body "<body>" --base "$DEFAULT_BRANCH" --assignee @me
    ```
 5. Use the newly created PR for the rest of the review
 
