@@ -234,10 +234,10 @@ Before running checks 5-8, check for custom commands in `.optimus/config.json`:
 ```bash
 CONFIG_FILE=".optimus/config.json"
 if [ -f "$CONFIG_FILE" ]; then
-  LINT_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands.lint // empty')
-  TEST_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands.test // empty')
-  TEST_INT_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands["test-integration"] // empty')
-  TEST_E2E_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands["test-e2e"] // empty')
+  LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE")
+  TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE")
+  TEST_INT_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE")
+  TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE")
 fi
 ```
 
@@ -455,11 +455,11 @@ Identify the task's branch from state.json (primary) or by searching git branche
 
 ```bash
 # Primary: read branch from state.json
-TASK_BRANCH=$(jq -r '.["T-XXX"].branch // ""' .optimus/state.json 2>/dev/null)
+TASK_BRANCH=$(jq -r --arg id "$TASK_ID" '.[$id].branch // ""' .optimus/state.json 2>/dev/null)
 
 # Fallback: search by task ID pattern
 if [ -z "$TASK_BRANCH" ]; then
-  TASK_BRANCH=$(git branch --list "*t-xxx*" 2>/dev/null | head -1 | tr -d ' *')
+  TASK_BRANCH=$(git branch --list "*$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')*" 2>/dev/null | head -1 | tr -d ' *')
 fi
 
 # Check if branch exists locally

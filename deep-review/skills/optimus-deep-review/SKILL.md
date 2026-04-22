@@ -323,8 +323,8 @@ Check `.optimus/config.json` for custom commands before running any verification
 ```bash
 CONFIG_FILE=".optimus/config.json"
 if [ -f "$CONFIG_FILE" ]; then
-  LINT_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands.lint // empty')
-  TEST_CMD=$(cat "$CONFIG_FILE" | jq -r '.commands.test // empty')
+  LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE")
+  TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE")
 fi
 ```
 
