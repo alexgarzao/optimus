@@ -104,7 +104,7 @@ Ask the user what to review:
 
 ## Phase 2: Parallel Agent Dispatch
 
-Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives the files in scope plus any reference docs found.
+Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives file paths and can navigate the codebase autonomously.
 
 **Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. If the core review droids are not installed, **STOP** and inform the user:
 ```
@@ -123,21 +123,21 @@ Required ring droids are not installed. Install them before running this skill:
 
 | # | Agent | Focus | Ring Droid |
 |---|-------|-------|------------|
-| 1 | **Code quality reviewer** | Architecture, design patterns, SOLID, DRY, maintainability, algorithmic flow | `ring-default-code-reviewer` |
-| 2 | **Business logic reviewer** | Domain correctness, business rules, edge cases, requirements compliance | `ring-default-business-logic-reviewer` |
-| 3 | **Security reviewer** | Vulnerabilities, authentication, input validation, OWASP, secrets | `ring-default-security-reviewer` |
-| 4 | **Test quality analyst** | Test coverage gaps (unit, integration, E2E), error scenario coverage, flaky patterns | `ring-default-ring-test-reviewer` |
-| 5 | **Cross-file consistency** | Interfaces vs implementations, DTOs, imports, registered routes, shared constants, dead code | `ring-default-ring-consequences-reviewer` |
-| 6 | **Nil/Null safety reviewer** | Nil pointer risks, unsafe dereferences, missing guards, panic paths | `ring-default-ring-nil-safety-reviewer` |
-| 7 | **Dead code reviewer** | Orphaned code, unreachable branches, unused imports, commented-out code, zombie test infrastructure | `ring-default-ring-dead-code-reviewer` |
-| 8 | **QA analyst** | Test strategy validation, scenario coverage, edge case identification, error path verification | `ring-dev-team-qa-analyst` |
+| 1 | **Code quality reviewer** | Architecture, design patterns, SOLID, DRY, maintainability, algorithmic flow, resilience, resource lifecycle, concurrency, performance, configuration, cognitive complexity, error handling, domain purity | `ring-default-code-reviewer` |
+| 2 | **Business logic reviewer** | Domain correctness, business rules, edge cases, requirements compliance, spec traceability, data integrity, backward compatibility, API semantics | `ring-default-business-logic-reviewer` |
+| 3 | **Security reviewer** | Vulnerabilities, authentication, input validation, OWASP, secrets, data privacy, error response leakage, rate limiting, auth propagation | `ring-default-security-reviewer` |
+| 4 | **Test quality analyst** | Test coverage gaps (unit, integration, E2E), error scenario coverage, flaky patterns, test effectiveness, false positive risk, test coupling, spec traceability | `ring-default-ring-test-reviewer` |
+| 5 | **Cross-file consistency** | Interfaces vs implementations, DTOs, imports, registered routes, shared constants, backward compatibility, configuration drift, migration paths, shared state, event contracts | `ring-default-ring-consequences-reviewer` |
+| 6 | **Nil/Null safety reviewer** | Nil pointer risks, unsafe dereferences, missing guards, panic paths, resource cleanup nil checks, channel/map/slice safety | `ring-default-ring-nil-safety-reviewer` |
+| 7 | **Dead code reviewer** | Orphaned code, unreachable branches, unused imports, commented-out code, zombie test infrastructure, stale feature flags, deprecated paths | `ring-default-ring-dead-code-reviewer` |
+| 8 | **QA analyst** | Test strategy validation, scenario coverage, edge case identification, error path verification, testability assessment, operational readiness, AC coverage | `ring-dev-team-qa-analyst` |
 
 ### Final Review (10 agents — includes the 8 above plus)
 
 | # | Agent | Focus | Ring Droid |
 |---|-------|-------|------------|
-| 9 | **Backend specialist** | Language idiomaticity, performance, concurrency, ecosystem patterns | `ring-dev-team-backend-engineer-golang` (Go) / `ring-dev-team-backend-engineer-typescript` (TS) |
-| 10 | **Frontend specialist** | Framework patterns, hooks, components, accessibility, responsive design, performance | `ring-dev-team-frontend-engineer` |
+| 9 | **Backend specialist** | Language idiomaticity, performance, concurrency, ecosystem patterns, graceful shutdown, connection pool sizing, context propagation, structured logging | `ring-dev-team-backend-engineer-golang` (Go) / `ring-dev-team-backend-engineer-typescript` (TS) |
+| 10 | **Frontend specialist** | Framework patterns, hooks, components, accessibility, responsive design, performance, UX completeness (loading/empty/error states), i18n readiness | `ring-dev-team-frontend-engineer` |
 
 ### Agent Prompt Template
 
@@ -148,11 +148,17 @@ Goal: Code review — [validation domain]
 
 Context:
   - Review type: Initial / Final
-  - Scope: [files or directory being reviewed]
-  - Coding standards: [paste relevant sections]
-  - Reference docs: [paste relevant sections if available]
-  - Files to review (full content follows):
-    [paste full content of each file with filename header]
+  - Project root: <absolute path to project worktree>
+  - Scope: [files or directory being reviewed — list of file paths]
+  - Project rules: AGENTS.md, PROJECT_RULES.md, docs/PROJECT_RULES.md (READ all that exist)
+  - Reference docs: [list paths to any reference docs found] (READ if relevant to your domain)
+
+IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
+  - Read files at the paths above
+  - Search the codebase for patterns similar to the code under review
+  - Find how the same problem was solved elsewhere in the project
+  - Discover test patterns, error handling conventions, and architectural styles
+  - Explore related files not listed above when needed for context
 
 Your job:
   Review the code for issues in your domain. Report issues ONLY — do NOT fix anything.
@@ -167,7 +173,95 @@ Required output format:
 
   If no issues found, state "PASS — no issues in [domain]"
   Include a "What Was Done Well" section acknowledging good practices.
+
+Cross-cutting analysis (MANDATORY for all agents):
+  1. What would break in production under load with this code?
+  2. What's MISSING that should be here? (not just what's wrong)
+  3. Does this code trace back to a spec requirement? Flag orphan code without spec backing
+  4. How would a new developer understand this code 6 months from now?
+  5. Search the codebase for how similar problems were solved — flag inconsistencies with existing patterns
 ```
+
+### Special Instructions per Agent
+
+**Code Quality agent** (`ring-default-code-reviewer`) must additionally verify:
+- Resilience: external calls have timeout, retry with backoff, circuit breaker where appropriate
+- Resource lifecycle: all opened connections/handles are closed (defer, cleanup, graceful shutdown)
+- Concurrency: shared state has proper synchronization, no goroutine leaks, no deadlock risk
+- Performance: no N+1 queries, no unbounded queries, indexes exist for query patterns, no hot-path allocations
+- Configuration: no hardcoded values that should be environment-configurable, safe defaults
+- Cognitive complexity: functions with >3 nesting levels or >30 lines flagged for decomposition
+- Error handling: errors wrapped with context, consistent with codebase error patterns
+- Domain purity: no infrastructure concerns in domain layer, dependency direction correct
+- Resource leaks: DB connections, HTTP clients, file handles, channels properly closed
+
+**Business Logic agent** (`ring-default-business-logic-reviewer`) must additionally verify:
+- Spec traceability: each code path maps to a spec requirement (flag orphan logic with no spec backing)
+- Data integrity: transaction boundaries correct, partial writes impossible, rollback defined
+- Backward compatibility: existing consumers/contracts not broken by this change
+- API semantics: correct HTTP status codes, idempotent operations marked as such, pagination consistent
+- Domain edge cases: what happens with zero, negative, maximum, duplicate, concurrent values?
+- Business rule completeness: all business rules from spec have implementation AND test
+
+**Security agent** (`ring-default-security-reviewer`) must additionally verify:
+- Data privacy: PII not logged, sensitive fields masked in responses, LGPD/GDPR compliance
+- Error responses: no internal details leaked (stack traces, DB schemas, internal paths, SQL)
+- Rate limiting: high-throughput or public endpoints have rate limiting consideration
+- Input validation: happens at the right layer (not just client-side), consistent with codebase
+- Secrets: no hardcoded credentials, tokens, API keys in code or config files
+- Auth propagation: authentication context properly propagated through the call chain
+
+**Test Quality agent** (`ring-default-ring-test-reviewer`) must additionally verify:
+- Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag tests where assertions only check mock.Called() without verifying output/state
+- False positive risk: could these tests pass while the feature is actually broken?
+- Test coupling: are tests coupled to implementation details (private fields, internal struct layout)?
+- Spec traceability: for each acceptance criterion in the task spec, is there a test?
+- Integration tests: do they use real dependencies (testcontainers/docker) or just mocks?
+- Test isolation: can tests run in parallel without interference? Shared state between tests?
+- Error scenario completeness: each error return path has a corresponding test?
+- Boundary values: min, max, zero, empty, nil, negative tested where applicable?
+
+**Nil/Null Safety agent** (`ring-default-ring-nil-safety-reviewer`) must additionally verify:
+- Resource cleanup: nil checks before Close/Release calls
+- Channel safety: sends to nil/closed channels
+- Map safety: reads/writes to nil maps
+- Slice safety: index bounds after filtering/transforming
+
+**Cross-file consistency agent** (`ring-default-ring-consequences-reviewer`) must additionally verify:
+- Values duplicated between files that should be a shared constant
+- Imports follow the project's layer architecture (no circular deps, no backwards imports)
+- New code follows the same patterns as existing code in the same domain
+- Backward compatibility: does this change break any existing consumer or API contract?
+- Configuration drift: new defaults reasonable? existing config overrides still valid?
+- Migration path: if breaking change, is migration strategy documented?
+- Shared state: new global/package-level state that could cause issues across modules?
+- Event/message contracts: changes to event payloads affect downstream consumers?
+
+**Dead Code agent** (`ring-default-ring-dead-code-reviewer`) must additionally verify:
+- Dead code: unused imports, unreachable branches, commented-out code
+- Zombie test infrastructure: test helpers, fixtures, mocks no longer used by any test
+- Feature flags: stale feature flag checks for flags that were already fully rolled out
+- Deprecated paths: code paths behind deprecated API versions with no remaining consumers
+
+**QA analyst** (`ring-dev-team-qa-analyst`) must additionally verify:
+- Testability assessment: is the code structured for testability? (dependency injection, interfaces)
+- Operational readiness: can ops monitor, debug, and rollback this in production?
+- Acceptance criteria coverage: each AC has both success AND failure test scenarios
+- Cross-cutting scenarios: concurrent modifications, large datasets, special characters, timezone handling
+
+**Backend specialist** (`ring-dev-team-backend-engineer-golang` or TS equivalent) must additionally verify:
+- Language idiomaticity: follows official style guide conventions
+- Graceful shutdown: SIGTERM handling, in-flight request draining
+- Connection pool sizing: appropriate for expected load
+- Context propagation: request context passed through the full call chain
+- Structured logging: logs include correlation IDs, operation names, durations
+
+**Frontend specialist** (`ring-dev-team-frontend-engineer`) must additionally verify:
+- UX completeness: loading states, empty states, error states all handled
+- Accessibility: keyboard navigation, screen reader support, ARIA labels, color contrast
+- Responsive behavior: works across viewport sizes (mobile, tablet, desktop)
+- i18n readiness: no hardcoded user-facing strings, date/number formatting locale-aware
+- Performance: no unnecessary re-renders, large lists virtualized, images optimized
 
 ---
 
@@ -348,10 +442,11 @@ Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Lo
 
 **Stage-specific scope for fresh sub-agent dispatch (rounds 2+):**
 Use `ring-default-code-reviewer` or any available ring review droid. The sub-agent receives:
-1. All files in scope (re-read fresh from disk)
-2. Project rules and coding standards (re-read fresh)
+1. File paths to all files in scope (sub-agent reads fresh via Read/Grep/Glob tools)
+2. File paths to project rules and coding standards (sub-agent reads fresh)
 3. The findings ledger (for dedup only)
 4. Review type (Initial/Final) and scope from Phase 1
+5. Cross-cutting analysis instructions (same 5 items from Phase 2 prompt)
 
 **Failure handling:** If the fresh sub-agent dispatch fails, treat as "zero new findings"
 for that round but warn the user. Do NOT fail the entire review.

@@ -81,7 +81,7 @@ Read the full content of each identified doc. Build a mental map of:
 ## Phase 2: Parallel Agent Dispatch
 
 Dispatch specialist agents via `Task` tool to analyze the docs from different perspectives.
-Each agent receives the full content of all docs being reviewed.
+Each agent receives file paths and can navigate the project autonomously.
 
 **Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. If the core review droids are not installed, **STOP** and inform the user:
 ```
@@ -92,9 +92,9 @@ Required ring droids are not installed. Install them before running this skill:
 ```
 
 **Droids to dispatch:**
-1. `ring-tw-team-docs-reviewer` — documentation quality, structure, completeness
-2. `ring-default-business-logic-reviewer` — business rules consistency across docs
-3. `ring-default-code-reviewer` — technical accuracy, architectural consistency
+1. `ring-tw-team-docs-reviewer` — documentation quality, structure, completeness, voice, tone, accuracy
+2. `ring-default-business-logic-reviewer` — business rules consistency across docs, spec traceability, data integrity definitions, edge case coverage
+3. `ring-default-code-reviewer` — technical accuracy, architectural consistency, implementability, feasibility of described patterns
 
 **Dispatch at least 2 agents in parallel:**
 
@@ -108,7 +108,18 @@ Required ring droids are not installed. Install them before running this skill:
 Goal: Documentation review — [your domain]
 
 Context:
-  - Docs to review: [full content of each doc with filename header]
+  - Project root: <absolute path to project worktree>
+  - Docs to review: [list of doc file paths] (READ each file)
+  - Reference docs dir: <TASKS_DIR>/ (explore for related docs)
+  - Project rules: AGENTS.md, PROJECT_RULES.md, docs/PROJECT_RULES.md (READ all that exist)
+  - Codebase: available for cross-referencing docs against implementation
+
+IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
+  - Read docs at the paths above
+  - Cross-reference documentation claims against actual code implementation
+  - Verify that referenced files, functions, endpoints, and configs actually exist
+  - Find inconsistencies between docs and codebase
+  - Discover related documentation not explicitly listed
 
 Your job:
   Review the documentation for issues in your domain. Report issues ONLY — do NOT fix anything.
@@ -121,6 +132,13 @@ Required output format:
   - Problem: what is wrong
   - Suggested fix: concrete correction
   If no issues: "PASS — no issues in [domain]"
+
+Cross-cutting analysis (MANDATORY for all agents):
+  1. Do the docs accurately reflect the current state of the codebase? (search code to verify)
+  2. What's MISSING from the docs that a developer would need to implement or maintain this?
+  3. Are acceptance criteria testable and measurable? (not vague like "works correctly")
+  4. Would a new developer be able to implement this without asking questions?
+  5. Are error scenarios, edge cases, and rollback strategies documented?
 ```
 
 Merge agent findings with the orchestrator's own analysis in Phase 3.

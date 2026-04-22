@@ -295,13 +295,77 @@ Required ring droids are not installed. Install them before running this skill:
 
 | Domain | When to Dispatch | Ring Droid |
 |--------|-----------------|------------|
-| **Code Quality** | Always | `ring-default-code-reviewer` |
-| **Business Logic** | Always | `ring-default-business-logic-reviewer` |
-| **Security** | Always | `ring-default-security-reviewer` |
-| **Test Quality** | Always | `ring-default-ring-test-reviewer` |
-| **Nil/Null Safety** | Always | `ring-default-ring-nil-safety-reviewer` |
-| **Ripple Effects** | Always | `ring-default-ring-consequences-reviewer` |
-| **Dead Code** | Always | `ring-default-ring-dead-code-reviewer` |
+| **Code Quality** — architecture, SOLID, DRY, resilience, resource lifecycle, concurrency, performance, configuration, cognitive complexity, error handling, domain purity | Always | `ring-default-code-reviewer` |
+| **Business Logic** — domain correctness, edge cases, spec traceability, data integrity, backward compatibility, API semantics | Always | `ring-default-business-logic-reviewer` |
+| **Security** — vulnerabilities, OWASP, input validation, data privacy, error response leakage, rate limiting, auth propagation | Always | `ring-default-security-reviewer` |
+| **Test Quality** — coverage gaps, error scenarios, flaky patterns, test effectiveness, false positive risk, test coupling, spec traceability | Always | `ring-default-ring-test-reviewer` |
+| **Nil/Null Safety** — nil pointer risks, unsafe dereferences, resource cleanup nil checks, channel/map/slice safety | Always | `ring-default-ring-nil-safety-reviewer` |
+| **Ripple Effects** — cross-file impacts, backward compatibility, configuration drift, migration paths, shared state, event contracts | Always | `ring-default-ring-consequences-reviewer` |
+| **Dead Code** — orphaned code, zombie test infrastructure, stale feature flags, deprecated paths | Always | `ring-default-ring-dead-code-reviewer` |
+
+**Agent prompt context MUST include:**
+```
+  - Project root: <absolute path to project worktree>
+  - Project rules: AGENTS.md, PROJECT_RULES.md, docs/PROJECT_RULES.md (READ all that exist)
+  - Changed files: [list of file paths] (READ each file)
+
+IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
+  - Read files at the paths above
+  - Search the codebase for patterns similar to the code under review
+  - Find how the same problem was solved elsewhere in the project
+  - Discover test patterns, error handling conventions, and architectural styles
+  - Explore related files not listed above when needed for context
+
+Cross-cutting analysis (MANDATORY for all agents):
+  1. What would break in production under load with this code?
+  2. What's MISSING that should be here? (not just what's wrong)
+  3. Does this code trace back to a spec requirement? Flag orphan code without spec backing
+  4. How would a new developer understand this code 6 months from now?
+  5. Search the codebase for how similar problems were solved — flag inconsistencies with existing patterns
+```
+
+**Special Instructions per Agent:**
+
+**Code Quality agent** (`ring-default-code-reviewer`) must additionally verify:
+- Resilience: external calls have timeout, retry with backoff, circuit breaker where appropriate
+- Resource lifecycle: all opened connections/handles are closed (defer, cleanup, graceful shutdown)
+- Concurrency: shared state has proper synchronization, no goroutine leaks, no deadlock risk
+- Performance: no N+1 queries, no unbounded queries, indexes exist for query patterns, no hot-path allocations
+- Configuration: no hardcoded values that should be environment-configurable, safe defaults
+- Error handling: errors wrapped with context, consistent with codebase error patterns
+- Domain purity: no infrastructure concerns in domain layer, dependency direction correct
+
+**Business Logic agent** (`ring-default-business-logic-reviewer`) must additionally verify:
+- Spec traceability: each code path maps to a spec requirement (flag orphan logic)
+- Data integrity: transaction boundaries correct, partial writes impossible, rollback defined
+- Backward compatibility: existing consumers/contracts not broken by this change
+- API semantics: correct HTTP status codes, idempotent operations, pagination consistent
+
+**Security agent** (`ring-default-security-reviewer`) must additionally verify:
+- Data privacy: PII not logged, sensitive fields masked, LGPD/GDPR compliance
+- Error responses: no internal details leaked (stack traces, DB schemas, internal paths)
+- Rate limiting: high-throughput or public endpoints have rate limiting consideration
+- Auth propagation: authentication context properly propagated through the call chain
+
+**Test Quality agent** (`ring-default-ring-test-reviewer`) must additionally verify:
+- Test effectiveness: do tests verify BEHAVIOR or just mock internals?
+- False positive risk: could these tests pass while the feature is actually broken?
+- Test coupling: are tests coupled to implementation details?
+- Error scenario completeness: each error return path has a corresponding test?
+
+**Nil/Null Safety agent** (`ring-default-ring-nil-safety-reviewer`) must additionally verify:
+- Resource cleanup: nil checks before Close/Release calls
+- Channel safety: sends to nil/closed channels
+- Map/slice safety: reads/writes to nil maps, index bounds after filtering
+
+**Ripple Effects agent** (`ring-default-ring-consequences-reviewer`) must additionally verify:
+- Backward compatibility: does this change break any existing consumer or API contract?
+- Configuration drift: new defaults reasonable? existing config overrides still valid?
+- Shared state: new global/package-level state that could cause issues across modules?
+
+**Dead Code agent** (`ring-default-ring-dead-code-reviewer`) must additionally verify:
+- Zombie test infrastructure: test helpers, fixtures, mocks no longer used
+- Feature flags: stale feature flag checks for flags already fully rolled out
 
 2. **Skip agent validation** for purely cosmetic fixes (comments, rename, formatting, DRY without logic change)
 
@@ -367,24 +431,30 @@ Dispatch an agent to identify missing test scenarios in the changed files.
 
 **Dispatch a test gap analyzer** via `Task` tool. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
 
-The agent receives:
-1. **Changed source files** — full content (non-test files only)
-2. **Test files for changed source** — full content
-3. **Coverage profile** — coverage command output (if available)
+The agent receives file paths and can navigate the codebase autonomously.
 
 ```
 Goal: Identify missing test scenarios in files changed during this review.
 
 Context:
-  - Source files changed: [full content]
-  - Test files: [full content]
-  - Coverage profile: [go tool cover -func output]
+  - Project root: <absolute path to project worktree>
+  - Changed source files: [list of file paths] (READ each file)
+  - Test files: [list of test file paths] (READ each file)
+  - Coverage profile: [coverage command output if available]
+
+IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
+  - Read files at the paths above
+  - Search for existing test patterns in the project
+  - Find related test files not listed above
+  - Discover how similar functions are tested elsewhere in the codebase
 
 Your job:
   For each public function changed/added:
   1. Unit tests: check for happy path, error paths, edge cases, validation failures
   2. Integration tests: check for DB failure, timeout, retry, rollback scenarios
   3. Report what EXISTS and what is MISSING
+  4. Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag false confidence tests
+  5. Could these tests pass while the feature is actually broken?
 
 Required output format:
   ## Unit Test Gaps
@@ -395,10 +465,15 @@ Required output format:
   | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
   |---|------|----------|--------------------|-------------------|----------|
 
+  ## Test Effectiveness Issues
+  | # | File | Test | Issue | Risk | Priority |
+  |---|------|------|-------|------|----------|
+
   ## Summary
   - Functions analyzed: X
   - Fully covered: X | Partial: X | No tests: X
   - Missing scenarios: X HIGH, Y MEDIUM, Z LOW
+  - Effectiveness issues: X
 ```
 
 **HIGH priority gaps** are presented as findings for user decision (fix now or defer).
@@ -427,10 +502,10 @@ The solution: **rounds 2+ are executed by a fresh sub-agent** dispatched via `Ta
 
 **Fresh sub-agent dispatch (rounds 2+):**
 
-Dispatch a single sub-agent via `Task` tool (use any available ring review droid, e.g., `ring-default-code-reviewer`). The sub-agent receives:
+Dispatch a single sub-agent via `Task` tool (use any available ring review droid, e.g., `ring-default-code-reviewer`). The sub-agent receives file paths and can navigate the codebase autonomously:
 
-1. **All changed files** — full content, re-read fresh from disk
-2. **Project rules and coding standards** — re-read fresh
+1. **File paths to all changed files** (sub-agent reads fresh via Read/Grep/Glob tools)
+2. **File paths to project rules and coding standards** (sub-agent reads fresh)
 3. **The findings ledger** — for deduplication ONLY
 4. **CodeRabbit CLI command** — the sub-agent re-runs CodeRabbit CLI itself to get fresh analysis
 
@@ -447,8 +522,14 @@ Steps:
   4. Return all findings
 
 Context:
-  - Changed files: [full content — re-read from disk]
-  - Project rules: [full content — re-read from files]
+  - Project root: <absolute path to project worktree>
+  - Changed files: [list of file paths] (READ each file fresh from disk)
+  - Project rules: AGENTS.md, PROJECT_RULES.md, docs/PROJECT_RULES.md (READ all that exist)
+
+IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
+  - Read files at the paths above fresh from disk
+  - Search the codebase for patterns and conventions
+  - Explore related files when needed for context
 
 Previously identified findings (for DEDUP ONLY):
   [list of findings with IDs and descriptions]

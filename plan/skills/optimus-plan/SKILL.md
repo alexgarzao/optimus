@@ -487,7 +487,7 @@ Required output:
   For each finding: severity, category, description, recommendation
   If no issues: "PASS — [domain] validation clean"
 
-Cross-cutting analysis (MANDATORY):
+Cross-cutting analysis (MANDATORY for all agents):
   1. What would break in production under load if this spec is implemented as-is?
   2. What's MISSING from the spec that should be there? (not just what's wrong)
   3. Does this spec trace back to business requirements? Flag orphan requirements
