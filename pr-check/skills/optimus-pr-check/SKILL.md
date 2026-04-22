@@ -1033,14 +1033,14 @@ When the loop exits, proceed to Phase 11 (integration/E2E tests).
 run ONCE here — not during the fix/convergence cycle.
 
 ```bash
-make test-integration        # Integration tests — if target exists
-make test-e2e                # E2E tests — if target exists
+$TEST_INTEGRATION_CMD        # from .optimus/config.json, or fallback: make test-integration
+$TEST_E2E_CMD                # from .optimus/config.json, or fallback: make test-e2e
 ```
 
-| Test Type | Makefile Target | If target exists | If target missing |
-|-----------|----------------|-----------------|-------------------|
-| Integration | `make test-integration` | **HARD BLOCK** if fails | SKIP |
-| E2E | `make test-e2e` | **HARD BLOCK** if fails | SKIP |
+| Test Type | Command | If target exists | If target missing |
+|-----------|---------|-----------------|-------------------|
+| Integration | `$TEST_INTEGRATION_CMD` | **HARD BLOCK** if fails | SKIP |
+| E2E | `$TEST_E2E_CMD` | **HARD BLOCK** if fails | SKIP |
 
 **If any test fails:**
 1. Present the failure output (first 30 lines)

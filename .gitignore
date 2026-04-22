@@ -1,1 +1,5 @@
 .factory/
+
+# Python bytecode
+__pycache__/
+*.pyc

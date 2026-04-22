@@ -179,13 +179,22 @@ Before loading docs, discover the project's structure and tooling (reuse discove
 
 4. **Identify reference docs:** Look for task specs, API design, data model, and architecture docs.
 
-Store discovered commands for use in verification gates:
+Store discovered commands for use in verification gates. Check `.optimus/config.json` first:
+```bash
+CONFIG_FILE=".optimus/config.json"
+if [ -f "$CONFIG_FILE" ]; then
+  LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
+fi
+LINT_CMD="${LINT_CMD:-make lint}"
+TEST_CMD="${TEST_CMD:-make test}"
+TEST_INTEGRATION_CMD="${TEST_INTEGRATION_CMD:-make test-integration}"
+TEST_E2E_CMD="${TEST_E2E_CMD:-make test-e2e}"
 ```
-LINT_CMD=<discovered lint command>
-TEST_CMD=<discovered test command>
-TEST_INTEGRATION_CMD=<discovered integration test command>
-TEST_E2E_CMD=<discovered E2E test command>
-```
+
+Fall back to Makefile/package.json/CI discovery if config.json is missing or keys absent.
 
 ### Step 1.2: Load Reference Documents
 
@@ -689,11 +698,11 @@ Execute re-run guard — see AGENTS.md Protocol: Re-run Guard.
 expensive, so they run ONCE at the end — not during the fix/convergence cycle.
 
 ```bash
-make test-integration        # Integration tests — if target exists
-make test-e2e                # E2E tests — if target exists
+$TEST_INTEGRATION_CMD        # from .optimus/config.json, or fallback: make test-integration
+$TEST_E2E_CMD                # from .optimus/config.json, or fallback: make test-e2e
 ```
 
-| Test Type | Makefile Target | If target exists | If target missing |
+| Test Type | Command | If target exists | If target missing |
 |-----------|----------------|-----------------|-------------------|
 | Integration | `make test-integration` | **HARD BLOCK** if fails | SKIP |
 | E2E | `make test-e2e` | **HARD BLOCK** if fails | SKIP |

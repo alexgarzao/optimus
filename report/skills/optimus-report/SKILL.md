@@ -473,7 +473,11 @@ exist, skip this phase silently.
 ```bash
 STATS_FILE=".optimus/stats.json"
 if [ -f "$STATS_FILE" ]; then
-  cat "$STATS_FILE"
+  if jq empty "$STATS_FILE" 2>/dev/null; then
+    cat "$STATS_FILE"
+  else
+    echo "WARNING: stats.json is corrupted. Skipping churn metrics."
+  fi
 fi
 ```
 
