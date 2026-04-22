@@ -66,9 +66,9 @@ The agent NEVER decides whether a finding should be fixed or skipped. ALL findin
 recommends but the user decides.
 
 ### 2. No False Convergence
-Convergence loops use the **fresh sub-agent model**: round 1 is analyzed by the
-orchestrator, rounds 2+ are executed by a fresh sub-agent (via `Task` tool) with zero
-prior context. Round 2 is mandatory. The orchestrator deduplicates, not the sub-agent.
+Convergence loops use the **Full Roster Model**: round 1 dispatches all specialist agents
+in parallel. Rounds 2+ dispatch the **same agent roster** via `Task` tool, each with zero
+prior context. Round 2 is mandatory. The orchestrator deduplicates, not the sub-agents.
 LOW severity is NOT a stop condition.
 
 ### 3. Atomic Thread Resolution
@@ -713,7 +713,7 @@ Follow these rules to prevent injection and silent failures:
    as regex patterns to `grep` without `-F`
 5. **Use `grep -E '^\| T-NNN \|'`** to match task rows in tasks.md — plain `grep "T-NNN"`
    matches titles and dependency columns too
-6. **Validate tool availability** before use: `command -v jq &>/dev/null` before running `jq`
+6. **Validate tool availability** before use: `command -v jq >/dev/null 2>&1` before running `jq`
 7. **Validate JSON files** before parsing: `jq empty "$FILE" 2>/dev/null` before reading keys
 8. **Sanitize user-derived values in commit messages** — task titles and descriptions may
    contain shell metacharacters (backticks, `$(...)`, double quotes). **Mandatory pattern:**
@@ -969,7 +969,7 @@ Events and their parameter signatures:
 When a dependency check fails:
 ```bash
 if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" "task-blocked" "$task_id" "$current_status" "$current_status" "blocked by $dep_id ($dep_status)" 2>/dev/null &
+  "$HOOKS_FILE" "task-blocked" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "blocked by $dep_id ($dep_status)")" 2>/dev/null &
 fi
 ```
 
@@ -1087,7 +1087,8 @@ Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
 4. **Path traversal validation (HARD BLOCK):** Verify the resolved path stays within the project:
    ```bash
    PROJECT_ROOT=$(git rev-parse --show-toplevel)
-   RESOLVED_PATH=$(cd "$PROJECT_ROOT" && realpath -m "${TASKS_DIR}/${TASK_SPEC}" 2>/dev/null)
+   RESOLVED_PATH=$(cd "$PROJECT_ROOT" && realpath -m "${TASKS_DIR}/${TASK_SPEC}" 2>/dev/null \
+     || python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "${TASKS_DIR}/${TASK_SPEC}" 2>/dev/null)
    case "$RESOLVED_PATH" in
      "$PROJECT_ROOT"/*) ;; # OK — within project
      *) echo "ERROR: TaskSpec path traversal detected — resolved path is outside the project root."; exit 1 ;;
@@ -1186,7 +1187,7 @@ Skills reference this as: "Execute re-run guard — see AGENTS.md Protocol: Re-r
 
 ### Protocol: Push Commits (optional)
 
-**Referenced by:** stages 1-4 (plan, build, check, pr-check), coderabbit-review, deep-review. Note: done handles pushing inline in its own cleanup phase.
+**Referenced by:** plan, build, check, coderabbit-review. Note: done handles pushing inline in its own cleanup phase. pr-check and deep-review have their own push phases.
 
 After stage work is complete, offer to push all local commits:
 
@@ -1225,7 +1226,7 @@ would be silently skipped even though ALL local commits are unpushed.
 and update installed plugins to pick up the changes just pushed:
 
 ```bash
-if jq -e '.name == "optimus"' .factory-plugin/marketplace.json &>/dev/null; then
+if jq -e '.name == "optimus"' .factory-plugin/marketplace.json >/dev/null 2>&1; then
   echo "Optimus repo detected — updating installed plugins..."
   for skill in $(droid plugin list 2>&1 | grep optimus | awk '{print $1}'); do
     droid plugin update "$skill" 2>/dev/null
@@ -1247,7 +1248,7 @@ All status and branch data is stored in `.optimus/state.json` (gitignored).
 **Prerequisites:**
 
 ```bash
-if ! command -v jq &>/dev/null; then
+if ! command -v jq >/dev/null 2>&1; then
   echo "ERROR: jq is required for state management but not installed."
   # STOP — do not proceed
 fi
