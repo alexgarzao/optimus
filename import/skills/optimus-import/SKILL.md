@@ -375,7 +375,6 @@ Original Ring files preserved."
 - IDs between optimus and Ring are independent — Optimus T-038 may reference Ring T-020
 - Task IDs must be unique — if duplicates found, warn the user before proceeding
 
-
 <!-- INLINE-PROTOCOLS:START -->
 ## Shared Protocols (from AGENTS.md)
 

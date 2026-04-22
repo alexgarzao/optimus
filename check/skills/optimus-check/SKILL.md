@@ -894,7 +894,6 @@ If the user requests a dry-run (e.g., "dry-run review T-012", "preview review"):
   (Phase 9) instead of unconditionally suggesting the next stage. The next stage is only
   suggested when the analysis produces 0 findings. See AGENTS.md Protocol: Re-run Guard.
 
-
 <!-- INLINE-PROTOCOLS:START -->
 ## Shared Protocols (from AGENTS.md)
 
@@ -1371,6 +1370,27 @@ times each stage ran on each task — useful for spotting spec churn and review 
 **NOTE:** stats.json is gitignored — no commit needed.
 
 Skills reference this as: "Increment stage stats — see AGENTS.md Protocol: Increment Stage Stats."
+
+
+### Protocol: Initialize .optimus Directory
+
+**Referenced by:** import, tasks, report (export), all stage agents (1-5) for session files
+
+Before creating ANY file inside `.optimus/`, ensure the directory structure exists
+and operational/temporary files are gitignored:
+
+```bash
+mkdir -p .optimus/sessions .optimus/reports
+if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
+  printf '\n# optimus-operational-files\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n' >> .gitignore
+fi
+```
+
+The `.optimus/config.json` and `.optimus/tasks.md` are versioned (structural data).
+The `.optimus/state.json`, `.optimus/stats.json`, `sessions/`, and `reports/` are
+gitignored (operational/temporary state).
+
+Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
 
 
 ### Protocol: Notification Hooks

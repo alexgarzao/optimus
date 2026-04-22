@@ -453,7 +453,6 @@ For each failed command:
 - Duration must be measured for each command individually
 - Auto-detect the stack from project files — do NOT assume Go
 
-
 <!-- INLINE-PROTOCOLS:START -->
 ## Shared Protocols (from AGENTS.md)
 

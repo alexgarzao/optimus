@@ -907,7 +907,6 @@ Confirm move?
 9. **Exactly one Ativa version** — when setting a version to `Ativa`, the current `Ativa` must be demoted (ask user)
 10. **At most one Próxima version** — when setting a version to `Próxima`, the current `Próxima` must be demoted to `Planejada` (ask user)
 
-
 <!-- INLINE-PROTOCOLS:START -->
 ## Shared Protocols (from AGENTS.md)
 

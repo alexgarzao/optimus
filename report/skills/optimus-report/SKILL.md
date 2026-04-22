@@ -634,7 +634,6 @@ an artifact in `.optimus/reports/` (gitignored), not a project file.
 - If tasks.md does not exist, suggest running `/optimus-import` to create one from existing task files
 - Always show the dependency graph, even for small projects — it reveals parallelization opportunities
 
-
 <!-- INLINE-PROTOCOLS:START -->
 ## Shared Protocols (from AGENTS.md)
 

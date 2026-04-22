@@ -322,7 +322,6 @@ After the convergence loop exits and all findings are processed:
 - Tradeoffs must be honest — do not minimize the cost of a correction
 - If a doc references existing code, verify that the code matches the doc
 
-
 <!-- INLINE-PROTOCOLS:START -->
 ## Shared Protocols (from AGENTS.md)
 

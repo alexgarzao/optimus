@@ -562,7 +562,6 @@ After all phases complete:
 - The agent may recommend an option, but MUST wait for user approval via AskUser before proceeding
 - Do NOT auto-skip, auto-dismiss, or auto-resolve any finding regardless of severity
 
-
 <!-- INLINE-PROTOCOLS:START -->
 ## Shared Protocols (from AGENTS.md)
 

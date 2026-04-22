@@ -292,7 +292,6 @@ After all tasks are processed (or the user stops):
 - Respect dependency order — never process a task before its dependencies are DONE
 - Each stage creates its own commits — the batch orchestrator does NOT commit anything
 
-
 <!-- INLINE-PROTOCOLS:START -->
 ## Shared Protocols (from AGENTS.md)
 
@@ -437,6 +436,27 @@ If this command fails (exit code != 0), **STOP** immediately:
 ```
 GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
 ```
+
+
+### Protocol: Initialize .optimus Directory
+
+**Referenced by:** import, tasks, report (export), all stage agents (1-5) for session files
+
+Before creating ANY file inside `.optimus/`, ensure the directory structure exists
+and operational/temporary files are gitignored:
+
+```bash
+mkdir -p .optimus/sessions .optimus/reports
+if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
+  printf '\n# optimus-operational-files\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n' >> .gitignore
+fi
+```
+
+The `.optimus/config.json` and `.optimus/tasks.md` are versioned (structural data).
+The `.optimus/state.json`, `.optimus/stats.json`, `sessions/`, and `reports/` are
+gitignored (operational/temporary state).
+
+Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
 
 
 ### Protocol: Shell Safety Guidelines

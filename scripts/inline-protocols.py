@@ -12,23 +12,12 @@ Usage: python3 scripts/inline-protocols.py
 """
 
 import re
-import os
 from pathlib import Path
-from collections import defaultdict
 
 REPO_ROOT = Path(__file__).parent.parent
 AGENTS_MD = REPO_ROOT / "AGENTS.md"
 MARKER_START = "<!-- INLINE-PROTOCOLS:START -->"
 MARKER_END = "<!-- INLINE-PROTOCOLS:END -->"
-
-# Sections that are general context (not protocols) but referenced by skills
-GENERAL_SECTIONS = {
-    "tasks.md Format",
-    "Task Lifecycle",
-    "Dry-Run Mode (all stages)",
-    "Verification Command Configuration",
-}
-
 
 def parse_agents_md():
     """Parse AGENTS.md into named sections keyed by heading text."""
@@ -36,18 +25,15 @@ def parse_agents_md():
     sections = {}
     current_key = None
     current_lines = []
-    current_level = 0
 
     for line in lines:
         heading_match = re.match(r'^(#{2,3})\s+(.+)$', line)
         if heading_match:
-            level = len(heading_match.group(1))
             title = heading_match.group(2).strip()
             if current_key:
                 sections[current_key] = "\n".join(current_lines)
             current_key = title
             current_lines = [line]
-            current_level = level
         elif current_key:
             current_lines.append(line)
 
@@ -63,11 +49,14 @@ def extract_refs_from_skill(skill_path):
     refs = set()
 
     # Protocol references: "see AGENTS.md Protocol: X"
-    for m in re.finditer(r'AGENTS\.md Protocol:\s*([^.\n"]+)', content):
-        name = m.group(1).strip().rstrip('.')
-        # Clean trailing context like "Use counter=..." or "If invalid..."
-        name = re.split(r'\.\s|;\s|\*\*|Use |If |Check |Also |Load |,\s', name)[0].strip()
-        name = name.rstrip('):')
+    for m in re.finditer(r'AGENTS\.md Protocol:\s*([^\n"]+)', content):
+        name = m.group(1).strip()
+        # Split at sentence boundary (". " followed by uppercase letter) to remove
+        # trailing sentences like ". Use stage=..." or ". Also load:"
+        name = re.split(r'\.\s+(?=[A-Z])', name)[0].strip()
+        # Clean remaining trailing context (comma clauses, bold markers, semicolons)
+        name = re.split(r',\s+(?:with |followed )|;\s|\*\*', name)[0].strip()
+        name = name.rstrip('.):')
         refs.add(f"Protocol: {name}")
 
     # Common pattern references: 'AGENTS.md "Common Patterns > X"'
@@ -82,35 +71,52 @@ def extract_refs_from_skill(skill_path):
     return refs
 
 
+def _normalize_key(key):
+    """Strip parenthetical suffixes like (HARD BLOCK), (optional) for matching."""
+    return re.sub(r'\s*\([^)]*\)\s*$', '', key).strip().lower()
+
+
 def match_ref_to_section(ref, sections):
     """Match a reference name to a section key in AGENTS.md."""
     if ref.startswith("Protocol: "):
         proto_name = ref[len("Protocol: "):]
-        # Try exact match first
+        proto_lower = proto_name.lower()
+        # Try exact match (ignoring parenthetical suffixes)
         for key in sections:
-            if key.startswith("Protocol: ") and proto_name.lower() in key.lower():
-                return key
-        # Try without "Protocol: " prefix
+            if key.startswith("Protocol: "):
+                key_base = _normalize_key(key[len("Protocol: "):])
+                if key_base == proto_lower:
+                    return key
+        # Try startswith match for partial names
         for key in sections:
-            if proto_name.lower() in key.lower():
-                return key
+            if key.startswith("Protocol: "):
+                key_base = _normalize_key(key[len("Protocol: "):])
+                if key_base.startswith(proto_lower):
+                    return key
     elif ref.startswith("Common: "):
         pattern_name = ref[len("Common: "):]
+        pattern_normalized = _normalize_key(pattern_name)
+        # Try exact match first (both sides normalized)
         for key in sections:
-            if pattern_name.lower() in key.lower():
+            if _normalize_key(key) == pattern_normalized:
+                return key
+        # Try startswith match
+        for key in sections:
+            if _normalize_key(key).startswith(pattern_normalized):
                 return key
     return None
 
 
 def strip_existing_inline(content):
-    """Remove previously inlined protocols section."""
+    """Remove previously inlined protocols section, preserving content after end marker."""
     start_idx = content.find(MARKER_START)
     if start_idx == -1:
         return content
     end_idx = content.find(MARKER_END)
     if end_idx == -1:
         return content[:start_idx].rstrip()
-    return content[:start_idx].rstrip()
+    after = content[end_idx + len(MARKER_END):]
+    return content[:start_idx].rstrip() + after
 
 
 def inline_protocols():
@@ -175,10 +181,10 @@ def inline_protocols():
 
         # Build the inline block
         content = skill_path.read_text()
-        content = strip_existing_inline(content)
+        content = strip_existing_inline(content).rstrip() + "\n"
 
         inline_parts = []
-        inline_parts.append(f"\n\n{MARKER_START}")
+        inline_parts.append(f"\n{MARKER_START}")
         inline_parts.append("## Shared Protocols (from AGENTS.md)")
         inline_parts.append("")
         inline_parts.append("The following protocols are referenced by this skill. They are")
