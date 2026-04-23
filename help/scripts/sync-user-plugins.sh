@@ -9,6 +9,21 @@ set -euo pipefail
 trap 'echo ""; echo "WARNING: Sync interrupted. Re-run /optimus-sync to complete."; exit 130' INT TERM
 
 readonly MARKETPLACE_NAME="${OPTIMUS_MARKETPLACE_NAME:-optimus}"
+readonly DROID_TIMEOUT="${OPTIMUS_DROID_TIMEOUT:-60}"
+
+_droid() {
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$DROID_TIMEOUT" droid "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$DROID_TIMEOUT" droid "$@"
+  else
+    droid "$@"
+  fi
+}
+
+_count_lines() {
+  echo "$1" | grep -c . 2>/dev/null || echo 0
+}
 
 echo "=== Optimus Plugin Sync ==="
 echo ""
@@ -27,7 +42,7 @@ fi
 
 # Step 1: Update marketplace
 echo "Updating marketplace..."
-if ! droid plugin marketplace update "$MARKETPLACE_NAME" 2>/dev/null; then
+if ! _droid plugin marketplace update "$MARKETPLACE_NAME" 2>/dev/null; then
   echo "WARNING: Could not update marketplace. Proceeding with cached version."
 fi
 
@@ -46,8 +61,8 @@ if [ -z "$EXPECTED" ]; then
 fi
 
 # Step 3: Get installed optimus plugins
-INSTALLED=$(droid plugin list 2>/dev/null \
-  | grep "@${MARKETPLACE_NAME}" \
+INSTALLED=$(_droid plugin list 2>/dev/null \
+  | grep -F "@${MARKETPLACE_NAME}" \
   | awk '{print $1}' \
   | sed "s/@${MARKETPLACE_NAME}//" \
   | sort) || true
@@ -71,15 +86,18 @@ fi
 REMOVED=0
 FAILED=0
 if [ -n "$ORPHANED_PLUGINS" ]; then
+  TOTAL=$(_count_lines "$ORPHANED_PLUGINS")
+  CURRENT=0
   echo ""
   echo "Removing orphaned plugins..."
   while IFS= read -r plugin; do
     [ -z "$plugin" ] && continue
-    echo "  - $plugin"
-    if droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null; then
+    CURRENT=$((CURRENT + 1))
+    echo "  - ($CURRENT/$TOTAL) $plugin"
+    if _droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null; then
       REMOVED=$((REMOVED + 1))
     else
-      echo "  WARNING: Failed to remove ${plugin}"
+      echo "    WARNING: Failed to remove ${plugin}"
       FAILED=$((FAILED + 1))
     fi
   done <<< "$ORPHANED_PLUGINS"
@@ -88,15 +106,18 @@ fi
 # Step 6: Install new plugins
 ADDED=0
 if [ -n "$NEW_PLUGINS" ]; then
+  TOTAL=$(_count_lines "$NEW_PLUGINS")
+  CURRENT=0
   echo ""
   echo "Installing new plugins..."
   while IFS= read -r plugin; do
     [ -z "$plugin" ] && continue
-    echo "  + $plugin"
-    if droid plugin install "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null; then
+    CURRENT=$((CURRENT + 1))
+    echo "  + ($CURRENT/$TOTAL) $plugin"
+    if _droid plugin install "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null; then
       ADDED=$((ADDED + 1))
     else
-      echo "  WARNING: Failed to install ${plugin}"
+      echo "    WARNING: Failed to install ${plugin}"
       FAILED=$((FAILED + 1))
     fi
   done <<< "$NEW_PLUGINS"
@@ -105,18 +126,21 @@ fi
 # Step 7: Update existing plugins
 UPDATED=0
 if [ -n "$EXISTING_PLUGINS" ]; then
+  TOTAL=$(_count_lines "$EXISTING_PLUGINS")
+  CURRENT=0
   echo ""
   echo "Updating existing plugins..."
   while IFS= read -r plugin; do
     [ -z "$plugin" ] && continue
-    echo "  * $plugin"
-    if droid plugin update "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null; then
+    CURRENT=$((CURRENT + 1))
+    echo "  * ($CURRENT/$TOTAL) $plugin"
+    if _droid plugin update "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null; then
       UPDATED=$((UPDATED + 1))
     else
       # Scope conflict — uninstall and reinstall
       echo "    ! scope conflict, reinstalling..."
-      droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null || true
-      if droid plugin install "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null; then
+      _droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null || true
+      if _droid plugin install "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null; then
         UPDATED=$((UPDATED + 1))
       else
         echo "    ERROR: Failed to reinstall ${plugin}"
