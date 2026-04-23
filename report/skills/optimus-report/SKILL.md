@@ -730,7 +730,7 @@ state.json is implicitly `Pendente`.
 | `Validando Impl` | check | Implementation being reviewed |
 | `Revisando PR` | pr-check | PR being reviewed (optional stage) |
 | `DONE` | done | Completed |
-| `Cancelado` | tasks | Task abandoned, will not be implemented |
+| `Cancelado` | tasks, done | Task abandoned, will not be implemented |
 
 **Administrative status operations** (managed by tasks, not by stage agents):
 - **Reopen:** `DONE` → `Pendente` (remove entry from state.json) or `Em Andamento` (if worktree exists) — when a bug is found after close. Also accepts `Cancelado` → `Pendente` — when a cancellation decision is reversed.

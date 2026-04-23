@@ -42,7 +42,7 @@
     },
     {
       "name": "done",
-      "description": "Stage 5: Verifies all prerequisites (commits pushed, PR ready, tests passing) and marks the task as done. Offers to merge the PR during cleanup.",
+      "description": "Stage 5: Requires PR in final state (merged or closed) before marking task done. Cleans up worktree and branch interactively.",
       "source": "./done"
     },
     {

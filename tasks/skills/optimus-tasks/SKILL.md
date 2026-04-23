@@ -647,7 +647,7 @@ code manually without using stage-2).
 ### Step 8.1: Validate Advance
 
 1. **Target status validation (check first):**
-   - If target status is `DONE` → **STOP**: "Cannot advance to DONE manually. Use `/optimus-done` which runs the verification checklist."
+   - If target status is `DONE` → **STOP**: "Cannot advance to DONE manually. Use `/optimus-done` which verifies PR state and runs close gates."
    - If target status is `Cancelado` → **STOP**: "Cannot advance to Cancelado. Use the cancel operation (`cancel T-XXX`) which handles cleanup."
 2. **Current status validation:**
    - If status is `DONE` or `Cancelado` → **STOP**: "Task T-XXX is in terminal status '<status>'. Use 'reopen' for DONE tasks."
@@ -1000,7 +1000,7 @@ state.json is implicitly `Pendente`.
 | `Validando Impl` | check | Implementation being reviewed |
 | `Revisando PR` | pr-check | PR being reviewed (optional stage) |
 | `DONE` | done | Completed |
-| `Cancelado` | tasks | Task abandoned, will not be implemented |
+| `Cancelado` | tasks, done | Task abandoned, will not be implemented |
 
 **Administrative status operations** (managed by tasks, not by stage agents):
 - **Reopen:** `DONE` → `Pendente` (remove entry from state.json) or `Em Andamento` (if worktree exists) — when a bug is found after close. Also accepts `Cancelado` → `Pendente` — when a cancellation decision is reversed.

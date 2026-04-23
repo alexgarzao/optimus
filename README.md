@@ -36,7 +36,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 | `build` | 2 | End-to-end task implementation with verification gates, code review, and commit approval | `/optimus-build` |
 | `check` | 3 | Validates completed task implementation against spec, coding standards, and best practices using parallel specialist agents | `/optimus-check` |
 | `pr-check` | 4 | (Optional) Unified PR review orchestrator. Collects PR metadata and existing comments, dispatches agents, applies fixes, resolves threads | `/optimus-pr-check` |
-| `done` | 5 | Verifies all prerequisites (commits pushed, PR ready, tests passing) and marks the task as done. Offers to merge the PR during cleanup | `/optimus-done` |
+| `done` | 5 | Requires PR in final state (merged or closed), then marks task as DONE. Cleans up worktree and branch interactively | `/optimus-done` |
 
 ## Review & Verification Skills
 

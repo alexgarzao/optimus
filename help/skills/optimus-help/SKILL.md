@@ -68,7 +68,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 | **build** | `/optimus-build` | After spec validation — implements the task end-to-end with TDD, verification gates, and code review. |
 | **check** | `/optimus-check` | After implementation — validates code quality, spec compliance, and test coverage using parallel specialist agents. |
 | **pr-check** | `/optimus-pr-check` | (Optional) After impl review — orchestrates PR review collecting findings from Codacy, DeepSource, CodeRabbit, and human reviewers. Also works standalone without a task. |
-| **done** | `/optimus-done` | Final step — verifies all prerequisites (tests, lint, PR ready) and marks the task as DONE. Offers to merge the PR. Supports force-close for tasks done outside the pipeline. |
+| **done** | `/optimus-done` | Final step — requires PR in final state (merged or closed), then marks task as DONE. Cleans up worktree and branch interactively. |
 
 ### Review & Verification Skills (standalone, no task required)
 
@@ -105,7 +105,7 @@ on their situation:
 - Use `/optimus-resolve` to auto-resolve structural conflicts (each task row is independent)
 
 ### "I completed a task outside the pipeline"
-- Use `/optimus-done` with "force close T-XXX" to skip the checklist
+- Use `/optimus-tasks advance T-XXX` to move the task forward manually
 
 ### "I want to preview what a stage would do"
 - Add "dry-run" to any stage command (e.g., "dry-run spec T-003", "preview review T-012")

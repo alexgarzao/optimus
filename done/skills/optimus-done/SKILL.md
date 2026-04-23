@@ -169,10 +169,19 @@ git rev-parse --abbrev-ref @{u} 2>/dev/null
 
 ```bash
 HEAD_BRANCH=$(git branch --show-current 2>/dev/null)
-PR_JSON=$(gh pr list --head "$HEAD_BRANCH" --json number,state --jq '.[0]' 2>/dev/null)
+if [ -z "$HEAD_BRANCH" ]; then
+  echo "ERROR: Cannot determine current branch. Checkout the task branch first."
+  # STOP — HARD BLOCK
+fi
+PR_JSON=$(gh pr list --head "$HEAD_BRANCH" --json number,state --jq '.[0]')
+if [ $? -ne 0 ]; then
+  echo "ERROR: GitHub CLI failed. Check network and run 'gh auth status'."
+  # STOP — HARD BLOCK (cannot verify PR state)
+fi
 ```
 
-- **No PR exists:** PASS → proceed (task went directly to default branch)
+- **gh command failed (non-zero exit):** HARD BLOCK — cannot verify PR state
+- **No PR exists** (PR_JSON is empty or "null"): PASS → proceed (task went directly to default branch)
 - **PR state is MERGED:** PASS → proceed
 - **PR state is CLOSED (not merged):** Ask via `AskUser`:
   ```
@@ -386,7 +395,7 @@ state.json is implicitly `Pendente`.
 | `Validando Impl` | check | Implementation being reviewed |
 | `Revisando PR` | pr-check | PR being reviewed (optional stage) |
 | `DONE` | done | Completed |
-| `Cancelado` | tasks | Task abandoned, will not be implemented |
+| `Cancelado` | tasks, done | Task abandoned, will not be implemented |
 
 **Administrative status operations** (managed by tasks, not by stage agents):
 - **Reopen:** `DONE` → `Pendente` (remove entry from state.json) or `Em Andamento` (if worktree exists) — when a bug is found after close. Also accepts `Cancelado` → `Pendente` — when a cancellation decision is reversed.
