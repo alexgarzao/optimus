@@ -511,9 +511,26 @@ Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the u
 - Skip — no action
 - Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
 
-**IMMEDIATE RESPONSE RULE** — see AGENTS.md "Finding Presentation" item 9. If the user
-selects "Tell me more" or responds with free text: STOP, research and answer RIGHT NOW.
+**AskUser template (MANDATORY — follow this exact structure for every finding):**
+```
+1. [question] (X/N) SEVERITY — Finding title summary
+[topic] (X/N) F#-Category
+[option] Option A: recommended fix
+[option] Option B: alternative approach
+[option] Skip
+[option] Tell me more
+```
+
+**HARD BLOCK — IMMEDIATE RESPONSE RULE:** If the user selects "Tell me more" or responds
+with free text: **STOP IMMEDIATELY.** Do NOT continue to the next finding. Research and
+answer RIGHT NOW. Only after the user is satisfied, re-present the SAME finding's options.
 **NEVER defer to the end of the findings loop.**
+
+**Anti-rationalization (excuses the agent MUST NOT use):**
+- "I'll address all questions after presenting the remaining findings" — NO
+- "Let me continue with the next finding and come back to this" — NO
+- "I'll research this after the findings loop" — NO
+- "This is noted, moving to the next finding" — NO
 
 Internally record every decision: finding ID, chosen option (or "skip"), and rationale if provided. Do NOT apply any fix yet — all fixes are applied in Phase 7.
 
@@ -1148,16 +1165,31 @@ All cycle review skills follow this pattern:
    - One option per proposed solution (Option A, Option B, Option C, etc.)
    - Skip — no action
    - Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
-   **AskUser `[topic]` format:** Format: `(X/N) F#-Category`.
-   Example: `[topic] (8/12) F8-DeadCode`.
-9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
-   (a question, disagreement, or request for clarification) instead of a decision:**
+
+   **AskUser template (MANDATORY — follow this exact structure for every finding):**
+   ```
+   1. [question] (X/N) SEVERITY — Finding title summary
+   [topic] (X/N) F#-Category
+   [option] Option A: recommended fix
+   [option] Option B: alternative approach
+   [option] Skip
+   [option] Tell me more
+   ```
+
+9. **HARD BLOCK — IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds
+   with free text (a question, disagreement, or request for clarification):**
    **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
    Research the user's concern RIGHT NOW using `WebSearch`, codebase analysis, or both.
    Provide a thorough answer with evidence (links, code references, best practice citations).
-   Only AFTER the user is satisfied, re-present the options and ask for their decision again.
-   This may go back and forth multiple times — that is expected and correct behavior.
+   Only AFTER the user is satisfied, re-present the SAME finding's options and ask for
+   their decision again. This may go back and forth multiple times — that is expected.
    **NEVER defer the response to the end of the findings loop.**
+
+   **Anti-rationalization (excuses the agent MUST NOT use to skip immediate response):**
+   - "I'll address all questions after presenting the remaining findings" — NO
+   - "Let me continue with the next finding and come back to this" — NO
+   - "I'll research this after the findings loop" — NO
+   - "This is noted, moving to the next finding" — NO
 10. After ALL N decisions collected: apply ALL approved fixes (see below)
 11. Run verification (see Verification Timing below)
 12. Present final summary
@@ -1991,35 +2023,6 @@ Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
 7. If subtasks directory exists, read all `.md` files inside it
 
 Skills reference this as: "Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution."
-
-
-### Protocol: Terminal Identification
-
-**Referenced by:** all stage agents (1-4), batch
-
-After the task ID is identified and confirmed, set the terminal title to show the
-current stage and task. This allows users running multiple agents in parallel terminals
-to identify each terminal at a glance.
-
-**Set title (after task ID is known):**
-
-```bash
-printf '\033]0;optimus: %s %s — %s\007' "<STAGE>" "$TASK_ID" "$TASK_TITLE"
-```
-
-Example output in terminal tab: `optimus: REVIEW T-003 — User Auth JWT`
-
-**Restore title (at stage completion or exit):**
-
-```bash
-printf '\033]0;\007'
-```
-
-**NOTE:** This uses the standard OSC (Operating System Command) escape sequence
-supported by iTerm2, Terminal.app, VS Code terminal, tmux, and most modern terminals.
-The sequence is silent — it produces no visible output.
-
-Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Terminal Identification."
 
 
 ### Protocol: Workspace Auto-Navigation (HARD BLOCK)

@@ -246,14 +246,28 @@ Use `AskUser` with contextual options:
 - Skip this item
 - Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
 
+**AskUser template (MANDATORY — follow this exact structure for every finding):**
+```
+1. [question] (X/N) SEVERITY — Finding title summary
+[topic] (X/N) F#-Category
+[option] Fix as suggested
+[option] Fix with adjustment
+[option] Skip
+[option] Tell me more
+```
+
 **BLOCKING**: Do NOT advance to the next item until the user decides.
 
-**IMMEDIATE RESPONSE RULE:** If the user selects "Tell me more" or responds with free text
-(a question, disagreement, or request for clarification) instead of a decision:
-**STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
-Research the user's concern RIGHT NOW using `WebSearch`, codebase analysis, or both.
-Provide a thorough answer with evidence. Only AFTER the user is satisfied, re-present the
-options and ask for their decision again. **NEVER defer to the end of the findings loop.**
+**HARD BLOCK — IMMEDIATE RESPONSE RULE:** If the user selects "Tell me more" or responds
+with free text: **STOP IMMEDIATELY.** Do NOT continue to the next finding. Research and
+answer RIGHT NOW. Only after the user is satisfied, re-present the SAME finding's options.
+**NEVER defer to the end of the findings loop.**
+
+**Anti-rationalization (excuses the agent MUST NOT use):**
+- "I'll address all questions after presenting the remaining findings" — NO
+- "Let me continue with the next finding and come back to this" — NO
+- "I'll research this after the findings loop" — NO
+- "This is noted, moving to the next finding" — NO
 
 ### 4. Apply (if approved)
 

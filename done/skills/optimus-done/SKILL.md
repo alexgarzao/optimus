@@ -830,35 +830,6 @@ appearing as `Pendente` when they actually have active worktrees.
 Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: State Management."
 
 
-### Protocol: Terminal Identification
-
-**Referenced by:** all stage agents (1-4), batch
-
-After the task ID is identified and confirmed, set the terminal title to show the
-current stage and task. This allows users running multiple agents in parallel terminals
-to identify each terminal at a glance.
-
-**Set title (after task ID is known):**
-
-```bash
-printf '\033]0;optimus: %s %s — %s\007' "<STAGE>" "$TASK_ID" "$TASK_TITLE"
-```
-
-Example output in terminal tab: `optimus: REVIEW T-003 — User Auth JWT`
-
-**Restore title (at stage completion or exit):**
-
-```bash
-printf '\033]0;\007'
-```
-
-**NOTE:** This uses the standard OSC (Operating System Command) escape sequence
-supported by iTerm2, Terminal.app, VS Code terminal, tmux, and most modern terminals.
-The sequence is silent — it produces no visible output.
-
-Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Terminal Identification."
-
-
 ### Protocol: Workspace Auto-Navigation (HARD BLOCK)
 
 **Referenced by:** stages 2-4

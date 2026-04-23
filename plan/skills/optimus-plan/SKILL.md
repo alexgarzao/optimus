@@ -566,9 +566,27 @@ Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding O
    - One option per proposed solution (Option A, Option B, Option C, etc.)
    - Skip — no action
    - Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
-5. **IMMEDIATE RESPONSE RULE** — see AGENTS.md "Finding Presentation" item 9. If the user
-   selects "Tell me more" or responds with free text: STOP, research and answer RIGHT NOW.
+
+   **AskUser template (MANDATORY — follow this exact structure for every finding):**
+   ```
+   1. [question] (X/N) SEVERITY — Finding title summary
+   [topic] (X/N) F#-Category
+   [option] Option A: recommended fix
+   [option] Option B: alternative approach
+   [option] Skip
+   [option] Tell me more
+   ```
+
+5. **HARD BLOCK — IMMEDIATE RESPONSE RULE:** If the user selects "Tell me more" or responds
+   with free text: **STOP IMMEDIATELY.** Do NOT continue to the next finding. Research and
+   answer RIGHT NOW. Only after the user is satisfied, re-present the SAME finding's options.
    **NEVER defer to the end of the findings loop.**
+
+   **Anti-rationalization (excuses the agent MUST NOT use):**
+   - "I'll address all questions after presenting the remaining findings" — NO
+   - "Let me continue with the next finding and come back to this" — NO
+   - "I'll research this after the findings loop" — NO
+   - "This is noted, moving to the next finding" — NO
 6. **Track all decisions** internally. Do NOT apply any fix yet — all fixes are applied in Phase 4.
 
 ## Phase 4: Apply Approved Corrections
@@ -975,44 +993,6 @@ Every finding must present 2-3 options with this structure:
 - **Medium:** Multiple files, straightforward, may need test updates
 - **High:** Significant refactoring, new tests, multiple modules affected
 - **Very high:** Architectural change, many files, extensive testing, risk of regressions
-
-
-### Finding Presentation (Unified Model)
-All cycle review skills follow this pattern:
-1. Collect findings from agents/tools
-2. Consolidate and deduplicate
-3. **Group same-nature findings** — after deduplication, identify findings that share the
-   same root cause or fix pattern (e.g., "missing error handling" in 5 handlers, "inconsistent
-   import path" in 4 files). If 2+ findings are of the same nature, merge them into a **single
-   grouped entry** listing all affected files/locations. Each group counts as ONE item in the
-   `"(X/N)"` sequence. The user makes ONE decision for the entire group.
-4. Announce total findings count: `"### Total findings to review: N"` (where N reflects
-   grouped entries — a group of 5 same-nature findings counts as 1)
-5. Present overview table with severity counts
-6. **Deep research BEFORE presenting each finding** (see research checklist below)
-7. Walk through findings ONE AT A TIME with `"(X/N)"` progress prefix in the header, ordered by severity
-   (CRITICAL first, then HIGH, MEDIUM, LOW). **ALL findings MUST be presented regardless of
-   severity** — the agent NEVER skips, filters, or auto-resolves any finding. The decision to
-   fix or skip is ALWAYS the user's. For grouped entries, list all affected files/locations
-   within the single presentation.
-8. For each finding: present research-backed analysis + options, collect decision via AskUser.
-   **Every AskUser for a finding decision MUST include these options:**
-   - One option per proposed solution (Option A, Option B, Option C, etc.)
-   - Skip — no action
-   - Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
-   **AskUser `[topic]` format:** Format: `(X/N) F#-Category`.
-   Example: `[topic] (8/12) F8-DeadCode`.
-9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
-   (a question, disagreement, or request for clarification) instead of a decision:**
-   **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
-   Research the user's concern RIGHT NOW using `WebSearch`, codebase analysis, or both.
-   Provide a thorough answer with evidence (links, code references, best practice citations).
-   Only AFTER the user is satisfied, re-present the options and ask for their decision again.
-   This may go back and forth multiple times — that is expected and correct behavior.
-   **NEVER defer the response to the end of the findings loop.**
-10. After ALL N decisions collected: apply ALL approved fixes (see below)
-11. Run verification (see Verification Timing below)
-12. Present final summary
 
 
 ### Protocol: Active Version Guard
@@ -1821,35 +1801,6 @@ Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
 7. If subtasks directory exists, read all `.md` files inside it
 
 Skills reference this as: "Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution."
-
-
-### Protocol: Terminal Identification
-
-**Referenced by:** all stage agents (1-4), batch
-
-After the task ID is identified and confirmed, set the terminal title to show the
-current stage and task. This allows users running multiple agents in parallel terminals
-to identify each terminal at a glance.
-
-**Set title (after task ID is known):**
-
-```bash
-printf '\033]0;optimus: %s %s — %s\007' "<STAGE>" "$TASK_ID" "$TASK_TITLE"
-```
-
-Example output in terminal tab: `optimus: REVIEW T-003 — User Auth JWT`
-
-**Restore title (at stage completion or exit):**
-
-```bash
-printf '\033]0;\007'
-```
-
-**NOTE:** This uses the standard OSC (Operating System Command) escape sequence
-supported by iTerm2, Terminal.app, VS Code terminal, tmux, and most modern terminals.
-The sequence is silent — it produces no visible output.
-
-Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Terminal Identification."
 
 
 ### Protocol: tasks.md Validation (HARD BLOCK)
