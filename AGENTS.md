@@ -26,6 +26,8 @@ optimus/
 ├── coderabbit-review/                 # CodeRabbit CLI + TDD cycle
 ├── help/                              # Skill discovery and help
 ├── quick-report/                      # Compact daily status dashboard
+├── scripts/                           # Build tools (inline-protocols.py, tests)
+├── Makefile                           # test, lint, check-inline targets
 └── docs/                              # Project documentation
     └── future-improvements.md         # Tracked improvements not yet prioritized
 ```

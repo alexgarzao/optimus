@@ -2,7 +2,6 @@
 """Tests for inline-protocols.py."""
 
 import importlib.util
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -193,3 +192,90 @@ class TestIdempotency:
         content_after_second = skill.read_text()
 
         assert content_after_first == content_after_second
+
+    def test_skips_skill_without_refs(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("## Protocol: Example\nContent\n")
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+
+        skill_dir = tmp_path / "noop" / "skills" / "optimus-noop"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_text("No references here.\n")
+
+        ip.inline_protocols()
+        assert "no AGENTS.md refs, skipping" in capsys.readouterr().out
+        assert ip.MARKER_START not in skill.read_text()
+
+    def test_warns_on_unmatched_refs(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("## Protocol: Real\nContent\n")
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+
+        skill_dir = tmp_path / "bad" / "skills" / "optimus-bad"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_text("see AGENTS.md Protocol: Nonexistent.\n")
+
+        ip.inline_protocols()
+        assert "unmatched" in capsys.readouterr().out.lower()
+
+    def test_includes_foundational_for_state_management(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text(
+            "## File Location\nFile location content\n"
+            "## Valid Status Values (stored in state.json)\nStatus values\n"
+            "## Protocol: State Management\nState mgmt content\n"
+        )
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+
+        skill_dir = tmp_path / "st" / "skills" / "optimus-st"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_text("see AGENTS.md Protocol: State Management.\n")
+
+        ip.inline_protocols()
+        content = skill.read_text()
+        assert "File location content" in content
+        assert "Status values" in content
+        assert "State mgmt content" in content
+
+    def test_handles_read_error_gracefully(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("## Protocol: X\nContent\n")
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+
+        skill_dir = tmp_path / "err" / "skills" / "optimus-err"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_text("see AGENTS.md Protocol: X.\n")
+        skill.chmod(0o000)
+
+        ip.inline_protocols()
+        output = capsys.readouterr().out
+        assert "ERROR" in output or "skipping" in output.lower()
+        skill.chmod(0o644)  # restore for cleanup
+
+    def test_processes_multiple_skills(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("## Protocol: Alpha\nAlpha content\n## Protocol: Beta\nBeta content\n")
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+
+        for name, ref in [("aaa", "Alpha"), ("bbb", "Beta")]:
+            d = tmp_path / name / "skills" / f"optimus-{name}"
+            d.mkdir(parents=True)
+            (d / "SKILL.md").write_text(f"see AGENTS.md Protocol: {ref}.\n")
+
+        ip.inline_protocols()
+
+        a = (tmp_path / "aaa" / "skills" / "optimus-aaa" / "SKILL.md").read_text()
+        b = (tmp_path / "bbb" / "skills" / "optimus-bbb" / "SKILL.md").read_text()
+        assert "Alpha content" in a
+        assert "Beta content" not in a
+        assert "Beta content" in b
+        assert "Alpha content" not in b

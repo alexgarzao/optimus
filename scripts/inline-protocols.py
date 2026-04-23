@@ -125,7 +125,7 @@ def strip_existing_inline(content: str) -> str:
     return content[:start_idx].rstrip() + after
 
 
-def inline_protocols():
+def inline_protocols() -> None:
     """Main: inline referenced protocols into each SKILL.md."""
     sections = parse_agents_md()
     print(f"Parsed {len(sections)} sections from AGENTS.md")
