@@ -545,7 +545,7 @@ Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding O
 
 4. Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
    **Every AskUser MUST include these options:**
-   - Option A / Option B (the proposed solutions)
+   - One option per proposed solution (Option A, Option B, Option C, etc.)
    - Skip — no action
    - Tell me more
 5. **IMMEDIATE RESPONSE RULE** — see AGENTS.md "Finding Presentation" item 9. If the user
@@ -975,7 +975,7 @@ All cycle review skills follow this pattern:
    within the single presentation.
 8. For each finding: present research-backed analysis + options, collect decision via AskUser.
    **Every AskUser for a finding decision MUST include these options:**
-   - Option A / Option B (the proposed solutions)
+   - One option per proposed solution (Option A, Option B, Option C, etc.)
    - Skip — no action
    - Tell me more
    **AskUser `[topic]` format:** Format: `F#-Category`.
