@@ -44,7 +44,7 @@ terminal display when available, otherwise use markdown tables.
 
 | Skill | Command | When to Use |
 |-------|---------|-------------|
-| **import** | `/optimus-import` | Import Ring pre-dev artifacts into optimus format. Creates tasks.md with TaskSpec column. Re-runnable. |
+| **import** | `/optimus-import` | Import Ring pre-dev artifacts into optimus format. Creates tasks.md with TaskSpec column. Re-runnable — only imports what's new. |
 | **report** | `/optimus-report` | Task status dashboard — shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only. |
 | **tasks** | `/optimus-tasks` | Creating, editing, removing, reordering, cancelling, or reopening tasks. Managing versions. Any administrative task management. |
 | **resolve** | `/optimus-resolve` | Resolving merge conflicts in `tasks.md` caused by parallel task execution across feature branches. |
@@ -64,7 +64,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
 
 | Skill | Command | When to Use |
 |-------|---------|-------------|
-| **plan** | `/optimus-plan` | Before implementing a task — validates the spec against project docs, catches gaps and contradictions. Creates the workspace (branch/worktree). |
+| **plan** | `/optimus-plan` | Before implementing a task — validates the spec against project docs, catches gaps, contradictions, and test coverage holes. Creates the workspace (branch/worktree). |
 | **build** | `/optimus-build` | After spec validation — implements the task end-to-end with TDD, verification gates, and code review. |
 | **review** | `/optimus-review` | After implementation — validates code quality, spec compliance, and test coverage using parallel specialist agents. |
 | **done** | `/optimus-done` | Final step — requires PR in final state (merged or closed), then marks task as DONE. Cleans up worktree and branch interactively. |
@@ -75,7 +75,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
 |-------|---------|-------------|
 | **pr-check** | `/optimus-pr-check` | PR review — collects findings from Codacy, DeepSource, CodeRabbit, and human reviewers. Standalone tool, does not change task status. |
 | **deep-review** | `/optimus-deep-review` | Code review with auto-discovered Ring droids — reviews entire project, git diff, or specific directory. Dispatches all installed review droids in parallel. |
-| **deep-doc-review** | `/optimus-deep-doc-review` | Documentation review — finds errors, inconsistencies, and gaps across project docs with cross-referencing. |
+| **deep-doc-review** | `/optimus-deep-doc-review` | Documentation review — finds errors, inconsistencies, gaps, and improvements with interactive one-by-one resolution. |
 | **coderabbit-review** | `/optimus-coderabbit-review` | Code review using CodeRabbit CLI with TDD fix cycle and agent validation. Requires CodeRabbit CLI installed. |
 
 
