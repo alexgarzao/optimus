@@ -384,7 +384,7 @@ These operations require explicit user confirmation.
 
 ### Format Validation
 
-Every stage agent (1-5) MUST validate the tasks.md format before operating:
+Every stage agent (1-4) MUST validate the tasks.md format before operating:
 1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
 2. A `## Versions` section exists with a table containing columns: Version, Status, Description
 3. All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
@@ -404,7 +404,7 @@ running `/optimus-import` to fix the format. Do NOT attempt to interpret malform
 
 14. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
 15. **Empty table handling:** If the tasks table exists but has zero data rows (only headers),
-format validation PASSES. Stage agents (1-5) MUST check for this condition immediately after
+format validation PASSES. Stage agents (1-4) MUST check for this condition immediately after
 format validation and before task identification. If zero data rows: **STOP** and inform the
 user: "No tasks found in tasks.md. Use `/optimus-tasks` to create a task or `/optimus-import`
 to import from Ring pre-dev." Do NOT proceed to task identification with an empty table.
