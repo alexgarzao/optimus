@@ -223,5 +223,5 @@ Present the final summary using `<json-render>` with metrics:
   parameter. If a command times out, treat it as FAIL and continue with the next plugin.
 - If the user cancels mid-sync or the session is interrupted, inform them:
   "Sync interrupted. Some plugins may be partially updated. Re-run `/optimus-sync` to complete."
-- The `make sync-plugins` target in the project Makefile runs `help/scripts/sync-user-plugins.sh`
+- The `make sync-plugins` target in the project Makefile runs `sync/scripts/sync-user-plugins.sh`
   directly. That script is for CLI usage without an agent and is NOT used by this skill.

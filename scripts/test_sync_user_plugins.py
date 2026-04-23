@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).parent.parent / "help" / "scripts" / "sync-user-plugins.sh"
+SCRIPT = Path(__file__).parent.parent / "sync" / "scripts" / "sync-user-plugins.sh"
 BASH = shutil.which("bash")
 if BASH is None:
     pytest.skip("bash not found", allow_module_level=True)

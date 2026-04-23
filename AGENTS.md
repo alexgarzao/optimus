@@ -24,7 +24,8 @@ optimus/
 ├── deep-review/                       # Parallel code review (no PR context)
 ├── deep-doc-review/                   # Documentation review
 ├── coderabbit-review/                 # CodeRabbit CLI + TDD cycle
-├── help/                              # Skill discovery, help, and plugin sync
+├── help/                              # Skill discovery and help
+├── sync/                              # Plugin sync (install, update, remove)
 ├── quick-report/                      # Compact daily status dashboard
 ├── scripts/                           # Build tools (inline-protocols.py, tests)
 ├── Makefile                           # test, lint, check-inline, sync-plugins targets
@@ -32,12 +33,11 @@ optimus/
     └── future-improvements.md         # Tracked improvements not yet prioritized
 ```
 
-Each plugin follows the same layout (a plugin may contain one or more skills):
+Each plugin follows the same layout:
 ```
 <plugin>/
 ├── .factory-plugin/plugin.json        # Plugin manifest (name, description)
-└── skills/
-    └── optimus-<skill>/SKILL.md       # Full skill instructions with YAML frontmatter
+└── skills/optimus-<skill>/SKILL.md    # Full skill instructions with YAML frontmatter
 ```
 
 ## How Skills Work

@@ -72,8 +72,13 @@
     },
     {
       "name": "help",
-      "description": "Lists all available Optimus skills with descriptions and usage commands. Also includes the sync skill for plugin management.",
+      "description": "Lists all available Optimus skills with descriptions, usage commands, and when to use each one.",
       "source": "./help"
+    },
+    {
+      "name": "sync",
+      "description": "Sync all Optimus plugins — install new, update existing, remove orphaned. Recommended after new releases.",
+      "source": "./sync"
     },
     {
       "name": "quick-report",
