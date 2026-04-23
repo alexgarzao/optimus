@@ -73,6 +73,20 @@ Or use `/optimus-batch` to chain all stages with checkpoints between them.
 
 **Note:** Execution and review skills require [Ring ecosystem](https://github.com/LerianStudio) droids to be installed.
 
+## Command Aliases
+
+Each plugin includes a short alias for quick access:
+
+| Alias | Command | Alias | Command |
+|-------|---------|-------|---------|
+| `/sp` | `/optimus-plan` | `/dr` | `/optimus-deep-review` |
+| `/bd` | `/optimus-build` | `/ddr` | `/optimus-deep-doc-review` |
+| `/ck` | `/optimus-check` | `/cr` | `/optimus-coderabbit-review` |
+| `/dn` | `/optimus-done` | `/prc` | `/optimus-pr-check` |
+| `/bt` | `/optimus-batch` | `/im` | `/optimus-import` |
+| `/qr` | `/optimus-quick-report` | `/rs` | `/optimus-resolve` |
+| `/rp` | `/optimus-report` | `/t` | `/optimus-tasks` |
+
 ## How it works
 
 Each skill is an installable plugin with:

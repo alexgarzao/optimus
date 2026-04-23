@@ -74,10 +74,24 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
 | Skill | Command | When to Use |
 |-------|---------|-------------|
 | **pr-check** | `/optimus-pr-check` | PR review — collects findings from Codacy, DeepSource, CodeRabbit, and human reviewers. Standalone tool, does not change task status. |
-| **deep-review** | `/optimus-deep-review` | Generic code review without task context — reviews entire project, git diff, or specific directory with parallel specialist agents. |
+| **deep-review** | `/optimus-deep-review` | Code review with auto-discovered Ring droids — reviews entire project, git diff, or specific directory. Dispatches all installed review droids in parallel. |
 | **deep-doc-review** | `/optimus-deep-doc-review` | Documentation review — finds errors, inconsistencies, and gaps across project docs with cross-referencing. |
 | **coderabbit-review** | `/optimus-coderabbit-review` | Code review using CodeRabbit CLI with TDD fix cycle and agent validation. Requires CodeRabbit CLI installed. |
 
+
+### Command Aliases
+
+Each plugin includes a short alias for quick access:
+
+| Alias | Full Command | Alias | Full Command |
+|-------|-------------|-------|-------------|
+| `/sp` | `/optimus-plan` | `/dr` | `/optimus-deep-review` |
+| `/bd` | `/optimus-build` | `/ddr` | `/optimus-deep-doc-review` |
+| `/ck` | `/optimus-check` | `/cr` | `/optimus-coderabbit-review` |
+| `/dn` | `/optimus-done` | `/prc` | `/optimus-pr-check` |
+| `/bt` | `/optimus-batch` | `/im` | `/optimus-import` |
+| `/qr` | `/optimus-quick-report` | `/rs` | `/optimus-resolve` |
+| `/rp` | `/optimus-report` | `/t` | `/optimus-tasks` |
 
 ---
 
