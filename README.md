@@ -19,7 +19,7 @@ Skills are classified as **Administrative** (run anywhere) or **Execution** (req
 | `resolve` | Administrative: Resolves merge conflicts in tasks.md caused by parallel task execution across feature branches | `/optimus-resolve` |
 | `quick-report` | Compact daily status dashboard. Shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Read-only | `/optimus-quick-report` |
 | `help` | Lists all available Optimus skills with descriptions, usage commands, and when to use each one | `/optimus-help` |
-| `sync` | Sync all Optimus plugins — install new, update existing, remove orphaned. Recommended after new releases *(command, not a standalone plugin)* | `/optimus-sync` |
+| `sync` | Sync all Optimus plugins — install new, update existing, remove orphaned. Recommended after new releases | `/optimus-sync` |
 
 ### Execution Skills (stages 1-4)
 

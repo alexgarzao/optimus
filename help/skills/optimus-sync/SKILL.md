@@ -11,6 +11,9 @@ prerequisite: >
   - droid CLI installed and available
   - jq installed and available
   - Optimus marketplace registered (`droid plugin marketplace add https://github.com/alexgarzao/optimus`)
+NOT_skip_when: >
+  - "I'll update plugins manually" -- optimus-sync handles scope conflicts and orphan removal automatically.
+  - "Only one plugin needs updating" -- sync is optimized for batch operations and ensures consistency.
 examples:
   - name: Sync all plugins
     invocation: "/optimus-sync"
@@ -20,6 +23,19 @@ examples:
       3. Show plan and ask for confirmation
       4. Execute each operation with progress
       5. Show summary
+related:
+  complementary:
+    - optimus-help
+  sequence:
+    after:
+      - optimus-help
+verification:
+  manual:
+    - Marketplace update completed
+    - New plugins installed successfully
+    - Orphaned plugins removed
+    - Existing plugins updated
+    - Summary shows correct counts
 ---
 
 # Optimus Sync
@@ -33,11 +49,15 @@ orphaned ones, and updates all existing plugins — with real-time progress.
 
 Check that required tools are available.
 
+### Step 1.1: Check droid CLI
+
 ```bash
 command -v droid >/dev/null 2>&1
 ```
 
 If `droid` is not found, **STOP**: "droid CLI is required but not installed. Install from: https://docs.factory.ai"
+
+### Step 1.2: Check jq
 
 ```bash
 command -v jq >/dev/null 2>&1
@@ -70,6 +90,14 @@ echo "$MARKETPLACE_FILE"
 
 If empty, **STOP**: "Marketplace 'optimus' not found. Register it first: `droid plugin marketplace add https://github.com/alexgarzao/optimus`"
 
+Validate the marketplace JSON is parseable:
+
+```bash
+jq empty "$MARKETPLACE_FILE" 2>/dev/null
+```
+
+If this fails, **STOP**: "Marketplace JSON is malformed. Re-run `droid plugin marketplace update optimus` to fix."
+
 ### Step 3.2: Get expected plugins
 
 ```bash
@@ -77,6 +105,8 @@ jq -r '.plugins[].name' "$MARKETPLACE_FILE" | sort
 ```
 
 Store the output as `EXPECTED` (one plugin name per line).
+
+If `EXPECTED` is empty, **STOP**: "No plugins found in marketplace. The marketplace may be empty or corrupted."
 
 ### Step 3.3: Get installed plugins
 
@@ -165,7 +195,7 @@ droid plugin uninstall "<plugin>@optimus" 2>&1
 droid plugin install "<plugin>@optimus" 2>&1
 ```
 
-Show: `* (X/N) <plugin> ... OK` or `* (X/N) <plugin> ... FAIL (reinstalled)` or `* (X/N) <plugin> ... FAIL`
+Show: `* (X/N) <plugin> ... OK` or `* (X/N) <plugin> ... OK (reinstalled)` or `* (X/N) <plugin> ... FAIL`
 
 Track counts: `UPDATED` and `FAILED`.
 
@@ -189,5 +219,9 @@ Present the final summary using `<json-render>` with metrics:
 - Always show the `(X/N)` progress counter before each operation.
 - If a plugin operation fails, log it and continue with the next plugin. Do NOT stop
   the entire sync on a single failure.
+- Use a 60-second timeout for all `droid plugin` commands via the Execute tool's timeout
+  parameter. If a command times out, treat it as FAIL and continue with the next plugin.
+- If the user cancels mid-sync or the session is interrupted, inform them:
+  "Sync interrupted. Some plugins may be partially updated. Re-run `/optimus-sync` to complete."
 - The `make sync-plugins` target in the project Makefile runs `help/scripts/sync-user-plugins.sh`
   directly. That script is for CLI usage without an agent and is NOT used by this skill.

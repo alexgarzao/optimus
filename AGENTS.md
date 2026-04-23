@@ -32,11 +32,12 @@ optimus/
     └── future-improvements.md         # Tracked improvements not yet prioritized
 ```
 
-Each plugin follows the same layout:
+Each plugin follows the same layout (a plugin may contain one or more skills):
 ```
 <plugin>/
 ├── .factory-plugin/plugin.json        # Plugin manifest (name, description)
-└── skills/optimus-<skill>/SKILL.md    # Full skill instructions with YAML frontmatter
+└── skills/
+    └── optimus-<skill>/SKILL.md       # Full skill instructions with YAML frontmatter
 ```
 
 ## How Skills Work
