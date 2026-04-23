@@ -1,6 +1,6 @@
 ---
 name: optimus-deep-review
-description: "Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Supports initial (8 agents, critical gaps) and final (10 agents, full coverage including stack idiomaticity) review modes. Flexible scope: entire project, git diff, or specific directory."
+description: "Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Auto-discovers installed Ring review droids and dispatches all that are relevant to the project stack. Flexible scope: entire project, git diff, or specific directory."
 trigger: >
   - When user requests code review (e.g., "review the code", "code review")
   - Before creating a pull request or merging a branch
@@ -18,29 +18,22 @@ NOT_skip_when: >
   - "We'll review later" -- Later reviews accumulate debt and miss context.
   - "CI will catch it" -- CI catches syntax and test failures, not architectural or business logic issues.
 examples:
-  - name: Initial review during development
-    invocation: "Review the code (initial)"
+  - name: Review changed files
+    invocation: "Review the code"
     expected_flow: >
       1. Ask scope (all files, git diff, directory)
-      2. Dispatch 8 agents in parallel
-      3. Consolidate and deduplicate findings
-      4. Present overview table
-      5. Walk through findings one by one
-      6. Apply approved fixes
-      7. Present summary
-  - name: Final review before merge
-    invocation: "Final code review before merge"
-    expected_flow: >
-      1. Ask scope
-      2. Dispatch 10 agents in parallel (includes stack-specific agents)
-      3. Consolidate, present, resolve findings
-      4. Apply fixes, present summary
+      2. Auto-discover installed Ring review droids
+      3. Present droid list for confirmation
+      4. Dispatch all confirmed droids in parallel
+      5. Consolidate and deduplicate findings
+      6. Walk through findings one by one
+      7. Apply approved fixes, present summary
   - name: Review specific directory
     invocation: "Review the code in internal/handler/"
     expected_flow: >
-      1. Scope already defined, ask review type
-      2. Dispatch agents scoped to the directory
-      3. Standard flow
+      1. Scope already defined
+      2. Auto-discover droids, filter by project stack
+      3. Dispatch, consolidate, resolve, apply
 related:
   complementary:
     - optimus-build
@@ -65,18 +58,9 @@ Parallel code review with specialist agents, consolidation, deduplication, and i
 
 ---
 
-## Phase 1: Review Scope
+## Phase 1: Review Scope and Droid Discovery
 
-Before starting, determine the review parameters.
-
-### Step 1.1: Determine Review Type
-
-Ask the user which type of review:
-
-- **Initial** (recurring review during development): 8 agents, focused on correctness and critical gaps
-- **Final** (review before merge/deployment): 10 agents, full coverage including stack idiomaticity
-
-### Step 1.2: Determine Scope
+### Step 1.1: Determine Scope
 
 Ask the user what to review:
 
@@ -84,51 +68,92 @@ Ask the user what to review:
 - **Changed files only** — use `git diff --name-only` to identify (optionally against a base branch)
 - **Specific directory or feature** — user specifies the path
 
-### Step 1.3: Load Context
+### Step 1.2: Load Context
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
 2. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
 3. **Identify reference docs:** Look for PRD, TRD, API design, data model — these provide context but are not the primary validation target (unlike optimus-check)
 4. **Read all files in scope:** Load the full content of every file that will be reviewed
 
+### Step 1.3: Auto-Discover Review Droids
+
+Instead of a fixed list, discover which Ring review droids are installed and select
+the ones relevant to this project.
+
+**1. List installed Ring droids:**
+```bash
+ls ~/.factory/droids/ring-*.md 2>/dev/null
+```
+
+**2. For each droid, read the `description` field from the YAML frontmatter.**
+
+**3. Classify each droid by relevance:**
+
+| Classification | Selection rule | Examples |
+|----------------|---------------|----------|
+| **Core reviewer** | Description indicates code review, security, testing, or safety analysis | `code-reviewer`, `business-logic-reviewer`, `security-reviewer`, `test-reviewer`, `nil-safety-reviewer`, `consequences-reviewer`, `dead-code-reviewer` |
+| **QA analyst** | Description indicates QA, test strategy, or acceptance criteria | `qa-analyst`, `qa-analyst-frontend` |
+| **Stack specialist** | Description mentions a specific language/framework — include only if the project uses that stack | `backend-engineer-golang` (if `go.mod` exists), `backend-engineer-typescript` (if `package.json`), `frontend-engineer` (if frontend files in scope) |
+| **Domain specialist** | Description mentions a specific technology — include only if the project uses it | `lib-commons-reviewer` (if `go.mod` imports lib-commons), `multi-tenant-reviewer` (if project uses multi-tenancy), `performance-reviewer` (always relevant) |
+| **Non-reviewer (EXCLUDE)** | Description indicates implementation, design, ops, finance, planning, or infrastructure — NOT code review | See exclusion list below |
+
+**4. Permanent exclusion list** (never dispatch for code review):
+
+Droids whose purpose is implementation, design, operations, or non-code domains:
+- `ring-default-codebase-explorer` — exploration, not review
+- `ring-default-write-plan` — planning, not review
+- `ring-default-review-slicer` — internal classification, not code review
+- `ring-dev-team-devops-engineer` — DevOps implementation
+- `ring-dev-team-frontend-designer` — UX design
+- `ring-dev-team-helm-engineer` — Helm charts
+- `ring-dev-team-sre` — observability validation
+- `ring-dev-team-ui-engineer` — UI implementation
+- `ring-dev-team-frontend-bff-engineer-*` — BFF implementation
+- `ring-dev-team-prompt-quality-reviewer` — reviews AI prompts, not code
+- All `ring-finance-*`, `ring-finops-*`, `ring-ops-*`, `ring-pm-*`, `ring-pmm-*`, `ring-pmo-*`, `ring-tw-*` — non-code domains
+
+**5. Present the selected droids to the user for confirmation:**
+
+```
+Discovered N review droids for this project (stack: Go):
+
+  Core reviewers:
+    1. ring-default-code-reviewer — Code quality, SOLID, DRY...
+    2. ring-default-business-logic-reviewer — Domain correctness...
+    3. ring-default-security-reviewer — Vulnerabilities, OWASP...
+    4. ring-default-ring-test-reviewer — Test coverage, effectiveness...
+    5. ring-default-ring-nil-safety-reviewer — Nil pointer safety...
+    6. ring-default-ring-consequences-reviewer — Cross-file consistency...
+    7. ring-default-ring-dead-code-reviewer — Orphaned code...
+
+  QA:
+    8. ring-dev-team-qa-analyst — Test strategy, AC coverage...
+
+  Stack specialists:
+    9. ring-dev-team-backend-engineer-golang — Go idiomaticity...
+
+  Domain specialists:
+    10. ring-dev-team-performance-reviewer — Performance hotspots...
+    11. ring-dev-team-lib-commons-reviewer — lib-commons usage...
+
+Proceed with all 11 droids?
+```
+
+Options via `AskUser`:
+- **Proceed with all** — dispatch all listed droids
+- **Remove some** — user specifies which to exclude
+
+**BLOCKING:** Do NOT dispatch until the user confirms.
+
 ---
 
 ## Phase 2: Parallel Agent Dispatch
 
-Dispatch ALL applicable agents simultaneously via `Task` tool. Each agent receives file paths and can navigate the codebase autonomously.
+Dispatch ALL confirmed droids from Step 1.3 simultaneously via `Task` tool. Each agent
+receives file paths and can navigate the codebase autonomously.
 
-**Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. If the core review droids are not installed, **STOP** and inform the user:
-```
-Required ring droids are not installed. Install them before running this skill:
-  - ring-default-code-reviewer
-  - ring-default-business-logic-reviewer
-  - ring-default-security-reviewer
-  - ring-default-ring-test-reviewer
-  - ring-default-ring-nil-safety-reviewer
-  - ring-default-ring-consequences-reviewer
-  - ring-default-ring-dead-code-reviewer
-  - ring-dev-team-qa-analyst
-```
-
-### Initial Review (8 agents)
-
-| # | Agent | Focus | Ring Droid |
-|---|-------|-------|------------|
-| 1 | **Code quality reviewer** | Architecture, design patterns, SOLID, DRY, maintainability, algorithmic flow, resilience, resource lifecycle, concurrency, performance, configuration, cognitive complexity, error handling, domain purity | `ring-default-code-reviewer` |
-| 2 | **Business logic reviewer** | Domain correctness, business rules, edge cases, requirements compliance, spec traceability, data integrity, backward compatibility, API semantics | `ring-default-business-logic-reviewer` |
-| 3 | **Security reviewer** | Vulnerabilities, authentication, input validation, OWASP, secrets, data privacy, error response leakage, rate limiting, auth propagation | `ring-default-security-reviewer` |
-| 4 | **Test quality analyst** | Test coverage gaps (unit, integration, E2E), error scenario coverage, flaky patterns, test effectiveness, false positive risk, test coupling, spec traceability | `ring-default-ring-test-reviewer` |
-| 5 | **Cross-file consistency** | Interfaces vs implementations, DTOs, imports, registered routes, shared constants, backward compatibility, configuration drift, migration paths, shared state, event contracts | `ring-default-ring-consequences-reviewer` |
-| 6 | **Nil/Null safety reviewer** | Nil pointer risks, unsafe dereferences, missing guards, panic paths, resource cleanup nil checks, channel/map/slice safety | `ring-default-ring-nil-safety-reviewer` |
-| 7 | **Dead code reviewer** | Orphaned code, unreachable branches, unused imports, commented-out code, zombie test infrastructure, stale feature flags, deprecated paths | `ring-default-ring-dead-code-reviewer` |
-| 8 | **QA analyst** | Test strategy validation, scenario coverage, edge case identification, error path verification, testability assessment, operational readiness, AC coverage | `ring-dev-team-qa-analyst` |
-
-### Final Review (10 agents — includes the 8 above plus)
-
-| # | Agent | Focus | Ring Droid |
-|---|-------|-------|------------|
-| 9 | **Backend specialist** | Language idiomaticity, performance, concurrency, ecosystem patterns, graceful shutdown, connection pool sizing, context propagation, structured logging | `ring-dev-team-backend-engineer-golang` (Go) / `ring-dev-team-backend-engineer-typescript` (TS) |
-| 10 | **Frontend specialist** | Framework patterns, hooks, components, accessibility, responsive design, performance, UX completeness (loading/empty/error states), i18n readiness | `ring-dev-team-frontend-engineer` |
+**If zero droids were confirmed** (user removed all, or none were discovered), **STOP**:
+"No review droids available. Install Ring review droids before running this skill."
 
 ### Agent Prompt Template
 
@@ -138,7 +163,6 @@ Each agent dispatch MUST include:
 Goal: Code review — [validation domain]
 
 Context:
-  - Review type: Initial / Final
   - Project root: <absolute path to project worktree>
   - Scope: [files or directory being reviewed — list of file paths]
   - Project rules: AGENTS.md, PROJECT_RULES.md, docs/PROJECT_RULES.md (READ all that exist)
@@ -415,13 +439,13 @@ Required output format:
 Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Loop".
 
 **Stage-specific scope for convergence rounds 2+:**
-Dispatch the **same agent roster** from Phase 2 (all 8 or 10 agents depending on review type).
-Each agent receives file paths and project rules (re-read fresh from disk). Do NOT include
-the findings ledger in agent prompts — the orchestrator handles dedup using strict matching
-(same file + same line range ±5 + same category).
+Dispatch the **same droids confirmed in Step 1.3**. Each agent receives file paths and
+project rules (re-read fresh from disk). Do NOT include the findings ledger in agent
+prompts — the orchestrator handles dedup using strict matching (same file + same line
+range ±5 + same category).
 
-Include the review type (Initial/Final) and scope from Phase 1, plus the cross-cutting
-analysis instructions (same 5 items from Phase 2 prompt).
+Include the scope from Phase 1, plus the cross-cutting analysis instructions (same 5
+items from Phase 2 prompt).
 
 **Failure handling:** If any agent dispatch fails, treat that agent's slot as "zero findings"
 for that round but warn the user. Do NOT fail the entire review.
@@ -702,46 +726,6 @@ If NONE exist, warn the user. If any are found, they become the source of truth
 for coding standards and must be passed to every dispatched sub-agent.
 
 Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Project Rules Discovery."
-
-
-### Protocol: Ring Droid Requirement Check
-
-**Referenced by:** check, pr-check, deep-review, deep-doc-review, coderabbit-review, plan, build
-
-Before dispatching ring droids, verify the required droids are available. If any required
-droid is not installed, **STOP** and list missing droids.
-
-**Core review droids** (required by check, pr-check, deep-review, coderabbit-review):
-- `ring-default-code-reviewer`
-- `ring-default-business-logic-reviewer`
-- `ring-default-security-reviewer`
-- `ring-default-ring-test-reviewer`
-
-**Extended review droids** (required by check, pr-check, deep-review, coderabbit-review):
-- `ring-default-ring-nil-safety-reviewer`
-- `ring-default-ring-consequences-reviewer`
-- `ring-default-ring-dead-code-reviewer`
-
-**QA droids** (required by check, deep-review, build):
-- `ring-dev-team-qa-analyst`
-
-**Documentation droids** (required by deep-doc-review):
-- `ring-tw-team-docs-reviewer`
-- `ring-default-business-logic-reviewer`
-- `ring-default-code-reviewer`
-
-**Implementation droids** (required by build):
-- `ring-dev-team-backend-engineer-golang` (Go)
-- `ring-dev-team-backend-engineer-typescript` (TypeScript)
-- `ring-dev-team-frontend-engineer` (React/Next.js)
-
-**Spec validation droids** (required by plan):
-- `ring-default-business-logic-reviewer`
-- `ring-default-security-reviewer`
-- `ring-dev-team-qa-analyst`
-- `ring-default-code-reviewer`
-
-Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check."
 
 
 <!-- INLINE-PROTOCOLS:END -->
