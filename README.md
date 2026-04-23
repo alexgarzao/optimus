@@ -34,7 +34,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
 |-------|-------|-------------|---------|
 | `plan` | 1 | Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes | `/optimus-plan` |
 | `build` | 2 | End-to-end task implementation with verification gates, code review, and commit approval | `/optimus-build` |
-| `check` | 3 | Validates completed task implementation against spec, coding standards, and best practices using parallel specialist agents | `/optimus-check` |
+| `review` | 3 | Validates completed task implementation against spec, coding standards, and best practices using parallel specialist agents | `/optimus-review` |
 | `done` | 4 | Requires PR in final state (merged or closed) before marking task done. Cleans up worktree and branch interactively | `/optimus-done` |
 
 ## Review & Verification Skills
@@ -66,7 +66,7 @@ updates existing, removes orphaned. This is the recommended way to stay up to da
 2. **Check status:** `/optimus-report` — see the dashboard with dependencies and parallelization
 3. **Validate spec:** `/optimus-plan` — validates the first pending task and creates a workspace
 4. **Implement:** `/optimus-build` — implements the task with TDD and verification gates
-5. **Review:** `/optimus-check` — validates implementation with parallel specialist agents
+5. **Review:** `/optimus-review` — validates implementation with parallel specialist agents
 6. **Close:** `/optimus-done` — verifies prerequisites and marks the task as done
 
 Or use `/optimus-batch` to chain all stages with checkpoints between them.
@@ -81,7 +81,7 @@ Each plugin includes a short alias for quick access:
 |-------|---------|-------|---------|
 | `/sp` | `/optimus-plan` | `/dr` | `/optimus-deep-review` |
 | `/bd` | `/optimus-build` | `/ddr` | `/optimus-deep-doc-review` |
-| `/ck` | `/optimus-check` | `/cr` | `/optimus-coderabbit-review` |
+| `/rv` | `/optimus-review` | `/cr` | `/optimus-coderabbit-review` |
 | `/dn` | `/optimus-done` | `/prc` | `/optimus-pr-check` |
 | `/bt` | `/optimus-batch` | `/im` | `/optimus-import` |
 | `/qr` | `/optimus-quick-report` | `/rs` | `/optimus-resolve` |

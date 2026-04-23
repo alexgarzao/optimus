@@ -6,7 +6,7 @@ trigger: >
   - Before starting implementation based on docs (validate doc quality)
   - After significant changes to reference docs (PRD, TRD, API design, etc.)
 skip_when: >
-  - Code review (use optimus-deep-review or optimus-check instead)
+  - Code review (use optimus-deep-review or optimus-review instead)
   - Docs do not exist yet (create them first)
   - Reviewing a single simple file (do it directly without the skill)
 prerequisite: >
@@ -35,7 +35,7 @@ examples:
 related:
   complementary:
     - optimus-plan
-    - optimus-check
+    - optimus-review
   differentiation:
     - name: optimus-plan
       difference: >
@@ -332,7 +332,7 @@ The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
 ### Convergence Loop (Full Roster Model)
-Applies to: plan, check, pr-check, coderabbit-review, deep-review, deep-doc-review
+Applies to: plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review
 
 The convergence loop eliminates false convergence by dispatching the **same agent roster**
 as round 1 in every subsequent round:
@@ -356,23 +356,23 @@ Dispatching a single agent in rounds 2+ creates false convergence — the agent 
 
 ### Protocol: Ring Droid Requirement Check
 
-**Referenced by:** check, pr-check, deep-doc-review, coderabbit-review, plan, build
+**Referenced by:** review, pr-check, deep-doc-review, coderabbit-review, plan, build
 
 Before dispatching ring droids, verify the required droids are available. If any required
 droid is not installed, **STOP** and list missing droids.
 
-**Core review droids** (required by check, pr-check, deep-review, coderabbit-review):
+**Core review droids** (required by review, pr-check, deep-review, coderabbit-review):
 - `ring-default-code-reviewer`
 - `ring-default-business-logic-reviewer`
 - `ring-default-security-reviewer`
 - `ring-default-ring-test-reviewer`
 
-**Extended review droids** (required by check, pr-check, deep-review, coderabbit-review):
+**Extended review droids** (required by review, pr-check, deep-review, coderabbit-review):
 - `ring-default-ring-nil-safety-reviewer`
 - `ring-default-ring-consequences-reviewer`
 - `ring-default-ring-dead-code-reviewer`
 
-**QA droids** (required by check, deep-review, build):
+**QA droids** (required by review, deep-review, build):
 - `ring-dev-team-qa-analyst`
 
 **Documentation droids** (required by deep-doc-review):

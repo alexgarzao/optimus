@@ -18,7 +18,7 @@ optimus/
 ├── resolve/          # Admin: Resolve tasks.md merge conflicts
 ├── plan/              # Execution Stage 1: Spec validation + workspace creation
 ├── build/              # Execution Stage 2: Task implementation
-├── check/       # Execution Stage 3: Implementation review
+├── review/      # Execution Stage 3: Implementation review
 ├── pr-check/         # Standalone PR review tool (does not change task status)
 ├── done/             # Execution Stage 4: Close task (verify & mark done)
 ├── deep-review/                       # Parallel code review (no PR context)
@@ -195,15 +195,15 @@ All Optimus files live in the `.optimus/` directory at the project root:
 
 ```json
 {
-  "T-001": { "plan_runs": 2, "check_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_check": "2025-01-16T14:00:00Z" },
-  "T-002": { "plan_runs": 1, "check_runs": 0 }
+  "T-001": { "plan_runs": 2, "review_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_review": "2025-01-16T14:00:00Z" },
+  "T-002": { "plan_runs": 1, "review_runs": 0 }
 }
 ```
 
-- Each key is a task ID. Values track how many times `plan` and `check` executed on the task.
-- A high `plan_runs` signals unclear or problematic specs. A high `check_runs` signals
+- Each key is a task ID. Values track how many times `plan` and `review` executed on the task.
+- A high `plan_runs` signals unclear or problematic specs. A high `review_runs` signals
   complex review cycles or specification gaps.
-- The file is created on first use by `plan` or `check`. If missing, agents treat all
+- The file is created on first use by `plan` or `review`. If missing, agents treat all
   counters as 0.
 - `report` reads this file to display churn metrics.
 
@@ -339,7 +339,7 @@ state.json is implicitly `Pendente`.
 | `Pendente` | Initial (implicit) | Not started — no entry in state.json |
 | `Validando Spec` | plan | Spec being validated |
 | `Em Andamento` | build | Implementation in progress |
-| `Validando Impl` | check | Implementation being reviewed |
+| `Validando Impl` | review | Implementation being reviewed |
 | `DONE` | done | Completed |
 | `Cancelado` | tasks, done | Task abandoned, will not be implemented |
 
@@ -467,7 +467,7 @@ data — no stage agent commits to tasks.md for status changes.
 
 ```
 Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
-           (plan)            (build)        (check)          (done)
+           (plan)            (build)        (review)         (done)
 
 Any status → Cancelado  (via tasks cancel operation)
 ```
@@ -532,7 +532,7 @@ It does NOT change task status and is NOT part of the pipeline stages.
    | Admin | tasks | Yes | Only creates/edits/removes tasks in tasks.md and state.json |
    | Execution | plan | Yes (creates worktree) | Writes state.json and creates worktree |
    | Execution | build | Yes (auto-navigates) | Finds task worktree and navigates to it |
-   | Execution | check | Yes (auto-navigates) | Finds task worktree and navigates to it |
+   | Execution | review | Yes (auto-navigates) | Finds task worktree and navigates to it |
    | Admin | pr-check | Yes | Standalone PR review tool, does not change task status |
    | Execution | done | Yes (auto-navigates) | Finds task worktree and navigates to it |
    | Admin | batch | Yes | Orchestrates stages, delegates to stage skills |
@@ -569,7 +569,7 @@ It does NOT change task status and is NOT part of the pipeline stages.
 |-------|---------------|------------|---------------|
 | plan | `Pendente` or `Validando Spec` | `Validando Spec` | Yes (accepts own status) |
 | build | `Validando Spec` or `Em Andamento` | `Em Andamento` | Yes (accepts own status) |
-| check | `Em Andamento` or `Validando Impl` | `Validando Impl` | Yes (accepts own status) |
+| review | `Em Andamento` or `Validando Impl` | `Validando Impl` | Yes (accepts own status) |
 | done | `Validando Impl` | `DONE` | No (final stage) |
 
 **NOTE:** `Cancelado` is a terminal status. No stage agent accepts it — all stages refuse
@@ -664,7 +664,7 @@ Skills reference this as: "Initialize .optimus directory — see AGENTS.md Proto
 
 ### Protocol: Increment Stage Stats
 
-**Referenced by:** plan, check
+**Referenced by:** plan, review
 
 After the status change in state.json (and BEFORE any analysis work begins), increment
 the execution counter for the current stage in `.optimus/stats.json`. This tracks how many
@@ -683,10 +683,10 @@ times each stage ran on each task — useful for spotting spec churn and review 
    ```
 2. If the task ID key does not exist, initialize it:
    ```json
-   { "plan_runs": 0, "check_runs": 0 }
+   { "plan_runs": 0, "review_runs": 0 }
    ```
-3. Increment the appropriate counter (`plan_runs` for plan, `check_runs` for check).
-4. Set the timestamp field (`last_plan` or `last_check`) to the current UTC ISO 8601 time.
+3. Increment the appropriate counter (`plan_runs` for plan, `review_runs` for review).
+4. Set the timestamp field (`last_plan` or `last_review`) to the current UTC ISO 8601 time.
 5. Write the updated JSON back to `.optimus/stats.json` (pretty-printed, sorted keys).
 
 **NOTE:** stats.json is gitignored — no commit needed.
@@ -1030,23 +1030,23 @@ Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol:
 
 ### Protocol: Ring Droid Requirement Check
 
-**Referenced by:** check, pr-check, deep-doc-review, coderabbit-review, plan, build
+**Referenced by:** review, pr-check, deep-doc-review, coderabbit-review, plan, build
 
 Before dispatching ring droids, verify the required droids are available. If any required
 droid is not installed, **STOP** and list missing droids.
 
-**Core review droids** (required by check, pr-check, deep-review, coderabbit-review):
+**Core review droids** (required by review, pr-check, deep-review, coderabbit-review):
 - `ring-default-code-reviewer`
 - `ring-default-business-logic-reviewer`
 - `ring-default-security-reviewer`
 - `ring-default-ring-test-reviewer`
 
-**Extended review droids** (required by check, pr-check, deep-review, coderabbit-review):
+**Extended review droids** (required by review, pr-check, deep-review, coderabbit-review):
 - `ring-default-ring-nil-safety-reviewer`
 - `ring-default-ring-consequences-reviewer`
 - `ring-default-ring-dead-code-reviewer`
 
-**QA droids** (required by check, deep-review, build):
+**QA droids** (required by review, deep-review, build):
 - `ring-dev-team-qa-analyst`
 
 **Documentation droids** (required by deep-doc-review):
@@ -1069,7 +1069,7 @@ Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring D
 
 ### Protocol: Coverage Measurement
 
-**Referenced by:** check, pr-check, coderabbit-review, deep-review, build
+**Referenced by:** review, pr-check, coderabbit-review, deep-review, build
 
 Measure test coverage using Makefile targets with stack-specific fallbacks.
 
@@ -1124,7 +1124,7 @@ Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Titl
 
 ### Protocol: TaskSpec Resolution
 
-**Referenced by:** plan, build, check
+**Referenced by:** plan, build, review
 
 Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
 
@@ -1197,11 +1197,11 @@ Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Pr
 
 ### Protocol: Re-run Guard
 
-**Referenced by:** plan, check
+**Referenced by:** plan, review
 
 After the convergence loop exits and the final report/summary is presented, evaluate
 whether to suggest advancement or offer a re-run. This protocol replaces the static
-"Next step suggestion" in plan and check.
+"Next step suggestion" in plan and review.
 
 **Logic:**
 
@@ -1211,7 +1211,7 @@ whether to suggest advancement or offer a re-run. This protocol replaces the sta
    Presentation item 3), count grouped entries, not individual occurrences.
 2. **If `total_findings == 0`:** The analysis is clean. Suggest the next stage:
    - plan: "Spec validation clean — 0 findings. Next step: run `/optimus-build` to implement this task."
-   - check: "Implementation review clean — 0 findings. Next step: run `/optimus-done` to close this task."
+   - review: "Implementation review clean — 0 findings. Next step: run `/optimus-done` to close this task."
 3. **If `total_findings > 0`:** Ask via `AskUser`:
    ```
    Validation found N findings (X fixed, Y skipped).
@@ -1250,7 +1250,7 @@ Skills reference this as: "Execute re-run guard — see AGENTS.md Protocol: Re-r
 
 ### Protocol: Push Commits (optional)
 
-**Referenced by:** plan, build, check, coderabbit-review. Note: done handles pushing inline in its own cleanup phase. pr-check and deep-review have their own push phases.
+**Referenced by:** plan, build, review, coderabbit-review. Note: done handles pushing inline in its own cleanup phase. pr-check and deep-review have their own push phases.
 
 After stage work is complete, offer to push all local commits:
 
@@ -1433,7 +1433,7 @@ Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: Sta
 
 ### Protocol: Branch Name Derivation
 
-**Referenced by:** plan, build, check, pr-check, done (workspace auto-navigation)
+**Referenced by:** plan, build, review, pr-check, done (workspace auto-navigation)
 
 Branch names are derived deterministically from the task's structural data in tasks.md.
 They are NOT stored in tasks.md — they are stored in state.json for quick reference
@@ -1535,7 +1535,7 @@ fall back to stack-specific commands (see Protocol: Coverage Measurement).
 
 ## Common Patterns Across Skills
 
-The patterns below apply to **cycle review skills** (plan, check,
+The patterns below apply to **cycle review skills** (plan, review,
 pr-check, coderabbit-review). `deep-doc-review` follows the same user-authority and finding
 presentation principles, applies fixes inline (not batch-apply), and uses the convergence
 loop to catch issues introduced by fixes. `deep-review` requires ring droids for analysis,
@@ -1565,8 +1565,8 @@ All cycle review skills follow this pattern:
    - One option per proposed solution (Option A, Option B, Option C, etc.)
    - Skip — no action
    - Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
-   **AskUser `[topic]` format:** Format: `F#-Category`.
-   Example: `[topic] F8-DeadCode`.
+   **AskUser `[topic]` format:** Format: `(X/N) F#-Category`.
+   Example: `[topic] (8/12) F8-DeadCode`.
 9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
    (a question, disagreement, or request for clarification) instead of a decision:**
    **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
@@ -1656,7 +1656,7 @@ All skills that measure coverage MUST use these thresholds. If coverage profiles
 be generated (command fails or tool missing), report as SKIP — do not fail the verification.
 
 ### Deep Research Before Presenting (MANDATORY for cycle review skills)
-Applies to: plan, check, pr-check, coderabbit-review
+Applies to: plan, review, pr-check, coderabbit-review
 
 **BEFORE presenting any finding to the user, the agent MUST research it deeply.** This
 research is done SILENTLY — do not show the research process. Present only the conclusions.
@@ -1723,7 +1723,7 @@ Every finding must present 2-3 options with this structure:
 - **Very high:** Architectural change, many files, extensive testing, risk of regressions
 
 ### Convergence Loop (Full Roster Model)
-Applies to: plan, check, pr-check, coderabbit-review, deep-review, deep-doc-review
+Applies to: plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review
 
 The convergence loop eliminates false convergence by dispatching the **same agent roster**
 as round 1 in every subsequent round:
@@ -1773,7 +1773,7 @@ section:
 
 ### Protocol: Per-Droid Quality Checklists
 
-**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan, build
+**Referenced by:** review, pr-check, deep-review, coderabbit-review, plan, build
 
 Each droid type has specific dimensions it MUST verify beyond its core domain. Skills
 that dispatch review droids MUST include the applicable checklists in agent prompts.

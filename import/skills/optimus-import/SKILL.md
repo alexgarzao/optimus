@@ -442,15 +442,15 @@ All Optimus files live in the `.optimus/` directory at the project root:
 
 ```json
 {
-  "T-001": { "plan_runs": 2, "check_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_check": "2025-01-16T14:00:00Z" },
-  "T-002": { "plan_runs": 1, "check_runs": 0 }
+  "T-001": { "plan_runs": 2, "review_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_review": "2025-01-16T14:00:00Z" },
+  "T-002": { "plan_runs": 1, "review_runs": 0 }
 }
 ```
 
-- Each key is a task ID. Values track how many times `plan` and `check` executed on the task.
-- A high `plan_runs` signals unclear or problematic specs. A high `check_runs` signals
+- Each key is a task ID. Values track how many times `plan` and `review` executed on the task.
+- A high `plan_runs` signals unclear or problematic specs. A high `review_runs` signals
   complex review cycles or specification gaps.
-- The file is created on first use by `plan` or `check`. If missing, agents treat all
+- The file is created on first use by `plan` or `review`. If missing, agents treat all
   counters as 0.
 - `report` reads this file to display churn metrics.
 
@@ -474,7 +474,7 @@ state.json is implicitly `Pendente`.
 | `Pendente` | Initial (implicit) | Not started — no entry in state.json |
 | `Validando Spec` | plan | Spec being validated |
 | `Em Andamento` | build | Implementation in progress |
-| `Validando Impl` | check | Implementation being reviewed |
+| `Validando Impl` | review | Implementation being reviewed |
 | `DONE` | done | Completed |
 | `Cancelado` | tasks, done | Task abandoned, will not be implemented |
 

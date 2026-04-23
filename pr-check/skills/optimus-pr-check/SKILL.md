@@ -52,7 +52,7 @@ related:
         human reviewers, agents).
   sequence:
     after:
-      - optimus-check
+      - optimus-review
     before:
       - optimus-done
   re_execution:
@@ -1365,7 +1365,7 @@ The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
 ### Convergence Loop (Full Roster Model)
-Applies to: plan, check, pr-check, coderabbit-review, deep-review, deep-doc-review
+Applies to: plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review
 
 The convergence loop eliminates false convergence by dispatching the **same agent roster**
 as round 1 in every subsequent round:
@@ -1388,7 +1388,7 @@ Dispatching a single agent in rounds 2+ creates false convergence — the agent 
 
 
 ### Deep Research Before Presenting (MANDATORY for cycle review skills)
-Applies to: plan, check, pr-check, coderabbit-review
+Applies to: plan, review, pr-check, coderabbit-review
 
 **BEFORE presenting any finding to the user, the agent MUST research it deeply.** This
 research is done SILENTLY — do not show the research process. Present only the conclusions.
@@ -1479,8 +1479,8 @@ All cycle review skills follow this pattern:
    - One option per proposed solution (Option A, Option B, Option C, etc.)
    - Skip — no action
    - Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
-   **AskUser `[topic]` format:** Format: `F#-Category`.
-   Example: `[topic] F8-DeadCode`.
+   **AskUser `[topic]` format:** Format: `(X/N) F#-Category`.
+   Example: `[topic] (8/12) F8-DeadCode`.
 9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
    (a question, disagreement, or request for clarification) instead of a decision:**
    **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
@@ -1546,7 +1546,7 @@ inform the user which droids need to be installed.
 
 ### Protocol: Coverage Measurement
 
-**Referenced by:** check, pr-check, coderabbit-review, deep-review, build
+**Referenced by:** review, pr-check, coderabbit-review, deep-review, build
 
 Measure test coverage using Makefile targets with stack-specific fallbacks.
 
@@ -1617,7 +1617,7 @@ Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Titl
 
 ### Protocol: Per-Droid Quality Checklists
 
-**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan, build
+**Referenced by:** review, pr-check, deep-review, coderabbit-review, plan, build
 
 Each droid type has specific dimensions it MUST verify beyond its core domain. Skills
 that dispatch review droids MUST include the applicable checklists in agent prompts.
@@ -1738,23 +1738,23 @@ Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Pr
 
 ### Protocol: Ring Droid Requirement Check
 
-**Referenced by:** check, pr-check, deep-doc-review, coderabbit-review, plan, build
+**Referenced by:** review, pr-check, deep-doc-review, coderabbit-review, plan, build
 
 Before dispatching ring droids, verify the required droids are available. If any required
 droid is not installed, **STOP** and list missing droids.
 
-**Core review droids** (required by check, pr-check, deep-review, coderabbit-review):
+**Core review droids** (required by review, pr-check, deep-review, coderabbit-review):
 - `ring-default-code-reviewer`
 - `ring-default-business-logic-reviewer`
 - `ring-default-security-reviewer`
 - `ring-default-ring-test-reviewer`
 
-**Extended review droids** (required by check, pr-check, deep-review, coderabbit-review):
+**Extended review droids** (required by review, pr-check, deep-review, coderabbit-review):
 - `ring-default-ring-nil-safety-reviewer`
 - `ring-default-ring-consequences-reviewer`
 - `ring-default-ring-dead-code-reviewer`
 
-**QA droids** (required by check, deep-review, build):
+**QA droids** (required by review, deep-review, build):
 - `ring-dev-team-qa-analyst`
 
 **Documentation droids** (required by deep-doc-review):

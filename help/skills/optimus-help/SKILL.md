@@ -66,7 +66,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
 |-------|---------|-------------|
 | **plan** | `/optimus-plan` | Before implementing a task — validates the spec against project docs, catches gaps and contradictions. Creates the workspace (branch/worktree). |
 | **build** | `/optimus-build` | After spec validation — implements the task end-to-end with TDD, verification gates, and code review. |
-| **check** | `/optimus-check` | After implementation — validates code quality, spec compliance, and test coverage using parallel specialist agents. |
+| **review** | `/optimus-review` | After implementation — validates code quality, spec compliance, and test coverage using parallel specialist agents. |
 | **done** | `/optimus-done` | Final step — requires PR in final state (merged or closed), then marks task as DONE. Cleans up worktree and branch interactively. |
 
 ### Review & Verification Skills (standalone, no task required)
@@ -87,7 +87,7 @@ Each plugin includes a short alias for quick access:
 |-------|-------------|-------|-------------|
 | `/sp` | `/optimus-plan` | `/dr` | `/optimus-deep-review` |
 | `/bd` | `/optimus-build` | `/ddr` | `/optimus-deep-doc-review` |
-| `/ck` | `/optimus-check` | `/cr` | `/optimus-coderabbit-review` |
+| `/rv` | `/optimus-review` | `/cr` | `/optimus-coderabbit-review` |
 | `/dn` | `/optimus-done` | `/prc` | `/optimus-pr-check` |
 | `/bt` | `/optimus-batch` | `/im` | `/optimus-import` |
 | `/qr` | `/optimus-quick-report` | `/rs` | `/optimus-resolve` |

@@ -54,7 +54,7 @@ related:
       - pre-dev-task-breakdown  # external: ring ecosystem
       - pre-dev-subtask-creation  # external: ring ecosystem
     before:
-      - optimus-check
+      - optimus-review
 verification:
   manual:
     - All subtasks implemented via ring droid dispatch (not directly)
@@ -443,7 +443,7 @@ Offer to push commits — see AGENTS.md Protocol: Push Commits.
 - Report subtask progress as each completes (X/N)
 - Never go silent — always present results and ask before proceeding
 - **Next step suggestion:** After the final commit, inform the user: "Implementation
-  complete. Next step: run `/optimus-check` to validate this task."
+  complete. Next step: run `/optimus-review` to validate this task."
 
 ### Dry-Run Mode
 If the user requests a dry-run (e.g., "dry-run impl T-003", "preview implementation"):
@@ -508,15 +508,15 @@ All Optimus files live in the `.optimus/` directory at the project root:
 
 ```json
 {
-  "T-001": { "plan_runs": 2, "check_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_check": "2025-01-16T14:00:00Z" },
-  "T-002": { "plan_runs": 1, "check_runs": 0 }
+  "T-001": { "plan_runs": 2, "review_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_review": "2025-01-16T14:00:00Z" },
+  "T-002": { "plan_runs": 1, "review_runs": 0 }
 }
 ```
 
-- Each key is a task ID. Values track how many times `plan` and `check` executed on the task.
-- A high `plan_runs` signals unclear or problematic specs. A high `check_runs` signals
+- Each key is a task ID. Values track how many times `plan` and `review` executed on the task.
+- A high `plan_runs` signals unclear or problematic specs. A high `review_runs` signals
   complex review cycles or specification gaps.
-- The file is created on first use by `plan` or `check`. If missing, agents treat all
+- The file is created on first use by `plan` or `review`. If missing, agents treat all
   counters as 0.
 - `report` reads this file to display churn metrics.
 
@@ -540,7 +540,7 @@ state.json is implicitly `Pendente`.
 | `Pendente` | Initial (implicit) | Not started — no entry in state.json |
 | `Validando Spec` | plan | Spec being validated |
 | `Em Andamento` | build | Implementation in progress |
-| `Validando Impl` | check | Implementation being reviewed |
+| `Validando Impl` | review | Implementation being reviewed |
 | `DONE` | done | Completed |
 | `Cancelado` | tasks, done | Task abandoned, will not be implemented |
 
@@ -601,7 +601,7 @@ in the cycle so the user can fix it with `/optimus-tasks`.
 
 
 ### Convergence Loop (Full Roster Model)
-Applies to: plan, check, pr-check, coderabbit-review, deep-review, deep-doc-review
+Applies to: plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review
 
 The convergence loop eliminates false convergence by dispatching the **same agent roster**
 as round 1 in every subsequent round:
@@ -646,8 +646,8 @@ All cycle review skills follow this pattern:
    - One option per proposed solution (Option A, Option B, Option C, etc.)
    - Skip — no action
    - Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
-   **AskUser `[topic]` format:** Format: `F#-Category`.
-   Example: `[topic] F8-DeadCode`.
+   **AskUser `[topic]` format:** Format: `(X/N) F#-Category`.
+   Example: `[topic] (8/12) F8-DeadCode`.
 9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
    (a question, disagreement, or request for clarification) instead of a decision:**
    **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
@@ -701,7 +701,7 @@ Skills reference this as: "Check active version guard — see AGENTS.md Protocol
 
 ### Protocol: Coverage Measurement
 
-**Referenced by:** check, pr-check, coderabbit-review, deep-review, build
+**Referenced by:** review, pr-check, coderabbit-review, deep-review, build
 
 Measure test coverage using Makefile targets with stack-specific fallbacks.
 
@@ -857,7 +857,7 @@ Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Titl
 
 ### Protocol: Per-Droid Quality Checklists
 
-**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan, build
+**Referenced by:** review, pr-check, deep-review, coderabbit-review, plan, build
 
 Each droid type has specific dimensions it MUST verify beyond its core domain. Skills
 that dispatch review droids MUST include the applicable checklists in agent prompts.
@@ -978,7 +978,7 @@ Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Pr
 
 ### Protocol: Push Commits (optional)
 
-**Referenced by:** plan, build, check, coderabbit-review. Note: done handles pushing inline in its own cleanup phase. pr-check and deep-review have their own push phases.
+**Referenced by:** plan, build, review, coderabbit-review. Note: done handles pushing inline in its own cleanup phase. pr-check and deep-review have their own push phases.
 
 After stage work is complete, offer to push all local commits:
 
@@ -1033,23 +1033,23 @@ Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Pus
 
 ### Protocol: Ring Droid Requirement Check
 
-**Referenced by:** check, pr-check, deep-doc-review, coderabbit-review, plan, build
+**Referenced by:** review, pr-check, deep-doc-review, coderabbit-review, plan, build
 
 Before dispatching ring droids, verify the required droids are available. If any required
 droid is not installed, **STOP** and list missing droids.
 
-**Core review droids** (required by check, pr-check, deep-review, coderabbit-review):
+**Core review droids** (required by review, pr-check, deep-review, coderabbit-review):
 - `ring-default-code-reviewer`
 - `ring-default-business-logic-reviewer`
 - `ring-default-security-reviewer`
 - `ring-default-ring-test-reviewer`
 
-**Extended review droids** (required by check, pr-check, deep-review, coderabbit-review):
+**Extended review droids** (required by review, pr-check, deep-review, coderabbit-review):
 - `ring-default-ring-nil-safety-reviewer`
 - `ring-default-ring-consequences-reviewer`
 - `ring-default-ring-dead-code-reviewer`
 
-**QA droids** (required by check, deep-review, build):
+**QA droids** (required by review, deep-review, build):
 - `ring-dev-team-qa-analyst`
 
 **Documentation droids** (required by deep-doc-review):
@@ -1314,7 +1314,7 @@ Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: Sta
 
 ### Protocol: TaskSpec Resolution
 
-**Referenced by:** plan, build, check
+**Referenced by:** plan, build, review
 
 Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
 

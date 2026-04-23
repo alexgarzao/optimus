@@ -31,9 +31,9 @@
       "source": "./build"
     },
     {
-      "name": "check",
+      "name": "review",
       "description": "Stage 3: Validates completed task implementation against spec, coding standards, and best practices using parallel specialist agents.",
-      "source": "./check"
+      "source": "./review"
     },
     {
       "name": "pr-check",

@@ -7,7 +7,7 @@ trigger: >
   - After completing a feature and wanting quality validation
 skip_when: >
   - Reviewing documentation only (use optimus-deep-doc-review instead)
-  - Validating a specific task against its spec (use optimus-check instead)
+  - Validating a specific task against its spec (use optimus-review instead)
   - Running automated checks only (use `make lint && make test` directly)
 prerequisite: >
   - Project has source code to review
@@ -39,9 +39,9 @@ related:
     - optimus-build
     - optimus-pr-check
   differentiation:
-    - name: optimus-check
+    - name: optimus-review
       difference: >
-        optimus-check validates a completed task against its spec
+        optimus-review validates a completed task against its spec
         (acceptance criteria, test IDs, spec compliance). optimus-deep-review is
         a generic code review without task/spec context -- focused on code quality,
         security, and best practices.
@@ -73,7 +73,7 @@ Ask the user what to review:
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
 2. **Verify Makefile targets (HARD BLOCK):** The project MUST have a `Makefile` with `lint` and `test` targets. If either is missing, **STOP**: "Project is missing required Makefile targets (`make lint`, `make test`). Add them before running deep-review."
 3. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
-4. **Identify reference docs:** Look for PRD, TRD, API design, data model — these provide context but are not the primary validation target (unlike optimus-check)
+4. **Identify reference docs:** Look for PRD, TRD, API design, data model — these provide context but are not the primary validation target (unlike optimus-review)
 5. **Read all files in scope:** Load the full content of every file that will be reviewed
 
 ### Step 1.3: Auto-Discover Review Droids
@@ -510,7 +510,7 @@ The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
 ### Convergence Loop (Full Roster Model)
-Applies to: plan, check, pr-check, coderabbit-review, deep-review, deep-doc-review
+Applies to: plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review
 
 The convergence loop eliminates false convergence by dispatching the **same agent roster**
 as round 1 in every subsequent round:
@@ -555,8 +555,8 @@ All cycle review skills follow this pattern:
    - One option per proposed solution (Option A, Option B, Option C, etc.)
    - Skip — no action
    - Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
-   **AskUser `[topic]` format:** Format: `F#-Category`.
-   Example: `[topic] F8-DeadCode`.
+   **AskUser `[topic]` format:** Format: `(X/N) F#-Category`.
+   Example: `[topic] (8/12) F8-DeadCode`.
 9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
    (a question, disagreement, or request for clarification) instead of a decision:**
    **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
@@ -572,7 +572,7 @@ All cycle review skills follow this pattern:
 
 ### Protocol: Coverage Measurement
 
-**Referenced by:** check, pr-check, coderabbit-review, deep-review, build
+**Referenced by:** review, pr-check, coderabbit-review, deep-review, build
 
 Measure test coverage using Makefile targets with stack-specific fallbacks.
 
@@ -610,7 +610,7 @@ Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage
 
 ### Protocol: Per-Droid Quality Checklists
 
-**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan, build
+**Referenced by:** review, pr-check, deep-review, coderabbit-review, plan, build
 
 Each droid type has specific dimensions it MUST verify beyond its core domain. Skills
 that dispatch review droids MUST include the applicable checklists in agent prompts.

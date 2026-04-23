@@ -450,7 +450,7 @@ Velocity: No completed tasks found in state.json. Complete a task to start track
 
 If enough data exists (3+ completed tasks with `updated_at` timestamps in state.json),
 compute approximate stage durations by comparing `updated_at` values of tasks that
-progressed through multiple stages. If `stats.json` has `last_plan` and `last_check`
+progressed through multiple stages. If `stats.json` has `last_plan` and `last_review`
 timestamps, use those for more precise stage duration estimates.
 
 Present as:
@@ -487,7 +487,7 @@ fi
 Only show this section if stats.json exists AND has at least one task entry.
 
 **Highlight tasks with above-average churn** — tasks where `plan_runs > avg_plan_runs`
-or `check_runs > avg_check_runs` are flagged as high-churn.
+or `review_runs > avg_review_runs` are flagged as high-churn.
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -693,15 +693,15 @@ All Optimus files live in the `.optimus/` directory at the project root:
 
 ```json
 {
-  "T-001": { "plan_runs": 2, "check_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_check": "2025-01-16T14:00:00Z" },
-  "T-002": { "plan_runs": 1, "check_runs": 0 }
+  "T-001": { "plan_runs": 2, "review_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_review": "2025-01-16T14:00:00Z" },
+  "T-002": { "plan_runs": 1, "review_runs": 0 }
 }
 ```
 
-- Each key is a task ID. Values track how many times `plan` and `check` executed on the task.
-- A high `plan_runs` signals unclear or problematic specs. A high `check_runs` signals
+- Each key is a task ID. Values track how many times `plan` and `review` executed on the task.
+- A high `plan_runs` signals unclear or problematic specs. A high `review_runs` signals
   complex review cycles or specification gaps.
-- The file is created on first use by `plan` or `check`. If missing, agents treat all
+- The file is created on first use by `plan` or `review`. If missing, agents treat all
   counters as 0.
 - `report` reads this file to display churn metrics.
 
@@ -725,7 +725,7 @@ state.json is implicitly `Pendente`.
 | `Pendente` | Initial (implicit) | Not started — no entry in state.json |
 | `Validando Spec` | plan | Spec being validated |
 | `Em Andamento` | build | Implementation in progress |
-| `Validando Impl` | check | Implementation being reviewed |
+| `Validando Impl` | review | Implementation being reviewed |
 | `DONE` | done | Completed |
 | `Cancelado` | tasks, done | Task abandoned, will not be implemented |
 
