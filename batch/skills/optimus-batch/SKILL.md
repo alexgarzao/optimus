@@ -169,7 +169,7 @@ Each stage skill handles its own validation, status changes, and user interactio
 The batch orchestrator does NOT duplicate any stage logic — it only chains them and
 manages worktree context.
 
-**Re-run Guard:** If plan or check presents a Re-run Guard prompt during batch execution,
+**Re-run Guard:** If plan or review presents a Re-run Guard prompt during batch execution,
 the user responds directly to the stage skill. Re-runs are handled internally by the
 stage — batch waits until the stage resolves and completes before proceeding to the
 checkpoint.

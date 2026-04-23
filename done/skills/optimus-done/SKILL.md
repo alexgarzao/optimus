@@ -5,12 +5,12 @@ trigger: >
   - After the PR has been merged or closed
   - When user requests closing a task (e.g., "close T-012", "mark T-012 as done")
 skip_when: >
-  - Task has not been through at least check yet
+  - Task has not been through at least review yet
   - Task is already done
   - PR is still open (hard block — merge or close the PR first)
 prerequisite: >
   - Task exists in tasks.md with status "Validando Impl" in state.json
-  - check has completed
+  - review has completed
   - PR must be in final state (MERGED or CLOSED) or not exist
 NOT_skip_when: >
   - "The PR was already merged" -- Still need to mark DONE and clean up worktree/branch.
@@ -91,10 +91,10 @@ Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stag
 
 1. Read `tasks.md` and find the row for the confirmed task ID
 2. Read the task's status from state.json — see AGENTS.md Protocol: State Management.
-   - If status is `Validando Impl` → proceed (check has completed)
-   - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. It must go through plan, build, and check first."
-   - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run build and check first."
-   - If status is `Em Andamento` → **STOP**: "Task T-XXX is in 'Em Andamento'. Run check first."
+   - If status is `Validando Impl` → proceed (review has completed)
+   - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. It must go through plan, build, and review first."
+   - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run build and review first."
+   - If status is `Em Andamento` → **STOP**: "Task T-XXX is in 'Em Andamento'. Run review first."
    - If status is `DONE` → **STOP**: "Task T-XXX is already done. Re-execution of done is not supported."
    - If status is `Cancelado` → **STOP**: "Task T-XXX was cancelled. Cannot close a cancelled task."
 3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task from tasks.md.

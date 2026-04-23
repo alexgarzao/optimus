@@ -129,7 +129,7 @@ If no PR is found, offer to create one via `AskUser`:
 No PR exists for the current branch (<branch>). What should I do?
 ```
 Options:
-- **Create PR** — create a PR against the default branch with a Conventional Commits title derived from the task's Tipo and title (same logic as check Phase 13)
+- **Create PR** — create a PR against the default branch with a Conventional Commits title derived from the task's Tipo and title (same logic as review Phase 13)
 - **Provide URL** — I have a PR URL to use
 - **Cancel** — stop the review
 

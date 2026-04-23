@@ -369,7 +369,7 @@ These operations require explicit user confirmation.
 ### Task Spec Resolution
 
 Every task MUST have a Ring pre-dev reference in the `TaskSpec` column. Stage agents
-(plan, build, check) resolve the full path as `<tasksDir>/<TaskSpec>` and read the
+(plan, build, review) resolve the full path as `<tasksDir>/<TaskSpec>` and read the
 referenced file for objective, acceptance criteria, and implementation details.
 
 The subtasks directory is derived automatically from the TaskSpec path:

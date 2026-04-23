@@ -7,7 +7,7 @@ Tracked improvements that are not yet prioritized for implementation.
 ## I1: Optimize Convergence Loop Token Cost
 
 **Status:** Open (tradeoff accepted — correctness over cost)
-**Affects:** plan, check, pr-check, coderabbit-review, deep-review, deep-doc-review
+**Affects:** plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review
 **Priority:** Low (demoted from Medium)
 
 ### Context

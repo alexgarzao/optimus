@@ -494,17 +494,17 @@ or `review_runs > avg_review_runs` are flagged as high-churn.
 │ STAGE EXECUTION STATS                            │
 ├─────────────────────────────────────────────────┤
 │ Average plan runs:  1.5 per task                 │
-│ Average check runs: 2.0 per task                 │
+│ Average review runs: 2.0 per task                │
 │                                                  │
 │ High-churn tasks:                                │
-│   T-003: plan ×4, check ×3  ← spec issues?      │
-│   T-007: plan ×1, check ×5  ← review cycles?    │
+│   T-003: plan ×4, review ×3  ← spec issues?     │
+│   T-007: plan ×1, review ×5  ← review cycles?   │
 │                                                  │
 │ All tasks:                                       │
-│   T-001: plan ×1, check ×1                       │
-│   T-002: plan ×2, check ×2                       │
-│   T-003: plan ×4, check ×3  ⚠                   │
-│   T-007: plan ×1, check ×5  ⚠                   │
+│   T-001: plan ×1, review ×1                      │
+│   T-002: plan ×2, review ×2                      │
+│   T-003: plan ×4, review ×3  ⚠                  │
+│   T-007: plan ×1, review ×5  ⚠                  │
 └─────────────────────────────────────────────────┘
 ```
 

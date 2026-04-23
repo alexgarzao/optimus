@@ -63,7 +63,7 @@ class TestExtractRefsFromSkill:
         assert "Protocol: State Management" in refs
 
     def test_protocol_with_trailing_sentence(self, tmp_path: Path):
-        p = self._write_skill(tmp_path, "AGENTS.md Protocol: Session State. Use stage=check.")
+        p = self._write_skill(tmp_path, "AGENTS.md Protocol: Session State. Use stage=review.")
         refs = ip.extract_refs_from_skill(p)
         assert "Protocol: Session State" in refs
 
