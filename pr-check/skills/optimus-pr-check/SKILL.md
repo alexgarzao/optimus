@@ -101,70 +101,13 @@ If you find yourself saying "these were already addressed" without having run `g
 
 ---
 
-## Task Mode vs Standalone Mode
+## Operating Mode
 
-This skill operates in TWO modes:
+This skill is a **standalone PR review tool**. It does NOT change task status in
+state.json and is NOT part of the pipeline stages. It works like deep-review — the
+user invokes it when they want to review a PR, independently of the task lifecycle.
 
-### Task Mode (part of the stage pipeline)
-When the user references a task (e.g., "review PR for T-012") or a `tasks.md` exists with a task in status `Validando Impl` or `Revisando PR`:
-
-1. **Find and validate tasks.md** — see AGENTS.md Protocol: tasks.md Validation.
-2. **Resolve workspace (HARD BLOCK):** See AGENTS.md Protocol: Workspace Auto-Navigation. Branch-task cross-validation is included in this protocol.
-3. **Validate status** (read from state.json — see AGENTS.md Protocol: State Management):
-   - If status is `Validando Impl` → proceed (check completed)
-   - If status is `Revisando PR` → proceed (re-execution of this stage)
-   - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run plan, build, and check first."
-   - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run build and check first."
-   - If status is `Em Andamento` → **STOP**: "Task T-XXX is in 'Em Andamento'. Run check first."
-   - If status is `DONE` → **STOP**: "Task T-XXX is already done."
-   - If status is `Cancelado` → **STOP**: "Task T-XXX was cancelled. Cannot review a cancelled task."
-4. **Check dependencies (HARD BLOCK):** Read the Depends column for this task from tasks.md.
-   - If Depends is `-` → proceed (no dependencies)
-   - For each dependency ID listed, read its status from state.json:
-     - If ALL dependencies have status `DONE` → proceed
-     - If ANY dependency is NOT `DONE`:
-       - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
-       - If the dependency has status `Cancelado` → **STOP**: `"T-YYY was cancelled (Cancelado). Consider removing this dependency via /optimus-tasks."`
-       - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be DONE first."`
-3.1. **Active version guard:** Check active version guard — see AGENTS.md Protocol: Active Version Guard.
-4.1. **Check session state:** Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`pr-check`, status=`Revisando PR`.
-4.2. **Set terminal title:** Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage=`pr-check`.
-
-   **On stage completion** (after Phase 14 final summary): delete the session file and restore terminal title.
-5. **Expanded confirmation before status change:**
-   - **If status will change** (current status is NOT `Revisando PR`) AND the user did NOT specify the task ID explicitly (auto-detect):
-     - Present to the user via `AskUser`:
-       ```
-       I'm about to change task T-XXX status from '<current>' to 'Revisando PR'.
-
-       **T-XXX: [title]**
-       **Version:** [version from table]
-
-       Confirm status change?
-       ```
-     - **BLOCKING:** Do NOT change status until the user confirms
-   - **If re-execution** (status is already `Revisando PR`) OR the user specified the task ID explicitly:
-     - Skip expanded confirmation (user already has context)
-6. **Update status** to `Revisando PR` in state.json (if not already) — see AGENTS.md Protocol: State Management.
-7. **Invoke notification hooks** (event=`status-change`) — see AGENTS.md Protocol: Notification Hooks.
-8. **Check tasks.md divergence (warning):** Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
-**NOTE:** At the END of the review (after all findings resolved, threads replied), do NOT change status again — the user invokes done next.
-
-### Standalone Mode (no task)
-When no task is referenced and no `tasks.md` exists, or the user explicitly wants to review a PR without a task context:
-- Skip all task status logic
-- Proceed directly to Phase 1
-
-### How to detect which mode:
-1. If the user mentions a task ID (T-XXX) → Task Mode
-2. Check if `.optimus/tasks.md` exists:
-   - If NOT found → Standalone Mode
-   - If found but INVALID format (first line is not `<!-- optimus:tasks-v1 -->` or format validation fails) → Standalone Mode with warning: "tasks.md exists but is invalid. Running in standalone mode. Consider running `/optimus-import`."
-   - If found and valid:
-     a. If exactly ONE task is in `Validando Impl` or `Revisando PR` → Task Mode (confirm with user via `AskUser`)
-     b. If MULTIPLE tasks are in `Validando Impl` or `Revisando PR` → Task Mode, but ask the user which task to review via `AskUser` (list all candidates with ID, title, version, and branch)
-     c. If NO tasks are in `Validando Impl` or `Revisando PR` → Standalone Mode
-3. If no `.optimus/tasks.md` exists → Standalone Mode
+No task identification, status validation, or state.json writes are performed.
 
 ---
 
@@ -232,10 +175,6 @@ The PR title MUST follow the **Conventional Commits 1.0.0** specification
 4. Colon followed by a single space before the description
 5. Description is present and non-empty
 6. Type is lowercase
-
-**If in Task Mode:** cross-check the type against the task's **Tipo** column:
-- Feature → `feat`, Fix → `fix`, Refactor → `refactor`, Chore → `chore`, Docs → `docs`, Test → `test`
-- If the type does not match the Tipo mapping, flag as a finding
 
 **Regex for validation:**
 ```
@@ -792,7 +731,10 @@ Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding O
 Example: `[topic] F8-DeadCode`.
 
 Use `AskUser`. **BLOCKING** — do not advance until decided.
-**Every AskUser MUST include a "Tell me more" option** alongside the fix/skip options.
+**Every AskUser MUST include these options:**
+- Option A / Option B (the proposed solutions)
+- Skip — no action
+- Tell me more
 
 **IMMEDIATE RESPONSE RULE** — see AGENTS.md "Finding Presentation" item 9. If the user
 selects "Tell me more" or responds with free text: STOP, research and answer RIGHT NOW.
@@ -1404,15 +1346,11 @@ gh api graphql -f query='
 - ALL findings (CRITICAL, HIGH, MEDIUM, and LOW) MUST be presented to the user for decision
 - The agent may recommend an option, but MUST wait for user approval via AskUser before proceeding
 - Do NOT auto-skip, auto-dismiss, or auto-resolve any finding regardless of severity
-- **Next step suggestion (Task Mode only):** After the final summary, inform the user:
-  "PR review complete. Next step: run `/optimus-done` to close this task."
-
 ### Dry-Run Mode
 If the user requests a dry-run (e.g., "dry-run pr-check", "preview PR review"):
 - Fetch ALL PR data normally (Phase 1)
 - Dispatch ALL review agents (Phase 3) and consolidate (Phase 4)
 - Present ALL findings in Phase 6 (interactive resolution)
-- **Do NOT change task status** — skip status update in Task Mode
 - **Do NOT apply fixes** — skip Phase 8 (TDD cycle)
 - **Do NOT push anything** — skip Phase 12
 - **Do NOT respond to PR comments** — skip Phase 13
@@ -1424,132 +1362,6 @@ If the user requests a dry-run (e.g., "dry-run pr-check", "preview PR review"):
 
 The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
-
-### File Location
-
-All Optimus files live in the `.optimus/` directory at the project root:
-
-```
-.optimus/
-├── config.json          # versionado — tasksDir
-├── tasks.md             # versionado — structural task data (NO status, NO branch)
-├── state.json           # gitignored — operational state (status, branch per task)
-├── stats.json           # gitignored — stage execution counters per task
-├── sessions/            # gitignored — session state for crash recovery
-└── reports/             # gitignored — exported reports
-```
-
-**Configuration** is stored in `.optimus/config.json`:
-
-```json
-{
-  "tasksDir": "docs/pre-dev"
-}
-```
-
-- **`tasksDir`**: Path to the Ring pre-dev artifacts root. Default: `docs/pre-dev`.
-  The import and stage agents look for task specs at `<tasksDir>/tasks/` and subtasks
-  at `<tasksDir>/subtasks/`.
-
-**Tasks file** is always `.optimus/tasks.md` — not configurable.
-
-**Operational state** is stored in `.optimus/state.json` (gitignored):
-
-```json
-{
-  "T-001": { "status": "DONE", "branch": "feat/t-001-setup-auth", "updated_at": "2025-01-15T10:30:00Z" },
-  "T-003": { "status": "Em Andamento", "branch": "feat/t-003-user-registration", "updated_at": "2025-01-16T14:00:00Z" }
-}
-```
-
-- Each key is a task ID. A task with no entry is `Pendente` (implicit default).
-- `status`: current pipeline stage (see Valid Status Values).
-- `branch`: the derived branch name, stored for quick reference (always re-derivable).
-- Stage agents read and write this file — never tasks.md — for status changes.
-- If state.json is lost, status can be reconstructed: task with a worktree = in progress,
-  without = Pendente. The agent asks the user to confirm before proceeding.
-
-**Stage execution stats** are stored in `.optimus/stats.json` (gitignored):
-
-```json
-{
-  "T-001": { "plan_runs": 2, "check_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_check": "2025-01-16T14:00:00Z" },
-  "T-002": { "plan_runs": 1, "check_runs": 0 }
-}
-```
-
-- Each key is a task ID. Values track how many times `plan` and `check` executed on the task.
-- A high `plan_runs` signals unclear or problematic specs. A high `check_runs` signals
-  complex review cycles or specification gaps.
-- The file is created on first use by `plan` or `check`. If missing, agents treat all
-  counters as 0.
-- `report` reads this file to display churn metrics.
-
-Agents resolve paths:
-1. **Read `.optimus/config.json`** for `tasksDir`. Fallback: `docs/pre-dev`.
-2. **Tasks file:** `.optimus/tasks.md` (fixed path).
-3. **If tasks.md not found:** **STOP** and suggest running `import` to create one.
-
-The `.optimus/state.json`, `.optimus/stats.json`, `.optimus/sessions/`, and
-`.optimus/reports/` are gitignored (operational/temporary state).
-The `.optimus/config.json` and `.optimus/tasks.md` are versioned (structural data).
-
-
-### Valid Status Values (stored in state.json)
-
-Status lives in `.optimus/state.json`, NOT in tasks.md. A task with no entry in
-state.json is implicitly `Pendente`.
-
-| Status | Set by | Meaning |
-|--------|--------|---------|
-| `Pendente` | Initial (implicit) | Not started — no entry in state.json |
-| `Validando Spec` | plan | Spec being validated |
-| `Em Andamento` | build | Implementation in progress |
-| `Validando Impl` | check | Implementation being reviewed |
-| `Revisando PR` | pr-check | PR being reviewed (optional stage) |
-| `DONE` | done | Completed |
-| `Cancelado` | tasks, done | Task abandoned, will not be implemented |
-
-**Administrative status operations** (managed by tasks, not by stage agents):
-- **Reopen:** `DONE` → `Pendente` (remove entry from state.json) or `Em Andamento` (if worktree exists) — when a bug is found after close. Also accepts `Cancelado` → `Pendente` — when a cancellation decision is reversed.
-- **Advance:** move forward one stage — when work was done manually outside the pipeline
-- **Demote:** move backward one stage — when rework is needed after review
-- **Cancel:** any non-terminal → `Cancelado` — task will not be implemented
-
-These operations require explicit user confirmation.
-
-
-### Format Validation
-
-Every stage agent (1-5) MUST validate the tasks.md format before operating:
-1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
-2. A `## Versions` section exists with a table containing columns: Version, Status, Description
-3. All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
-4. Exactly one version has Status `Ativa`
-5. At most one version has Status `Próxima`
-6. A markdown table exists with columns: ID, Title, Tipo, Depends, Priority, Version (Estimate and TaskSpec are optional — tables without them are still valid). **Status and Branch columns are NOT expected** — they live in state.json.
-7. All task IDs follow the `T-NNN` pattern
-8. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
-9. All Depends values are either `-` or comma-separated valid task IDs that exist as rows in the tasks table (not just matching `T-NNN` pattern — the referenced task must actually exist)
-10. All Priority values are one of: `Alta`, `Media`, `Baixa`
-11. All Version values reference a version name that exists in the Versions table
-12. No duplicate task IDs
-13. No circular dependencies in the dependency graph (e.g., T-001 → T-002 → T-001)
-
-If the format marker is missing or validation fails, the agent must **STOP** and suggest
-running `/optimus-import` to fix the format. Do NOT attempt to interpret malformed data.
-
-14. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
-15. **Empty table handling:** If the tasks table exists but has zero data rows (only headers),
-format validation PASSES. Stage agents (1-5) MUST check for this condition immediately after
-format validation and before task identification. If zero data rows: **STOP** and inform the
-user: "No tasks found in tasks.md. Use `/optimus-tasks` to create a task or `/optimus-import`
-to import from Ring pre-dev." Do NOT proceed to task identification with an empty table.
-
-**NOTE:** For circular dependency detection (item 13), trace the full dependency chain for
-each task. If any task appears twice in the chain, a cycle exists. Report ALL tasks involved
-in the cycle so the user can fix it with `/optimus-tasks`.
-
 
 ### Convergence Loop (Full Roster Model)
 Applies to: plan, check, pr-check, coderabbit-review, deep-review, deep-doc-review
@@ -1662,9 +1474,10 @@ All cycle review skills follow this pattern:
    fix or skip is ALWAYS the user's. For grouped entries, list all affected files/locations
    within the single presentation.
 8. For each finding: present research-backed analysis + options, collect decision via AskUser.
-   **Every AskUser for a finding decision MUST include a "Tell me more" option.** This option
-   is always the **second-to-last** option (right before the free-text input that AskUser
-   provides automatically). This lets the user request deeper analysis with one click.
+   **Every AskUser for a finding decision MUST include these options:**
+   - Option A / Option B (the proposed solutions)
+   - Skip — no action
+   - Tell me more
    **AskUser `[topic]` format:** Format: `F#-Category`.
    Example: `[topic] F8-DeadCode`.
 9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
@@ -1730,44 +1543,6 @@ required droids are not installed and a complex fix is needed, the skill MUST st
 inform the user which droids need to be installed.
 
 
-### Protocol: Active Version Guard
-
-**Referenced by:** all stage agents (1-5)
-
-After the task ID is confirmed and dependencies are validated, check if the task belongs
-to the `Ativa` version. If not, present options before proceeding.
-
-1. Read the task's **Version** column from `tasks.md`
-2. Read the **Versions** table and find the version with Status `Ativa`
-   - **If no version has Status `Ativa`** → **STOP**: "No active version found in the Versions table. Run `/optimus-tasks` to set a version as Ativa before proceeding."
-3. **If the task's version matches the `Ativa` version** → proceed silently
-4. **If the task's version does NOT match the `Ativa` version** → present via `AskUser`:
-   ```
-   Task T-XXX is in version '<task_version>' (<version_status>),
-   but the active version is '<active_version>'.
-   To execute this task, it must be moved to the active version first.
-   ```
-   Options:
-   - **Move to active version and continue** — updates the Version column to the active version, commits, and proceeds
-   - **Cancel** — stops execution
-
-5. **If "Move to active version and continue":**
-   - Update the task's Version column in `tasks.md` to the `Ativa` version name
-   - Commit:
-     ```bash
-     git add "$TASKS_FILE"
-     COMMIT_MSG_FILE=$(mktemp)
-     printf '%s' "chore(tasks): move T-XXX to active version <active_version>" > "$COMMIT_MSG_FILE"
-     git commit -F "$COMMIT_MSG_FILE"
-     rm -f "$COMMIT_MSG_FILE"
-     ```
-   - Proceed with the stage
-
-6. **If "Cancel":** **STOP** — do not proceed with the stage
-
-Skills reference this as: "Check active version guard — see AGENTS.md Protocol: Active Version Guard."
-
-
 ### Protocol: Coverage Measurement
 
 **Referenced by:** check, pr-check, coderabbit-review, deep-review, build
@@ -1806,46 +1581,9 @@ code with 0% as SKIP.
 Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage Measurement."
 
 
-### Protocol: Divergence Warning
-
-**Referenced by:** all stage agents (1-5)
-
-Since status and branch data live in state.json (gitignored), tasks.md rarely changes
-on feature branches. This protocol detects the uncommon case where tasks.md WAS modified
-(e.g., Active Version Guard moved a task).
-
-```bash
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-if [ -z "$DEFAULT_BRANCH" ]; then
-  DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
-fi
-if [ -z "$DEFAULT_BRANCH" ]; then
-  echo "WARNING: Cannot determine default branch. Skipping divergence check."
-  # Skip — this is a warning, not a HARD BLOCK
-else
-  TASKS_FILE=".optimus/tasks.md"
-  git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
-  git diff "origin/$DEFAULT_BRANCH" -- "$TASKS_FILE" 2>/dev/null | head -20
-fi
-```
-
-- If diff output is non-empty → warn via `AskUser`:
-  ```
-  tasks.md has diverged between your branch and <default_branch>.
-  This may cause merge conflicts when the PR is merged.
-  ```
-  Options:
-  - **Sync now** — run `git merge origin/<default_branch>` to incorporate changes
-  - **Continue without syncing** — I'll handle conflicts later
-- If diff output is empty → proceed silently (files are in sync)
-- **NOTE:** This is a warning, not a HARD BLOCK. The user may choose to continue.
-
-Skills reference this as: "Check tasks.md divergence — see AGENTS.md Protocol: Divergence Warning."
-
-
 ### Protocol: GitHub CLI Check (HARD BLOCK)
 
-**Referenced by:** all stage agents (1-5), tasks, batch
+**Referenced by:** all stage agents (1-4), tasks, batch
 
 ```bash
 gh auth status 2>/dev/null
@@ -1857,55 +1595,9 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 ```
 
 
-### Protocol: Notification Hooks
-
-**Referenced by:** all stage agents (1-5), tasks
-
-After writing a status change to state.json, invoke notification hooks if present.
-
-**IMPORTANT — Capture timing:** Read the current status from state.json and store it as
-`OLD_STATUS` BEFORE writing the new status. The sequence is:
-1. Read current status: `OLD_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")`
-2. Write new status to state.json
-3. Invoke hooks with `OLD_STATUS` and new status
-
-**IMPORTANT:** Always quote all arguments and sanitize user-derived values to prevent
-shell injection. Hook scripts MUST NOT pass their arguments to `eval` or shell
-interpretation — treat all arguments as untrusted data.
-
-```bash
-_optimus_sanitize() { printf '%s' "$1" | tr -cd '[:alnum:][:space:]-_./:'; }
-HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
-if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" "$(_optimus_sanitize "$event")" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$old_status")" "$(_optimus_sanitize "$new_status")" 2>/dev/null &
-fi
-```
-
-Events and their parameter signatures:
-
-| Event | Parameters | Description |
-|-------|-----------|-------------|
-| `status-change` | `event task_id old_status new_status` | Any status transition |
-| `task-done` | `event task_id old_status "DONE"` | Task marked as done |
-| `task-cancelled` | `event task_id old_status "Cancelado"` | Task cancelled |
-| `task-blocked` | `event task_id current_status current_status reason` | Dependency check failed (5 args — includes reason) |
-
-When a dependency check fails:
-```bash
-if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" "task-blocked" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "blocked by $dep_id ($dep_status)")" 2>/dev/null &
-fi
-```
-
-Hooks run in background (`&`) and their failure does NOT block the pipeline.
-If `tasks-hooks.sh` does not exist, hooks are silently skipped.
-
-Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol: Notification Hooks."
-
-
 ### Protocol: PR Title Validation
 
-**Referenced by:** stages 2-5
+**Referenced by:** stages 2-4
 
 Check if a PR exists for the current branch:
 ```bash
@@ -2081,348 +1773,6 @@ droid is not installed, **STOP** and list missing droids.
 - `ring-default-code-reviewer`
 
 Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check."
-
-
-### Protocol: Session State
-
-**Referenced by:** all stage agents (1-5)
-
-Stage agents write a session state file to track progress. This enables resumption
-when a session is interrupted (agent crash, user closes terminal, context window limit).
-
-**IMPORTANT — Write timing:** The session file MUST be written **immediately after the
-status change in state.json** (before any work begins). This ensures crash recovery has
-a record even if the agent fails before producing any output. Do NOT wait until
-"key phase transitions" to write the initial session file.
-
-**Session file location:** `.optimus/sessions/session-<task-id>.json` (gitignored).
-Each task gets its own file (e.g., `.optimus/sessions/session-T-003.json`).
-
-```json
-{
-  "task_id": "T-003",
-  "stage": "<stage-name>",
-  "status": "<stage-output-status>",
-  "branch": "feat/t-003-user-auth",
-  "started_at": "2025-01-15T10:30:00Z",
-  "updated_at": "2025-01-15T11:45:00Z",
-  "phase": "Phase 1: Implementation",
-  "notes": "Implementation in progress"
-}
-```
-
-**On stage start (after task ID is known):**
-
-```bash
-SESSION_FILE=".optimus/sessions/session-${TASK_ID}.json"
-if [ -f "$SESSION_FILE" ]; then
-  if ! jq empty "$SESSION_FILE" 2>/dev/null; then
-    echo "WARNING: Session file is corrupted. Deleting and proceeding fresh."
-    rm -f "$SESSION_FILE"
-  else
-    cat "$SESSION_FILE"
-  fi
-fi
-```
-
-- If the file exists AND the task's status in `state.json` matches the session's `status`:
-  - Present via `AskUser`:
-    ```
-    Previous session found:
-      Task: T-XXX — [title]
-      Stage: <stage-name>
-      Last active: <time since updated_at>
-      Progress: <phase from session>
-    Resume this session?
-    ```
-    Options: Resume / Start fresh (delete session) / Continue (keep session file)
-  - If **Resume**: skip to the phase indicated in the session file
-  - If **Start fresh (delete session)**: delete the session file and proceed from the beginning
-  - If **Continue (keep session file)**: proceed from the beginning without deleting the session file
-- If the file is stale (>24h) or the task status has changed → delete and proceed normally.
-  **Staleness check example:**
-  ```bash
-  UPDATED=$(jq -r '.updated_at // empty' "$SESSION_FILE" 2>/dev/null)
-  if [ -n "$UPDATED" ]; then
-    NOW_EPOCH=$(date +%s)
-    UPDATED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED" +%s 2>/dev/null || date -d "$UPDATED" +%s 2>/dev/null || echo 0)
-    AGE=$(( NOW_EPOCH - UPDATED_EPOCH ))
-    if [ "$AGE" -gt 86400 ]; then
-      echo "Session file is stale (>24h). Deleting."
-      rm -f "$SESSION_FILE"
-    fi
-  fi
-  ```
-- **External status change detection:** If the session file exists AND the task's status
-  does NOT match the session's `status`, check if the difference is explainable by normal
-  stage progression (e.g., session says `Em Andamento` but task is now `Validando Impl` —
-  the task was advanced externally via `/optimus-tasks`). If the status change is NOT
-  explainable by forward progression, treat the session as stale and delete it.
-- If no file exists → proceed normally
-
-**On stage progress (at key phase transitions):**
-
-```bash
-# Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
-mkdir -p .optimus/sessions .optimus/reports
-BRANCH_NAME=$(git branch --show-current 2>/dev/null || echo "detached")
-jq -n \
-  --arg task_id "${TASK_ID}" --arg stage "<stage-name>" --arg status "<status>" \
-  --arg branch "${BRANCH_NAME}" --arg started "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  --arg updated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg phase "<current-phase>" \
-  --arg notes "<progress>" \
-  '{task_id: $task_id, stage: $stage, status: $status, branch: $branch,
-    started_at: $started, updated_at: $updated, phase: $phase, notes: $notes}' \
-  > ".optimus/sessions/session-${TASK_ID}.json"
-```
-
-**On stage completion:** Delete the session file:
-```bash
-rm -f ".optimus/sessions/session-${TASK_ID}.json"
-```
-
-Skills reference this as: "Execute session state protocol from AGENTS.md using stage=`<name>`, status=`<status>`."
-
-
-### Protocol: State Management
-
-**Referenced by:** all stage agents (1-5), tasks, report, quick-report, import, batch
-
-All status and branch data is stored in `.optimus/state.json` (gitignored).
-
-**Prerequisites:**
-
-```bash
-if ! command -v jq >/dev/null 2>&1; then
-  echo "ERROR: jq is required for state management but not installed."
-  # STOP — do not proceed
-fi
-```
-
-**Reading state:**
-
-```bash
-STATE_FILE=".optimus/state.json"
-if [ -f "$STATE_FILE" ]; then
-  # Validate JSON integrity before reading
-  if ! jq empty "$STATE_FILE" 2>/dev/null; then
-    echo "WARNING: state.json is corrupted. Running reconciliation."
-    rm -f "$STATE_FILE"
-    # Fall through to missing-file handling below
-  fi
-fi
-if [ -f "$STATE_FILE" ]; then
-  TASK_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")
-  TASK_BRANCH=$(jq -r --arg id "$TASK_ID" '.[$id].branch // ""' "$STATE_FILE")
-else
-  TASK_STATUS="Pendente"
-  TASK_BRANCH=""
-fi
-```
-
-A task with no entry in state.json is implicitly `Pendente`.
-
-**Writing state:**
-
-```bash
-# Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
-STATE_FILE=".optimus/state.json"
-if [ ! -f "$STATE_FILE" ]; then
-  echo '{}' > "$STATE_FILE"
-fi
-if [ -z "$TASK_ID" ] || [ -z "$NEW_STATUS" ]; then
-  echo "ERROR: Cannot write state — TASK_ID or NEW_STATUS is empty."
-  # STOP — do not proceed
-fi
-UPDATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-if jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" --arg branch "$BRANCH_NAME" --arg ts "$UPDATED_AT" \
-  '.[$id] = {status: $status, branch: $branch, updated_at: $ts}' "$STATE_FILE" > "${STATE_FILE}.tmp"; then
-  mv "${STATE_FILE}.tmp" "$STATE_FILE"
-else
-  rm -f "${STATE_FILE}.tmp"
-  echo "ERROR: jq failed to update state.json"
-  # STOP — do not proceed
-fi
-```
-
-**Removing entry (for Pendente reset):**
-
-```bash
-STATE_FILE=".optimus/state.json"
-if [ ! -f "$STATE_FILE" ]; then
-  echo "state.json does not exist — task is already implicitly Pendente."
-else
-  if jq --arg id "$TASK_ID" 'del(.[$id])' "$STATE_FILE" > "${STATE_FILE}.tmp"; then
-    mv "${STATE_FILE}.tmp" "$STATE_FILE"
-  else
-    rm -f "${STATE_FILE}.tmp"
-    echo "ERROR: jq failed to update state.json"
-  fi
-fi
-```
-
-**Listing all tasks with status (for report/quick-report):**
-
-```bash
-STATE_FILE=".optimus/state.json"
-TASKS_FILE=".optimus/tasks.md"
-# Validate state.json if it exists
-if [ -f "$STATE_FILE" ] && ! jq empty "$STATE_FILE" 2>/dev/null; then
-  echo "WARNING: state.json is corrupted. Treating all tasks as Pendente."
-  rm -f "$STATE_FILE"
-fi
-# Get all task IDs from tasks.md
-TASK_IDS=$(grep -E '^\| T-[0-9]+ \|' "$TASKS_FILE" | awk -F'|' '{print $2}' | tr -d ' ')
-# For each task, read status from state.json (default: Pendente)
-for TASK_ID in $TASK_IDS; do
-  if [ -f "$STATE_FILE" ]; then
-    STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")
-  else
-    STATUS="Pendente"
-  fi
-  echo "$TASK_ID: $STATUS"
-done
-```
-
-**state.json is NEVER committed.** It is gitignored. No `git add` or `git commit`
-for state changes.
-
-**Reconciliation (if state.json is lost or empty):**
-1. List all worktrees: `git worktree list`
-2. For each worktree matching a task ID pattern (e.g., `t-003` in the path),
-   infer status as `Em Andamento` (most common in-progress status)
-3. Tasks without worktrees are `Pendente`
-4. Ask the user to confirm before proceeding
-
-**Automatic mismatch detection:** Stage agents SHOULD check for inconsistencies on startup:
-if state.json is missing or empty AND worktrees exist for known task IDs, warn the user
-and offer to run reconciliation before proceeding. This prevents tasks from silently
-appearing as `Pendente` when they actually have active worktrees.
-
-Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: State Management."
-
-
-### Protocol: Terminal Identification
-
-**Referenced by:** all stage agents (1-5), batch
-
-After the task ID is identified and confirmed, set the terminal title to show the
-current stage and task. This allows users running multiple agents in parallel terminals
-to identify each terminal at a glance.
-
-**Set title (after task ID is known):**
-
-```bash
-printf '\033]0;optimus: %s | %s — %s\007' "<stage-name>" "$TASK_ID" "$TASK_TITLE"
-```
-
-Example output in terminal tab: `optimus: check | T-003 — User Auth JWT`
-
-**Restore title (at stage completion or exit):**
-
-```bash
-printf '\033]0;\007'
-```
-
-**NOTE:** This uses the standard OSC (Operating System Command) escape sequence
-supported by iTerm2, Terminal.app, VS Code terminal, tmux, and most modern terminals.
-The sequence is silent — it produces no visible output.
-
-Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Terminal Identification."
-
-
-### Protocol: Workspace Auto-Navigation (HARD BLOCK)
-
-**Referenced by:** stages 2-5
-
-Execution stages (2-5) resolve the correct workspace automatically. The agent MUST
-be in the task's worktree before proceeding with any work.
-
-```bash
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-if [ -z "$DEFAULT_BRANCH" ]; then
-  DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
-fi
-if [ -z "$DEFAULT_BRANCH" ]; then
-  echo "ERROR: Cannot determine default branch. Set it with: git remote set-head origin <branch>"
-  # STOP — do not proceed
-fi
-CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
-if [ -z "$CURRENT_BRANCH" ]; then
-  echo "ERROR: Cannot determine current branch (detached HEAD state). Checkout a branch first."
-  # STOP — do not proceed
-fi
-```
-
-**Resolution order:**
-
-1. **Already on a feature branch?**
-   - Derive the expected branch name from the task's Tipo + ID + Title (see Protocol:
-     Branch Name Derivation). Also read the `branch` field from state.json if available.
-   - Cross-validate: check that `CURRENT_BRANCH` matches the expected/derived branch.
-   - If matches → proceed silently.
-   - If does not match → warn via `AskUser`: "Expected branch `<expected>` for T-XXX,
-     but you are on `<current>`. Continue on current branch, or switch?"
-
-2. **On the default branch (auto-navigate)?**
-   - Read state.json and list tasks with status compatible with the current stage
-     (use the Transition Table to determine which statuses are valid).
-     Tasks with no entry in state.json are `Pendente`.
-   - **If 0 eligible tasks** → **STOP**: "No tasks in `<expected-status>` found."
-   - **If 1 eligible task** → suggest via `AskUser`: "Found task T-XXX — [title] in
-     worktree `<path>`. Continue with this task?"
-   - **If N eligible tasks** → list all with worktree paths via `AskUser`:
-     ```
-     Multiple tasks available:
-       T-001 — User auth (Em Andamento) → /projeto-t-001-.../
-       T-002 — Login page (Em Andamento) → /projeto-t-002-.../
-     Which task should I continue?
-     ```
-   - After task is identified, locate the worktree by task ID:
-     ```bash
-     git worktree list | grep -iF "<task-id>"
-     ```
-   - **If worktree found** → change working directory to the worktree path.
-   - **If worktree NOT found** → derive the branch name (Protocol: Branch Name Derivation)
-     and verify it exists:
-     ```bash
-     if ! git rev-parse --verify "<branch-name>" >/dev/null 2>&1; then
-       # Branch doesn't exist — ask user for recovery
-       # AskUser: "No worktree or branch found for T-XXX.
-       #   This may indicate stage-1 crashed before creating it.
-       #   Options: Create branch from HEAD / Re-run /optimus-plan"
-     fi
-     ```
-     If the branch exists, create the worktree automatically:
-     ```bash
-     REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
-     WORKTREE_DIR="../${REPO_NAME}-$(echo <task-id> | tr '[:upper:]' '[:lower:]')-<keywords>"
-     git worktree add "$WORKTREE_DIR" "<branch-name>"
-     ```
-     Then change working directory to the new worktree.
-
-Skills reference this as: "Resolve workspace (HARD BLOCK) — see AGENTS.md Protocol: Workspace Auto-Navigation."
-
-
-### Protocol: tasks.md Validation (HARD BLOCK)
-
-**Referenced by:** all stage agents (1-5), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
-
-Every stage agent MUST validate tasks.md before operating. The full validation rules are
-defined in the "Format Validation" section above (items 1-15). This protocol is the
-executable version:
-
-1. **Resolve paths:**
-   - `TASKS_FILE` is always `.optimus/tasks.md` (fixed path).
-   - Read `.optimus/config.json`. If `tasksDir` key exists, use that path. Otherwise, use `docs/pre-dev` (default).
-   - Store as `TASKS_FILE` and `TASKS_DIR`.
-2. **Find tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus-import`.
-3. **Validate format:** Execute all 15 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-import`.
-
-**All subsequent references to `tasks.md` in the skill use the resolved `TASKS_FILE` path.
-All references to Ring pre-dev artifacts use `TASKS_DIR` as the root** — never hardcoded paths.
-
-Skills reference this as: "Find and validate tasks.md (HARD BLOCK) — see AGENTS.md Protocol: tasks.md Validation."
 
 
 <!-- INLINE-PROTOCOLS:END -->

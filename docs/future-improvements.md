@@ -109,7 +109,7 @@ If revisited in the future, consider:
 
 ### Problem
 
-Status values (Pendente, Validando Spec, Em Andamento, Validando Impl, Revisando PR,
+Status values (Pendente, Validando Spec, Em Andamento, Validando Impl,
 Cancelado, Concluída), version statuses (Ativa, Próxima, Planejada, Backlog), priority
 values (Alta, Media, Baixa), column headers (Tipo, Depends), and various labels are in
 Portuguese. This creates a barrier for non-Portuguese-speaking users and contributors.
@@ -129,5 +129,27 @@ Portuguese. This creates a barrier for non-Portuguese-speaking users and contrib
 - tasks.md format marker may need versioning (v1 → v2)
 - All protocol references to status names must be updated atomically
 - Consider keeping Portuguese as an alias during transition period
+
+---
+
+## I5: Remove Revisando PR Migration Code
+
+**Status:** Open (waiting for all projects to migrate)
+**Affects:** AGENTS.md Protocol: State Management
+**Priority:** Low
+
+### Context
+
+The `Revisando PR` status was removed from the pipeline. A one-time migration in
+Protocol: State Management rewrites `Revisando PR` → `Validando Impl` on first read.
+
+### When to Remove
+
+Safe to remove when all projects using Optimus have run at least one stage agent
+with this version (migration runs automatically on first state.json read).
+
+### Action
+
+Remove the "One-time migration" block from Protocol: State Management in AGENTS.md.
 
 

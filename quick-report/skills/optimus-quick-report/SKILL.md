@@ -114,7 +114,7 @@ For each task **in the filtered set**:
 
 - **Done:** Status is `DONE`
 - **Cancelled:** Status is `Cancelado`
-- **Active:** Status is `Validando Spec`, `Em Andamento`, `Validando Impl`, or `Revisando PR`
+- **Active:** Status is `Validando Spec`, `Em Andamento`, or `Validando Impl`
 - **Ready:** Status is `Pendente` AND all dependencies are `DONE` (or Depends is `-`)
 - **Blocked:** Status is `Pendente` AND at least one dependency is NOT `DONE`
 
@@ -159,17 +159,16 @@ Each section uses a distinct ASCII symbol for instant visual recognition:
 
 ### Stage Progress Mini-Bar
 
-For active tasks, render a mini progress bar (5 chars wide) showing how far the task
-has advanced through the 5-stage pipeline. The mapping is:
+For active tasks, render a mini progress bar showing how far the task
+has advanced through the pipeline. The mapping is:
 
 | Status | Stage | Filled chars |
 |--------|-------|-------------|
-| `Validando Spec` | 1/5 | 1 |
-| `Em Andamento` | 2/5 | 2 |
-| `Validando Impl` | 3/5 | 3 |
-| `Revisando PR` | 4/5 | 4 |
+| `Validando Spec` | 1/3 | 1 |
+| `Em Andamento` | 2/3 | 2 |
+| `Validando Impl` | 3/3 | 3 |
 
-Examples: `[█░░░░] 1/5`, `[██░░░] 2/5`, `[███░░] 3/5`, `[████░] 4/5`
+Examples: `[█░░] 1/3`, `[██░] 2/3`, `[███] 3/3`
 
 ### Section Format
 
@@ -179,8 +178,8 @@ Examples: `[█░░░░] 1/5`, `[██░░░] 2/5`, `[███░░] 3
     T-NNN <title>
 
   ⚙ ACTIVE (N)
-    T-NNN <status>       — <title>              [██░░░] 2/5
-    T-NNN <status>       — <title>              [███░░] 3/5
+    T-NNN <status>       — <title>              [██░] 2/3
+    T-NNN <status>       — <title>              [███] 3/3
 
   ◇ READY (N)
     T-NNN [<priority>]   <title>
@@ -202,7 +201,7 @@ Examples: `[█░░░░] 1/5`, `[██░░░] 2/5`, `[███░░] 3
 2. **All sections (DONE, ACTIVE, READY, BLOCKED)** show only tasks from the filtered
    version(s) selected in Step 2.2.
 
-3. **Active tasks** are sorted by status advancement (Revisando PR first, then Validando Impl,
+3. **Active tasks** are sorted by status advancement (Validando Impl first, then
    Em Andamento, Validando Spec). Show stage progress mini-bar next to each task.
 
 4. **Ready tasks** are sorted by Priority (`Alta` > `Media` > `Baixa`), then by ID.
@@ -323,7 +322,6 @@ state.json is implicitly `Pendente`.
 | `Validando Spec` | plan | Spec being validated |
 | `Em Andamento` | build | Implementation in progress |
 | `Validando Impl` | check | Implementation being reviewed |
-| `Revisando PR` | pr-check | PR being reviewed (optional stage) |
 | `DONE` | done | Completed |
 | `Cancelado` | tasks, done | Task abandoned, will not be implemented |
 
@@ -338,7 +336,7 @@ These operations require explicit user confirmation.
 
 ### Protocol: State Management
 
-**Referenced by:** all stage agents (1-5), tasks, report, quick-report, import, batch
+**Referenced by:** all stage agents (1-4), tasks, report, quick-report, import, batch
 
 All status and branch data is stored in `.optimus/state.json` (gitignored).
 
@@ -362,6 +360,12 @@ if [ -f "$STATE_FILE" ]; then
     rm -f "$STATE_FILE"
     # Fall through to missing-file handling below
   fi
+fi
+# One-time migration: Revisando PR → Validando Impl (status removed)
+if [ -f "$STATE_FILE" ] && jq -e 'to_entries[] | select(.value.status == "Revisando PR")' "$STATE_FILE" >/dev/null 2>&1; then
+  jq 'with_entries(if .value.status == "Revisando PR" then .value.status = "Validando Impl" else . end)' "$STATE_FILE" > "${STATE_FILE}.tmp" \
+    && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  echo "NOTE: Migrated tasks from 'Revisando PR' to 'Validando Impl' (status removed in this version)."
 fi
 if [ -f "$STATE_FILE" ]; then
   TASK_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")

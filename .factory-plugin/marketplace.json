@@ -37,17 +37,17 @@
     },
     {
       "name": "pr-check",
-      "description": "Stage 4 (optional): Unified PR review orchestrator. Collects PR metadata and existing comments (Codacy, DeepSource, CodeRabbit, human), dispatches agents, applies fixes, resolves threads.",
+      "description": "Standalone PR review orchestrator. Collects PR metadata and existing comments (Codacy, DeepSource, CodeRabbit, human), dispatches agents, applies fixes, resolves threads. Does not change task status.",
       "source": "./pr-check"
     },
     {
       "name": "done",
-      "description": "Stage 5: Requires PR in final state (merged or closed) before marking task done. Cleans up worktree and branch interactively.",
+      "description": "Stage 4: Requires PR in final state (merged or closed) before marking task done. Cleans up worktree and branch interactively.",
       "source": "./done"
     },
     {
       "name": "batch",
-      "description": "Pipeline orchestrator: chains stages 1-5 for one or more tasks with user checkpoints between stages.",
+      "description": "Pipeline orchestrator: chains stages 1-4 for one or more tasks with user checkpoints between stages.",
       "source": "./batch"
     },
     {

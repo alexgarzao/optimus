@@ -15,19 +15,19 @@ Skills are classified as **Administrative** (run anywhere) or **Execution** (req
 | `import` | Import Ring pre-dev artifacts into optimus format. Creates tasks.md with TaskSpec column. Re-runnable — only imports what's new | `/optimus-import` |
 | `report` | Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only | `/optimus-report` |
 | `tasks` | Administrative: Create, edit, remove, reorder, cancel, and reopen tasks. Manage versions and move tasks between versions. Runs on any branch | `/optimus-tasks` |
-| `batch` | Pipeline orchestrator: chains stages 1-5 for one or more tasks with user checkpoints between stages | `/optimus-batch` |
+| `batch` | Pipeline orchestrator: chains stages 1-4 for one or more tasks with user checkpoints between stages | `/optimus-batch` |
 | `resolve` | Resolves merge conflicts in tasks.md caused by parallel task execution across feature branches | `/optimus-resolve` |
 | `quick-report` | Compact daily status dashboard. Shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Read-only | `/optimus-quick-report` |
 | `help` | Lists all available Optimus skills with descriptions, usage commands, and when to use each one | `/optimus-help` |
 | `sync` | Sync all Optimus plugins — install new, update existing, remove orphaned. Recommended after new releases | `/optimus-sync` |
 
-### Execution Skills (stages 1-5)
+### Execution Skills (stages 1-4)
 
-Stage-1 creates the workspace (worktree). Stages 2-5 auto-navigate to the task's worktree.
+Stage-1 creates the workspace (worktree). Stages 2-4 auto-navigate to the task's worktree.
 
 ```
-Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando PR] → DONE
-           (plan)            (build)         (check)          (pr-check)      (done)
+Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
+           (plan)            (build)        (check)          (done)
 ```
 
 | Skill | Stage | Description | Command |
@@ -35,13 +35,13 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 | `plan` | 1 | Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes | `/optimus-plan` |
 | `build` | 2 | End-to-end task implementation with verification gates, code review, and commit approval | `/optimus-build` |
 | `check` | 3 | Validates completed task implementation against spec, coding standards, and best practices using parallel specialist agents | `/optimus-check` |
-| `pr-check` | 4 | (Optional) Unified PR review orchestrator. Collects PR metadata and existing comments, dispatches agents, applies fixes, resolves threads | `/optimus-pr-check` |
-| `done` | 5 | Requires PR in final state (merged or closed), then marks task as DONE. Cleans up worktree and branch interactively | `/optimus-done` |
+| `done` | 4 | Requires PR in final state (merged or closed), then marks task as DONE. Cleans up worktree and branch interactively | `/optimus-done` |
 
 ## Review & Verification Skills
 
 | Skill | Description | Command |
 |-------|-------------|---------|
+| `pr-check` | Standalone PR review orchestrator. Collects PR metadata and existing comments, dispatches agents, applies fixes, resolves threads. Does not change task status | `/optimus-pr-check` |
 | `deep-doc-review` | Deep review of project documentation. Finds errors, inconsistencies, gaps, and improvements with interactive one-by-one resolution | `/optimus-deep-doc-review` |
 | `deep-review` | Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Supports initial (8 agents) and final (10 agents) review modes | `/optimus-deep-review` |
 | `coderabbit-review` | CodeRabbit-driven code review with TDD fix cycle, secondary validation via review agents, and interactive finding resolution | `/optimus-coderabbit-review` |

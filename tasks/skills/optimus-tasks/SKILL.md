@@ -429,7 +429,7 @@ Show the new table order.
 
 1. **If status is `DONE`** → **STOP**: "Task T-XXX is already done. Cannot cancel a completed task."
 2. **If status is `Cancelado`** → **STOP**: "Task T-XXX is already cancelled."
-2.1. **Mid-pipeline warning:** If status is `Validando Spec`, `Em Andamento`, `Validando Impl`, or `Revisando PR`, warn via `AskUser`:
+2.1. **Mid-pipeline warning:** If status is `Validando Spec`, `Em Andamento`, or `Validando Impl`, warn via `AskUser`:
    ```
    Task T-XXX is currently in stage '<status>'. Cancelling mid-pipeline may leave
    uncommitted work in the worktree. Check for local changes before proceeding.
@@ -639,8 +639,7 @@ code manually without using stage-2).
    | `Pendente` | `Validando Spec` |
    | `Validando Spec` | `Em Andamento` |
    | `Em Andamento` | `Validando Impl` |
-   | `Validando Impl` | `Revisando PR` |
-   | `Revisando PR` | (use done to mark DONE) |
+   | `Validando Impl` | (use done to mark DONE) |
    | `DONE` | (use Reopen instead) |
    | `Cancelado` | (use Reopen or create new task) |
 
@@ -651,7 +650,6 @@ code manually without using stage-2).
    - If target status is `Cancelado` → **STOP**: "Cannot advance to Cancelado. Use the cancel operation (`cancel T-XXX`) which handles cleanup."
 2. **Current status validation:**
    - If status is `DONE` or `Cancelado` → **STOP**: "Task T-XXX is in terminal status '<status>'. Use 'reopen' for DONE tasks."
-   - If current status is `Revisando PR` and no target was specified → **STOP**: "Task T-XXX is in 'Revisando PR'. The next step is `/optimus-done`, not manual advance."
 2. **Check dependencies (HARD BLOCK):** same rules as stage agents — all dependencies must be `DONE`.
 3. **Workspace check (warning):** If the target status is `Validando Spec` or later, verify
    that a workspace exists for this task (stage-1 normally creates the workspace when
@@ -713,7 +711,6 @@ that significant rework is needed and the task should go back to implementation)
    | `Validando Spec` | `Pendente` |
    | `Em Andamento` | `Validando Spec` |
    | `Validando Impl` | `Em Andamento` |
-   | `Revisando PR` | `Validando Impl` |
    | `Pendente` | (already at start) |
    | `DONE` | (use Reopen instead) |
    | `Cancelado` | (terminal, cannot demote) |
@@ -998,7 +995,6 @@ state.json is implicitly `Pendente`.
 | `Validando Spec` | plan | Spec being validated |
 | `Em Andamento` | build | Implementation in progress |
 | `Validando Impl` | check | Implementation being reviewed |
-| `Revisando PR` | pr-check | PR being reviewed (optional stage) |
 | `DONE` | done | Completed |
 | `Cancelado` | tasks, done | Task abandoned, will not be implemented |
 
@@ -1045,7 +1041,7 @@ in the cycle so the user can fix it with `/optimus-tasks`.
 
 ### Protocol: Initialize .optimus Directory
 
-**Referenced by:** import, tasks, report (export), quick-report, batch, all stage agents (1-5) for session files
+**Referenced by:** import, tasks, report (export), quick-report, batch, all stage agents (1-4) for session files
 
 Before creating ANY file inside `.optimus/`, ensure the directory structure exists
 and operational/temporary files are gitignored:
@@ -1066,7 +1062,7 @@ Skills reference this as: "Initialize .optimus directory — see AGENTS.md Proto
 
 ### Protocol: State Management
 
-**Referenced by:** all stage agents (1-5), tasks, report, quick-report, import, batch
+**Referenced by:** all stage agents (1-4), tasks, report, quick-report, import, batch
 
 All status and branch data is stored in `.optimus/state.json` (gitignored).
 
@@ -1090,6 +1086,12 @@ if [ -f "$STATE_FILE" ]; then
     rm -f "$STATE_FILE"
     # Fall through to missing-file handling below
   fi
+fi
+# One-time migration: Revisando PR → Validando Impl (status removed)
+if [ -f "$STATE_FILE" ] && jq -e 'to_entries[] | select(.value.status == "Revisando PR")' "$STATE_FILE" >/dev/null 2>&1; then
+  jq 'with_entries(if .value.status == "Revisando PR" then .value.status = "Validando Impl" else . end)' "$STATE_FILE" > "${STATE_FILE}.tmp" \
+    && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  echo "NOTE: Migrated tasks from 'Revisando PR' to 'Validando Impl' (status removed in this version)."
 fi
 if [ -f "$STATE_FILE" ]; then
   TASK_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")
@@ -1184,7 +1186,7 @@ Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: Sta
 
 ### Protocol: tasks.md Validation (HARD BLOCK)
 
-**Referenced by:** all stage agents (1-5), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
+**Referenced by:** all stage agents (1-4), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
 
 Every stage agent MUST validate tasks.md before operating. The full validation rules are
 defined in the "Format Validation" section above (items 1-15). This protocol is the

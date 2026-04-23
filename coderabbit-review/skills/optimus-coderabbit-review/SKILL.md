@@ -233,7 +233,10 @@ For each option:
 Example: `[topic] F8-DeadCode`.
 
 Use `AskUser` tool. **BLOCKING**: Do NOT proceed to the next finding until the user decides.
-**Every AskUser MUST include a "Tell me more" option** alongside the fix/skip options.
+**Every AskUser MUST include these options:**
+- Option A / Option B (the proposed solutions)
+- Skip — no action
+- Tell me more
 
 **IMMEDIATE RESPONSE RULE:** If the user selects "Tell me more" or responds with free text
 (a question, disagreement, or request for clarification) instead of a decision:
@@ -600,9 +603,10 @@ All cycle review skills follow this pattern:
    fix or skip is ALWAYS the user's. For grouped entries, list all affected files/locations
    within the single presentation.
 8. For each finding: present research-backed analysis + options, collect decision via AskUser.
-   **Every AskUser for a finding decision MUST include a "Tell me more" option.** This option
-   is always the **second-to-last** option (right before the free-text input that AskUser
-   provides automatically). This lets the user request deeper analysis with one click.
+   **Every AskUser for a finding decision MUST include these options:**
+   - Option A / Option B (the proposed solutions)
+   - Skip — no action
+   - Tell me more
    **AskUser `[topic]` format:** Format: `F#-Category`.
    Example: `[topic] F8-DeadCode`.
 9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text

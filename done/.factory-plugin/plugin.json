@@ -1,6 +1,6 @@
 {
   "name": "done",
-  "description": "Stage 5: Requires PR in final state (merged or closed) before marking task done. Cleans up worktree and branch interactively.",
+  "description": "Stage 4: Requires PR in final state (merged or closed) before marking task done. Cleans up worktree and branch interactively.",
   "version": "1.0.0",
   "author": {
     "name": "Alex Garzao"

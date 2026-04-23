@@ -1,6 +1,6 @@
 ---
 name: optimus-done
-description: "Stage 5 of the task lifecycle. Requires PR in final state (merged or closed) before marking task as done. Cleans up worktree and branch interactively."
+description: "Stage 4 of the task lifecycle. Requires PR in final state (merged or closed) before marking task as done. Cleans up worktree and branch interactively."
 trigger: >
   - After the PR has been merged or closed
   - When user requests closing a task (e.g., "close T-012", "mark T-012 as done")
@@ -9,8 +9,8 @@ skip_when: >
   - Task is already done
   - PR is still open (hard block — merge or close the PR first)
 prerequisite: >
-  - Task exists in tasks.md with status "Validando Impl" or "Revisando PR" in state.json
-  - At least check has completed (pr-check is optional)
+  - Task exists in tasks.md with status "Validando Impl" in state.json
+  - check has completed
   - PR must be in final state (MERGED or CLOSED) or not exist
 NOT_skip_when: >
   - "The PR was already merged" -- Still need to mark DONE and clean up worktree/branch.
@@ -46,7 +46,7 @@ verification:
 
 # Task Closer
 
-Stage 5 of the task lifecycle. Verifies all prerequisites before marking a task as done.
+Stage 4 of the task lifecycle. Verifies all prerequisites before marking a task as done.
 
 ---
 
@@ -70,7 +70,7 @@ Resolve workspace — see AGENTS.md Protocol: Workspace Auto-Navigation. Branch-
 - Confirm with the user using `AskUser`: "I'll close task T-012: [task title]. Correct?"
 
 **If the user did NOT specify a task ID:**
-1. Look for tasks with status `Validando Impl` or `Revisando PR`
+1. Look for tasks with status `Validando Impl`
 2. If exactly one found, suggest it
 3. If multiple found, ask the user which one to close
 4. If none found, inform the user there are no tasks ready to close
@@ -91,8 +91,7 @@ Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stag
 
 1. Read `tasks.md` and find the row for the confirmed task ID
 2. Read the task's status from state.json — see AGENTS.md Protocol: State Management.
-   - If status is `Validando Impl` → proceed (check has completed, pr-check was skipped)
-   - If status is `Revisando PR` → proceed (pr-check has completed)
+   - If status is `Validando Impl` → proceed (check has completed)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. It must go through plan, build, and check first."
    - If status is `Validando Spec` → **STOP**: "Task T-XXX is in 'Validando Spec'. Run build and check first."
    - If status is `Em Andamento` → **STOP**: "Task T-XXX is in 'Em Andamento'. Run check first."
@@ -393,7 +392,6 @@ state.json is implicitly `Pendente`.
 | `Validando Spec` | plan | Spec being validated |
 | `Em Andamento` | build | Implementation in progress |
 | `Validando Impl` | check | Implementation being reviewed |
-| `Revisando PR` | pr-check | PR being reviewed (optional stage) |
 | `DONE` | done | Completed |
 | `Cancelado` | tasks, done | Task abandoned, will not be implemented |
 
@@ -440,7 +438,7 @@ in the cycle so the user can fix it with `/optimus-tasks`.
 
 ### Protocol: Active Version Guard
 
-**Referenced by:** all stage agents (1-5)
+**Referenced by:** all stage agents (1-4)
 
 After the task ID is confirmed and dependencies are validated, check if the task belongs
 to the `Ativa` version. If not, present options before proceeding.
@@ -478,7 +476,7 @@ Skills reference this as: "Check active version guard — see AGENTS.md Protocol
 
 ### Protocol: Divergence Warning
 
-**Referenced by:** all stage agents (1-5)
+**Referenced by:** all stage agents (1-4)
 
 Since status and branch data live in state.json (gitignored), tasks.md rarely changes
 on feature branches. This protocol detects the uncommon case where tasks.md WAS modified
@@ -515,7 +513,7 @@ Skills reference this as: "Check tasks.md divergence — see AGENTS.md Protocol:
 
 ### Protocol: GitHub CLI Check (HARD BLOCK)
 
-**Referenced by:** all stage agents (1-5), tasks, batch
+**Referenced by:** all stage agents (1-4), tasks, batch
 
 ```bash
 gh auth status 2>/dev/null
@@ -529,7 +527,7 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 
 ### Protocol: Notification Hooks
 
-**Referenced by:** all stage agents (1-5), tasks
+**Referenced by:** all stage agents (1-4), tasks
 
 After writing a status change to state.json, invoke notification hooks if present.
 
@@ -575,7 +573,7 @@ Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol:
 
 ### Protocol: Session State
 
-**Referenced by:** all stage agents (1-5)
+**Referenced by:** all stage agents (1-4)
 
 Stage agents write a session state file to track progress. This enables resumption
 when a session is interrupted (agent crash, user closes terminal, context window limit).
@@ -676,7 +674,7 @@ Skills reference this as: "Execute session state protocol from AGENTS.md using s
 
 ### Protocol: State Management
 
-**Referenced by:** all stage agents (1-5), tasks, report, quick-report, import, batch
+**Referenced by:** all stage agents (1-4), tasks, report, quick-report, import, batch
 
 All status and branch data is stored in `.optimus/state.json` (gitignored).
 
@@ -700,6 +698,12 @@ if [ -f "$STATE_FILE" ]; then
     rm -f "$STATE_FILE"
     # Fall through to missing-file handling below
   fi
+fi
+# One-time migration: Revisando PR → Validando Impl (status removed)
+if [ -f "$STATE_FILE" ] && jq -e 'to_entries[] | select(.value.status == "Revisando PR")' "$STATE_FILE" >/dev/null 2>&1; then
+  jq 'with_entries(if .value.status == "Revisando PR" then .value.status = "Validando Impl" else . end)' "$STATE_FILE" > "${STATE_FILE}.tmp" \
+    && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  echo "NOTE: Migrated tasks from 'Revisando PR' to 'Validando Impl' (status removed in this version)."
 fi
 if [ -f "$STATE_FILE" ]; then
   TASK_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")
@@ -794,7 +798,7 @@ Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: Sta
 
 ### Protocol: Terminal Identification
 
-**Referenced by:** all stage agents (1-5), batch
+**Referenced by:** all stage agents (1-4), batch
 
 After the task ID is identified and confirmed, set the terminal title to show the
 current stage and task. This allows users running multiple agents in parallel terminals
@@ -823,7 +827,7 @@ Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Termin
 
 ### Protocol: Workspace Auto-Navigation (HARD BLOCK)
 
-**Referenced by:** stages 2-5
+**Referenced by:** stages 2-4
 
 Execution stages (2-5) resolve the correct workspace automatically. The agent MUST
 be in the task's worktree before proceeding with any work.
@@ -896,7 +900,7 @@ Skills reference this as: "Resolve workspace (HARD BLOCK) — see AGENTS.md Prot
 
 ### Protocol: tasks.md Validation (HARD BLOCK)
 
-**Referenced by:** all stage agents (1-5), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
+**Referenced by:** all stage agents (1-4), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
 
 Every stage agent MUST validate tasks.md before operating. The full validation rules are
 defined in the "Format Validation" section above (items 1-15). This protocol is the

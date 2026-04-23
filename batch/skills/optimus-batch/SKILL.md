@@ -1,6 +1,6 @@
 ---
 name: optimus-batch
-description: "Chains stages 1-5 for one or more tasks sequentially. Instead of invoking each stage manually, the user specifies which tasks and stages to run, and this skill orchestrates the pipeline with user checkpoints between stages."
+description: "Chains stages 1-4 for one or more tasks sequentially. Instead of invoking each stage manually, the user specifies which tasks and stages to run, and this skill orchestrates the pipeline with user checkpoints between stages."
 trigger: >
   - When user says "run all stages for T-003"
   - When user says "process T-003 through T-006"
@@ -24,8 +24,8 @@ examples:
       4. Run stage-2 (implementation)
       5. Checkpoint -- user approves continuing
       6. Run stage-3 (impl review)
-      7. Checkpoint -- user chooses stage-4 or skip to stage-5
-      8. Run stage-5 (close)
+      7. Checkpoint -- user approves continuing
+      8. Run stage-4 (close)
   - name: Multiple tasks sequentially
     invocation: "Process T-003, T-004, T-005"
     expected_flow: >
@@ -48,7 +48,7 @@ verification:
 
 # Batch Pipeline Executor
 
-Chains stages 1-5 for one or more tasks with user checkpoints between stages.
+Chains stages 1-4 for one or more tasks with user checkpoints between stages.
 
 **Classification:** Administrative skill — orchestrates execution stages, delegates workspace creation and code modification to stage skills.
 
@@ -72,7 +72,7 @@ If validation fails, **STOP** and suggest `/optimus-import`.
 Parse the user's request to determine:
 
 1. **Which tasks:** specific IDs (T-003, T-004) or "next N tasks" or "all ready tasks"
-2. **Which stages:** "all" (1-5), specific range ("stages 1-3"), or "from current" (resume from task's current status)
+2. **Which stages:** "all" (1-4), specific range ("stages 1-3"), or "from current" (resume from task's current status)
 
 If the user said "all ready tasks", scan for tasks with status `Pendente` and all
 dependencies `DONE`. Prioritize by version (`Ativa` first), then priority, then ID.
@@ -101,9 +101,9 @@ If multiple tasks are specified:
 
 | # | Task | Title | Current Status | Start Stage | End Stage |
 |---|------|-------|---------------|-------------|-----------|
-| 1 | T-003 | User auth | Pendente | Stage 1 | Stage 5 |
-| 2 | T-004 | Login page | Pendente | Stage 1 | Stage 5 |
-| 3 | T-005 | E2E tests | Pendente | Stage 1 | Stage 5 |
+| 1 | T-003 | User auth | Pendente | Stage 1 | Stage 4 |
+| 2 | T-004 | Login page | Pendente | Stage 1 | Stage 4 |
+| 3 | T-005 | E2E tests | Pendente | Stage 1 | Stage 4 |
 
 Execution order respects dependencies: T-003 first (T-004, T-005 depend on it).
 ```
@@ -128,7 +128,7 @@ tracks the working directory for each task and switches context between tasks.
 }
 ```
 
-**Before invoking stages 2-5 for a task**, the orchestrator MUST:
+**Before invoking stages 2-4 for a task**, the orchestrator MUST:
 1. Check if the task has a worktree (from stage-1 output or `branch` field in state.json)
 2. If worktree exists, switch to it: `cd <worktree-path>`
 3. Verify the correct branch is checked out: `git branch --show-current`
@@ -159,10 +159,9 @@ stage to prevent auto-detect from picking the wrong task.
 | 1 | `optimus-plan` | "spec T-XXX" (via Skill tool) | Validando Spec |
 | 2 | `optimus-build` | "execute T-XXX" (via Skill tool) | Em Andamento |
 | 3 | `optimus-check` | "validate T-XXX" (via Skill tool) | Validando Impl |
-| 4 (optional) | `optimus-pr-check` | "review PR for T-XXX" (via Skill tool) | Revisando PR |
-| 5 | `optimus-done` | "close T-XXX" (via Skill tool) | DONE |
+| 4 | `optimus-done` | "close T-XXX" (via Skill tool) | DONE |
 
-**Worktree context switch:** Before invoking stages 2-5, switch to the task's worktree
+**Worktree context switch:** Before invoking stages 2-4, switch to the task's worktree
 directory (from Step 1.5 tracking). Stage-1 may create the worktree — capture its output
 path and record it in the tracking map.
 
@@ -188,19 +187,10 @@ What's next?
 
 Options:
 - **Continue to Stage X+1** — proceed with the next stage
-- **Skip to Stage 5 (close)** — skip remaining stages and close
+- **Skip to Stage 4 (close)** — skip remaining stages and close
 - **Stop here** — pause the batch, user will resume later
-- **Skip Stage 4 (PR review)** — go directly from Stage 3 to Stage 5
 
 **BLOCKING:** Do NOT advance to the next stage without user approval.
-
-**If stage-4 (PR review):** Always ask whether to include it:
-```
-Stage 3 (impl review) completed. Stage 4 (PR review) is optional.
-```
-Options:
-- **Run Stage 4** — review PR comments from Codacy/DeepSource/CodeRabbit/humans
-- **Skip to Stage 5** — go directly to close
 
 ### Step 2.3: Checkpoint Between Tasks
 
@@ -248,8 +238,8 @@ After all tasks are processed (or the user stops), restore terminal title (`prin
 ### Completed
 | # | Task | Title | Final Status | Stages Run |
 |---|------|-------|-------------|------------|
-| 1 | T-003 | User auth | DONE | 1-5 |
-| 2 | T-004 | Login page | DONE | 1-3, 5 |
+| 1 | T-003 | User auth | DONE | 1-4 |
+| 2 | T-004 | Login page | DONE | 1-3, 4 |
 
 ### Stopped / Remaining
 | # | Task | Title | Current Status | Stopped At |
@@ -290,7 +280,6 @@ After all tasks are processed (or the user stops), restore terminal title (`prin
   1. **Check staleness:** If `updated_at` (or file modification time) is older than 24h, delete the file and proceed fresh — project state may have changed significantly.
   2. **Verify task statuses:** Cross-reference remaining tasks' statuses in state.json against the session's `current_stage`. If statuses have changed (tasks progressed through other means), warn the user and suggest starting fresh.
   3. **If not stale and statuses match:** offer to resume from where it stopped.
-- Stage 4 (PR review) is always offered as optional, never forced
 - Respect dependency order — never process a task before its dependencies are DONE
 - Each stage creates its own commits — the batch orchestrator does NOT commit anything
 
@@ -381,7 +370,6 @@ state.json is implicitly `Pendente`.
 | `Validando Spec` | plan | Spec being validated |
 | `Em Andamento` | build | Implementation in progress |
 | `Validando Impl` | check | Implementation being reviewed |
-| `Revisando PR` | pr-check | PR being reviewed (optional stage) |
 | `DONE` | done | Completed |
 | `Cancelado` | tasks, done | Task abandoned, will not be implemented |
 
@@ -428,7 +416,7 @@ in the cycle so the user can fix it with `/optimus-tasks`.
 
 ### Protocol: GitHub CLI Check (HARD BLOCK)
 
-**Referenced by:** all stage agents (1-5), tasks, batch
+**Referenced by:** all stage agents (1-4), tasks, batch
 
 ```bash
 gh auth status 2>/dev/null
@@ -485,7 +473,7 @@ Skills reference this as: "Follow shell safety guidelines — see AGENTS.md Prot
 
 ### Protocol: State Management
 
-**Referenced by:** all stage agents (1-5), tasks, report, quick-report, import, batch
+**Referenced by:** all stage agents (1-4), tasks, report, quick-report, import, batch
 
 All status and branch data is stored in `.optimus/state.json` (gitignored).
 
@@ -509,6 +497,12 @@ if [ -f "$STATE_FILE" ]; then
     rm -f "$STATE_FILE"
     # Fall through to missing-file handling below
   fi
+fi
+# One-time migration: Revisando PR → Validando Impl (status removed)
+if [ -f "$STATE_FILE" ] && jq -e 'to_entries[] | select(.value.status == "Revisando PR")' "$STATE_FILE" >/dev/null 2>&1; then
+  jq 'with_entries(if .value.status == "Revisando PR" then .value.status = "Validando Impl" else . end)' "$STATE_FILE" > "${STATE_FILE}.tmp" \
+    && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  echo "NOTE: Migrated tasks from 'Revisando PR' to 'Validando Impl' (status removed in this version)."
 fi
 if [ -f "$STATE_FILE" ]; then
   TASK_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")
@@ -603,7 +597,7 @@ Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: Sta
 
 ### Protocol: Terminal Identification
 
-**Referenced by:** all stage agents (1-5), batch
+**Referenced by:** all stage agents (1-4), batch
 
 After the task ID is identified and confirmed, set the terminal title to show the
 current stage and task. This allows users running multiple agents in parallel terminals
@@ -632,7 +626,7 @@ Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Termin
 
 ### Protocol: tasks.md Validation (HARD BLOCK)
 
-**Referenced by:** all stage agents (1-5), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
+**Referenced by:** all stage agents (1-4), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
 
 Every stage agent MUST validate tasks.md before operating. The full validation rules are
 defined in the "Format Validation" section above (items 1-15). This protocol is the

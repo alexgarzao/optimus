@@ -33,7 +33,7 @@ Lists all available Optimus skills organized by category.
 ## Phase 1: Present Skill Catalog
 
 **Prerequisites:** Optimus requires the Ring ecosystem (droids + pre-dev workflow).
-Execution skills (plan, build, check, pr-check, done) and review skills (deep-review,
+Execution skills (plan, build, check, done) and review skills (pr-check, deep-review,
 coderabbit-review) require Ring droids to be installed. Administrative skills (import,
 report, tasks, resolve, quick-report, help) work without Ring droids.
 
@@ -49,17 +49,17 @@ terminal display when available, otherwise use markdown tables.
 | **tasks** | `/optimus-tasks` | Creating, editing, removing, reordering, cancelling, or reopening tasks. Managing versions. Any administrative task management. |
 | **resolve** | `/optimus-resolve` | Resolving merge conflicts in `tasks.md` caused by parallel task execution across feature branches. |
 | **quick-report** | `/optimus-quick-report` | Compact daily status — active tasks with current status, ready-to-start, blocked. No git ops. Read-only. |
-| **batch** | `/optimus-batch` | Pipeline orchestrator — chains stages 1-5 for one or more tasks with user checkpoints between stages. Handles dependency ordering. |
+| **batch** | `/optimus-batch` | Pipeline orchestrator — chains stages 1-4 for one or more tasks with user checkpoints between stages. Handles dependency ordering. |
 | **help** | `/optimus-help` | This skill — discovering what's available. |
 | **sync** | `/optimus-sync` | Sync all Optimus plugins — install new, update existing, remove orphaned. Recommended after new releases. *(command, not a standalone plugin)* |
 
-### Execution Skills (task lifecycle, stages 1-5)
+### Execution Skills (task lifecycle, stages 1-4)
 
 These skills form the task execution pipeline. Run them in order for each task:
 
 ```
-Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando PR] → DONE
-           (stage-1)          (stage-2)       (stage-3)        (stage-4)       (stage-5)
+Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
+           (plan)            (build)        (check)          (done)
 ```
 
 | Skill | Command | When to Use |
@@ -67,13 +67,13 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 | **plan** | `/optimus-plan` | Before implementing a task — validates the spec against project docs, catches gaps and contradictions. Creates the workspace (branch/worktree). |
 | **build** | `/optimus-build` | After spec validation — implements the task end-to-end with TDD, verification gates, and code review. |
 | **check** | `/optimus-check` | After implementation — validates code quality, spec compliance, and test coverage using parallel specialist agents. |
-| **pr-check** | `/optimus-pr-check` | (Optional) After impl review — orchestrates PR review collecting findings from Codacy, DeepSource, CodeRabbit, and human reviewers. Also works standalone without a task. |
 | **done** | `/optimus-done` | Final step — requires PR in final state (merged or closed), then marks task as DONE. Cleans up worktree and branch interactively. |
 
 ### Review & Verification Skills (standalone, no task required)
 
 | Skill | Command | When to Use |
 |-------|---------|-------------|
+| **pr-check** | `/optimus-pr-check` | PR review — collects findings from Codacy, DeepSource, CodeRabbit, and human reviewers. Standalone tool, does not change task status. |
 | **deep-review** | `/optimus-deep-review` | Generic code review without task context — reviews entire project, git diff, or specific directory with parallel specialist agents. |
 | **deep-doc-review** | `/optimus-deep-doc-review` | Documentation review — finds errors, inconsistencies, and gaps across project docs with cross-referencing. |
 | **coderabbit-review** | `/optimus-coderabbit-review` | Code review using CodeRabbit CLI with TDD fix cycle and agent validation. Requires CodeRabbit CLI installed. |

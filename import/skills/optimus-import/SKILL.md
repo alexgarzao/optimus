@@ -471,7 +471,6 @@ state.json is implicitly `Pendente`.
 | `Validando Spec` | plan | Spec being validated |
 | `Em Andamento` | build | Implementation in progress |
 | `Validando Impl` | check | Implementation being reviewed |
-| `Revisando PR` | pr-check | PR being reviewed (optional stage) |
 | `DONE` | done | Completed |
 | `Cancelado` | tasks, done | Task abandoned, will not be implemented |
 
@@ -486,7 +485,7 @@ These operations require explicit user confirmation.
 
 ### Protocol: Initialize .optimus Directory
 
-**Referenced by:** import, tasks, report (export), quick-report, batch, all stage agents (1-5) for session files
+**Referenced by:** import, tasks, report (export), quick-report, batch, all stage agents (1-4) for session files
 
 Before creating ANY file inside `.optimus/`, ensure the directory structure exists
 and operational/temporary files are gitignored:
@@ -507,7 +506,7 @@ Skills reference this as: "Initialize .optimus directory — see AGENTS.md Proto
 
 ### Protocol: State Management
 
-**Referenced by:** all stage agents (1-5), tasks, report, quick-report, import, batch
+**Referenced by:** all stage agents (1-4), tasks, report, quick-report, import, batch
 
 All status and branch data is stored in `.optimus/state.json` (gitignored).
 
@@ -531,6 +530,12 @@ if [ -f "$STATE_FILE" ]; then
     rm -f "$STATE_FILE"
     # Fall through to missing-file handling below
   fi
+fi
+# One-time migration: Revisando PR → Validando Impl (status removed)
+if [ -f "$STATE_FILE" ] && jq -e 'to_entries[] | select(.value.status == "Revisando PR")' "$STATE_FILE" >/dev/null 2>&1; then
+  jq 'with_entries(if .value.status == "Revisando PR" then .value.status = "Validando Impl" else . end)' "$STATE_FILE" > "${STATE_FILE}.tmp" \
+    && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  echo "NOTE: Migrated tasks from 'Revisando PR' to 'Validando Impl' (status removed in this version)."
 fi
 if [ -f "$STATE_FILE" ]; then
   TASK_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")

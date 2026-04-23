@@ -14,13 +14,13 @@ optimus/
 ├── import/                    # Admin: Import external task artifacts (re-runnable)
 ├── report/                    # Admin: Task status dashboard (read-only)
 ├── tasks/                      # Admin: Create, edit, remove, reorder tasks
-├── batch/                     # Admin: Pipeline orchestrator (stages 1-5)
+├── batch/                     # Admin: Pipeline orchestrator (stages 1-4)
 ├── resolve/          # Admin: Resolve tasks.md merge conflicts
 ├── plan/              # Execution Stage 1: Spec validation + workspace creation
 ├── build/              # Execution Stage 2: Task implementation
 ├── check/       # Execution Stage 3: Implementation review
-├── pr-check/         # Execution Stage 4 (optional): PR review orchestrator
-├── done/             # Execution Stage 5: Close task (verify & mark done)
+├── pr-check/         # Standalone PR review tool (does not change task status)
+├── done/             # Execution Stage 4: Close task (verify & mark done)
 ├── deep-review/                       # Parallel code review (no PR context)
 ├── deep-doc-review/                   # Documentation review
 ├── coderabbit-review/                 # CodeRabbit CLI + TDD cycle
@@ -340,7 +340,6 @@ state.json is implicitly `Pendente`.
 | `Validando Spec` | plan | Spec being validated |
 | `Em Andamento` | build | Implementation in progress |
 | `Validando Impl` | check | Implementation being reviewed |
-| `Revisando PR` | pr-check | PR being reviewed (optional stage) |
 | `DONE` | done | Completed |
 | `Cancelado` | tasks, done | Task abandoned, will not be implemented |
 
@@ -462,17 +461,19 @@ The report agent computes and displays parallelization opportunities.
 
 ## Task Lifecycle
 
-Tasks flow through 5 stages (pr-check is optional). Status lives in `.optimus/state.json`
+Tasks flow through 4 stages. Status lives in `.optimus/state.json`
 (gitignored). Each stage is a separate skill. The tasks.md file contains only structural
 data — no stage agent commits to tasks.md for status changes.
 
 ```
-Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando PR] → DONE
-           (plan)   (build)  (check)  (pr-check)  (done)
-                                                               [optional]
+Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
+           (plan)            (build)        (check)          (done)
 
 Any status → Cancelado  (via tasks cancel operation)
 ```
+
+**NOTE:** pr-check exists as a standalone tool (like deep-review) for reviewing PRs.
+It does NOT change task status and is NOT part of the pipeline stages.
 
 ### Rules
 
@@ -486,7 +487,7 @@ Any status → Cancelado  (via tasks cancel operation)
 4. **Anti-pulo** — each agent validates that the task is in the expected predecessor
    status (read from state.json) before proceeding. If not, it refuses and tells
    the user which agent to run first.
-5. **Re-execution allowed** — every agent (stages 1-4) accepts being re-run when
+5. **Re-execution allowed** — every agent (stages 1-3) accepts being re-run when
    the task is already in its own output status. For example, build accepts
    `Em Andamento` (its own status) as well as `Validando Spec` (its predecessor).
    This allows the user to re-run a stage without resetting status.
@@ -514,7 +515,7 @@ Any status → Cancelado  (via tasks cancel operation)
    **Exception:** done always changes status (no re-execution), so the
    re-execution skip does not apply. It still skips when the user specified the task ID.
 
-8. **Branch protection** — execution skills (stages 1-5) require a feature branch.
+8. **Branch protection** — execution skills (stages 1-4) require a feature branch.
    Administrative skills can run on any branch. See the classification table below:
 
    **Skills are classified as Administrative or Execution:**
@@ -528,7 +529,7 @@ Any status → Cancelado  (via tasks cancel operation)
    | Execution | plan | Yes (creates worktree) | Writes state.json and creates worktree |
    | Execution | build | Yes (auto-navigates) | Finds task worktree and navigates to it |
    | Execution | check | Yes (auto-navigates) | Finds task worktree and navigates to it |
-   | Execution | pr-check | Yes (auto-navigates) | Finds task worktree and navigates to it |
+   | Admin | pr-check | Yes | Standalone PR review tool, does not change task status |
    | Execution | done | Yes (auto-navigates) | Finds task worktree and navigates to it |
    | Admin | batch | Yes | Orchestrates stages, delegates to stage skills |
    | Admin | resolve | Yes | Only resolves merge conflicts in tasks.md |
@@ -538,7 +539,7 @@ Any status → Cancelado  (via tasks cancel operation)
 
    **Execution skills** modify code or run verification. They require a feature branch
    (workspace). Stage-1 writes state.json (status + branch) and creates the worktree.
-   Stages 2-5 auto-navigate to the task's worktree when invoked on the default branch
+   Stages 2-4 auto-navigate to the task's worktree when invoked on the default branch
    (see Protocol: Workspace Auto-Navigation).
 
    To detect the default branch:
@@ -553,7 +554,7 @@ Any status → Cancelado  (via tasks cancel operation)
    fi
    ```
 
-9. **Branch-task cross-validation** — stages 2-5 derive the expected branch name from
+9. **Branch-task cross-validation** — stages 2-4 derive the expected branch name from
    the task's Tipo + ID + Title (see Protocol: Branch Name Derivation) and verify it
    matches the current branch. If the branch does not match, the agent warns the user
    and asks whether to continue or switch.
@@ -565,21 +566,10 @@ Any status → Cancelado  (via tasks cancel operation)
 | plan | `Pendente` or `Validando Spec` | `Validando Spec` | Yes (accepts own status) |
 | build | `Validando Spec` or `Em Andamento` | `Em Andamento` | Yes (accepts own status) |
 | check | `Em Andamento` or `Validando Impl` | `Validando Impl` | Yes (accepts own status) |
-| pr-check | `Validando Impl` or `Revisando PR` | `Revisando PR` | Yes (accepts own status) |
-| done | `Validando Impl` or `Revisando PR` | `DONE` | No (final stage) |
+| done | `Validando Impl` | `DONE` | No (final stage) |
 
 **NOTE:** `Cancelado` is a terminal status. No stage agent accepts it — all stages refuse
 tasks with status `Cancelado`. Cancellation is managed exclusively by `tasks`.
-
-**NOTE:** pr-check is optional. done accepts both `Validando Impl`
-(if pr-check was skipped) and `Revisando PR` (if pr-check ran).
-
-**NOTE:** pr-check also works in standalone mode (without a task). In standalone
-mode, it skips all task status logic. See its SKILL.md for detection rules.
-
-**NOTE:** O merge do PR pode ser feito pelo done durante a fase de cleanup
-(o agente pergunta ao usuário via AskUser com opções: merge commit, squash, rebase, keep open,
-close without merging), ou manualmente pelo usuário depois.
 
 ### done Gates
 
@@ -595,7 +585,7 @@ If any gate fails, done stops immediately and status in state.json stays unchang
 
 ## Dry-Run Mode (all stages)
 
-All stage agents (1-5) support **dry-run mode**. When the user includes "dry-run" or
+All stage agents (1-4) support **dry-run mode**. When the user includes "dry-run" or
 "preview" in their invocation (e.g., "dry-run spec T-003", "preview review T-012"):
 
 1. **Run all analysis/validation phases normally** — agent dispatch, findings, etc.
@@ -617,7 +607,7 @@ in every SKILL.md.
 
 ### Protocol: tasks.md Validation (HARD BLOCK)
 
-**Referenced by:** all stage agents (1-5), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
+**Referenced by:** all stage agents (1-4), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
 
 Every stage agent MUST validate tasks.md before operating. The full validation rules are
 defined in the "Format Validation" section above (items 1-15). This protocol is the
@@ -637,7 +627,7 @@ Skills reference this as: "Find and validate tasks.md (HARD BLOCK) — see AGENT
 
 ### Protocol: GitHub CLI Check (HARD BLOCK)
 
-**Referenced by:** all stage agents (1-5), tasks, batch
+**Referenced by:** all stage agents (1-4), tasks, batch
 
 ```bash
 gh auth status 2>/dev/null
@@ -650,7 +640,7 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 
 ### Protocol: Initialize .optimus Directory
 
-**Referenced by:** import, tasks, report (export), quick-report, batch, all stage agents (1-5) for session files
+**Referenced by:** import, tasks, report (export), quick-report, batch, all stage agents (1-4) for session files
 
 Before creating ANY file inside `.optimus/`, ensure the directory structure exists
 and operational/temporary files are gitignored:
@@ -743,7 +733,7 @@ Skills reference this as: "Follow shell safety guidelines — see AGENTS.md Prot
 
 ### Protocol: Session State
 
-**Referenced by:** all stage agents (1-5)
+**Referenced by:** all stage agents (1-4)
 
 Stage agents write a session state file to track progress. This enables resumption
 when a session is interrupted (agent crash, user closes terminal, context window limit).
@@ -843,7 +833,7 @@ Skills reference this as: "Execute session state protocol from AGENTS.md using s
 
 ### Protocol: Terminal Identification
 
-**Referenced by:** all stage agents (1-5), batch
+**Referenced by:** all stage agents (1-4), batch
 
 After the task ID is identified and confirmed, set the terminal title to show the
 current stage and task. This allows users running multiple agents in parallel terminals
@@ -871,7 +861,7 @@ Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Termin
 
 ### Protocol: Workspace Auto-Navigation (HARD BLOCK)
 
-**Referenced by:** stages 2-5
+**Referenced by:** stages 2-4
 
 Execution stages (2-5) resolve the correct workspace automatically. The agent MUST
 be in the task's worktree before proceeding with any work.
@@ -943,7 +933,7 @@ Skills reference this as: "Resolve workspace (HARD BLOCK) — see AGENTS.md Prot
 
 ### Protocol: Divergence Warning
 
-**Referenced by:** all stage agents (1-5)
+**Referenced by:** all stage agents (1-4)
 
 Since status and branch data live in state.json (gitignored), tasks.md rarely changes
 on feature branches. This protocol detects the uncommon case where tasks.md WAS modified
@@ -979,7 +969,7 @@ Skills reference this as: "Check tasks.md divergence — see AGENTS.md Protocol:
 
 ### Protocol: Notification Hooks
 
-**Referenced by:** all stage agents (1-5), tasks
+**Referenced by:** all stage agents (1-4), tasks
 
 After writing a status change to state.json, invoke notification hooks if present.
 
@@ -1100,7 +1090,7 @@ Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage
 
 ### Protocol: PR Title Validation
 
-**Referenced by:** stages 2-5
+**Referenced by:** stages 2-4
 
 Check if a PR exists for the current branch:
 ```bash
@@ -1205,7 +1195,7 @@ whether to suggest advancement or offer a re-run. This protocol replaces the sta
    Presentation item 3), count grouped entries, not individual occurrences.
 2. **If `total_findings == 0`:** The analysis is clean. Suggest the next stage:
    - plan: "Spec validation clean — 0 findings. Next step: run `/optimus-build` to implement this task."
-   - check: "Implementation review clean — 0 findings. Next step: run `/optimus-pr-check` for PR review (optional), or `/optimus-done` to close this task."
+   - check: "Implementation review clean — 0 findings. Next step: run `/optimus-done` to close this task."
 3. **If `total_findings > 0`:** Ask via `AskUser`:
    ```
    Validation found N findings (X fixed, Y skipped).
@@ -1298,7 +1288,7 @@ Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Pus
 
 ### Protocol: State Management
 
-**Referenced by:** all stage agents (1-5), tasks, report, quick-report, import, batch
+**Referenced by:** all stage agents (1-4), tasks, report, quick-report, import, batch
 
 All status and branch data is stored in `.optimus/state.json` (gitignored).
 
@@ -1322,6 +1312,12 @@ if [ -f "$STATE_FILE" ]; then
     rm -f "$STATE_FILE"
     # Fall through to missing-file handling below
   fi
+fi
+# One-time migration: Revisando PR → Validando Impl (status removed)
+if [ -f "$STATE_FILE" ] && jq -e 'to_entries[] | select(.value.status == "Revisando PR")' "$STATE_FILE" >/dev/null 2>&1; then
+  jq 'with_entries(if .value.status == "Revisando PR" then .value.status = "Validando Impl" else . end)' "$STATE_FILE" > "${STATE_FILE}.tmp" \
+    && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  echo "NOTE: Migrated tasks from 'Revisando PR' to 'Validando Impl' (status removed in this version)."
 fi
 if [ -f "$STATE_FILE" ]; then
   TASK_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")
@@ -1456,7 +1452,7 @@ Skills reference this as: "Derive branch name — see AGENTS.md Protocol: Branch
 
 ### Protocol: Active Version Guard
 
-**Referenced by:** all stage agents (1-5)
+**Referenced by:** all stage agents (1-4)
 
 After the task ID is confirmed and dependencies are validated, check if the task belongs
 to the `Ativa` version. If not, present options before proceeding.
@@ -1544,9 +1540,10 @@ All cycle review skills follow this pattern:
    fix or skip is ALWAYS the user's. For grouped entries, list all affected files/locations
    within the single presentation.
 8. For each finding: present research-backed analysis + options, collect decision via AskUser.
-   **Every AskUser for a finding decision MUST include a "Tell me more" option.** This option
-   is always the **second-to-last** option (right before the free-text input that AskUser
-   provides automatically). This lets the user request deeper analysis with one click.
+   **Every AskUser for a finding decision MUST include these options:**
+   - Option A / Option B (the proposed solutions)
+   - Skip — no action
+   - Tell me more
    **AskUser `[topic]` format:** Format: `F#-Category`.
    Example: `[topic] F8-DeadCode`.
 9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text

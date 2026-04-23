@@ -113,7 +113,7 @@ Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stag
    - If status is `Validando Spec` → proceed (plan has completed, workspace will be resolved in Step 1.4 via Workspace Auto-Navigation protocol which handles missing worktrees with branch recovery)
    - If status is `Em Andamento` → proceed (re-execution of this stage)
    - If status is `Pendente` → **STOP**: "Task T-XXX is in 'Pendente'. Run plan first."
-   - If status is `Validando Impl`, `Revisando PR`, `DONE`, or `Cancelado` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage or was cancelled."
+   - If status is `Validando Impl`, `DONE`, or `Cancelado` → **STOP**: "Task T-XXX is in '<status>'. It has already moved past this stage or was cancelled."
 3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task from tasks.md.
    - If Depends is `-` → proceed (no dependencies)
    - For each dependency ID listed, read its status from state.json:
@@ -530,7 +530,6 @@ state.json is implicitly `Pendente`.
 | `Validando Spec` | plan | Spec being validated |
 | `Em Andamento` | build | Implementation in progress |
 | `Validando Impl` | check | Implementation being reviewed |
-| `Revisando PR` | pr-check | PR being reviewed (optional stage) |
 | `DONE` | done | Completed |
 | `Cancelado` | tasks, done | Task abandoned, will not be implemented |
 
@@ -632,9 +631,10 @@ All cycle review skills follow this pattern:
    fix or skip is ALWAYS the user's. For grouped entries, list all affected files/locations
    within the single presentation.
 8. For each finding: present research-backed analysis + options, collect decision via AskUser.
-   **Every AskUser for a finding decision MUST include a "Tell me more" option.** This option
-   is always the **second-to-last** option (right before the free-text input that AskUser
-   provides automatically). This lets the user request deeper analysis with one click.
+   **Every AskUser for a finding decision MUST include these options:**
+   - Option A / Option B (the proposed solutions)
+   - Skip — no action
+   - Tell me more
    **AskUser `[topic]` format:** Format: `F#-Category`.
    Example: `[topic] F8-DeadCode`.
 9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
@@ -652,7 +652,7 @@ All cycle review skills follow this pattern:
 
 ### Protocol: Active Version Guard
 
-**Referenced by:** all stage agents (1-5)
+**Referenced by:** all stage agents (1-4)
 
 After the task ID is confirmed and dependencies are validated, check if the task belongs
 to the `Ativa` version. If not, present options before proceeding.
@@ -728,7 +728,7 @@ Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage
 
 ### Protocol: Divergence Warning
 
-**Referenced by:** all stage agents (1-5)
+**Referenced by:** all stage agents (1-4)
 
 Since status and branch data live in state.json (gitignored), tasks.md rarely changes
 on feature branches. This protocol detects the uncommon case where tasks.md WAS modified
@@ -765,7 +765,7 @@ Skills reference this as: "Check tasks.md divergence — see AGENTS.md Protocol:
 
 ### Protocol: GitHub CLI Check (HARD BLOCK)
 
-**Referenced by:** all stage agents (1-5), tasks, batch
+**Referenced by:** all stage agents (1-4), tasks, batch
 
 ```bash
 gh auth status 2>/dev/null
@@ -779,7 +779,7 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 
 ### Protocol: Notification Hooks
 
-**Referenced by:** all stage agents (1-5), tasks
+**Referenced by:** all stage agents (1-4), tasks
 
 After writing a status change to state.json, invoke notification hooks if present.
 
@@ -825,7 +825,7 @@ Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol:
 
 ### Protocol: PR Title Validation
 
-**Referenced by:** stages 2-5
+**Referenced by:** stages 2-4
 
 Check if a PR exists for the current branch:
 ```bash
@@ -1060,7 +1060,7 @@ Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring D
 
 ### Protocol: Session State
 
-**Referenced by:** all stage agents (1-5)
+**Referenced by:** all stage agents (1-4)
 
 Stage agents write a session state file to track progress. This enables resumption
 when a session is interrupted (agent crash, user closes terminal, context window limit).
@@ -1161,7 +1161,7 @@ Skills reference this as: "Execute session state protocol from AGENTS.md using s
 
 ### Protocol: State Management
 
-**Referenced by:** all stage agents (1-5), tasks, report, quick-report, import, batch
+**Referenced by:** all stage agents (1-4), tasks, report, quick-report, import, batch
 
 All status and branch data is stored in `.optimus/state.json` (gitignored).
 
@@ -1185,6 +1185,12 @@ if [ -f "$STATE_FILE" ]; then
     rm -f "$STATE_FILE"
     # Fall through to missing-file handling below
   fi
+fi
+# One-time migration: Revisando PR → Validando Impl (status removed)
+if [ -f "$STATE_FILE" ] && jq -e 'to_entries[] | select(.value.status == "Revisando PR")' "$STATE_FILE" >/dev/null 2>&1; then
+  jq 'with_entries(if .value.status == "Revisando PR" then .value.status = "Validando Impl" else . end)' "$STATE_FILE" > "${STATE_FILE}.tmp" \
+    && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  echo "NOTE: Migrated tasks from 'Revisando PR' to 'Validando Impl' (status removed in this version)."
 fi
 if [ -f "$STATE_FILE" ]; then
   TASK_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE")
@@ -1322,7 +1328,7 @@ Skills reference this as: "Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec
 
 ### Protocol: Terminal Identification
 
-**Referenced by:** all stage agents (1-5), batch
+**Referenced by:** all stage agents (1-4), batch
 
 After the task ID is identified and confirmed, set the terminal title to show the
 current stage and task. This allows users running multiple agents in parallel terminals
@@ -1351,7 +1357,7 @@ Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Termin
 
 ### Protocol: Workspace Auto-Navigation (HARD BLOCK)
 
-**Referenced by:** stages 2-5
+**Referenced by:** stages 2-4
 
 Execution stages (2-5) resolve the correct workspace automatically. The agent MUST
 be in the task's worktree before proceeding with any work.
@@ -1424,7 +1430,7 @@ Skills reference this as: "Resolve workspace (HARD BLOCK) — see AGENTS.md Prot
 
 ### Protocol: tasks.md Validation (HARD BLOCK)
 
-**Referenced by:** all stage agents (1-5), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
+**Referenced by:** all stage agents (1-4), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
 
 Every stage agent MUST validate tasks.md before operating. The full validation rules are
 defined in the "Format Validation" section above (items 1-15). This protocol is the
