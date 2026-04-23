@@ -550,6 +550,9 @@ All cycle review skills follow this pattern:
    **Every AskUser for a finding decision MUST include a "Tell me more" option.** This option
    is always the **second-to-last** option (right before the free-text input that AskUser
    provides automatically). This lets the user request deeper analysis with one click.
+   **AskUser `[topic]` format:** The `[topic]` label MUST include the progress indicator
+   before the finding ID. Format: `(X of N) F#-Category`.
+   Example: `[topic] (8 of 15) F8-DeadCode`.
 9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
    (a question, disagreement, or request for clarification) instead of a decision:**
    **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
