@@ -52,19 +52,9 @@ related:
     - optimus-plan
     - optimus-build
     - optimus-deep-doc-review
-    - requesting-code-review  # external: ring ecosystem
-    - dev-validation  # external: ring ecosystem
-  differentiation:
-    - name: requesting-code-review
-      difference: >
-        requesting-code-review dispatches reviewers during the dev-cycle.
-        optimus-check is a standalone validation that also checks
-        spec compliance, test ID coverage, and cross-file consistency.
   sequence:
     after:
       - optimus-build
-    before:
-      - dev-feedback-loop
 verification:
   automated:
     - command: "git diff --name-only 2>/dev/null | wc -l"

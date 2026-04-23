@@ -154,6 +154,18 @@ Branch-task cross-validation is part of the workspace protocol above.
 
 Validate PR title — see AGENTS.md Protocol: PR Title Validation.
 
+### Step 1.5.1: Verify Ring Droids (HARD BLOCK)
+
+**HARD BLOCK:** Verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check.
+
+Build requires both **implementation droids** (for subtask dispatch) and **core review droids**
+(for post-implementation review). If any are missing, **STOP** and list missing droids:
+```
+Required ring droids are not installed. Install them before running this skill:
+  Implementation: ring-dev-team-backend-engineer-golang (Go) / ring-dev-team-backend-engineer-typescript (TS) / ring-dev-team-frontend-engineer (React)
+  Review: ring-default-code-reviewer, ring-default-business-logic-reviewer, ring-default-security-reviewer, ring-default-ring-test-reviewer, ring-default-ring-nil-safety-reviewer, ring-default-ring-consequences-reviewer, ring-default-ring-dead-code-reviewer
+```
+
 ### Step 1.6: Discover Project Structure
 
 Before loading docs, discover the project's structure and tooling:
@@ -163,6 +175,22 @@ Before loading docs, discover the project's structure and tooling:
 3. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
 
 4. **Identify reference docs:** Look for `docs/pre-dev/`, `docs/`, or project-specific locations for tasks, PRD, TRD, API design, data model.
+
+Store discovered commands for use in subtask verification and post-implementation checks.
+Check `.optimus/config.json` first:
+```bash
+CONFIG_FILE=".optimus/config.json"
+if [ -f "$CONFIG_FILE" ]; then
+  LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
+fi
+LINT_CMD="${LINT_CMD:-make lint}"
+TEST_CMD="${TEST_CMD:-make test}"
+TEST_INTEGRATION_CMD="${TEST_INTEGRATION_CMD:-make test-integration}"
+TEST_E2E_CMD="${TEST_E2E_CMD:-make test-e2e}"
+```
 
 ### Step 1.7: Load All Reference Documents
 
@@ -219,8 +247,18 @@ After context is loaded and all questions are answered, execute the implementati
 Read all subtask `.md` files from the subtasks directory (derived from TaskSpec in
 Step 1.7). Sort by filename (`subtask_001.md`, `subtask_002.md`, etc.).
 
-If `PARALLEL-PLAN.md` exists in the subtasks directory, read it to understand which
-subtasks can run in parallel vs sequentially.
+If `PARALLEL-PLAN.md` exists in the subtasks directory, read it for informational
+purposes (to understand implementation structure and dependencies between subtasks).
+**NOTE:** All subtasks are executed sequentially with user checkpoints between each.
+Future versions may support parallel execution.
+
+**HARD BLOCK — Zero subtasks guard:**
+If 0 subtask `.md` files are found (subtasks directory missing, empty, or contains
+no `.md` files):
+- **STOP**: "No subtask files found for T-XXX in `<subtasks_dir>`. Subtask breakdown
+  is required for implementation. Run Ring pre-dev subtask creation first
+  (`/pre-dev-subtask-creation`), or create subtask files manually."
+- Do NOT proceed to Step 2.2.
 
 Present the execution plan to the user:
 ```
@@ -273,8 +311,15 @@ a. Run unit tests:
 ```bash
 $TEST_CMD   # from .optimus/config.json, or fallback: make test
 ```
-b. If tests fail → present the failure output (first 30 lines), ask user via `AskUser`:
-   "Unit tests failing after subtask X. Fix or skip?"
+b. **If tests fail (max 3 attempts per subtask):**
+   1. **Logic bug** — dispatch the same ring droid with failure output and instruction:
+      "Test failed after your implementation: <output>. Diagnose and fix." Re-run tests.
+   2. **Flaky test** — re-execute at least 3 times in a clean environment to confirm
+      flakiness. Maximum 1 test skipped per subtask. Document explicit justification
+      (error message, flakiness evidence) and tag with `pending-test-fix`.
+   3. **External dependency** — pause and wait for restoration.
+   If tests fail after 3 attempts, ask user via `AskUser`:
+   "Unit tests failing after subtask X (3 attempts). Skip and continue, or stop?"
 c. If tests pass → present a summary of what changed (files created/modified, tests added)
 
 **4. MANDATORY USER CHECKPOINT:**
@@ -312,22 +357,35 @@ After ALL subtasks are complete:
 
 2. **Measure coverage** — see AGENTS.md Protocol: Coverage Measurement.
 
-3. **Dispatch code review droids** in parallel via `Task` tool:
+3. **Run integration tests (if available):**
+   ```bash
+   $TEST_INTEGRATION_CMD   # from .optimus/config.json, or fallback: make test-integration
+   ```
+   If the command/target does not exist, mark as SKIP. If it fails, present failure
+   output and ask user via `AskUser`: "Integration tests failing. Fix or defer to check?"
+
+4. **Dispatch code review droids** in parallel via `Task` tool:
    - `ring-default-code-reviewer`
    - `ring-default-business-logic-reviewer`
    - `ring-default-security-reviewer`
    - `ring-default-ring-test-reviewer`
+   - `ring-default-ring-nil-safety-reviewer`
+   - `ring-default-ring-consequences-reviewer`
+   - `ring-default-ring-dead-code-reviewer`
 
    Each droid receives all files changed by this task + project rules + task spec.
    Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists.
 
-4. **Consolidate review findings:** merge, deduplicate, sort by severity.
+5. **Consolidate review findings:** merge, deduplicate, sort by severity.
 
-5. **Present findings interactively** — one at a time, severity order, collect decisions
+6. **Present findings interactively** — one at a time, severity order, collect decisions
    (same pattern as AGENTS.md "Common Patterns > Finding Presentation").
 
-6. **Apply approved fixes** — for each approved fix, apply directly (simple) or dispatch
+7. **Apply approved fixes** — for each approved fix, apply directly (simple) or dispatch
    ring droid (complex). Run unit tests after each fix.
+
+8. **Convergence loop (MANDATORY):** Execute the convergence loop — see AGENTS.md
+   "Common Patterns > Convergence Loop". Dispatch the same 7 review droids in rounds 2+.
 
 ---
 
@@ -546,6 +604,29 @@ to import from Ring pre-dev." Do NOT proceed to task identification with an empt
 **NOTE:** For circular dependency detection (item 13), trace the full dependency chain for
 each task. If any task appears twice in the chain, a cycle exists. Report ALL tasks involved
 in the cycle so the user can fix it with `/optimus-tasks`.
+
+
+### Convergence Loop (Full Roster Model)
+Applies to: plan, check, pr-check, coderabbit-review, deep-review, deep-doc-review
+
+The convergence loop eliminates false convergence by dispatching the **same agent roster**
+as round 1 in every subsequent round:
+- **Round 1:** Orchestrator dispatches all specialist agents in parallel (with full session context)
+- **Rounds 2-5:** The **same agent roster** as round 1 is dispatched in parallel via `Task`
+  tool, each with zero prior context. Each agent reads all files fresh from disk.
+- **Round 2 is MANDATORY** — the "zero new findings" stop condition only applies from round 3 onward
+- **Sub-agents do NOT receive the findings ledger.** Dedup is performed entirely by the
+  orchestrator after agents return, using **strict matching**: same file + same line range
+  (±5 lines) + same category. "Description similarity" is NOT sufficient for dedup — the
+  file, location, and category must all match.
+- Stop only when: zero new findings (round 3+), round 5 reached, or user explicitly stops
+- LOW severity findings are NOT a reason to stop — ALL findings are presented to the user
+
+**Why full roster, not a single agent:** A single generalist agent structurally cannot
+replicate the coverage of 8-10 domain specialists. The security-reviewer catches injection
+risks a code-reviewer won't. The nil-safety-reviewer catches empty guards a QA analyst won't.
+Dispatching a single agent in rounds 2+ creates false convergence — the agent declares
+"zero new findings" because it lacks the domain depth, not because the code is clean.
 
 
 ### Finding Presentation (Unified Model)
@@ -955,6 +1036,46 @@ This ensures that agents running in the Optimus repo itself always use the lates
 skill versions after pushing changes.
 
 Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Push Commits."
+
+
+### Protocol: Ring Droid Requirement Check
+
+**Referenced by:** check, pr-check, deep-review, deep-doc-review, coderabbit-review, plan, build
+
+Before dispatching ring droids, verify the required droids are available. If any required
+droid is not installed, **STOP** and list missing droids.
+
+**Core review droids** (required by check, pr-check, deep-review, coderabbit-review):
+- `ring-default-code-reviewer`
+- `ring-default-business-logic-reviewer`
+- `ring-default-security-reviewer`
+- `ring-default-ring-test-reviewer`
+
+**Extended review droids** (required by check, pr-check, deep-review, coderabbit-review):
+- `ring-default-ring-nil-safety-reviewer`
+- `ring-default-ring-consequences-reviewer`
+- `ring-default-ring-dead-code-reviewer`
+
+**QA droids** (required by check, deep-review):
+- `ring-dev-team-qa-analyst`
+
+**Documentation droids** (required by deep-doc-review):
+- `ring-tw-team-docs-reviewer`
+- `ring-default-business-logic-reviewer`
+- `ring-default-code-reviewer`
+
+**Implementation droids** (required by build):
+- `ring-dev-team-backend-engineer-golang` (Go)
+- `ring-dev-team-backend-engineer-typescript` (TypeScript)
+- `ring-dev-team-frontend-engineer` (React/Next.js)
+
+**Spec validation droids** (required by plan):
+- `ring-default-business-logic-reviewer`
+- `ring-default-security-reviewer`
+- `ring-dev-team-qa-analyst`
+- `ring-default-code-reviewer`
+
+Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check."
 
 
 ### Protocol: Session State
