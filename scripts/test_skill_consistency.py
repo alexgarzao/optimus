@@ -170,11 +170,11 @@ OLD_TITLE_FORMAT = re.compile(
     r"printf.*optimus:.*%s\s*\|\s*%s"
 )
 NEW_TITLE_FORMAT = re.compile(
-    r'printf.*optimus:\s*%s\s+%s\s.*%s'
+    r'printf.*optimus:\s*(%s|\w+)\s+%s\s.*%s'
 )
-OSC_PRINTF = re.compile(r"printf.*\\033\]0;")
-TTY_REDIRECT = re.compile(r">\s*/dev/tty")
-STAGE_SKILLS = ["plan", "build", "review", "done"]
+OSC_PRINTF = re.compile(r"printf.*(\\033|\\e|\\x1b)\]0;")
+TTY_REDIRECT = re.compile(r">\s*/dev/tty\s+2>/dev/null")
+TITLE_SKILLS = ["plan", "build", "review", "done", "batch"]
 
 
 class TestTerminalTitleFormat:
@@ -194,13 +194,17 @@ class TestTerminalTitleFormat:
             + "\n".join(f"  - {v}" for v in violations)
         )
 
-    def test_new_format_exists(self):
-        """At least one file should use the new terminal title format."""
-        count = 0
-        for filepath in _all_doc_files():
-            text = filepath.read_text()
-            count += len(NEW_TITLE_FORMAT.findall(text))
-        assert count >= 1, "No files found with the new terminal title format."
+    def test_new_format_exists_in_all_title_skills(self):
+        """Every title skill must use the new terminal title format."""
+        missing = []
+        for skill in TITLE_SKILLS:
+            content = _read_skill(skill)
+            if not NEW_TITLE_FORMAT.search(content):
+                missing.append(skill)
+        assert missing == [], (
+            "Skills missing new terminal title format:\n"
+            + "\n".join(f"  - {v}" for v in missing)
+        )
 
     def test_all_osc_printf_redirect_to_tty(self):
         """Every printf with OSC escape (\\033]0;) must redirect to /dev/tty."""
@@ -217,14 +221,27 @@ class TestTerminalTitleFormat:
         )
 
     def test_all_stage_skills_have_terminal_title_step(self):
-        """All stage skills (plan, build, review, done) must have a Set Terminal Title step."""
+        """All stage/batch skills must have a Set Terminal Title step."""
         missing = []
-        for skill in STAGE_SKILLS:
+        for skill in TITLE_SKILLS:
             content = _read_skill(skill)
-            if "Set Terminal Title" not in content:
+            if "Set Terminal Title" not in content and "Set terminal title" not in content:
                 missing.append(skill)
         assert missing == [], (
-            "Stage skills missing 'Set Terminal Title' step:\n"
+            "Skills missing 'Set Terminal Title' step:\n"
+            + "\n".join(f"  - {v}" for v in missing)
+        )
+
+    def test_all_title_skills_have_restore_title(self):
+        """All title skills must have a restore terminal title command with /dev/tty."""
+        restore_osc = re.compile(r"printf.*\\033\]0;\\007.*>\s*/dev/tty")
+        missing = []
+        for skill in TITLE_SKILLS:
+            content = _read_skill(skill)
+            if not restore_osc.search(content):
+                missing.append(skill)
+        assert missing == [], (
+            "Skills missing restore terminal title with /dev/tty:\n"
             + "\n".join(f"  - {v}" for v in missing)
         )
 
