@@ -1,6 +1,6 @@
 ---
 name: optimus-sync
-description: Sync all Optimus plugins — install new, update existing, remove orphaned
+description: Sync all Optimus plugins — install new, update existing, remove orphaned. Recommended after new releases
 ---
 
 Run this script and show the full output to the user:
