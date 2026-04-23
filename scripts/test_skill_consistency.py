@@ -198,3 +198,68 @@ class TestTerminalTitleFormat:
             text = filepath.read_text()
             count += len(NEW_TITLE_FORMAT.findall(text))
         assert count >= 1, "No files found with the new terminal title format."
+
+
+# --- Finding presentation: Tell me more, IMMEDIATE RESPONSE RULE, anti-rationalization ---
+
+SKILLS_WITH_FINDINGS = [
+    "pr-check", "review", "plan", "deep-review",
+    "coderabbit-review", "deep-doc-review",
+]
+
+
+def _read_skill(plugin_name: str) -> str:
+    """Read the SKILL.md for a given plugin name."""
+    paths = list(REPO_ROOT.glob(f"{plugin_name}/skills/*/SKILL.md"))
+    assert paths, f"No SKILL.md found for {plugin_name}"
+    return paths[0].read_text()
+
+
+class TestFindingPresentation:
+    """Every skill with finding presentation must enforce Tell me more, HARD BLOCK, and anti-rationalization."""
+
+    def test_askuser_template_has_tell_me_more_option(self):
+        """Every skill with findings must have [option] Tell me more in the AskUser template."""
+        violations = []
+        for skill in SKILLS_WITH_FINDINGS:
+            content = _read_skill(skill)
+            if "[option] Tell me more" not in content:
+                violations.append(skill)
+        assert violations == [], (
+            "Skills missing concrete [option] Tell me more in AskUser template:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    def test_hard_block_immediate_response_rule(self):
+        """Every skill with findings must have HARD BLOCK on IMMEDIATE RESPONSE RULE."""
+        violations = []
+        for skill in SKILLS_WITH_FINDINGS:
+            content = _read_skill(skill)
+            if "HARD BLOCK" not in content or "IMMEDIATE RESPONSE RULE" not in content:
+                violations.append(skill)
+        assert violations == [], (
+            "Skills missing HARD BLOCK — IMMEDIATE RESPONSE RULE:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    def test_anti_rationalization_block(self):
+        """Every skill with findings must have anti-rationalization excuses."""
+        violations = []
+        for skill in SKILLS_WITH_FINDINGS:
+            content = _read_skill(skill)
+            if "Anti-rationalization" not in content:
+                violations.append(skill)
+        assert violations == [], (
+            "Skills missing anti-rationalization block:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    def test_agents_md_has_all_three(self):
+        """AGENTS.md (source of truth) must also have all three elements."""
+        content = AGENTS_MD.read_text()
+        assert "[option] Tell me more" in content, \
+            "AGENTS.md missing [option] Tell me more in AskUser template"
+        assert "HARD BLOCK" in content and "IMMEDIATE RESPONSE RULE" in content, \
+            "AGENTS.md missing HARD BLOCK — IMMEDIATE RESPONSE RULE"
+        assert "Anti-rationalization" in content, \
+            "AGENTS.md missing anti-rationalization block"
