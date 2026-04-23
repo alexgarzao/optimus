@@ -490,8 +490,8 @@ Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding O
 
 ### Ask for Decision
 
-**AskUser `[topic]` format:** Format: `F#-Category`.
-Example: `[topic] F8-DeadCode`.
+**AskUser `[topic]` format:** Format: `(X/N) F#-Category`.
+Example: `[topic] (8/12) F8-DeadCode`.
 
 Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
 **Every AskUser MUST include these options:**

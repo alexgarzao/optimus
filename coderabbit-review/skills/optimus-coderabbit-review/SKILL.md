@@ -229,8 +229,8 @@ For each option:
 
 ### 5. Wait for User Decision
 
-**AskUser `[topic]` format:** Format: `F#-Category`.
-Example: `[topic] F8-DeadCode`.
+**AskUser `[topic]` format:** Format: `(X/N) F#-Category`.
+Example: `[topic] (8/12) F8-DeadCode`.
 
 Use `AskUser` tool. **BLOCKING**: Do NOT proceed to the next finding until the user decides.
 **Every AskUser MUST include these options:**

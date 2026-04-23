@@ -237,8 +237,8 @@ Display the type, severity, affected file(s), problem description, suggested fix
 
 ### 3. Ask the User
 
-**AskUser `[topic]` format:** Format: `F#-Category`.
-Example: `[topic] F8-DeadCode`.
+**AskUser `[topic]` format:** Format: `(X/N) F#-Category`.
+Example: `[topic] (8/12) F8-DeadCode`.
 
 Use `AskUser` with contextual options:
 - Fix as suggested
