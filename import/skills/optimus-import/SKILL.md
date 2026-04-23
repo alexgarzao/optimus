@@ -184,10 +184,19 @@ carry over Depends, Priority, Version, and Estimate into tasks.md.
 # For each task with non-Pendente status or non-empty branch in EXISTING_DATA:
 STATE_FILE=".optimus/state.json"
 if [ ! -f "$STATE_FILE" ]; then echo '{}' > "$STATE_FILE"; fi
-jq --arg id "$TASK_ID" --arg status "$LEGACY_STATUS" --arg branch "$LEGACY_BRANCH" \
-  --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  '.[$id] = {status: $status, branch: $branch, updated_at: $ts}' \
-  "$STATE_FILE" > "${STATE_FILE}.tmp" && mv "${STATE_FILE}.tmp" "$STATE_FILE"
+if [ -z "$TASK_ID" ] || [ -z "$LEGACY_STATUS" ]; then
+  echo "WARNING: Skipping migration for task with empty ID or status."
+else
+  if jq --arg id "$TASK_ID" --arg status "$LEGACY_STATUS" --arg branch "$LEGACY_BRANCH" \
+    --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    '.[$id] = {status: $status, branch: $branch, updated_at: $ts}' \
+    "$STATE_FILE" > "${STATE_FILE}.tmp"; then
+    mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  else
+    rm -f "${STATE_FILE}.tmp"
+    echo "ERROR: jq failed to update state.json during migration."
+  fi
+fi
 ```
 After migration, inform the user: "Migrated N task statuses from legacy format to state.json."
 

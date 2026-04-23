@@ -385,7 +385,7 @@ X checks failed. I can attempt to fix some of these automatically. What should I
 
 Options:
 - **Auto-fix what I can** — the agent will attempt to fix the following actionable failures:
-  - Uncommitted changes (Check 1) → `git add -A && git commit -m "chore: commit pending changes for T-XXX"`
+  - Uncommitted changes (Check 1) → `git add -A && COMMIT_MSG_FILE=$(mktemp) && printf '%s' "chore: commit pending changes for T-XXX" > "$COMMIT_MSG_FILE" && git commit -F "$COMMIT_MSG_FILE" && rm -f "$COMMIT_MSG_FILE"`
   - Unpushed commits (Check 2) → `git push` (or `git push -u origin "$(git branch --show-current)"`)
   - Lint failures (Check 5) → run auto-fix (`make lint-fix` or equivalent), commit, and re-check
   - PR title invalid (Check 3) → `gh pr edit <number> --title "<corrected>"`
@@ -570,7 +570,7 @@ If the user requests a force close (e.g., "force close T-012", "force done T-012
   the branch would lose this work.
   ```
   Options:
-  - **Commit and continue** — `git add -A && git commit -m "chore: commit pending changes for T-XXX"`, then proceed
+  - **Commit and continue** — `git add -A && COMMIT_MSG_FILE=$(mktemp) && printf '%s' "chore: commit pending changes for T-XXX" > "$COMMIT_MSG_FILE" && git commit -F "$COMMIT_MSG_FILE" && rm -f "$COMMIT_MSG_FILE"`, then proceed
   - **Continue without committing** — I accept the risk
   - **Cancel force-close** — let me handle this first
 - **Require explicit confirmation** via `AskUser`:
@@ -845,7 +845,7 @@ interpretation — treat all arguments as untrusted data.
 _optimus_sanitize() { printf '%s' "$1" | tr -cd '[:alnum:][:space:]-_./:'; }
 HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
 if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" "$event" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$old_status")" "$(_optimus_sanitize "$new_status")" 2>/dev/null &
+  "$HOOKS_FILE" "$(_optimus_sanitize "$event")" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$old_status")" "$(_optimus_sanitize "$new_status")" 2>/dev/null &
 fi
 ```
 
