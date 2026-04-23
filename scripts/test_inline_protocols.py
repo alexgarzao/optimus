@@ -151,6 +151,14 @@ class TestMatchRefToSection:
     def test_no_match(self):
         assert ip.match_ref_to_section("Protocol: Nonexistent", self.SECTIONS) is None
 
+    def test_startswith_does_not_overmatch(self):
+        sections = {
+            "Protocol: Task": "...",
+            "Protocol: TaskSpec Resolution": "...",
+        }
+        result = ip.match_ref_to_section("Protocol: Task", sections)
+        assert result == "Protocol: Task"
+
 
 # --- strip_existing_inline ---
 
@@ -286,3 +294,124 @@ class TestIdempotency:
         assert "Beta content" not in a
         assert "Beta content" in b
         assert "Alpha content" not in b
+
+
+# --- F3: Critical path tests ---
+
+class TestCriticalPaths:
+    def test_duplicate_heading_keeps_last(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("## Same\nFirst content\n## Same\nSecond content\n")
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        sections = ip.parse_agents_md()
+        assert "Second content" in sections["Same"]
+        assert "First content" not in sections["Same"]
+
+    def test_multiple_mixed_refs_in_single_file(self, tmp_path: Path):
+        content = (
+            "see AGENTS.md Protocol: State Management.\n"
+            'also AGENTS.md "Common Patterns > Convergence Loop"\n'
+            'and AGENTS.md "Finding Presentation"\n'
+            "plus AGENTS.md Protocol: Push Commits.\n"
+        )
+        p = tmp_path / "SKILL.md"
+        p.write_text(content)
+        refs = ip.extract_refs_from_skill(p)
+        assert len(refs) == 4
+        assert "Protocol: State Management" in refs
+        assert "Common: Convergence Loop" in refs
+        assert "Common: Finding Presentation" in refs
+        assert "Protocol: Push Commits" in refs
+
+    def test_handles_write_error_gracefully(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("## Protocol: Y\nContent Y\n")
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+
+        skill_dir = tmp_path / "wr" / "skills" / "optimus-wr"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_text("see AGENTS.md Protocol: Y.\n")
+        skill.chmod(0o444)
+
+        try:
+            ip.inline_protocols()
+            output = capsys.readouterr().out
+            assert "ERROR" in output or "Failed to write" in output
+        finally:
+            skill.chmod(0o644)
+
+
+# --- F4: Edge case tests ---
+
+class TestEdgeCases:
+    def test_protocol_with_bold_trailing(self, tmp_path: Path):
+        p = tmp_path / "SKILL.md"
+        p.write_text("AGENTS.md Protocol: State Management**")
+        refs = ip.extract_refs_from_skill(p)
+        assert "Protocol: State Management" in refs
+
+    def test_normalize_key_multiple_parens_strips_only_last(self):
+        assert ip._normalize_key("X (A) (B)") == "x (a)"
+
+    def test_strip_multiple_inline_blocks_strips_first(self):
+        content = f"A\n{ip.MARKER_START}\nB\n{ip.MARKER_END}\nC\n{ip.MARKER_START}\nD\n{ip.MARKER_END}\nE"
+        result = ip.strip_existing_inline(content)
+        assert "A" in result
+        assert "B" not in result
+        assert "C" in result
+
+    def test_heading_with_special_chars(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("## Protocol: tasks.md Validation (HARD BLOCK)\nValidation content\n")
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        sections = ip.parse_agents_md()
+        assert "Protocol: tasks.md Validation (HARD BLOCK)" in sections
+
+    def test_protocol_with_trailing_paren(self, tmp_path: Path):
+        p = tmp_path / "SKILL.md"
+        p.write_text("AGENTS.md Protocol: Push Commits)")
+        refs = ip.extract_refs_from_skill(p)
+        assert "Protocol: Push Commits" in refs
+
+    def test_unicode_heading(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("## Protocol: Notifica\u00e7\u00e3o de Status\nContent\n")
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        sections = ip.parse_agents_md()
+        assert "Protocol: Notifica\u00e7\u00e3o de Status" in sections
+
+    def test_includes_foundational_for_taskspec(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text(
+            "## Task Spec Resolution\nTaskSpec resolution content\n"
+            "## Protocol: TaskSpec Resolution\nTaskSpec protocol content\n"
+        )
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+
+        skill_dir = tmp_path / "ts" / "skills" / "optimus-ts"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_text("see AGENTS.md Protocol: TaskSpec Resolution.\n")
+
+        ip.inline_protocols()
+        content = skill.read_text()
+        assert "TaskSpec resolution content" in content
+        assert "TaskSpec protocol content" in content
+
+    def test_unicode_decode_error_gracefully(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("## Protocol: Z\nContent Z\n")
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+
+        skill_dir = tmp_path / "uc" / "skills" / "optimus-uc"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_bytes(b'\xff\xfe see AGENTS.md Protocol: Z.\n')
+
+        ip.inline_protocols()
+        output = capsys.readouterr().out
+        assert "ERROR" in output and "skipping" in output.lower()

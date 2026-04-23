@@ -5,6 +5,8 @@ test:
 
 lint:
 	python3 -m py_compile scripts/inline-protocols.py
+	ruff check scripts/
+	shellcheck help/scripts/sync-user-plugins.sh
 
 check-inline:
 	python3 scripts/inline-protocols.py

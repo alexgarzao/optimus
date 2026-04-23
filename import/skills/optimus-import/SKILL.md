@@ -567,7 +567,13 @@ fi
 UPDATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 if jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" --arg branch "$BRANCH_NAME" --arg ts "$UPDATED_AT" \
   '.[$id] = {status: $status, branch: $branch, updated_at: $ts}' "$STATE_FILE" > "${STATE_FILE}.tmp"; then
-  mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  if jq empty "${STATE_FILE}.tmp" 2>/dev/null; then
+    mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  else
+    rm -f "${STATE_FILE}.tmp"
+    echo "ERROR: jq produced invalid JSON — state.json unchanged"
+    # STOP — do not proceed
+  fi
 else
   rm -f "${STATE_FILE}.tmp"
   echo "ERROR: jq failed to update state.json"

@@ -6,12 +6,15 @@ set -euo pipefail
 # - Removes orphaned plugins that were removed from the marketplace
 # - Updates all existing plugins (with uninstall+reinstall fallback for scope conflicts)
 
-trap 'echo ""; echo "WARNING: Sync interrupted. Re-run /optimus-sync to complete."; exit 130' INT TERM
+_error() { echo "ERROR: $*" >&2; }
+_warn() { echo "WARNING: $*" >&2; }
+
+trap 'echo ""; _warn "Sync interrupted. Re-run /optimus-sync to complete."; exit 130' INT TERM
 
 readonly MARKETPLACE_NAME="${OPTIMUS_MARKETPLACE_NAME:-optimus}"
 readonly DROID_TIMEOUT="${OPTIMUS_DROID_TIMEOUT:-60}"
 if ! [[ "$DROID_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
-  echo "ERROR: OPTIMUS_DROID_TIMEOUT must be a positive integer (got: '$DROID_TIMEOUT')"
+  _error "OPTIMUS_DROID_TIMEOUT must be a positive integer (got: '$DROID_TIMEOUT')"
   exit 1
 fi
 
@@ -34,33 +37,33 @@ echo ""
 
 # Check dependencies
 if ! command -v droid >/dev/null 2>&1; then
-  echo "ERROR: droid CLI is required but not installed."
-  echo "  Install from: https://docs.factory.ai"
+  _error "droid CLI is required but not installed."
+  echo "  Install from: https://docs.factory.ai" >&2
   exit 1
 fi
 
 if ! command -v jq >/dev/null 2>&1; then
-  echo "ERROR: jq is required but not installed."
+  _error "jq is required but not installed."
   exit 1
 fi
 
 # Step 1: Update marketplace
 echo "Updating marketplace..."
 if ! _droid plugin marketplace update "$MARKETPLACE_NAME" 2>/dev/null; then
-  echo "WARNING: Could not update marketplace. Proceeding with cached version."
+  _warn "Could not update marketplace. Proceeding with cached version."
 fi
 
 # Step 2: Get expected plugins from marketplace
 MARKETPLACE_FILE=$(find ~/.factory -path "*/marketplaces/${MARKETPLACE_NAME}/.factory-plugin/marketplace.json" -type f 2>/dev/null | head -1)
 if [ -z "$MARKETPLACE_FILE" ]; then
-  echo "ERROR: Marketplace '${MARKETPLACE_NAME}' not found. Register it first:"
-  echo "  droid plugin marketplace add https://github.com/alexgarzao/optimus"
+  _error "Marketplace '${MARKETPLACE_NAME}' not found. Register it first:"
+  echo "  droid plugin marketplace add https://github.com/alexgarzao/optimus" >&2
   exit 1
 fi
 
 EXPECTED=$(jq -r '.plugins[].name' "$MARKETPLACE_FILE" | sort)
 if [ -z "$EXPECTED" ]; then
-  echo "ERROR: No plugins found in marketplace."
+  _error "No plugins found in marketplace."
   exit 1
 fi
 
@@ -68,7 +71,7 @@ fi
 INSTALLED=$(_droid plugin list 2>/dev/null \
   | grep -F "@${MARKETPLACE_NAME}" \
   | awk '{print $1}' \
-  | while IFS= read -r _line; do echo "${_line%@${MARKETPLACE_NAME}}"; done \
+  | while IFS= read -r _line; do echo "${_line%@"${MARKETPLACE_NAME}"}"; done \
   | sort) || true
 
 # Step 4: Calculate diffs
@@ -101,7 +104,7 @@ if [ -n "$ORPHANED_PLUGINS" ]; then
     if _droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null; then
       REMOVED=$((REMOVED + 1))
     else
-      echo "    WARNING: Failed to remove ${plugin}"
+      _warn "Failed to remove ${plugin}"
       FAILED=$((FAILED + 1))
     fi
   done <<< "$ORPHANED_PLUGINS"
@@ -121,7 +124,7 @@ if [ -n "$NEW_PLUGINS" ]; then
     if _droid plugin install "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null; then
       ADDED=$((ADDED + 1))
     else
-      echo "    WARNING: Failed to install ${plugin}"
+      _warn "Failed to install ${plugin}"
       FAILED=$((FAILED + 1))
     fi
   done <<< "$NEW_PLUGINS"
@@ -142,12 +145,12 @@ if [ -n "$EXISTING_PLUGINS" ]; then
       UPDATED=$((UPDATED + 1))
     else
       # Scope conflict — uninstall and reinstall
-      echo "    ! scope conflict, reinstalling..."
+      _warn "scope conflict for ${plugin}, reinstalling..."
       _droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null || true
       if _droid plugin install "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null; then
         UPDATED=$((UPDATED + 1))
       else
-        echo "    ERROR: Failed to reinstall ${plugin}"
+        _error "Failed to reinstall ${plugin}"
         FAILED=$((FAILED + 1))
       fi
     fi

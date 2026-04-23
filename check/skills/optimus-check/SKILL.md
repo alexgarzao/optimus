@@ -1295,7 +1295,9 @@ if [ -z "$DEFAULT_BRANCH" ]; then
   # Skip — this is a warning, not a HARD BLOCK
 else
   TASKS_FILE=".optimus/tasks.md"
-  git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
+  if ! git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null; then
+    echo "WARNING: Could not fetch from origin. Divergence check may use stale data."
+  fi
   git diff "origin/$DEFAULT_BRANCH" -- "$TASKS_FILE" 2>/dev/null | head -20
 fi
 ```
@@ -1657,7 +1659,7 @@ Skills reference this as: "Execute re-run guard — see AGENTS.md Protocol: Re-r
 
 ### Protocol: Ring Droid Requirement Check
 
-**Referenced by:** check, pr-check, deep-review, deep-doc-review, coderabbit-review, plan, build
+**Referenced by:** check, pr-check, deep-doc-review, coderabbit-review, plan, build
 
 Before dispatching ring droids, verify the required droids are available. If any required
 droid is not installed, **STOP** and list missing droids.
@@ -1719,9 +1721,15 @@ Each task gets its own file (e.g., `.optimus/sessions/session-T-003.json`).
   "started_at": "2025-01-15T10:30:00Z",
   "updated_at": "2025-01-15T11:45:00Z",
   "phase": "Phase 1: Implementation",
+  "convergence_round": 0,
+  "findings_count": 0,
   "notes": "Implementation in progress"
 }
 ```
+
+**Convergence checkpoint:** During the convergence loop, update `convergence_round` and
+`findings_count` after each round completes. On resume, skip to the last completed round
+rather than restarting the entire analysis.
 
 **On stage start (after task ID is known):**
 
@@ -1757,7 +1765,11 @@ fi
   UPDATED=$(jq -r '.updated_at // empty' "$SESSION_FILE" 2>/dev/null)
   if [ -n "$UPDATED" ]; then
     NOW_EPOCH=$(date +%s)
-    UPDATED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED" +%s 2>/dev/null || date -d "$UPDATED" +%s 2>/dev/null || echo 0)
+    if [ "$(uname)" = "Darwin" ]; then
+      UPDATED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED" +%s 2>/dev/null || echo 0)
+    else
+      UPDATED_EPOCH=$(date -d "$UPDATED" +%s 2>/dev/null || echo 0)
+    fi
     AGE=$(( NOW_EPOCH - UPDATED_EPOCH ))
     if [ "$AGE" -gt 86400 ]; then
       echo "Session file is stale (>24h). Deleting."
@@ -1855,7 +1867,13 @@ fi
 UPDATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 if jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" --arg branch "$BRANCH_NAME" --arg ts "$UPDATED_AT" \
   '.[$id] = {status: $status, branch: $branch, updated_at: $ts}' "$STATE_FILE" > "${STATE_FILE}.tmp"; then
-  mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  if jq empty "${STATE_FILE}.tmp" 2>/dev/null; then
+    mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  else
+    rm -f "${STATE_FILE}.tmp"
+    echo "ERROR: jq produced invalid JSON — state.json unchanged"
+    # STOP — do not proceed
+  fi
 else
   rm -f "${STATE_FILE}.tmp"
   echo "ERROR: jq failed to update state.json"

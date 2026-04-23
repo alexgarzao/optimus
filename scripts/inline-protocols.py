@@ -20,7 +20,7 @@ REPO_ROOT = Path(__file__).parent.parent
 AGENTS_MD = REPO_ROOT / "AGENTS.md"
 MARKER_START = "<!-- INLINE-PROTOCOLS:START -->"
 MARKER_END = "<!-- INLINE-PROTOCOLS:END -->"
-HEADING_RE = re.compile(r'^(#{2,3})\s+(.+)$')
+HEADING_RE = re.compile(r'^(?:#{2,3})\s+(.+)$')
 PROTOCOL_RE = re.compile(r'AGENTS\.md Protocol:\s*([^\n"]+)')
 COMMON_PATTERN_RE = re.compile(r'AGENTS\.md\s*"Common Patterns\s*>\s*([^"]+)"')
 FINDING_PRESENTATION_RE = re.compile(r'AGENTS\.md\s*"Finding Presentation"')
@@ -38,7 +38,7 @@ def parse_agents_md() -> dict[str, str]:
     for line in lines:
         heading_match = HEADING_RE.match(line)
         if heading_match:
-            title = heading_match.group(2).strip()
+            title = heading_match.group(1).strip()
             if current_key:
                 sections[current_key] = "\n".join(current_lines)
             current_key = title
@@ -52,10 +52,10 @@ def parse_agents_md() -> dict[str, str]:
     return sections
 
 
-def extract_refs_from_skill(skill_path: Path) -> set[str]:
-    """Extract all AGENTS.md references from a SKILL.md file (body only, not inlined block)."""
-    content = strip_existing_inline(skill_path.read_text())
-    refs = set()
+def extract_refs_from_content(content: str) -> set[str]:
+    """Extract all AGENTS.md references from SKILL.md content (body only, not inlined block)."""
+    content = strip_existing_inline(content)
+    refs: set[str] = set()
 
     # Protocol references: "see AGENTS.md Protocol: X"
     for m in PROTOCOL_RE.finditer(content):
@@ -78,6 +78,11 @@ def extract_refs_from_skill(skill_path: Path) -> set[str]:
         refs.add("Common: Finding Presentation")
 
     return refs
+
+
+def extract_refs_from_skill(skill_path: Path) -> set[str]:
+    """Extract all AGENTS.md references from a SKILL.md file."""
+    return extract_refs_from_content(skill_path.read_text())
 
 
 def _normalize_key(key: str) -> str:
@@ -151,18 +156,20 @@ def inline_protocols() -> None:
     for skill_path in skill_files:
         plugin_name = skill_path.parts[-4]  # e.g., "plan" from plan/skills/optimus-plan/SKILL.md
         try:
-            refs = extract_refs_from_skill(skill_path)
+            raw_content = skill_path.read_text()
         except (OSError, UnicodeDecodeError) as e:
             print(f"  ERROR: {skill_path}: {e} — skipping")
             continue
+
+        refs = extract_refs_from_content(raw_content)
 
         if not refs:
             print(f"  {plugin_name}: no AGENTS.md refs, skipping")
             continue
 
         # Match refs to sections
-        matched = {}
-        unmatched = []
+        matched: dict[str, str] = {}
+        unmatched: list[str] = []
         for ref in sorted(refs):
             key = match_ref_to_section(ref, sections)
             if key:
@@ -171,7 +178,7 @@ def inline_protocols() -> None:
                 unmatched.append(ref)
 
         # Collect the sections to inline (deduplicated, ordered)
-        sections_to_inline = {}
+        sections_to_inline: dict[str, str] = {}
         for ref, key in sorted(matched.items(), key=lambda x: x[1]):
             if key not in sections_to_inline:
                 sections_to_inline[key] = sections[key]
@@ -181,7 +188,7 @@ def inline_protocols() -> None:
         needs_taskspec = any("TaskSpec" in k for k in sections_to_inline)
         needs_format = any("tasks.md Validation" in k for k in sections_to_inline)
 
-        extra = {}
+        extra: dict[str, str] = {}
         if needs_state and "File Location" in foundational:
             extra["File Location"] = foundational["File Location"]
         if needs_state and "Valid Status Values (stored in state.json)" in foundational:
@@ -191,14 +198,7 @@ def inline_protocols() -> None:
         if needs_format and "Format Validation" in foundational:
             extra["Format Validation"] = foundational["Format Validation"]
 
-        # Build the inline block
-        try:
-            content = skill_path.read_text()
-        except (OSError, UnicodeDecodeError) as e:
-            print(f"  ERROR: {skill_path}: {e} — skipping")
-            continue
-
-        content = strip_existing_inline(content).rstrip() + "\n"
+        content = strip_existing_inline(raw_content).rstrip() + "\n"
 
         inline_parts = []
         inline_parts.append(f"\n{MARKER_START}")
