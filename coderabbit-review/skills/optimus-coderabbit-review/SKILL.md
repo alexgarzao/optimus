@@ -117,9 +117,13 @@ Store discovered commands:
 ```bash
 CONFIG_FILE=".optimus/config.json"
 if [ -f "$CONFIG_FILE" ]; then
-  LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
-  TEST_UNIT_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
-  TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
+    echo "WARNING: .optimus/config.json is corrupted. Falling back to auto-detection."
+  else
+    LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_UNIT_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  fi
 fi
 LINT_CMD="${LINT_CMD:-make lint}"
 TEST_UNIT_CMD="${TEST_UNIT_CMD:-make test}"
@@ -831,7 +835,7 @@ and update installed plugins to pick up the changes just pushed:
 ```bash
 if jq -e '.name == "optimus"' .factory-plugin/marketplace.json >/dev/null 2>&1; then
   echo "Optimus repo detected — updating installed plugins..."
-  for skill in $(droid plugin list 2>&1 | grep optimus | awk '{print $1}'); do
+  for skill in $(droid plugin list 2>/dev/null | grep optimus | awk '{print $1}'); do
     droid plugin update "$skill" 2>/dev/null
   done
 fi

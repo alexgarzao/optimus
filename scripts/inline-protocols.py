@@ -12,15 +12,20 @@ Usage: python3 scripts/inline-protocols.py
 """
 
 import re
+import sys
 from pathlib import Path
+from typing import Dict, Optional, Set
 
 REPO_ROOT = Path(__file__).parent.parent
 AGENTS_MD = REPO_ROOT / "AGENTS.md"
 MARKER_START = "<!-- INLINE-PROTOCOLS:START -->"
 MARKER_END = "<!-- INLINE-PROTOCOLS:END -->"
 
-def parse_agents_md():
+def parse_agents_md() -> Dict[str, str]:
     """Parse AGENTS.md into named sections keyed by heading text."""
+    if not AGENTS_MD.exists():
+        print(f"ERROR: {AGENTS_MD} not found. Run from repo root.")
+        sys.exit(1)
     lines = AGENTS_MD.read_text().splitlines()
     sections = {}
     current_key = None
@@ -43,7 +48,7 @@ def parse_agents_md():
     return sections
 
 
-def extract_refs_from_skill(skill_path):
+def extract_refs_from_skill(skill_path: Path) -> Set[str]:
     """Extract all AGENTS.md references from a SKILL.md file (body only, not inlined block)."""
     content = strip_existing_inline(skill_path.read_text())
     refs = set()
@@ -71,12 +76,12 @@ def extract_refs_from_skill(skill_path):
     return refs
 
 
-def _normalize_key(key):
+def _normalize_key(key: str) -> str:
     """Strip parenthetical suffixes like (HARD BLOCK), (optional) for matching."""
     return re.sub(r'\s*\([^)]*\)\s*$', '', key).strip().lower()
 
 
-def match_ref_to_section(ref, sections):
+def match_ref_to_section(ref: str, sections: Dict[str, str]) -> Optional[str]:
     """Match a reference name to a section key in AGENTS.md."""
     if ref.startswith("Protocol: "):
         proto_name = ref[len("Protocol: "):]
@@ -107,14 +112,15 @@ def match_ref_to_section(ref, sections):
     return None
 
 
-def strip_existing_inline(content):
+def strip_existing_inline(content: str) -> str:
     """Remove previously inlined protocols section, preserving content after end marker."""
     start_idx = content.find(MARKER_START)
     if start_idx == -1:
         return content
     end_idx = content.find(MARKER_END)
     if end_idx == -1:
-        return content[:start_idx].rstrip()
+        print("  WARNING: MARKER_START found but MARKER_END missing — skipping strip to avoid data loss")
+        return content
     after = content[end_idx + len(MARKER_END):]
     return content[:start_idx].rstrip() + after
 
@@ -128,9 +134,7 @@ def inline_protocols():
     # for protocol references (e.g., State Management references state.json format)
     foundational = {}
     for key in ["File Location", "Valid Status Values (stored in state.json)",
-                 "Task Spec Resolution", "Format Validation",
-                 "Dependency Rules", "Version Management",
-                 "Valid Tipo Values", "Column Specification"]:
+                 "Task Spec Resolution", "Format Validation"]:
         if key in sections:
             foundational[key] = sections[key]
 
@@ -142,7 +146,11 @@ def inline_protocols():
 
     for skill_path in skill_files:
         plugin_name = skill_path.parts[-4]  # e.g., "plan" from plan/skills/optimus-plan/SKILL.md
-        refs = extract_refs_from_skill(skill_path)
+        try:
+            refs = extract_refs_from_skill(skill_path)
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"  ERROR: {skill_path}: {e} — skipping")
+            continue
 
         if not refs:
             print(f"  {plugin_name}: no AGENTS.md refs, skipping")
@@ -180,7 +188,12 @@ def inline_protocols():
             extra["Format Validation"] = foundational["Format Validation"]
 
         # Build the inline block
-        content = skill_path.read_text()
+        try:
+            content = skill_path.read_text()
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"  ERROR: {skill_path}: {e} — skipping")
+            continue
+
         content = strip_existing_inline(content).rstrip() + "\n"
 
         inline_parts = []
@@ -205,7 +218,11 @@ def inline_protocols():
         inline_parts.append(MARKER_END)
 
         new_content = content + "\n".join(inline_parts) + "\n"
-        skill_path.write_text(new_content)
+        try:
+            skill_path.write_text(new_content)
+        except OSError as e:
+            print(f"  ERROR: Failed to write {skill_path}: {e}")
+            continue
 
         total_inlined += 1
         print(f"  {plugin_name}: inlined {len(sections_to_inline)} protocols + {len(extra)} foundational ({len(refs)} refs, {len(unmatched)} unmatched)")

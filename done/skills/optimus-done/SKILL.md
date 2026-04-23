@@ -244,10 +244,14 @@ Before running checks 5-8, check for custom commands in `.optimus/config.json`:
 ```bash
 CONFIG_FILE=".optimus/config.json"
 if [ -f "$CONFIG_FILE" ]; then
-  LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
-  TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
-  TEST_INT_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
-  TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
+    echo "WARNING: .optimus/config.json is corrupted. Falling back to auto-detection."
+  else
+    LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_INT_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  fi
 fi
 ```
 
@@ -756,7 +760,10 @@ to the `Ativa` version. If not, present options before proceeding.
    - Commit:
      ```bash
      git add "$TASKS_FILE"
-     git commit -m "chore(tasks): move T-XXX to active version <active_version>"
+     COMMIT_MSG_FILE=$(mktemp)
+     printf '%s' "chore(tasks): move T-XXX to active version <active_version>" > "$COMMIT_MSG_FILE"
+     git commit -F "$COMMIT_MSG_FILE"
+     rm -f "$COMMIT_MSG_FILE"
      ```
    - Proceed with the stage
 

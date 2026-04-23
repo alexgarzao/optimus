@@ -539,10 +539,14 @@ Store discovered commands:
 ```bash
 CONFIG_FILE=".optimus/config.json"
 if [ -f "$CONFIG_FILE" ]; then
-  LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
-  TEST_UNIT_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
-  TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
-  TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
+    echo "WARNING: .optimus/config.json is corrupted. Falling back to auto-detection."
+  else
+    LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_UNIT_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  fi
 fi
 LINT_CMD="${LINT_CMD:-make lint}"
 TEST_UNIT_CMD="${TEST_UNIT_CMD:-make test}"
@@ -905,9 +909,10 @@ After each successful TDD cycle:
 1. Stage ONLY the files changed by this fix
 2. Commit with descriptive message:
    ```bash
-   git commit -m "fix: <concise description>
-
-   Addresses review finding F<N> [<source>]"
+   COMMIT_MSG_FILE=$(mktemp)
+   printf 'fix: <concise description>\n\nAddresses review finding F<N> [<source>]' > "$COMMIT_MSG_FILE"
+   git commit -F "$COMMIT_MSG_FILE"
+   rm -f "$COMMIT_MSG_FILE"
    ```
 3. Record `{finding_id} → {commit_sha}` mapping
 
@@ -937,10 +942,10 @@ Add `// skipcq: <shortcode>` comment on the line above the flagged code (e.g., `
 
 Commit all suppressions together:
 ```bash
-git commit -m "chore: suppress won't-fix static analysis findings
-
-Codacy: X findings suppressed (via <linter> inline suppression)
-DeepSource: Y findings suppressed (skipcq)"
+COMMIT_MSG_FILE=$(mktemp)
+printf 'chore: suppress won'\''t-fix static analysis findings\n\nCodacy: X findings suppressed (via <linter> inline suppression)\nDeepSource: Y findings suppressed (skipcq)' > "$COMMIT_MSG_FILE"
+git commit -F "$COMMIT_MSG_FILE"
+rm -f "$COMMIT_MSG_FILE"
 ```
 
 Record the suppression commit SHA for use in Phase 13.
@@ -1759,7 +1764,10 @@ to the `Ativa` version. If not, present options before proceeding.
    - Commit:
      ```bash
      git add "$TASKS_FILE"
-     git commit -m "chore(tasks): move T-XXX to active version <active_version>"
+     COMMIT_MSG_FILE=$(mktemp)
+     printf '%s' "chore(tasks): move T-XXX to active version <active_version>" > "$COMMIT_MSG_FILE"
+     git commit -F "$COMMIT_MSG_FILE"
+     rm -f "$COMMIT_MSG_FILE"
      ```
    - Proceed with the stage
 

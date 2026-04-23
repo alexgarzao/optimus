@@ -183,10 +183,14 @@ Store discovered commands for use in verification gates. Check `.optimus/config.
 ```bash
 CONFIG_FILE=".optimus/config.json"
 if [ -f "$CONFIG_FILE" ]; then
-  LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
-  TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
-  TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
-  TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
+    echo "WARNING: .optimus/config.json is corrupted. Falling back to auto-detection."
+  else
+    LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  fi
 fi
 LINT_CMD="${LINT_CMD:-make lint}"
 TEST_CMD="${TEST_CMD:-make test}"
@@ -1253,7 +1257,10 @@ to the `Ativa` version. If not, present options before proceeding.
    - Commit:
      ```bash
      git add "$TASKS_FILE"
-     git commit -m "chore(tasks): move T-XXX to active version <active_version>"
+     COMMIT_MSG_FILE=$(mktemp)
+     printf '%s' "chore(tasks): move T-XXX to active version <active_version>" > "$COMMIT_MSG_FILE"
+     git commit -F "$COMMIT_MSG_FILE"
+     rm -f "$COMMIT_MSG_FILE"
      ```
    - Proceed with the stage
 
@@ -1615,7 +1622,7 @@ and update installed plugins to pick up the changes just pushed:
 ```bash
 if jq -e '.name == "optimus"' .factory-plugin/marketplace.json >/dev/null 2>&1; then
   echo "Optimus repo detected — updating installed plugins..."
-  for skill in $(droid plugin list 2>&1 | grep optimus | awk '{print $1}'); do
+  for skill in $(droid plugin list 2>/dev/null | grep optimus | awk '{print $1}'); do
     droid plugin update "$skill" 2>/dev/null
   done
 fi
@@ -1954,12 +1961,28 @@ Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
    PROJECT_ROOT=$(git rev-parse --show-toplevel)
    RESOLVED_PATH=$(cd "$PROJECT_ROOT" && realpath -m "${TASKS_DIR}/${TASK_SPEC}" 2>/dev/null \
      || python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "${TASKS_DIR}/${TASK_SPEC}" 2>/dev/null)
+   if [ -z "$RESOLVED_PATH" ]; then
+     echo "ERROR: Cannot resolve TaskSpec path '${TASKS_DIR}/${TASK_SPEC}' — neither realpath nor python3 available."
+     exit 1
+   fi
    case "$RESOLVED_PATH" in
      "$PROJECT_ROOT"/*) ;; # OK — within project
      *) echo "ERROR: TaskSpec path traversal detected — resolved path is outside the project root."; exit 1 ;;
    esac
    ```
-   Also apply the same validation to `TASKS_DIR` when reading from `.optimus/config.json`.
+   Also apply the same validation to `TASKS_DIR` when reading from `.optimus/config.json`:
+   ```bash
+   TASKS_DIR_RESOLVED=$(cd "$PROJECT_ROOT" && realpath -m "$TASKS_DIR" 2>/dev/null \
+     || python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$TASKS_DIR" 2>/dev/null)
+   if [ -z "$TASKS_DIR_RESOLVED" ]; then
+     echo "ERROR: Cannot resolve tasksDir path '$TASKS_DIR'."
+     exit 1
+   fi
+   case "$TASKS_DIR_RESOLVED" in
+     "$PROJECT_ROOT"/*) ;; # OK — within project
+     *) echo "ERROR: tasksDir path traversal detected — '$TASKS_DIR' resolves outside the project root."; exit 1 ;;
+   esac
+   ```
 5. Read the task spec file at `TASK_SPEC_PATH`
 6. Derive subtasks directory: if TaskSpec is `tasks/task_001.md`, subtasks are at `<TASKS_DIR>/subtasks/T-001/`
 7. If subtasks directory exists, read all `.md` files inside it

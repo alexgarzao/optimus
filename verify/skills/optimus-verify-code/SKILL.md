@@ -88,11 +88,15 @@ Check if `.optimus/config.json` exists and read specific command keys:
 ```bash
 CONFIG_FILE=".optimus/config.json"
 if [ -f "$CONFIG_FILE" ]; then
-  LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
-  TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
-  TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
-  TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
-  TEST_COVERAGE_CMD=$(jq -r '.commands["test-coverage"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
+    echo "WARNING: .optimus/config.json is corrupted. Falling back to auto-detection."
+  else
+    LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_COVERAGE_CMD=$(jq -r '.commands["test-coverage"] // empty' "$CONFIG_FILE" 2>/dev/null)
+  fi
 fi
 ```
 

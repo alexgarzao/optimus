@@ -702,10 +702,14 @@ Follow these rules to prevent injection and silent failures:
 2. **Check exit codes for critical commands:**
    ```bash
    git add "$TASKS_FILE"
-   if ! git commit -m "chore(tasks): $COMMIT_MSG"; then
+   COMMIT_MSG_FILE=$(mktemp)
+   printf '%s' "chore(tasks): $COMMIT_MSG" > "$COMMIT_MSG_FILE"
+   if ! git commit -F "$COMMIT_MSG_FILE"; then
      echo "ERROR: git commit failed. Check pre-commit hooks or git config."
+     rm -f "$COMMIT_MSG_FILE"
      # STOP — do not proceed
    fi
+   rm -f "$COMMIT_MSG_FILE"
    ```
 3. **Never interpolate user-derived values directly into shell commands** — task titles,
    branch names, and other user input may contain shell metacharacters
@@ -1089,12 +1093,28 @@ Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
    PROJECT_ROOT=$(git rev-parse --show-toplevel)
    RESOLVED_PATH=$(cd "$PROJECT_ROOT" && realpath -m "${TASKS_DIR}/${TASK_SPEC}" 2>/dev/null \
      || python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "${TASKS_DIR}/${TASK_SPEC}" 2>/dev/null)
+   if [ -z "$RESOLVED_PATH" ]; then
+     echo "ERROR: Cannot resolve TaskSpec path '${TASKS_DIR}/${TASK_SPEC}' — neither realpath nor python3 available."
+     exit 1
+   fi
    case "$RESOLVED_PATH" in
      "$PROJECT_ROOT"/*) ;; # OK — within project
      *) echo "ERROR: TaskSpec path traversal detected — resolved path is outside the project root."; exit 1 ;;
    esac
    ```
-   Also apply the same validation to `TASKS_DIR` when reading from `.optimus/config.json`.
+   Also apply the same validation to `TASKS_DIR` when reading from `.optimus/config.json`:
+   ```bash
+   TASKS_DIR_RESOLVED=$(cd "$PROJECT_ROOT" && realpath -m "$TASKS_DIR" 2>/dev/null \
+     || python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$TASKS_DIR" 2>/dev/null)
+   if [ -z "$TASKS_DIR_RESOLVED" ]; then
+     echo "ERROR: Cannot resolve tasksDir path '$TASKS_DIR'."
+     exit 1
+   fi
+   case "$TASKS_DIR_RESOLVED" in
+     "$PROJECT_ROOT"/*) ;; # OK — within project
+     *) echo "ERROR: tasksDir path traversal detected — '$TASKS_DIR' resolves outside the project root."; exit 1 ;;
+   esac
+   ```
 5. Read the task spec file at `TASK_SPEC_PATH`
 6. Derive subtasks directory: if TaskSpec is `tasks/task_001.md`, subtasks are at `<TASKS_DIR>/subtasks/T-001/`
 7. If subtasks directory exists, read all `.md` files inside it
@@ -1228,7 +1248,7 @@ and update installed plugins to pick up the changes just pushed:
 ```bash
 if jq -e '.name == "optimus"' .factory-plugin/marketplace.json >/dev/null 2>&1; then
   echo "Optimus repo detected — updating installed plugins..."
-  for skill in $(droid plugin list 2>&1 | grep optimus | awk '{print $1}'); do
+  for skill in $(droid plugin list 2>/dev/null | grep optimus | awk '{print $1}'); do
     droid plugin update "$skill" 2>/dev/null
   done
 fi
@@ -1423,7 +1443,10 @@ to the `Ativa` version. If not, present options before proceeding.
    - Commit:
      ```bash
      git add "$TASKS_FILE"
-     git commit -m "chore(tasks): move T-XXX to active version <active_version>"
+     COMMIT_MSG_FILE=$(mktemp)
+     printf '%s' "chore(tasks): move T-XXX to active version <active_version>" > "$COMMIT_MSG_FILE"
+     git commit -F "$COMMIT_MSG_FILE"
+     rm -f "$COMMIT_MSG_FILE"
      ```
    - Proceed with the stage
 

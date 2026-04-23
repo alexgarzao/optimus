@@ -340,10 +340,10 @@ re-running import.
 
 ```bash
 git add .optimus/
-git commit -m "chore: import Ring pre-dev tasks to optimus format
-
-Imported N tasks from $TASKS_DIR/tasks/.
-Original Ring files preserved."
+COMMIT_MSG_FILE=$(mktemp)
+printf 'chore: import Ring pre-dev tasks to optimus format\n\nImported N tasks from %s/tasks/.\nOriginal Ring files preserved.' "$TASKS_DIR" > "$COMMIT_MSG_FILE"
+git commit -F "$COMMIT_MSG_FILE"
+rm -f "$COMMIT_MSG_FILE"
 ```
 
 ### Step 3.5: Final Summary

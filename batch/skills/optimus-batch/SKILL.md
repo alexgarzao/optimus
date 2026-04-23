@@ -449,10 +449,14 @@ Follow these rules to prevent injection and silent failures:
 2. **Check exit codes for critical commands:**
    ```bash
    git add "$TASKS_FILE"
-   if ! git commit -m "chore(tasks): $COMMIT_MSG"; then
+   COMMIT_MSG_FILE=$(mktemp)
+   printf '%s' "chore(tasks): $COMMIT_MSG" > "$COMMIT_MSG_FILE"
+   if ! git commit -F "$COMMIT_MSG_FILE"; then
      echo "ERROR: git commit failed. Check pre-commit hooks or git config."
+     rm -f "$COMMIT_MSG_FILE"
      # STOP — do not proceed
    fi
+   rm -f "$COMMIT_MSG_FILE"
    ```
 3. **Never interpolate user-derived values directly into shell commands** — task titles,
    branch names, and other user input may contain shell metacharacters
