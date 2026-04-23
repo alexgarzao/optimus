@@ -355,7 +355,7 @@ For each approved fix:
 1. **RED:** Write a failing test (if one doesn't already exist for the scenario)
 2. **GREEN:** Implement the minimal fix
 3. **REFACTOR:** Improve if necessary
-4. **RUN UNIT TESTS:** Execute `make test` to verify no regressions
+4. **RUN UNIT TESTS:** Execute `$TEST_UNIT_CMD` to verify no regressions
 
 **For documentation fixes (docs, README, specs):** dispatch ring documentation droids
 (`ring-tw-team-functional-writer`, `ring-tw-team-api-writer`). Documentation

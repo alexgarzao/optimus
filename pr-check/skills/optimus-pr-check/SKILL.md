@@ -445,7 +445,11 @@ CI Status:
 
 1. **Fetch details:**
 ```bash
-COMMIT_SHA=$(gh api repos/{owner}/{repo}/pulls/{number} --jq '.head.sha')
+COMMIT_SHA=$(gh api repos/{owner}/{repo}/pulls/{number} --jq '.head.sha' 2>/dev/null)
+if [ -z "$COMMIT_SHA" ]; then
+  echo "ERROR: Could not fetch commit SHA for PR. Check gh auth and network."
+  # STOP — cannot analyze CI checks without commit SHA
+fi
 
 # Get ALL failing check runs with their details
 gh api repos/{owner}/{repo}/commits/${COMMIT_SHA}/check-runs \
@@ -454,8 +458,10 @@ gh api repos/{owner}/{repo}/commits/${COMMIT_SHA}/check-runs \
 
 2. **For GitHub Actions failures, fetch logs:**
 ```bash
-RUN_ID=$(echo "<details_url>" | grep -oP 'runs/\K[0-9]+')
-gh run view $RUN_ID --log-failed 2>/dev/null | tail -100
+RUN_ID=$(echo "<details_url>" | sed -n 's|.*/runs/\([0-9]*\).*|\1|p')
+if [ -n "$RUN_ID" ]; then
+  gh run view "$RUN_ID" --log-failed 2>/dev/null | tail -100
+fi
 ```
 
 3. **For Codacy failures, check annotation count:**

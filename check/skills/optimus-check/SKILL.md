@@ -566,8 +566,8 @@ Apply fixes using ring droids with TDD cycle — see AGENTS.md "Common Patterns 
 **After ALL fixes are applied**, run lint and unit tests one final time:
 
 ```bash
-make lint                    # Lint — runs ONCE after all fixes
-make test                    # Unit tests — final regression check
+$LINT_CMD                    # Lint — runs ONCE after all fixes (from .optimus/config.json, or fallback: make lint)
+$TEST_CMD                    # Unit tests — final regression check (from .optimus/config.json, or fallback: make test)
 ```
 
 If lint fails, fix formatting issues and re-run.
@@ -702,10 +702,10 @@ $TEST_INTEGRATION_CMD        # from .optimus/config.json, or fallback: make test
 $TEST_E2E_CMD                # from .optimus/config.json, or fallback: make test-e2e
 ```
 
-| Test Type | Command | If target exists | If target missing |
-|-----------|----------------|-----------------|-------------------|
-| Integration | `make test-integration` | **HARD BLOCK** if fails | SKIP |
-| E2E | `make test-e2e` | **HARD BLOCK** if fails | SKIP |
+| Test Type | Command | If command/target exists | If missing |
+|-----------|---------|------------------------|------------|
+| Integration | `$TEST_INTEGRATION_CMD` | **HARD BLOCK** if fails | SKIP |
+| E2E | `$TEST_E2E_CMD` | **HARD BLOCK** if fails | SKIP |
 
 **If any test fails:**
 1. Present the failure output (first 30 lines)
