@@ -1,6 +1,6 @@
 ---
 name: optimus-tasks
-description: "Administrative task management for tasks.md. Create, edit, remove, reorder, and cancel tasks. Manage versions (create, edit, remove, reorder) and move tasks between versions. Validates format, dependencies, and ID uniqueness. Runs on any branch -- this is an administrative skill, not an execution skill."
+description: "Administrative task management for tasks.md. Create, edit, remove, reorder, cancel, and reopen tasks. Manage versions (create, edit, remove, reorder) and move tasks between versions. Validates format, dependencies, and ID uniqueness. Runs on any branch -- this is an administrative skill, not an execution skill."
 trigger: >
   - When user wants to add a new task (e.g., "add task", "create task", "new task")
   - When user wants to edit a task (e.g., "change priority of T-003", "rename T-005")

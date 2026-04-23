@@ -33,7 +33,7 @@ Lists all available Optimus skills organized by category.
 ## Phase 1: Present Skill Catalog
 
 **Prerequisites:** Optimus requires the Ring ecosystem (droids + pre-dev workflow).
-Execution skills (plan, build, check, done) and review skills (pr-check, deep-review,
+Execution skills (plan, build, review, done) and review skills (pr-check, deep-review,
 coderabbit-review) require Ring droids to be installed. Administrative skills (import,
 report, tasks, resolve, quick-report, help) work without Ring droids.
 
@@ -45,11 +45,11 @@ terminal display when available, otherwise use markdown tables.
 | Skill | Command | When to Use |
 |-------|---------|-------------|
 | **import** | `/optimus-import` | Import Ring pre-dev artifacts into optimus format. Creates tasks.md with TaskSpec column. Re-runnable. |
-| **report** | `/optimus-report` | Checking project status — shows progress, active/blocked/ready tasks, dependency graph, parallelization opportunities, and velocity metrics. Read-only. |
+| **report** | `/optimus-report` | Task status dashboard — shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only. |
 | **tasks** | `/optimus-tasks` | Creating, editing, removing, reordering, cancelling, or reopening tasks. Managing versions. Any administrative task management. |
 | **resolve** | `/optimus-resolve` | Resolving merge conflicts in `tasks.md` caused by parallel task execution across feature branches. |
-| **quick-report** | `/optimus-quick-report` | Compact daily status — active tasks with current status, ready-to-start, blocked. No git ops. Read-only. |
-| **batch** | `/optimus-batch` | Pipeline orchestrator — chains stages 1-4 for one or more tasks with user checkpoints between stages. Handles dependency ordering. |
+| **quick-report** | `/optimus-quick-report` | Compact daily status dashboard — shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Read-only. |
+| **batch** | `/optimus-batch` | Pipeline orchestrator — chains stages 1-4 for one or more tasks with user checkpoints between stages. |
 | **help** | `/optimus-help` | This skill — discovering what's available. |
 | **sync** | `/optimus-sync` | Sync all Optimus plugins — install new, update existing, remove orphaned. Recommended after new releases. *(command, not a standalone plugin)* |
 
@@ -59,7 +59,7 @@ These skills form the task execution pipeline. Run them in order for each task:
 
 ```
 Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
-           (plan)            (build)        (check)          (done)
+           (plan)            (build)        (review)         (done)
 ```
 
 | Skill | Command | When to Use |

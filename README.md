@@ -27,12 +27,12 @@ Stage-1 creates the workspace (worktree). Stages 2-4 auto-navigate to the task's
 
 ```
 Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
-           (plan)            (build)        (check)          (done)
+           (plan)            (build)        (review)         (done)
 ```
 
 | Skill | Stage | Description | Command |
 |-------|-------|-------------|---------|
-| `plan` | 1 | Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes | `/optimus-plan` |
+| `plan` | 1 | Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes. Creates workspace (branch/worktree) | `/optimus-plan` |
 | `build` | 2 | End-to-end task implementation with verification gates, code review, and commit approval | `/optimus-build` |
 | `review` | 3 | Validates completed task implementation against spec, coding standards, and best practices using parallel specialist agents | `/optimus-review` |
 | `done` | 4 | Requires PR in final state (merged or closed) before marking task done. Cleans up worktree and branch interactively | `/optimus-done` |
@@ -44,7 +44,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
 | `pr-check` | Standalone PR review orchestrator. Collects PR metadata and existing comments (Codacy, DeepSource, CodeRabbit, human), dispatches agents, applies fixes, resolves threads. Does not change task status | `/optimus-pr-check` |
 | `deep-doc-review` | Deep review of project documentation. Finds errors, inconsistencies, gaps, and improvements with interactive one-by-one resolution | `/optimus-deep-doc-review` |
 | `deep-review` | Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Auto-discovers installed Ring review droids. Flexible scope: entire project, git diff, or specific directory | `/optimus-deep-review` |
-| `coderabbit-review` | CodeRabbit-driven code review with TDD fix cycle, secondary validation via review agents, and interactive finding resolution | `/optimus-coderabbit-review` |
+| `coderabbit-review` | CodeRabbit-driven code review with TDD fix cycle, secondary validation via review agents, and interactive finding resolution. Requires CodeRabbit CLI | `/optimus-coderabbit-review` |
 
 ## Install
 

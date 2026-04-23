@@ -22,7 +22,7 @@
     },
     {
       "name": "plan",
-      "description": "Stage 1: Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes.",
+      "description": "Stage 1: Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes. Creates workspace (branch/worktree).",
       "source": "./plan"
     },
     {
@@ -67,7 +67,7 @@
     },
     {
       "name": "coderabbit-review",
-      "description": "CodeRabbit-driven code review with TDD fix cycle, secondary validation via review agents, and interactive finding resolution.",
+      "description": "CodeRabbit-driven code review with TDD fix cycle, secondary validation via review agents, and interactive finding resolution. Requires CodeRabbit CLI.",
       "source": "./coderabbit-review"
     },
     {
