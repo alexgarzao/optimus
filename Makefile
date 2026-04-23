@@ -1,7 +1,7 @@
 .PHONY: test lint check-inline sync-plugins
 
 test:
-	python3 -m pytest scripts/test_inline_protocols.py -v
+	python3 -m pytest scripts/test_inline_protocols.py scripts/test_sync_user_plugins.py -v
 
 lint:
 	python3 -m py_compile scripts/inline-protocols.py

@@ -10,18 +10,22 @@ making each plugin self-contained.
 
 Usage: python3 scripts/inline-protocols.py
 """
+from __future__ import annotations
 
 import re
 import sys
 from pathlib import Path
-from typing import Dict, Optional, Set
 
 REPO_ROOT = Path(__file__).parent.parent
 AGENTS_MD = REPO_ROOT / "AGENTS.md"
 MARKER_START = "<!-- INLINE-PROTOCOLS:START -->"
 MARKER_END = "<!-- INLINE-PROTOCOLS:END -->"
+HEADING_RE = re.compile(r'^(#{2,3})\s+(.+)$')
+PROTOCOL_RE = re.compile(r'AGENTS\.md Protocol:\s*([^\n"]+)')
+COMMON_PATTERN_RE = re.compile(r'AGENTS\.md\s*"Common Patterns\s*>\s*([^"]+)"')
+FINDING_PRESENTATION_RE = re.compile(r'AGENTS\.md\s*"Finding Presentation"')
 
-def parse_agents_md() -> Dict[str, str]:
+def parse_agents_md() -> dict[str, str]:
     """Parse AGENTS.md into named sections keyed by heading text."""
     if not AGENTS_MD.exists():
         print(f"ERROR: {AGENTS_MD} not found. Run from repo root.")
@@ -32,7 +36,7 @@ def parse_agents_md() -> Dict[str, str]:
     current_lines = []
 
     for line in lines:
-        heading_match = re.match(r'^(#{2,3})\s+(.+)$', line)
+        heading_match = HEADING_RE.match(line)
         if heading_match:
             title = heading_match.group(2).strip()
             if current_key:
@@ -48,13 +52,13 @@ def parse_agents_md() -> Dict[str, str]:
     return sections
 
 
-def extract_refs_from_skill(skill_path: Path) -> Set[str]:
+def extract_refs_from_skill(skill_path: Path) -> set[str]:
     """Extract all AGENTS.md references from a SKILL.md file (body only, not inlined block)."""
     content = strip_existing_inline(skill_path.read_text())
     refs = set()
 
     # Protocol references: "see AGENTS.md Protocol: X"
-    for m in re.finditer(r'AGENTS\.md Protocol:\s*([^\n"]+)', content):
+    for m in PROTOCOL_RE.finditer(content):
         name = m.group(1).strip()
         # Split at sentence boundary (". " followed by uppercase letter) to remove
         # trailing sentences like ". Use stage=..." or ". Also load:"
@@ -65,12 +69,12 @@ def extract_refs_from_skill(skill_path: Path) -> Set[str]:
         refs.add(f"Protocol: {name}")
 
     # Common pattern references: 'AGENTS.md "Common Patterns > X"'
-    for m in re.finditer(r'AGENTS\.md\s*"Common Patterns\s*>\s*([^"]+)"', content):
+    for m in COMMON_PATTERN_RE.finditer(content):
         name = m.group(1).strip().rstrip('.')
         refs.add(f"Common: {name}")
 
     # Finding Presentation references
-    for m in re.finditer(r'AGENTS\.md\s*"Finding Presentation"', content):
+    for m in FINDING_PRESENTATION_RE.finditer(content):
         refs.add("Common: Finding Presentation")
 
     return refs
@@ -81,7 +85,7 @@ def _normalize_key(key: str) -> str:
     return re.sub(r'\s*\([^)]*\)\s*$', '', key).strip().lower()
 
 
-def match_ref_to_section(ref: str, sections: Dict[str, str]) -> Optional[str]:
+def match_ref_to_section(ref: str, sections: dict[str, str]) -> str | None:
     """Match a reference name to a section key in AGENTS.md."""
     if ref.startswith("Protocol: "):
         proto_name = ref[len("Protocol: "):]

@@ -243,7 +243,7 @@ For EACH finding, present:
 
 ### 1. Finding Header
 
-`## [SEVERITY] F# | [Category]`
+`## (X/N) [SEVERITY] F# | [Category]`
 - Source agent(s)
 - File and line number
 
@@ -327,24 +327,7 @@ collected in Phase 5. No fix is applied during Phase 5.
 For each approved fix, apply the change. After each fix, confirm what changed in 1-2 sentences.
 
 For fixes that alter execution flow, conditions, or observable behavior, run unit tests
-after the fix to verify no regressions.
-
-Check `.optimus/config.json` for custom commands before running any verification:
-
-```bash
-CONFIG_FILE=".optimus/config.json"
-if [ -f "$CONFIG_FILE" ]; then
-  if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
-    echo "WARNING: .optimus/config.json is corrupted. Falling back to auto-detection."
-  else
-    LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE")
-    TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE")
-  fi
-fi
-```
-
-Use configured commands if present (empty string means skip that check). Fall back to
-`make lint` / `make test` if `.optimus/config.json` is missing or the key is absent.
+after the fix to verify no regressions (`make test`).
 
 ### Step 6.2.1: Handle Test Failures
 
@@ -362,7 +345,6 @@ If tests fail after 3 attempts to fix, revert the offending fix and ask the user
 
 After ALL fixes are applied, run lint once (if available):
 ```bash
-$LINT_CMD   # from .optimus/config.json, or fallback:
 make lint
 ```
 If lint fails, fix formatting issues.

@@ -8,7 +8,7 @@ set -euo pipefail
 
 trap 'echo ""; echo "WARNING: Sync interrupted. Re-run /optimus-sync to complete."; exit 130' INT TERM
 
-MARKETPLACE_NAME="optimus"
+readonly MARKETPLACE_NAME="${OPTIMUS_MARKETPLACE_NAME:-optimus}"
 
 echo "=== Optimus Plugin Sync ==="
 echo ""

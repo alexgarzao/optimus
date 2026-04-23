@@ -87,6 +87,11 @@ class TestExtractRefsFromSkill:
         refs = ip.extract_refs_from_skill(p)
         assert "Common: Finding Presentation" in refs
 
+    def test_protocol_with_semicolon_trailing(self, tmp_path: Path):
+        p = self._write_skill(tmp_path, "AGENTS.md Protocol: Session State; also do X.")
+        refs = ip.extract_refs_from_skill(p)
+        assert "Protocol: Session State" in refs
+
     def test_no_refs(self, tmp_path: Path):
         p = self._write_skill(tmp_path, "No references here.")
         assert ip.extract_refs_from_skill(p) == set()
@@ -255,10 +260,12 @@ class TestIdempotency:
         skill.write_text("see AGENTS.md Protocol: X.\n")
         skill.chmod(0o000)
 
-        ip.inline_protocols()
-        output = capsys.readouterr().out
-        assert "ERROR" in output or "skipping" in output.lower()
-        skill.chmod(0o644)  # restore for cleanup
+        try:
+            ip.inline_protocols()
+            output = capsys.readouterr().out
+            assert "ERROR" in output and "skipping" in output.lower()
+        finally:
+            skill.chmod(0o644)
 
     def test_processes_multiple_skills(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         agents = tmp_path / "AGENTS.md"
