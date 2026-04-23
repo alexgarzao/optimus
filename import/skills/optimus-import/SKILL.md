@@ -337,7 +337,11 @@ if [ -n "$EXISTING_FILE" ] && [ "$EXISTING_FILE" != ".optimus/tasks.md" ]; then
   else
     EXISTING_TASKS_DIR="$(dirname "$EXISTING_FILE")/tasks"
     git rm -r "$EXISTING_FILE" 2>/dev/null || rm -f "$EXISTING_FILE"
-    git rm -r "$EXISTING_TASKS_DIR" 2>/dev/null || rm -rf "$EXISTING_TASKS_DIR"
+    PROJECT_ROOT=$(git rev-parse --show-toplevel)
+    case "$EXISTING_TASKS_DIR" in
+      "$PROJECT_ROOT"/*) git rm -r "$EXISTING_TASKS_DIR" 2>/dev/null || rm -rf "$EXISTING_TASKS_DIR" ;;
+      *) echo "ERROR: Path outside project root — refusing to delete '$EXISTING_TASKS_DIR'" ;;
+    esac
   fi
 fi
 ```

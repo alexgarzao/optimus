@@ -379,7 +379,7 @@ Measure coverage — see AGENTS.md Protocol: Coverage Measurement.
 
 If coverage is below threshold, flag as findings.
 
-**NOTE:** Integration and E2E tests run only before push or when user invokes directly.
+**NOTE:** Integration tests run only before push or when user invokes directly.
 
 ### Step 5.2: Test Scenario Gap Analysis
 
@@ -453,28 +453,26 @@ analysis. The other agents review the code from their specialist domains.
 **Failure handling:** If any agent dispatch fails, treat that agent's slot as "zero findings"
 for that round but warn the user. Do NOT fail the entire review.
 
-When the loop exits, proceed to Phase 7 (integration/E2E tests).
+When the loop exits, proceed to Phase 7 (integration tests).
 
 ---
 
-## Phase 7: Integration and E2E Tests (before push)
+## Phase 7: Integration Tests (before push)
 
-**After the convergence loop exits**, run integration and E2E tests. These are slow and
+**After the convergence loop exits**, run integration tests. These are slow and
 expensive, so they run ONCE here — not during the fix/convergence cycle.
 
 ```bash
 make test-integration        # Optional target — SKIP if missing
-make test-e2e                # Optional target — SKIP if missing
 ```
 
 | Test Type | Command | If target exists | If missing |
 |-----------|---------|-----------------|------------|
 | Integration | `make test-integration` | **HARD BLOCK** if fails | SKIP |
-| E2E | `make test-e2e` | **HARD BLOCK** if fails | SKIP |
 
-**If any test fails:**
+**If integration tests fail:**
 1. Present the failure output (first 30 lines)
-2. Ask via `AskUser`: "Integration/E2E tests are failing. What should I do?"
+2. Ask via `AskUser`: "Integration tests are failing. What should I do?"
    - Fix the issue (dispatch ring droid)
    - Skip and proceed to summary (user will handle later)
 
@@ -520,7 +518,6 @@ After all phases complete:
 - Unit tests: PASS (X tests)
 - Lint: PASS
 - Integration tests: not run (run before push or invoke directly)
-- E2E tests: not run (run before push or invoke directly)
 - Skipped tests: X (with justification)
 
 ### Statistics

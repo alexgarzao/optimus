@@ -962,28 +962,30 @@ Include existing PR comments from all sources (reuse data from Phase 1 — do NO
 Codacy/DeepSource comments, they only update after push). Include the cross-cutting
 analysis instructions (same 5 items from Step 3.3 prompt).
 
-When the loop exits, proceed to Phase 11 (integration/E2E tests).
+**Failure handling:** If the fresh sub-agent dispatch fails (Task tool error, ring droid
+unavailable), treat it as equivalent to "zero new findings" for that round but warn the
+user. Do NOT fail the entire review.
+
+When the loop exits, proceed to Phase 11 (integration tests).
 
 ---
 
-## Phase 11: Integration and E2E Tests (before push)
+## Phase 11: Integration Tests (before push)
 
-**Before pushing**, run integration and E2E tests. These are slow and expensive, so they
+**Before pushing**, run integration tests. These are slow and expensive, so they
 run ONCE here — not during the fix/convergence cycle.
 
 ```bash
 make test-integration        # Optional target — SKIP if missing
-make test-e2e                # Optional target — SKIP if missing
 ```
 
 | Test Type | Command | If target exists | If target missing |
 |-----------|---------|-----------------|-------------------|
 | Integration | `make test-integration` | **HARD BLOCK** if fails | SKIP |
-| E2E | `make test-e2e` | **HARD BLOCK** if fails | SKIP |
 
-**If any test fails:**
+**If integration tests fail:**
 1. Present the failure output (first 30 lines)
-2. Ask via `AskUser`: "Integration/E2E tests are failing. What should I do?"
+2. Ask via `AskUser`: "Integration tests are failing. What should I do?"
    - Fix the issue (dispatch ring droid)
    - Skip and push anyway (user will handle in CI)
 
@@ -1285,7 +1287,6 @@ gh api graphql -f query='
 - Lint: PASS
 - Unit tests: PASS (X tests) — Coverage: XX.X% (threshold: 85%)
 - Integration tests: PASS/SKIPPED — Coverage: XX.X% (threshold: 70%) / SKIP
-- E2E tests: PASS/SKIPPED
 
 ### Configuration Changes
 | # | Tool | Change | Method |

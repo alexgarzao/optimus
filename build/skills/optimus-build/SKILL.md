@@ -378,6 +378,8 @@ After ALL subtasks are complete:
 
 8. **Convergence loop (MANDATORY):** Execute the convergence loop — see AGENTS.md
    "Common Patterns > Convergence Loop". Dispatch the same 8 review droids in rounds 2+.
+   **Failure handling:** If any sub-agent dispatch fails, treat as "zero new findings"
+   for that round but warn the user. Do NOT fail the entire build.
 
 ---
 

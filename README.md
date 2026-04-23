@@ -43,7 +43,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
 |-------|-------------|---------|
 | `pr-check` | Standalone PR review orchestrator. Collects PR metadata and existing comments, dispatches agents, applies fixes, resolves threads. Does not change task status | `/optimus-pr-check` |
 | `deep-doc-review` | Deep review of project documentation. Finds errors, inconsistencies, gaps, and improvements with interactive one-by-one resolution | `/optimus-deep-doc-review` |
-| `deep-review` | Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Supports initial (8 agents) and final (10 agents) review modes | `/optimus-deep-review` |
+| `deep-review` | Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Auto-discovers installed Ring review droids. Flexible scope: entire project, git diff, or specific directory | `/optimus-deep-review` |
 | `coderabbit-review` | CodeRabbit-driven code review with TDD fix cycle, secondary validation via review agents, and interactive finding resolution | `/optimus-coderabbit-review` |
 
 ## Install

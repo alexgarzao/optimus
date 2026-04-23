@@ -257,6 +257,10 @@ Options:
 - **Delete local only**: switch to default branch, delete local
 - **Keep**: Leave the branch as is
 
+**Final confirmation for destructive options:** If the user selects "Delete local and remote"
+or "Delete local only", present a final confirmation via `AskUser`:
+"This will permanently delete branch `<branch>`. Are you sure?" Options: Yes, delete / Cancel.
+
 **Before deleting:** switch to the default branch first:
 ```bash
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')

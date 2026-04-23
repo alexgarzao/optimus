@@ -246,7 +246,7 @@ make test                    # Unit tests — MANDATORY
 
 Measure coverage — see AGENTS.md Protocol: Coverage Measurement.
 
-**NOTE:** Integration and E2E tests are NOT run here. They run only in Phase 10
+**NOTE:** Integration tests are NOT run here. They run only in Phase 10
 (after re-run guard, before summary) or when the user invokes them directly.
 This avoids slow test suites blocking the review loop.
 
@@ -559,16 +559,13 @@ If lint fails, fix formatting issues and re-run.
 
 If tests fail after 3 attempts to fix, revert the offending fix and ask the user.
 
-**NOTE:** Integration and E2E tests do NOT run here — they run in Phase 10 (after re-run guard, before summary).
+**NOTE:** Integration tests do NOT run here — they run in Phase 10 (after re-run guard, before summary).
 
 ### Step 7.4: Coverage Verification
 
 Measure coverage — see AGENTS.md Protocol: Coverage Measurement.
 
 If coverage is below threshold, add findings to the results.
-
-**E2E tests:**
-If `make test-e2e` target does not exist, mark as SKIP in the summary. Do NOT ask the user whether to implement E2E — that's a project-level decision, not a per-task decision.
 
 ### Step 7.5: Test Scenario Gap Analysis
 
@@ -666,28 +663,26 @@ Execute re-run guard — see AGENTS.md Protocol: Re-run Guard.
   Structure). Skip all prior setup steps (GitHub CLI check, tasks.md validation, workspace
   resolution, task identification, session state, status validation, divergence check).
   Increment stage stats before re-starting analysis.
-- If the user chooses **Advance** (or 0 findings): proceed to Phase 10 (integration/E2E tests).
+- If the user chooses **Advance** (or 0 findings): proceed to Phase 10 (integration tests).
 
 ---
 
-## Phase 10: Integration and E2E Tests (before push)
+## Phase 10: Integration Tests (before push)
 
-**After the convergence loop exits**, run integration and E2E tests. These are slow and
+**After the convergence loop exits**, run integration tests. These are slow and
 expensive, so they run ONCE at the end — not during the fix/convergence cycle.
 
 ```bash
 make test-integration        # Integration tests — optional target
-make test-e2e                # E2E tests — optional target
 ```
 
 | Test Type | Command | If target exists | If missing |
 |-----------|---------|-----------------|------------|
 | Integration | `make test-integration` | **HARD BLOCK** if fails | SKIP |
-| E2E | `make test-e2e` | **HARD BLOCK** if fails | SKIP |
 
-**If any test fails:**
+**If integration tests fail:**
 1. Present the failure output (first 30 lines)
-2. Ask via `AskUser`: "Integration/E2E tests are failing. What should I do?"
+2. Ask via `AskUser`: "Integration tests are failing. What should I do?"
    - Fix the issue (dispatch ring droid)
    - Skip and proceed to summary (user will handle later)
 
@@ -736,7 +731,6 @@ make test-e2e                # E2E tests — optional target
 - Lint: PASS
 - Unit tests: PASS (X tests)
 - Integration tests: PASS / SKIPPED (Phase 10)
-- E2E tests: PASS / SKIPPED (Phase 10)
 
 ### Test Coverage
 - Unit tests: XX.X% (threshold: 85%) — PASS / FAIL

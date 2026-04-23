@@ -62,7 +62,7 @@
     },
     {
       "name": "deep-review",
-      "description": "Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Supports initial (8 agents) and final (10 agents) review modes.",
+      "description": "Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Auto-discovers installed Ring review droids. Flexible scope: entire project, git diff, or specific directory.",
       "source": "./deep-review"
     },
     {

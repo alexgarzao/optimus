@@ -213,7 +213,13 @@ Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelin
 4. **Create worktree:**
    ```bash
    REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
-   git worktree add "../${REPO_NAME}-<task-id>-<keywords>" -b "<tipo-prefix>/<task-id>-<keywords>"
+   WORKTREE_DIR="../${REPO_NAME}-<task-id>-<keywords>"
+   ```
+   **Pre-check:** If `WORKTREE_DIR` already exists but is not a git worktree, ask via
+   `AskUser`: "Directory `<path>` already exists but is not a git worktree."
+   Options: Remove and create worktree / Rename existing directory / Cancel.
+   ```bash
+   git worktree add "$WORKTREE_DIR" -b "<tipo-prefix>/<task-id>-<keywords>"
    ```
    Then change working directory to the new worktree path for all subsequent steps.
 
@@ -236,7 +242,7 @@ Increment stage stats — see AGENTS.md Protocol: Increment Stage Stats. Use cou
 Before loading docs, discover the project's structure:
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
-2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, test, integration test, and E2E test commands. These are needed for DoD validation.
+2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, test, and integration test commands. These are needed for DoD validation.
 3. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
 
 4. **Identify reference docs:** Look for task specs, API design, data model, architecture docs, business requirements, and dependency maps.
@@ -348,7 +354,7 @@ Verify the task has a Definition of Done section with ALL required items:
 **Required items (every task MUST have):**
 - [ ] Code reviewed (specify reviewers as applicable)
 - [ ] Tests passing with coverage threshold
-- [ ] All verification commands passing (lint, unit tests, integration tests, E2E tests)
+- [ ] All verification commands passing (lint, unit tests, integration tests)
 - [ ] Documentation updated (if applicable)
 
 **Validate DoD quality:**
@@ -591,6 +597,10 @@ line range ±5 + same category).
 Include analysis instructions: cross-reference (Step 2.1), test gaps (Step 2.2),
 observability (Step 2.3), DoD, ambiguities. Include the cross-cutting analysis instructions
 (same 5 items from Step 2.4 prompt).
+
+**Failure handling:** If the fresh sub-agent dispatch fails (Task tool error, ring droid
+unavailable), treat it as equivalent to "zero new findings" for that round but warn the
+user. Do NOT fail the entire validation.
 
 When the loop exits, proceed to Phase 7 (Re-run Guard).
 

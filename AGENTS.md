@@ -499,6 +499,10 @@ It does NOT change task status and is NOT part of the pipeline stages.
    and then refuses with a clear message identifying which dependency is blocking.
    **If the blocking dependency has status `Cancelado`**, the message must differentiate:
    "T-YYY was cancelled (Cancelado). Consider removing this dependency via `/optimus-tasks`."
+   **If ALL dependencies are `Cancelado`**, add resolution guidance:
+   "All dependencies of T-XXX are cancelled. To unblock, run `/optimus-tasks edit T-XXX`
+   and either: (a) remove all dependencies, (b) replace with alternative task IDs, or
+   (c) cancel T-XXX as well."
 7. **Expanded confirmation on status change** — when a stage agent is about to change
    a task's status, it shows the task summary (title and version) and asks for
    explicit confirmation via `AskUser`. This
@@ -755,9 +759,15 @@ Each task gets its own file (e.g., `.optimus/sessions/session-T-003.json`).
   "started_at": "2025-01-15T10:30:00Z",
   "updated_at": "2025-01-15T11:45:00Z",
   "phase": "Phase 1: Implementation",
+  "convergence_round": 0,
+  "findings_count": 0,
   "notes": "Implementation in progress"
 }
 ```
+
+**Convergence checkpoint:** During the convergence loop, update `convergence_round` and
+`findings_count` after each round completes. On resume, skip to the last completed round
+rather than restarting the entire analysis.
 
 **On stage start (after task ID is known):**
 
@@ -793,7 +803,11 @@ fi
   UPDATED=$(jq -r '.updated_at // empty' "$SESSION_FILE" 2>/dev/null)
   if [ -n "$UPDATED" ]; then
     NOW_EPOCH=$(date +%s)
-    UPDATED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED" +%s 2>/dev/null || date -d "$UPDATED" +%s 2>/dev/null || echo 0)
+    if [ "$(uname)" = "Darwin" ]; then
+      UPDATED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED" +%s 2>/dev/null || echo 0)
+    else
+      UPDATED_EPOCH=$(date -d "$UPDATED" +%s 2>/dev/null || echo 0)
+    fi
     AGE=$(( NOW_EPOCH - UPDATED_EPOCH ))
     if [ "$AGE" -gt 86400 ]; then
       echo "Session file is stale (>24h). Deleting."
@@ -949,7 +963,9 @@ if [ -z "$DEFAULT_BRANCH" ]; then
   # Skip — this is a warning, not a HARD BLOCK
 else
   TASKS_FILE=".optimus/tasks.md"
-  git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null
+  if ! git fetch origin "$DEFAULT_BRANCH" --quiet 2>/dev/null; then
+    echo "WARNING: Could not fetch from origin. Divergence check may use stale data."
+  fi
   git diff "origin/$DEFAULT_BRANCH" -- "$TASKS_FILE" 2>/dev/null | head -20
 fi
 ```
@@ -1014,7 +1030,7 @@ Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol:
 
 ### Protocol: Ring Droid Requirement Check
 
-**Referenced by:** check, pr-check, deep-review, deep-doc-review, coderabbit-review, plan, build
+**Referenced by:** check, pr-check, deep-doc-review, coderabbit-review, plan, build
 
 Before dispatching ring droids, verify the required droids are available. If any required
 droid is not installed, **STOP** and list missing droids.
@@ -1345,7 +1361,13 @@ fi
 UPDATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 if jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" --arg branch "$BRANCH_NAME" --arg ts "$UPDATED_AT" \
   '.[$id] = {status: $status, branch: $branch, updated_at: $ts}' "$STATE_FILE" > "${STATE_FILE}.tmp"; then
-  mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  if jq empty "${STATE_FILE}.tmp" 2>/dev/null; then
+    mv "${STATE_FILE}.tmp" "$STATE_FILE"
+  else
+    rm -f "${STATE_FILE}.tmp"
+    echo "ERROR: jq produced invalid JSON — state.json unchanged"
+    # STOP — do not proceed
+  fi
 else
   rm -f "${STATE_FILE}.tmp"
   echo "ERROR: jq failed to update state.json"
@@ -1504,7 +1526,6 @@ Skills call `make <target>` directly — no configuration needed.
 | Target | Purpose |
 |--------|---------|
 | `make test-integration` | Run integration tests |
-| `make test-e2e` | Run E2E tests |
 | `make test-coverage` | Run unit tests with coverage report |
 | `make test-integration-coverage` | Run integration tests with coverage report |
 
@@ -1617,12 +1638,11 @@ during development while ensuring full validation before push.
 | **Unit tests** (`make test`) | BEFORE review (baseline) + AFTER each fix (regression) | stages 3, 4, coderabbit |
 | **Lint** (`make lint`) | ONCE after ALL fixes applied | stages 3, 4, coderabbit |
 | **Integration tests** (`make test-integration`) | ONCE before push (or when user invokes directly) | stages 3, 4 |
-| **E2E tests** (`make test-e2e`) | ONCE before push (or when user invokes directly) | stages 3, 4 |
 
 **Rationale:**
 - Unit tests are fast and catch regressions immediately — run often
 - Lint is fast but only matters after all code is finalized — run once at end
-- Integration/E2E tests are slow (seconds to minutes) — run once before push to avoid
+- Integration tests are slow (seconds to minutes) — run once before push to avoid
   blocking the review loop. If targets don't exist, skip.
 
 ### Coverage Thresholds
