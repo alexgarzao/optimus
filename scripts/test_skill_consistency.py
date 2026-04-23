@@ -4,8 +4,6 @@
 import re
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).parent.parent
 AGENTS_MD = REPO_ROOT / "AGENTS.md"
 
