@@ -323,3 +323,301 @@ class TestFindingPresentation:
             "AGENTS.md missing anti-rationalization block"
         assert "(X/N)" in content, \
             "AGENTS.md missing (X/N) progress prefix instruction"
+
+
+# --- Pipeline: exactly 4 stages (plan, build, review, done) ---
+
+TRANSITION_ROW = re.compile(
+    r"^\|\s*(plan|build|review|done)\s*\|", re.MULTILINE
+)
+STALE_FIVE_STAGE = re.compile(
+    r"(5 stages|stages 1-5|stages 2-5)", re.IGNORECASE
+)
+VALID_STATUSES = [
+    "Pendente", "Validando Spec", "Em Andamento",
+    "Validando Impl", "DONE", "Cancelado",
+]
+
+
+class TestPipelineFourStages:
+    """Pipeline must be exactly 4 stages: plan, build, review, done."""
+
+    def test_agents_md_transition_table_has_four_rows(self):
+        """Transition Table in AGENTS.md must have exactly 4 agent rows."""
+        content = AGENTS_MD.read_text()
+        rows = TRANSITION_ROW.findall(content)
+        assert sorted(rows) == ["build", "done", "plan", "review"], (
+            f"Transition Table has agents {rows}, expected [plan, build, review, done]"
+        )
+
+    def test_no_stale_five_stage_references(self):
+        """No doc file should mention '5 stages' or 'stages 1-5' or 'stages 2-5'."""
+        violations = []
+        for filepath in _all_doc_files():
+            text = filepath.read_text()
+            for i, line in enumerate(text.splitlines(), 1):
+                if STALE_FIVE_STAGE.search(line):
+                    rel = filepath.relative_to(REPO_ROOT)
+                    violations.append(f"{rel}:{i}: {line.strip()}")
+        assert violations == [], (
+            "Stale 5-stage references found (pipeline is 4 stages):\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    def test_valid_status_values_in_agents_md(self):
+        """AGENTS.md must define exactly 6 statuses; Revisando PR only in migration code."""
+        content = AGENTS_MD.read_text()
+        for status in VALID_STATUSES:
+            assert status in content, f"AGENTS.md missing status '{status}'"
+        for i, line in enumerate(content.splitlines(), 1):
+            if "Revisando PR" in line:
+                assert "migration" in line.lower() or "migrat" in line.lower() \
+                    or "jq" in line or "select(" in line or "echo" in line, (
+                    f"AGENTS.md:{i}: 'Revisando PR' outside migration code: {line.strip()}"
+                )
+
+
+# --- Plugin completeness: marketplace matches directory structure ---
+
+EXPECTED_PLUGINS = [
+    "batch", "build", "coderabbit-review", "deep-doc-review", "deep-review",
+    "done", "help", "import", "plan", "pr-check", "quick-report", "report",
+    "resolve", "review", "sync", "tasks",
+]
+REMOVED_PLUGINS = ["verify-code", "codacy-review", "deepsource-review"]
+
+
+class TestPluginCompleteness:
+    """Marketplace, directories, and plugin count must stay in sync."""
+
+    def test_all_marketplace_plugins_have_directory(self):
+        """Every plugin in marketplace.json must have a SKILL.md."""
+        if not MARKETPLACE_JSON.exists():
+            return
+        marketplace = json.loads(MARKETPLACE_JSON.read_text())
+        missing = []
+        for plugin in marketplace.get("plugins", []):
+            name = plugin["name"]
+            paths = list(REPO_ROOT.glob(f"{name}/skills/*/SKILL.md"))
+            if not paths:
+                missing.append(name)
+        assert missing == [], (
+            "Marketplace plugins missing SKILL.md:\n"
+            + "\n".join(f"  - {v}" for v in missing)
+        )
+
+    def test_all_plugin_directories_in_marketplace(self):
+        """Every directory with plugin.json must be listed in marketplace.json."""
+        if not MARKETPLACE_JSON.exists():
+            return
+        marketplace = json.loads(MARKETPLACE_JSON.read_text())
+        marketplace_names = {p["name"] for p in marketplace.get("plugins", [])}
+        orphans = []
+        for pj in REPO_ROOT.glob("*/.factory-plugin/plugin.json"):
+            name = pj.parent.parent.name
+            if name not in marketplace_names:
+                orphans.append(name)
+        assert orphans == [], (
+            "Plugin directories not in marketplace.json:\n"
+            + "\n".join(f"  - {v}" for v in orphans)
+        )
+
+    def test_expected_plugin_count(self):
+        """Marketplace must have exactly 16 plugins."""
+        if not MARKETPLACE_JSON.exists():
+            return
+        marketplace = json.loads(MARKETPLACE_JSON.read_text())
+        count = len(marketplace.get("plugins", []))
+        assert count == 16, (
+            f"Expected 16 plugins in marketplace, found {count}"
+        )
+
+    def test_no_removed_plugins_referenced(self):
+        """No SKILL.md should reference removed plugins (verify-code, codacy-review, deepsource-review)."""
+        violations = []
+        for filepath in _all_skill_files():
+            text = filepath.read_text()
+            for removed in REMOVED_PLUGINS:
+                if removed in text:
+                    rel = filepath.relative_to(REPO_ROOT)
+                    violations.append(f"{rel}: references removed plugin '{removed}'")
+        assert violations == [], (
+            "Removed plugins still referenced:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+
+# --- Skill classification: Admin vs Execution ---
+
+EXECUTION_SKILLS = ["plan", "build", "review", "done"]
+WORKSPACE_SKILLS = ["build", "review", "done"]
+
+
+class TestSkillClassification:
+    """Execution skills must have session state and workspace protocols."""
+
+    def test_stage_skills_have_session_state(self):
+        """All 4 execution skills must reference Session State protocol."""
+        missing = []
+        for skill in EXECUTION_SKILLS:
+            content = _read_skill(skill)
+            if "Session State" not in content:
+                missing.append(skill)
+        assert missing == [], (
+            "Execution skills missing Session State protocol:\n"
+            + "\n".join(f"  - {v}" for v in missing)
+        )
+
+    def test_stage_skills_have_workspace_protocol(self):
+        """build, review, done must reference Workspace Auto-Navigation."""
+        missing = []
+        for skill in WORKSPACE_SKILLS:
+            content = _read_skill(skill)
+            if "Workspace Auto-Navigation" not in content:
+                missing.append(skill)
+        assert missing == [], (
+            "Skills missing Workspace Auto-Navigation protocol:\n"
+            + "\n".join(f"  - {v}" for v in missing)
+        )
+
+    def test_pr_check_is_standalone(self):
+        """pr-check must NOT change task status (it's standalone, not a pipeline stage)."""
+        content = _read_skill("pr-check")
+        assert "state.json" not in content or "does not change" in content.lower() or \
+            "standalone" in content.lower(), (
+            "pr-check appears to modify state.json — it should be standalone"
+        )
+
+
+# --- Makefile convention: make lint/test required, no commands.* config ---
+
+COMMANDS_CONFIG = re.compile(r"commands\.(lint|test|build|format)")
+
+
+class TestMakefileConvention:
+    """Projects must use Makefile targets, not commands.* config."""
+
+    def test_agents_md_requires_make_lint_and_test(self):
+        """AGENTS.md must define make lint and make test as required targets."""
+        content = AGENTS_MD.read_text()
+        assert "make lint" in content, "AGENTS.md missing 'make lint' requirement"
+        assert "make test" in content, "AGENTS.md missing 'make test' requirement"
+
+    def test_no_commands_config_references(self):
+        """No SKILL.md should reference commands.lint or commands.test config pattern."""
+        violations = []
+        for filepath in _all_skill_files():
+            text = filepath.read_text()
+            for i, line in enumerate(text.splitlines(), 1):
+                if COMMANDS_CONFIG.search(line):
+                    rel = filepath.relative_to(REPO_ROOT)
+                    violations.append(f"{rel}:{i}: {line.strip()}")
+        assert violations == [], (
+            "Stale commands.* config references found (use Makefile convention):\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+
+# --- Convergence model: Full Roster, no escalating scrutiny ---
+
+
+class TestConvergenceModel:
+    """Convergence loop must use Full Roster Model, not escalating scrutiny."""
+
+    def test_agents_md_has_full_roster_model(self):
+        """AGENTS.md must define the Full Roster Model for convergence."""
+        content = AGENTS_MD.read_text()
+        assert "Full Roster Model" in content, \
+            "AGENTS.md missing 'Full Roster Model' convergence definition"
+
+    def test_no_escalating_scrutiny_references(self):
+        """No doc file should mention 'escalating scrutiny' (replaced by Full Roster)."""
+        violations = []
+        for filepath in _all_doc_files():
+            text = filepath.read_text()
+            if "escalating scrutiny" in text.lower():
+                rel = filepath.relative_to(REPO_ROOT)
+                violations.append(str(rel))
+        assert violations == [], (
+            "Stale 'escalating scrutiny' references found:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    def test_convergence_round_2_mandatory(self):
+        """AGENTS.md must state that convergence round 2 is mandatory."""
+        content = AGENTS_MD.read_text()
+        assert "Round 2 is MANDATORY" in content, \
+            "AGENTS.md missing 'Round 2 is MANDATORY' convergence rule"
+
+
+# --- tasks.md format spec: marker, Tipo, versions, state.json ---
+
+
+class TestTasksFormatSpec:
+    """tasks.md format invariants must be defined in AGENTS.md."""
+
+    def test_agents_md_defines_format_marker(self):
+        """AGENTS.md must define the tasks-v1 format marker."""
+        content = AGENTS_MD.read_text()
+        assert "<!-- optimus:tasks-v1 -->" in content, \
+            "AGENTS.md missing format marker <!-- optimus:tasks-v1 -->"
+
+    def test_agents_md_defines_tipo_values(self):
+        """AGENTS.md must list all 6 Tipo values."""
+        content = AGENTS_MD.read_text()
+        for tipo in ["Feature", "Fix", "Refactor", "Chore", "Docs", "Test"]:
+            assert tipo in content, f"AGENTS.md missing Tipo value '{tipo}'"
+
+    def test_agents_md_defines_version_statuses(self):
+        """AGENTS.md must list all 5 version status values."""
+        content = AGENTS_MD.read_text()
+        for status in ["Ativa", "Backlog"]:
+            assert status in content, f"AGENTS.md missing version status '{status}'"
+
+    def test_status_lives_in_state_json(self):
+        """AGENTS.md must state that status is NOT stored in tasks.md."""
+        content = AGENTS_MD.read_text()
+        assert "NOT stored in tasks.md" in content or \
+            "NOT in tasks.md" in content, (
+            "AGENTS.md missing statement that status lives in state.json, not tasks.md"
+        )
+
+    def test_agents_md_has_column_spec(self):
+        """AGENTS.md must define the required columns: ID, Title, Tipo, Depends, Priority, Version."""
+        content = AGENTS_MD.read_text()
+        for col in ["ID", "Title", "Tipo", "Depends", "Priority", "Version"]:
+            assert f"| {col} |" in content or f"| {col}" in content, \
+                f"AGENTS.md missing column definition for '{col}'"
+
+
+# --- done redesign: 3 hard gates, no local lint/test ---
+
+
+class TestDoneRedesign:
+    """done must use 3 hard gates and NOT run local lint/test."""
+
+    def test_done_has_three_hard_gates(self):
+        """done SKILL.md must reference all 3 hard gates."""
+        content = _read_skill("done")
+        assert "uncommitted" in content.lower(), \
+            "done missing 'uncommitted changes' gate"
+        assert "unpushed" in content.lower(), \
+            "done missing 'unpushed commits' gate"
+        assert "PR" in content and ("MERGED" in content or "final state" in content.lower()), \
+            "done missing 'PR in final state' gate"
+
+    def test_done_no_local_lint_test(self):
+        """done SKILL.md must NOT contain make lint or make test as execution steps."""
+        content = _read_skill("done")
+        lines = content.splitlines()
+        violations = []
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if stripped.startswith("#") or stripped.startswith("**"):
+                continue
+            if re.search(r"^make (lint|test)\b", stripped):
+                violations.append(f"done/SKILL.md:{i}: {stripped}")
+        assert violations == [], (
+            "done should not run local lint/test (CI responsibility):\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
