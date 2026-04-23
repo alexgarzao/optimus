@@ -1150,6 +1150,10 @@ DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@
 if [ -z "$DEFAULT_BRANCH" ]; then
   DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
 fi
+if [ -z "$DEFAULT_BRANCH" ]; then
+  echo "ERROR: Cannot determine default branch. Set it with: git remote set-head origin <branch>"
+  # STOP — do not proceed
+fi
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
 if [ -z "$CURRENT_BRANCH" ]; then
   echo "ERROR: Cannot determine current branch (detached HEAD state). Checkout a branch first."

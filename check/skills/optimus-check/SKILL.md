@@ -1270,7 +1270,7 @@ Skills reference this as: "Check active version guard — see AGENTS.md Protocol
 
 ### Protocol: Coverage Measurement
 
-**Referenced by:** check, pr-check, coderabbit-review, deep-review
+**Referenced by:** check, pr-check, coderabbit-review, deep-review, build
 
 Measure test coverage using the project's configured commands. Check `.optimus/config.json`
 for custom commands first, then fall back to Makefile targets, then stack-specific commands.
@@ -1459,7 +1459,7 @@ Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Titl
 
 ### Protocol: Per-Droid Quality Checklists
 
-**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan
+**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan, build
 
 Each droid type has specific dimensions it MUST verify beyond its core domain. Skills
 that dispatch review droids MUST include the applicable checklists in agent prompts.
@@ -2029,6 +2029,10 @@ be in the task's worktree before proceeding with any work.
 DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
 if [ -z "$DEFAULT_BRANCH" ]; then
   DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
+fi
+if [ -z "$DEFAULT_BRANCH" ]; then
+  echo "ERROR: Cannot determine default branch. Set it with: git remote set-head origin <branch>"
+  # STOP — do not proceed
 fi
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
 if [ -z "$CURRENT_BRANCH" ]; then

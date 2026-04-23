@@ -563,7 +563,7 @@ All cycle review skills follow this pattern:
 
 ### Protocol: Coverage Measurement
 
-**Referenced by:** check, pr-check, coderabbit-review, deep-review
+**Referenced by:** check, pr-check, coderabbit-review, deep-review, build
 
 Measure test coverage using the project's configured commands. Check `.optimus/config.json`
 for custom commands first, then fall back to Makefile targets, then stack-specific commands.
@@ -604,7 +604,7 @@ Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage
 
 ### Protocol: Per-Droid Quality Checklists
 
-**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan
+**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan, build
 
 Each droid type has specific dimensions it MUST verify beyond its core domain. Skills
 that dispatch review droids MUST include the applicable checklists in agent prompts.

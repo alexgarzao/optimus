@@ -1203,7 +1203,7 @@ Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol:
 
 ### Protocol: Per-Droid Quality Checklists
 
-**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan
+**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan, build
 
 Each droid type has specific dimensions it MUST verify beyond its core domain. Skills
 that dispatch review droids MUST include the applicable checklists in agent prompts.

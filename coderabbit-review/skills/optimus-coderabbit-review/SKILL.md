@@ -122,10 +122,13 @@ if [ -f "$CONFIG_FILE" ]; then
     LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
     TEST_UNIT_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
     TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
+    TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
   fi
 fi
 LINT_CMD="${LINT_CMD:-make lint}"
 TEST_UNIT_CMD="${TEST_UNIT_CMD:-make test}"
+TEST_INTEGRATION_CMD="${TEST_INTEGRATION_CMD:-make test-integration}"
+TEST_E2E_CMD="${TEST_E2E_CMD:-make test-e2e}"
 ```
 
 ---
@@ -477,14 +480,14 @@ When the loop exits, proceed to Phase 7 (integration/E2E tests).
 expensive, so they run ONCE here — not during the fix/convergence cycle.
 
 ```bash
-make test-integration        # Integration tests — if target exists
-make test-e2e                # E2E tests — if target exists
+$TEST_INTEGRATION_CMD   # from .optimus/config.json, or fallback: make test-integration
+$TEST_E2E_CMD           # from .optimus/config.json, or fallback: make test-e2e
 ```
 
-| Test Type | Makefile Target | If target exists | If target missing |
-|-----------|----------------|-----------------|-------------------|
-| Integration | `make test-integration` | **HARD BLOCK** if fails | SKIP |
-| E2E | `make test-e2e` | **HARD BLOCK** if fails | SKIP |
+| Test Type | Command | If command/target exists | If missing |
+|-----------|---------|------------------------|------------|
+| Integration | `$TEST_INTEGRATION_CMD` | **HARD BLOCK** if fails | SKIP |
+| E2E | `$TEST_E2E_CMD` | **HARD BLOCK** if fails | SKIP |
 
 **If any test fails:**
 1. Present the failure output (first 30 lines)
@@ -638,7 +641,7 @@ All cycle review skills follow this pattern:
 
 ### Protocol: Coverage Measurement
 
-**Referenced by:** check, pr-check, coderabbit-review, deep-review
+**Referenced by:** check, pr-check, coderabbit-review, deep-review, build
 
 Measure test coverage using the project's configured commands. Check `.optimus/config.json`
 for custom commands first, then fall back to Makefile targets, then stack-specific commands.
@@ -679,7 +682,7 @@ Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage
 
 ### Protocol: Per-Droid Quality Checklists
 
-**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan
+**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan, build
 
 Each droid type has specific dimensions it MUST verify beyond its core domain. Skills
 that dispatch review droids MUST include the applicable checklists in agent prompts.
