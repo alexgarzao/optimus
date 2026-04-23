@@ -89,75 +89,109 @@ else
   EXISTING_PLUGINS=$(comm -12 <(echo "$EXPECTED") <(echo "$INSTALLED"))
 fi
 
-# Step 5: Remove orphaned plugins
-REMOVED=0
-FAILED=0
+# All operations run in parallel using temp dir for result collection
+RESULTS_DIR=$(mktemp -d)
+_cleanup() { rm -rf "$RESULTS_DIR"; }
+trap '_cleanup; echo ""; _warn "Sync interrupted. Re-run /optimus-sync to complete."; exit 130' INT TERM
+trap '_cleanup' EXIT
+
+# Step 5: Remove orphaned plugins (parallel)
 if [ -n "$ORPHANED_PLUGINS" ]; then
-  TOTAL=$(_count_lines "$ORPHANED_PLUGINS")
-  CURRENT=0
   echo ""
   echo "Removing orphaned plugins..."
   while IFS= read -r plugin; do
     [ -z "$plugin" ] && continue
-    CURRENT=$((CURRENT + 1))
-    echo "  - ($CURRENT/$TOTAL) $plugin"
-    if _droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null; then
+    (
+      if _droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
+        echo "OK" > "$RESULTS_DIR/remove-${plugin}"
+      else
+        echo "FAIL" > "$RESULTS_DIR/remove-${plugin}"
+      fi
+    ) &
+  done <<< "$ORPHANED_PLUGINS"
+  wait
+fi
+
+# Step 6: Install new plugins (parallel)
+if [ -n "$NEW_PLUGINS" ]; then
+  echo "Installing new plugins..."
+  while IFS= read -r plugin; do
+    [ -z "$plugin" ] && continue
+    (
+      if _droid plugin install "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
+        echo "OK" > "$RESULTS_DIR/install-${plugin}"
+      else
+        echo "FAIL" > "$RESULTS_DIR/install-${plugin}"
+      fi
+    ) &
+  done <<< "$NEW_PLUGINS"
+  wait
+fi
+
+# Step 7: Update existing plugins (parallel)
+if [ -n "$EXISTING_PLUGINS" ]; then
+  echo "Updating existing plugins..."
+  while IFS= read -r plugin; do
+    [ -z "$plugin" ] && continue
+    (
+      if _droid plugin update "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
+        echo "OK" > "$RESULTS_DIR/update-${plugin}"
+      else
+        _droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1 || true
+        if _droid plugin install "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
+          echo "REINSTALLED" > "$RESULTS_DIR/update-${plugin}"
+        else
+          echo "FAIL" > "$RESULTS_DIR/update-${plugin}"
+        fi
+      fi
+    ) &
+  done <<< "$EXISTING_PLUGINS"
+  wait
+fi
+
+# Step 8: Collect results and print summary
+REMOVED=0; ADDED=0; UPDATED=0; FAILED=0
+
+if [ -n "$ORPHANED_PLUGINS" ]; then
+  while IFS= read -r plugin; do
+    [ -z "$plugin" ] && continue
+    result=$(cat "$RESULTS_DIR/remove-${plugin}" 2>/dev/null || echo "FAIL")
+    if [ "$result" = "OK" ]; then
+      echo "  - $plugin ... OK"
       REMOVED=$((REMOVED + 1))
     else
-      _warn "Failed to remove ${plugin}"
+      echo "  - $plugin ... FAIL"
       FAILED=$((FAILED + 1))
     fi
   done <<< "$ORPHANED_PLUGINS"
 fi
 
-# Step 6: Install new plugins
-ADDED=0
 if [ -n "$NEW_PLUGINS" ]; then
-  TOTAL=$(_count_lines "$NEW_PLUGINS")
-  CURRENT=0
-  echo ""
-  echo "Installing new plugins..."
   while IFS= read -r plugin; do
     [ -z "$plugin" ] && continue
-    CURRENT=$((CURRENT + 1))
-    echo "  + ($CURRENT/$TOTAL) $plugin"
-    if _droid plugin install "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null; then
+    result=$(cat "$RESULTS_DIR/install-${plugin}" 2>/dev/null || echo "FAIL")
+    if [ "$result" = "OK" ]; then
+      echo "  + $plugin ... OK"
       ADDED=$((ADDED + 1))
     else
-      _warn "Failed to install ${plugin}"
+      echo "  + $plugin ... FAIL"
       FAILED=$((FAILED + 1))
     fi
   done <<< "$NEW_PLUGINS"
 fi
 
-# Step 7: Update existing plugins
-UPDATED=0
 if [ -n "$EXISTING_PLUGINS" ]; then
-  TOTAL=$(_count_lines "$EXISTING_PLUGINS")
-  CURRENT=0
-  echo ""
-  echo "Updating existing plugins..."
   while IFS= read -r plugin; do
     [ -z "$plugin" ] && continue
-    CURRENT=$((CURRENT + 1))
-    echo "  * ($CURRENT/$TOTAL) $plugin"
-    if _droid plugin update "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null; then
-      UPDATED=$((UPDATED + 1))
-    else
-      # Scope conflict — uninstall and reinstall
-      _warn "scope conflict for ${plugin}, reinstalling..."
-      _droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null || true
-      if _droid plugin install "${plugin}@${MARKETPLACE_NAME}" 2>/dev/null; then
-        UPDATED=$((UPDATED + 1))
-      else
-        _error "Failed to reinstall ${plugin}"
-        FAILED=$((FAILED + 1))
-      fi
-    fi
+    result=$(cat "$RESULTS_DIR/update-${plugin}" 2>/dev/null || echo "FAIL")
+    case "$result" in
+      OK)          echo "  * $plugin ... OK";            UPDATED=$((UPDATED + 1)) ;;
+      REINSTALLED) echo "  * $plugin ... OK (reinstalled)"; UPDATED=$((UPDATED + 1)) ;;
+      *)           echo "  * $plugin ... FAIL";           FAILED=$((FAILED + 1)) ;;
+    esac
   done <<< "$EXISTING_PLUGINS"
 fi
 
-# Step 8: Summary
 echo ""
 echo "=== Sync Complete ==="
 echo "  Added:   $ADDED"

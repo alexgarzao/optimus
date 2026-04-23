@@ -106,8 +106,8 @@ class TestFirstTimeInstall:
         result = _run_sync(tmp_path)
         assert result.returncode == 0
         assert "Added:   2" in result.stdout
-        assert "(1/2)" in result.stdout
-        assert "(2/2)" in result.stdout
+        assert "alpha ... OK" in result.stdout
+        assert "beta ... OK" in result.stdout
         log_content = log.read_text()
         assert "alpha@optimus" in log_content
         assert "beta@optimus" in log_content
@@ -145,7 +145,7 @@ class TestScopeConflict:
         _create_marketplace(tmp_path, ["alpha"])
         result = _run_sync(tmp_path)
         assert result.returncode == 0
-        assert "scope conflict" in result.stderr.lower()
+        assert "reinstalled" in result.stdout.lower()
         log_content = log.read_text()
         assert "uninstall alpha@optimus" in log_content
         assert "install alpha@optimus" in log_content

@@ -153,51 +153,43 @@ If **Cancel**, **STOP**.
 
 ## Phase 5: Execute
 
-Execute each operation ONE AT A TIME using separate `Execute` tool calls. Show progress
-`(X/N)` and result (OK/FAIL) between each operation.
-
-### Step 5.1: Remove orphaned plugins
-
-For each plugin in ORPHANED_PLUGINS (skip if empty):
+Run all operations in a **single Execute call** using the sync shell script. The script
+runs all plugin operations in parallel (remove, install, update simultaneously) and
+prints a summary with per-plugin results.
 
 ```bash
-droid plugin uninstall "<plugin>@optimus" 2>&1
+bash sync/scripts/sync-user-plugins.sh 2>&1
 ```
 
-Show: `- (X/N) <plugin> ... OK` or `- (X/N) <plugin> ... FAIL`
-
-Track counts: `REMOVED` and `FAILED`.
-
-### Step 5.2: Install new plugins
-
-For each plugin in NEW_PLUGINS (skip if empty):
+If not running inside the Optimus repo (script not available), construct an equivalent
+single command that runs all `droid plugin update` calls in parallel:
 
 ```bash
-droid plugin install "<plugin>@optimus" 2>&1
+RESULTS_DIR=$(mktemp -d)
+for plugin in <space-separated list of all plugins>; do
+  (
+    if droid plugin update "${plugin}@optimus" >/dev/null 2>&1; then
+      echo "OK" > "$RESULTS_DIR/$plugin"
+    else
+      droid plugin uninstall "${plugin}@optimus" >/dev/null 2>&1 || true
+      if droid plugin install "${plugin}@optimus" >/dev/null 2>&1; then
+        echo "REINSTALLED" > "$RESULTS_DIR/$plugin"
+      else
+        echo "FAIL" > "$RESULTS_DIR/$plugin"
+      fi
+    fi
+  ) &
+done
+wait
+for plugin in <space-separated list>; do
+  result=$(cat "$RESULTS_DIR/$plugin" 2>/dev/null || echo "FAIL")
+  echo "  * $plugin ... $result"
+done
+rm -rf "$RESULTS_DIR"
 ```
 
-Show: `+ (X/N) <plugin> ... OK` or `+ (X/N) <plugin> ... FAIL`
-
-Track counts: `ADDED` and `FAILED`.
-
-### Step 5.3: Update existing plugins
-
-For each plugin in EXISTING_PLUGINS (skip if empty):
-
-```bash
-droid plugin update "<plugin>@optimus" 2>&1
-```
-
-If the update fails (scope conflict), retry with uninstall + reinstall:
-
-```bash
-droid plugin uninstall "<plugin>@optimus" 2>&1
-droid plugin install "<plugin>@optimus" 2>&1
-```
-
-Show: `* (X/N) <plugin> ... OK` or `* (X/N) <plugin> ... OK (reinstalled)` or `* (X/N) <plugin> ... FAIL`
-
-Track counts: `UPDATED` and `FAILED`.
+Use a 90-second timeout for the entire Execute call (all plugins run in parallel,
+so total time is ~6-8 seconds for 16 plugins).
 
 ---
 
@@ -214,14 +206,11 @@ Present the final summary using `<json-render>` with metrics:
 
 ## Rules
 
-- Each `droid plugin` operation MUST be a separate `Execute` tool call — never batch
-  multiple operations in one call. This ensures real-time progress visibility.
-- Always show the `(X/N)` progress counter before each operation.
-- If a plugin operation fails, log it and continue with the next plugin. Do NOT stop
+- All plugin operations run in **parallel** via a single Execute call — no separate
+  calls per plugin. This makes sync complete in ~6-8 seconds instead of ~2 minutes.
+- If a plugin operation fails, the script logs it and continues. Do NOT stop
   the entire sync on a single failure.
-- Use a 60-second timeout for all `droid plugin` commands via the Execute tool's timeout
-  parameter. If a command times out, treat it as FAIL and continue with the next plugin.
 - If the user cancels mid-sync or the session is interrupted, inform them:
   "Sync interrupted. Some plugins may be partially updated. Re-run `/optimus-sync` to complete."
 - The `make sync-plugins` target in the project Makefile runs `sync/scripts/sync-user-plugins.sh`
-  directly. That script is for CLI usage without an agent and is NOT used by this skill.
+  directly. Both the agent skill and CLI use the same parallel script.
