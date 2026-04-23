@@ -81,9 +81,21 @@ Resolve workspace — see AGENTS.md Protocol: Workspace Auto-Navigation. Branch-
 
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`done`, status=`DONE`.
 
-Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage=`done`.
-
 **On marking DONE** (Phase 3): delete the session file and restore terminal title.
+
+### Step 1.0.3.2: Set Terminal Title
+
+**CRITICAL:** Set the terminal title so the user can identify this terminal at a glance. Execute this command NOW:
+
+```bash
+printf '\033]0;optimus: DONE %s — %s\007' "$TASK_ID" "$TASK_TITLE"
+```
+
+**On stage completion or exit**, restore the title:
+
+```bash
+printf '\033]0;\007'
+```
 
 ### Step 1.1: Validate Task Status
 

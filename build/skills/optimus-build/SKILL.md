@@ -100,9 +100,21 @@ Executes a validated task specification end-to-end: identifies the task, loads c
 
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`build`, status=`Em Andamento`.
 
-Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage=`build`.
-
 **On stage completion** (after Phase 3 post-execution): delete the session file and restore terminal title.
+
+### Step 1.2.2: Set Terminal Title
+
+**CRITICAL:** Set the terminal title so the user can identify this terminal at a glance. Execute this command NOW:
+
+```bash
+printf '\033]0;optimus: BUILD %s — %s\007' "$TASK_ID" "$TASK_TITLE"
+```
+
+**On stage completion or exit**, restore the title:
+
+```bash
+printf '\033]0;\007'
+```
 
 ### Step 1.3: Validate and Update Task Status
 

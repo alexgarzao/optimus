@@ -105,9 +105,21 @@ spec validation only to discover `gh` is not set up when they try to run Stage-2
 
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`plan`, status=`Validando Spec`.
 
-Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage=`plan`.
-
 **On stage completion** (after Phase 7 Re-run Guard resolves to advance): delete the session file and restore terminal title.
+
+### Step 1.0.2.2: Set Terminal Title
+
+**CRITICAL:** Set the terminal title so the user can identify this terminal at a glance. Execute this command NOW:
+
+```bash
+printf '\033]0;optimus: PLAN %s — %s\007' "$TASK_ID" "$TASK_TITLE"
+```
+
+**On stage completion or exit**, restore the title:
+
+```bash
+printf '\033]0;\007'
+```
 
 ### Step 1.0.3: Validate Task Status (DO NOT modify yet)
 

@@ -115,9 +115,21 @@ Validate PR title — see AGENTS.md Protocol: PR Title Validation.
 ### Step 1.0.7: Check Session State
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`review`, status=`Validando Impl`.
 
-Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage=`review`.
-
 **On stage completion** (after Phase 9 Re-run Guard resolves to advance): delete the session file and restore terminal title.
+
+### Step 1.0.7.1: Set Terminal Title
+
+**CRITICAL:** Set the terminal title so the user can identify this terminal at a glance. Execute this command NOW:
+
+```bash
+printf '\033]0;optimus: REVIEW %s — %s\007' "$TASK_ID" "$TASK_TITLE"
+```
+
+**On stage completion or exit**, restore the title:
+
+```bash
+printf '\033]0;\007'
+```
 
 ### Step 1.0.8: Validate and Update Task Status
 
