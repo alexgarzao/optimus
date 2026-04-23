@@ -254,8 +254,20 @@ class TestFindingPresentation:
             + "\n".join(f"  - {v}" for v in violations)
         )
 
-    def test_agents_md_has_all_three(self):
-        """AGENTS.md (source of truth) must also have all three elements."""
+    def test_finding_header_has_progress_prefix(self):
+        """Every skill with findings must instruct (X/N) progress prefix in finding headers."""
+        violations = []
+        for skill in SKILLS_WITH_FINDINGS:
+            content = _read_skill(skill)
+            if "(X/N)" not in content:
+                violations.append(skill)
+        assert violations == [], (
+            "Skills missing (X/N) progress prefix instruction in finding headers:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    def test_agents_md_has_all_elements(self):
+        """AGENTS.md (source of truth) must have all finding presentation elements."""
         content = AGENTS_MD.read_text()
         assert "[option] Tell me more" in content, \
             "AGENTS.md missing [option] Tell me more in AskUser template"
@@ -263,3 +275,5 @@ class TestFindingPresentation:
             "AGENTS.md missing HARD BLOCK — IMMEDIATE RESPONSE RULE"
         assert "Anti-rationalization" in content, \
             "AGENTS.md missing anti-rationalization block"
+        assert "(X/N)" in content, \
+            "AGENTS.md missing (X/N) progress prefix instruction"
