@@ -707,7 +707,7 @@ Skills reference this as: "Check active version guard — see AGENTS.md Protocol
 
 ### Protocol: Coverage Measurement
 
-**Referenced by:** check, pr-check, coderabbit-review, verify, deep-review
+**Referenced by:** check, pr-check, coderabbit-review, deep-review
 
 Measure test coverage using the project's configured commands. Check `.optimus/config.json`
 for custom commands first, then fall back to Makefile targets, then stack-specific commands.

@@ -71,11 +71,6 @@
       "source": "./coderabbit-review"
     },
     {
-      "name": "verify-code",
-      "description": "Two-phase code verification (Go, TypeScript, Python, generic): parallel static analysis + sequential test execution with executive summary.",
-      "source": "./verify"
-    },
-    {
       "name": "help",
       "description": "Lists all available Optimus skills with descriptions, usage commands, and when to use each one.",
       "source": "./help"

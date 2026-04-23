@@ -7,7 +7,7 @@ trigger: >
 skip_when: >
   - No PR URL provided and user wants a generic code review (use optimus-deep-review directly)
   - PR is already merged (nothing to review)
-  - User wants to run automated checks only (use optimus-verify-code instead)
+  - User wants to run automated checks only (use `make lint && make test` directly)
 prerequisite: >
   - PR URL is provided or can be inferred (current branch has an open PR)
   - gh CLI is installed and authenticated
@@ -42,7 +42,6 @@ examples:
 related:
   complementary:
     - optimus-deep-review
-    - optimus-verify-code
   differentiation:
     - name: optimus-deep-review
       difference: >
@@ -1786,7 +1785,7 @@ Skills reference this as: "Check active version guard — see AGENTS.md Protocol
 
 ### Protocol: Coverage Measurement
 
-**Referenced by:** check, pr-check, coderabbit-review, verify, deep-review
+**Referenced by:** check, pr-check, coderabbit-review, deep-review
 
 Measure test coverage using the project's configured commands. Check `.optimus/config.json`
 for custom commands first, then fall back to Makefile targets, then stack-specific commands.

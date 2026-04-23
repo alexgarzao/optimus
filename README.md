@@ -44,7 +44,6 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 | `deep-doc-review` | Deep review of project documentation. Finds errors, inconsistencies, gaps, and improvements with interactive one-by-one resolution | `/optimus-deep-doc-review` |
 | `deep-review` | Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Supports initial (8 agents) and final (10 agents) review modes | `/optimus-deep-review` |
 | `coderabbit-review` | CodeRabbit-driven code review with TDD fix cycle, secondary validation via review agents, and interactive finding resolution | `/optimus-coderabbit-review` |
-| `verify-code` | Two-phase code verification (Go, TypeScript, Python, generic): parallel static analysis + sequential test execution with executive summary | `/optimus-verify-code` |
 
 ## Install
 

@@ -24,7 +24,6 @@ optimus/
 ├── deep-review/                       # Parallel code review (no PR context)
 ├── deep-doc-review/                   # Documentation review
 ├── coderabbit-review/                 # CodeRabbit CLI + TDD cycle
-├── verify/                            # Automated verification (lint/test/build)
 ├── help/                              # Skill discovery and help
 ├── quick-report/                      # Compact daily status dashboard
 └── docs/                              # Project documentation
@@ -1051,7 +1050,7 @@ Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring D
 
 ### Protocol: Coverage Measurement
 
-**Referenced by:** check, pr-check, coderabbit-review, verify, deep-review
+**Referenced by:** check, pr-check, coderabbit-review, deep-review
 
 Measure test coverage using the project's configured commands. Check `.optimus/config.json`
 for custom commands first, then fall back to Makefile targets, then stack-specific commands.
@@ -1506,7 +1505,7 @@ Location: `.optimus/config.json` (versioned)
 
 ### Behavior
 
-All skills that run verification commands (verify, done, build,
+All skills that run verification commands (done, build,
 check, pr-check, coderabbit-review) MUST check for `.optimus/config.json` BEFORE auto-detecting
 commands. If the config file exists, use its commands instead of auto-detection.
 

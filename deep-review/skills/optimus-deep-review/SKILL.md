@@ -8,7 +8,7 @@ trigger: >
 skip_when: >
   - Reviewing documentation only (use optimus-deep-doc-review instead)
   - Validating a specific task against its spec (use optimus-check instead)
-  - Running automated checks only (use optimus-verify-code instead)
+  - Running automated checks only (use `make lint && make test` directly)
 prerequisite: >
   - Project has source code to review
   - Code is accessible in the repository
@@ -45,7 +45,6 @@ related:
   complementary:
     - optimus-build
     - optimus-pr-check
-    - optimus-verify-code
   differentiation:
     - name: optimus-check
       difference: >
@@ -53,14 +52,6 @@ related:
         (acceptance criteria, test IDs, spec compliance). optimus-deep-review is
         a generic code review without task/spec context -- focused on code quality,
         security, and best practices.
-    - name: optimus-verify-code
-      difference: >
-        optimus-verify-code runs automated checks (lint, vet, tests) and reports
-        pass/fail. optimus-deep-review dispatches specialist agents for deep
-        analysis that automated tools cannot catch.
-  sequence:
-    before:
-      - optimus-verify-code
 verification:
   manual:
     - All findings presented to user
@@ -572,7 +563,7 @@ All cycle review skills follow this pattern:
 
 ### Protocol: Coverage Measurement
 
-**Referenced by:** check, pr-check, coderabbit-review, verify, deep-review
+**Referenced by:** check, pr-check, coderabbit-review, deep-review
 
 Measure test coverage using the project's configured commands. Check `.optimus/config.json`
 for custom commands first, then fall back to Makefile targets, then stack-specific commands.

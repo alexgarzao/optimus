@@ -76,7 +76,7 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 | **deep-review** | `/optimus-deep-review` | Generic code review without task context — reviews entire project, git diff, or specific directory with parallel specialist agents. |
 | **deep-doc-review** | `/optimus-deep-doc-review` | Documentation review — finds errors, inconsistencies, and gaps across project docs with cross-referencing. |
 | **coderabbit-review** | `/optimus-coderabbit-review` | Code review using CodeRabbit CLI with TDD fix cycle and agent validation. Requires CodeRabbit CLI installed. |
-| **verify-code** | `/optimus-verify-code` | Quick automated verification — runs lint, vet, format checks, and tests in parallel. Reports MERGE_READY or NEEDS_FIX verdict. |
+
 
 ---
 
@@ -89,7 +89,7 @@ on their situation:
 - **For a PR:** Use `/optimus-pr-check` (collects all review sources)
 - **For code without a PR:** Use `/optimus-deep-review` (parallel agent review)
 - **Using CodeRabbit:** Use `/optimus-coderabbit-review` (CodeRabbit + TDD cycle)
-- **Quick pass/fail check:** Use `/optimus-verify-code` (automated checks only)
+- **Quick pass/fail check:** Run `make lint && make test` directly
 
 ### "I want to start working on a task"
 1. First: `/optimus-report` to see what's ready
