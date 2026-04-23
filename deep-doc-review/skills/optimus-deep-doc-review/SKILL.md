@@ -209,7 +209,7 @@ Present the full findings table for a bird's-eye view:
 2. Display the total prominently: `"### Total findings to review: N"`
 
 **For EVERY finding presented, you MUST:**
-1. Include `"Finding X/N"` in the header
+1. Include `"(X/N)"` progress prefix in the header
 2. X starts at 1 and increments sequentially
 3. N is the total announced above and NEVER changes mid-review
 
@@ -231,15 +231,14 @@ research process — present only the conclusions.
 
 ### 2. Show the Item
 
-`## Finding X/N — [TYPE] [SEVERITY] | [File(s)]`
+`## (X/N) — [TYPE] [SEVERITY] | [File(s)]`
 
 Display the type, severity, affected file(s), problem description, suggested fix, and tradeoff.
 
 ### 3. Ask the User
 
-**AskUser `[topic]` format:** The `[topic]` label MUST include the progress indicator
-before the finding ID. Format: `(X/N) F#-Category`.
-Example: `[topic] (8/15) F8-DeadCode`.
+**AskUser `[topic]` format:** Format: `F#-Category`.
+Example: `[topic] F8-DeadCode`.
 
 Use `AskUser` with contextual options:
 - Fix as suggested

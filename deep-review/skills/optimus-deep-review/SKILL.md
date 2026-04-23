@@ -233,7 +233,7 @@ Findings are presented ONE AT A TIME, decisions collected for ALL, then fixes ap
 2. Display the total prominently: `"### Total findings to review: N"`
 
 **For EVERY finding presented, you MUST:**
-1. Include `"Finding X/N"` in the header
+1. Include `"(X/N)"` progress prefix in the header
 2. X starts at 1 and increments sequentially
 3. N is the total announced above and NEVER changes mid-review
 
@@ -264,9 +264,8 @@ Include a recommendation when one option is clearly better.
 
 ### 4. Wait for User Decision
 
-**AskUser `[topic]` format:** The `[topic]` label MUST include the progress indicator
-before the finding ID. Format: `(X/N) F#-Category`.
-Example: `[topic] (8/15) F8-DeadCode`.
+**AskUser `[topic]` format:** Format: `F#-Category`.
+Example: `[topic] F8-DeadCode`.
 
 Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
 **Every AskUser MUST include a "Tell me more" option** alongside the fix/skip options.
@@ -531,12 +530,12 @@ All cycle review skills follow this pattern:
    same root cause or fix pattern (e.g., "missing error handling" in 5 handlers, "inconsistent
    import path" in 4 files). If 2+ findings are of the same nature, merge them into a **single
    grouped entry** listing all affected files/locations. Each group counts as ONE item in the
-   "Finding X/N" sequence. The user makes ONE decision for the entire group.
+   `"(X/N)"` sequence. The user makes ONE decision for the entire group.
 4. Announce total findings count: `"### Total findings to review: N"` (where N reflects
    grouped entries — a group of 5 same-nature findings counts as 1)
 5. Present overview table with severity counts
 6. **Deep research BEFORE presenting each finding** (see research checklist below)
-7. Walk through findings ONE AT A TIME with `"Finding X/N"` header, ordered by severity
+7. Walk through findings ONE AT A TIME with `"(X/N)"` progress prefix in the header, ordered by severity
    (CRITICAL first, then HIGH, MEDIUM, LOW). **ALL findings MUST be presented regardless of
    severity** — the agent NEVER skips, filters, or auto-resolves any finding. The decision to
    fix or skip is ALWAYS the user's. For grouped entries, list all affected files/locations
@@ -545,9 +544,8 @@ All cycle review skills follow this pattern:
    **Every AskUser for a finding decision MUST include a "Tell me more" option.** This option
    is always the **second-to-last** option (right before the free-text input that AskUser
    provides automatically). This lets the user request deeper analysis with one click.
-   **AskUser `[topic]` format:** The `[topic]` label MUST include the progress indicator
-   before the finding ID. Format: `(X/N) F#-Category`.
-   Example: `[topic] (8/15) F8-DeadCode`.
+   **AskUser `[topic]` format:** Format: `F#-Category`.
+   Example: `[topic] F8-DeadCode`.
 9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
    (a question, disagreement, or request for clarification) instead of a decision:**
    **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
@@ -565,13 +563,11 @@ All cycle review skills follow this pattern:
 
 **Referenced by:** check, pr-check, coderabbit-review, deep-review, build
 
-Measure test coverage using the project's configured commands. Check `.optimus/config.json`
-for custom commands first, then fall back to Makefile targets, then stack-specific commands.
+Measure test coverage using Makefile targets with stack-specific fallbacks.
 
 **Unit coverage command resolution order:**
-1. `.optimus/config.json` → `commands.test-coverage` (if present)
-2. `make test-coverage` (if Makefile target exists)
-3. Stack-specific fallback:
+1. `make test-coverage` (if Makefile target exists)
+2. Stack-specific fallback:
    - Go: `go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out`
    - Node: `npm test -- --coverage`
    - Python: `pytest --cov=. --cov-report=term`
@@ -579,9 +575,8 @@ for custom commands first, then fall back to Makefile targets, then stack-specif
 If no unit coverage command is available, mark as **SKIP** — do not fail the verification.
 
 **Integration coverage command resolution order:**
-1. `.optimus/config.json` → `commands.test-integration-coverage` (if present)
-2. `make test-integration-coverage` (if Makefile target exists)
-3. Stack-specific fallback:
+1. `make test-integration-coverage` (if Makefile target exists)
+2. Stack-specific fallback:
    - Go: `go test -tags=integration -coverprofile=coverage-integration.out ./... && go tool cover -func=coverage-integration.out`
    - Node: `npm run test:integration -- --coverage`
    - Python: `pytest -m integration --cov=. --cov-report=term`

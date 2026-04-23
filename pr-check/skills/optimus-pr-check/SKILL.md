@@ -739,10 +739,10 @@ Findings are presented ONE AT A TIME, decisions collected for ALL, then fixes ap
 3. This total MUST be visible to the user BEFORE any finding is presented
 
 **For EVERY finding presented, you MUST:**
-1. Include `"Finding X/N"` in the header — this is NOT optional
+1. Include `"(X/N)"` progress prefix in the header — this is NOT optional
 2. X starts at 1 and increments sequentially
 3. N is the total announced above and NEVER changes mid-review
-4. If you present a finding WITHOUT "Finding X/N" in the header, you are violating this rule — STOP and correct it
+4. If you present a finding WITHOUT "(X/N)" progress prefix in the header, you are violating this rule — STOP and correct it
 
 **The user MUST always know:**
 - How many findings exist in total (N)
@@ -757,13 +757,13 @@ For EACH finding:
 
 #### Finding Header
 
-`## Finding X/N — [SEVERITY] F# | [Source] | [Category]`
+`## (X/N) F# — [SEVERITY] | [Source] | [Category]`
 
-Example: `## Finding 1/12 — [HIGH] F1 | Codacy + Agent | Security`
-Example: `## Finding 5/12 — [MEDIUM] F5 | DeepSource + Agent | Anti-pattern`
-Example: `## Finding 8/12 — [MEDIUM] F8 | CodeRabbit — DUPLICATE + Agent | Error handling`
-Example: `## Finding 10/12 — [LOW] F10 | CodeRabbit — OUTSIDE PR DIFF + Agent | Naming`
-Example: `## Finding 12/12 — [LOW] F12 | CodeRabbit + Agent | Style`
+Example: `## (1/12) F1 — [HIGH] | Codacy + Agent | Security`
+Example: `## (5/12) F5 — [MEDIUM] | DeepSource + Agent | Anti-pattern`
+Example: `## (8/12) F8 — [MEDIUM] | CodeRabbit — DUPLICATE + Agent | Error handling`
+Example: `## (10/12) F10 — [LOW] | CodeRabbit — OUTSIDE PR DIFF + Agent | Naming`
+Example: `## (12/12) F12 — [LOW] | CodeRabbit + Agent | Style`
 
 #### Deep Research Before Presenting (MANDATORY)
 
@@ -788,9 +788,8 @@ Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding O
 
 #### Collect Decision
 
-**AskUser `[topic]` format:** The `[topic]` label MUST include the progress indicator
-before the finding ID. Format: `(X/N) F#-Category`.
-Example: `[topic] (8/15) F8-DeadCode`.
+**AskUser `[topic]` format:** Format: `F#-Category`.
+Example: `[topic] F8-DeadCode`.
 
 Use `AskUser`. **BLOCKING** — do not advance until decided.
 **Every AskUser MUST include a "Tell me more" option** alongside the fix/skip options.
@@ -1365,7 +1364,7 @@ gh api graphql -f query='
 ## Completion Checklist (MANDATORY — verify before ending)
 
 - [ ] Total findings count (N) was announced before the first finding
-- [ ] All findings presented with "Finding X/N" in EVERY header
+- [ ] All findings presented with "(X/N)" progress prefix in EVERY header
 - [ ] All decisions collected (fix / skip / defer for every finding)
 - [ ] All approved fixes committed with TDD cycle (applied after all decisions collected)
 - [ ] Won't-fix Codacy/DeepSource findings suppressed inline
@@ -1387,7 +1386,7 @@ gh api graphql -f query='
 - Every finding must include source attribution
 - Only review files changed in the PR
 - ALWAYS announce total findings count (N) before presenting the first finding: `"### Total findings to review: N"`
-- Present findings ONE AT A TIME in severity order, ALWAYS showing "Finding X/N" in EVERY finding header
+- Present findings ONE AT A TIME in severity order, ALWAYS showing "(X/N)" progress prefix in EVERY finding header
 - Collect ALL decisions first (Phase 6), then apply ALL approved fixes at once (Phase 8)
 - Coverage verification and convergence loop run ONLY after all fixes are applied
 - No changes without user approval
@@ -1652,12 +1651,12 @@ All cycle review skills follow this pattern:
    same root cause or fix pattern (e.g., "missing error handling" in 5 handlers, "inconsistent
    import path" in 4 files). If 2+ findings are of the same nature, merge them into a **single
    grouped entry** listing all affected files/locations. Each group counts as ONE item in the
-   "Finding X/N" sequence. The user makes ONE decision for the entire group.
+   `"(X/N)"` sequence. The user makes ONE decision for the entire group.
 4. Announce total findings count: `"### Total findings to review: N"` (where N reflects
    grouped entries — a group of 5 same-nature findings counts as 1)
 5. Present overview table with severity counts
 6. **Deep research BEFORE presenting each finding** (see research checklist below)
-7. Walk through findings ONE AT A TIME with `"Finding X/N"` header, ordered by severity
+7. Walk through findings ONE AT A TIME with `"(X/N)"` progress prefix in the header, ordered by severity
    (CRITICAL first, then HIGH, MEDIUM, LOW). **ALL findings MUST be presented regardless of
    severity** — the agent NEVER skips, filters, or auto-resolves any finding. The decision to
    fix or skip is ALWAYS the user's. For grouped entries, list all affected files/locations
@@ -1666,9 +1665,8 @@ All cycle review skills follow this pattern:
    **Every AskUser for a finding decision MUST include a "Tell me more" option.** This option
    is always the **second-to-last** option (right before the free-text input that AskUser
    provides automatically). This lets the user request deeper analysis with one click.
-   **AskUser `[topic]` format:** The `[topic]` label MUST include the progress indicator
-   before the finding ID. Format: `(X/N) F#-Category`.
-   Example: `[topic] (8/15) F8-DeadCode`.
+   **AskUser `[topic]` format:** Format: `F#-Category`.
+   Example: `[topic] F8-DeadCode`.
 9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
    (a question, disagreement, or request for clarification) instead of a decision:**
    **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.

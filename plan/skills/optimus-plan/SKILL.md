@@ -519,7 +519,7 @@ Merge agent findings with the findings from Steps 2.1-2.3. Deduplicate and sort 
 2. **Present the summary report** (tables from Output Format) for bird's-eye view
 3. **Then present findings ONE AT A TIME** in priority order: contradictions > missing specs > test gaps > observability > DoD > ambiguities
 
-**For EACH finding**, present with `"Finding X/N"` in the header:
+**For EACH finding**, present with `"(X/N)"` progress prefix in the header:
 
 #### Deep Research Before Presenting (MANDATORY)
 
@@ -540,9 +540,8 @@ Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding O
 
 #### Collect Decision
 
-   **AskUser `[topic]` format:** The `[topic]` label MUST include the progress indicator
-   before the finding ID. Format: `(X/N) F#-Category`.
-   Example: `[topic] (8/15) F8-DeadCode`.
+   **AskUser `[topic]` format:** Format: `F#-Category`.
+   Example: `[topic] F8-DeadCode`.
 
 4. Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
    **Every AskUser MUST include a "Tell me more" option** alongside the fix/skip options.
@@ -962,12 +961,12 @@ All cycle review skills follow this pattern:
    same root cause or fix pattern (e.g., "missing error handling" in 5 handlers, "inconsistent
    import path" in 4 files). If 2+ findings are of the same nature, merge them into a **single
    grouped entry** listing all affected files/locations. Each group counts as ONE item in the
-   "Finding X/N" sequence. The user makes ONE decision for the entire group.
+   `"(X/N)"` sequence. The user makes ONE decision for the entire group.
 4. Announce total findings count: `"### Total findings to review: N"` (where N reflects
    grouped entries — a group of 5 same-nature findings counts as 1)
 5. Present overview table with severity counts
 6. **Deep research BEFORE presenting each finding** (see research checklist below)
-7. Walk through findings ONE AT A TIME with `"Finding X/N"` header, ordered by severity
+7. Walk through findings ONE AT A TIME with `"(X/N)"` progress prefix in the header, ordered by severity
    (CRITICAL first, then HIGH, MEDIUM, LOW). **ALL findings MUST be presented regardless of
    severity** — the agent NEVER skips, filters, or auto-resolves any finding. The decision to
    fix or skip is ALWAYS the user's. For grouped entries, list all affected files/locations
@@ -976,9 +975,8 @@ All cycle review skills follow this pattern:
    **Every AskUser for a finding decision MUST include a "Tell me more" option.** This option
    is always the **second-to-last** option (right before the free-text input that AskUser
    provides automatically). This lets the user request deeper analysis with one click.
-   **AskUser `[topic]` format:** The `[topic]` label MUST include the progress indicator
-   before the finding ID. Format: `(X/N) F#-Category`.
-   Example: `[topic] (8/15) F8-DeadCode`.
+   **AskUser `[topic]` format:** Format: `F#-Category`.
+   Example: `[topic] F8-DeadCode`.
 9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
    (a question, disagreement, or request for clarification) instead of a decision:**
    **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
