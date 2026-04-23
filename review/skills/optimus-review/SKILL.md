@@ -113,9 +113,9 @@ Validate PR title — see AGENTS.md Protocol: PR Title Validation.
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
 
 ### Step 1.0.7: Check Session State
-Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`check`, status=`Validando Impl`.
+Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`review`, status=`Validando Impl`.
 
-Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage=`check`.
+Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage=`review`.
 
 **On stage completion** (after Phase 9 Re-run Guard resolves to advance): delete the session file and restore terminal title.
 
@@ -1992,10 +1992,10 @@ to identify each terminal at a glance.
 **Set title (after task ID is known):**
 
 ```bash
-printf '\033]0;optimus: %s | %s — %s\007' "<stage-name>" "$TASK_ID" "$TASK_TITLE"
+printf '\033]0;optimus: %s %s — %s\007' "<STAGE>" "$TASK_ID" "$TASK_TITLE"
 ```
 
-Example output in terminal tab: `optimus: check | T-003 — User Auth JWT`
+Example output in terminal tab: `optimus: REVIEW T-003 — User Auth JWT`
 
 **Restore title (at stage completion or exit):**
 

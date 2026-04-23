@@ -829,10 +829,10 @@ to identify each terminal at a glance.
 **Set title (after task ID is known):**
 
 ```bash
-printf '\033]0;optimus: %s | %s — %s\007' "<stage-name>" "$TASK_ID" "$TASK_TITLE"
+printf '\033]0;optimus: %s %s — %s\007' "<STAGE>" "$TASK_ID" "$TASK_TITLE"
 ```
 
-Example output in terminal tab: `optimus: check | T-003 — User Auth JWT`
+Example output in terminal tab: `optimus: REVIEW T-003 — User Auth JWT`
 
 **Restore title (at stage completion or exit):**
 

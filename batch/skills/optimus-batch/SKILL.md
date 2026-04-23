@@ -143,7 +143,7 @@ starting the next task.
 
 For each task in the execution order:
 
-Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage=`batch` and include the current task ID in the title (e.g., `optimus: batch | T-003 — User Auth JWT`). Update the title each time the task changes.
+Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage=`BATCH` and include the current task ID in the title (e.g., `optimus: BATCH T-003 — User Auth JWT`). Update the title each time the task changes.
 
 ### Step 2.1: Stage Dispatch
 
@@ -612,10 +612,10 @@ to identify each terminal at a glance.
 **Set title (after task ID is known):**
 
 ```bash
-printf '\033]0;optimus: %s | %s — %s\007' "<stage-name>" "$TASK_ID" "$TASK_TITLE"
+printf '\033]0;optimus: %s %s — %s\007' "<STAGE>" "$TASK_ID" "$TASK_TITLE"
 ```
 
-Example output in terminal tab: `optimus: check | T-003 — User Auth JWT`
+Example output in terminal tab: `optimus: REVIEW T-003 — User Auth JWT`
 
 **Restore title (at stage completion or exit):**
 
