@@ -1450,7 +1450,7 @@ droid is not installed, **STOP** and list missing droids.
 - `ring-default-ring-consequences-reviewer`
 - `ring-default-ring-dead-code-reviewer`
 
-**QA droids** (required by check, deep-review):
+**QA droids** (required by check, deep-review, build):
 - `ring-dev-team-qa-analyst`
 
 **Documentation droids** (required by deep-doc-review):

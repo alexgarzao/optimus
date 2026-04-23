@@ -164,6 +164,7 @@ Build requires both **implementation droids** (for subtask dispatch) and **core 
 Required ring droids are not installed. Install them before running this skill:
   Implementation: ring-dev-team-backend-engineer-golang (Go) / ring-dev-team-backend-engineer-typescript (TS) / ring-dev-team-frontend-engineer (React)
   Review: ring-default-code-reviewer, ring-default-business-logic-reviewer, ring-default-security-reviewer, ring-default-ring-test-reviewer, ring-default-ring-nil-safety-reviewer, ring-default-ring-consequences-reviewer, ring-default-ring-dead-code-reviewer
+  Spec Compliance: ring-dev-team-qa-analyst
 ```
 
 ### Step 1.6: Discover Project Structure
@@ -348,7 +349,7 @@ After ALL subtasks are complete:
    If the target does not exist, mark as SKIP. If it fails, present failure
    output and ask user via `AskUser`: "Integration tests failing. Fix or defer to check?"
 
-4. **Dispatch code review droids** in parallel via `Task` tool:
+4. **Dispatch code review and spec compliance droids** in parallel via `Task` tool:
    - `ring-default-code-reviewer`
    - `ring-default-business-logic-reviewer`
    - `ring-default-security-reviewer`
@@ -356,9 +357,16 @@ After ALL subtasks are complete:
    - `ring-default-ring-nil-safety-reviewer`
    - `ring-default-ring-consequences-reviewer`
    - `ring-default-ring-dead-code-reviewer`
+   - `ring-dev-team-qa-analyst`
 
    Each droid receives all files changed by this task + project rules + task spec.
    Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists.
+
+   **Spec Compliance agent** (`ring-dev-team-qa-analyst`) must additionally (beyond the protocol):
+   1. List every acceptance criterion from the Ring source (via `TaskSpec` column) and mark PASS/FAIL/PARTIAL
+   2. List every test ID and verify a corresponding test exists
+   3. If the task has API endpoints, verify request/response format matches API contracts
+   4. If the task has DB changes, verify column types/constraints match the data model
 
 5. **Consolidate review findings:** merge, deduplicate, sort by severity.
 
@@ -369,7 +377,7 @@ After ALL subtasks are complete:
    ring droid (complex). Run unit tests after each fix.
 
 8. **Convergence loop (MANDATORY):** Execute the convergence loop — see AGENTS.md
-   "Common Patterns > Convergence Loop". Dispatch the same 7 review droids in rounds 2+.
+   "Common Patterns > Convergence Loop". Dispatch the same 8 review droids in rounds 2+.
 
 ---
 
@@ -397,6 +405,7 @@ Present a structured summary including:
 - Files created and modified
 - Tests added
 - Subtask execution results (X/N completed, tests passing)
+- Spec compliance: X/Y acceptance criteria PASS (table with Criterion, Status, Notes)
 - Code review findings summary (fixed, skipped)
 - Decisions made during questioning and review phases
 
@@ -1036,7 +1045,7 @@ droid is not installed, **STOP** and list missing droids.
 - `ring-default-ring-consequences-reviewer`
 - `ring-default-ring-dead-code-reviewer`
 
-**QA droids** (required by check, deep-review):
+**QA droids** (required by check, deep-review, build):
 - `ring-dev-team-qa-analyst`
 
 **Documentation droids** (required by deep-doc-review):
