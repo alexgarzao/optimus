@@ -244,7 +244,7 @@ Use `AskUser` with contextual options:
 - Fix as suggested
 - Fix with adjustment (user specifies)
 - Skip this item
-- Tell me more
+- Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
 
 **BLOCKING**: Do NOT advance to the next item until the user decides.
 

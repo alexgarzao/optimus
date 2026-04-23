@@ -734,7 +734,7 @@ Use `AskUser`. **BLOCKING** — do not advance until decided.
 **Every AskUser MUST include these options:**
 - One option per proposed solution (Option A, Option B, Option C, etc.)
 - Skip — no action
-- Tell me more
+- Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
 
 **IMMEDIATE RESPONSE RULE** — see AGENTS.md "Finding Presentation" item 9. If the user
 selects "Tell me more" or responds with free text: STOP, research and answer RIGHT NOW.
@@ -1477,7 +1477,7 @@ All cycle review skills follow this pattern:
    **Every AskUser for a finding decision MUST include these options:**
    - One option per proposed solution (Option A, Option B, Option C, etc.)
    - Skip — no action
-   - Tell me more
+   - Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
    **AskUser `[topic]` format:** Format: `F#-Category`.
    Example: `[topic] F8-DeadCode`.
 9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
