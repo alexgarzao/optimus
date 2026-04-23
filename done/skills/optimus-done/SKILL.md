@@ -88,13 +88,13 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 **CRITICAL:** Set the terminal title so the user can identify this terminal at a glance. Execute this command NOW:
 
 ```bash
-printf '\033]0;optimus: DONE %s — %s\007' "$TASK_ID" "$TASK_TITLE"
+printf '\033]0;optimus: DONE %s — %s\007' "$TASK_ID" "$TASK_TITLE" > /dev/tty 2>/dev/null || true
 ```
 
 **On stage completion or exit**, restore the title:
 
 ```bash
-printf '\033]0;\007'
+printf '\033]0;\007' > /dev/tty 2>/dev/null || true
 ```
 
 ### Step 1.1: Validate Task Status

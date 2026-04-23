@@ -857,15 +857,20 @@ to identify each terminal at a glance.
 **Set title (after task ID is known):**
 
 ```bash
-printf '\033]0;optimus: %s %s — %s\007' "<STAGE>" "$TASK_ID" "$TASK_TITLE"
+printf '\033]0;optimus: %s %s — %s\007' "<STAGE>" "$TASK_ID" "$TASK_TITLE" > /dev/tty 2>/dev/null || true
 ```
 
 Example output in terminal tab: `optimus: REVIEW T-003 — User Auth JWT`
 
+**Why `/dev/tty`:** The Execute tool captures stdout, so escape sequences written to
+stdout never reach the terminal emulator. Redirecting to `/dev/tty` writes directly to
+the controlling terminal, bypassing capture. The `2>/dev/null || true` ensures silent
+failure in environments without a TTY (Docker, CI).
+
 **Restore title (at stage completion or exit):**
 
 ```bash
-printf '\033]0;\007'
+printf '\033]0;\007' > /dev/tty 2>/dev/null || true
 ```
 
 **NOTE:** This uses the standard OSC (Operating System Command) escape sequence

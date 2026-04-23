@@ -172,6 +172,9 @@ OLD_TITLE_FORMAT = re.compile(
 NEW_TITLE_FORMAT = re.compile(
     r'printf.*optimus:\s*%s\s+%s\s.*%s'
 )
+OSC_PRINTF = re.compile(r"printf.*\\033\]0;")
+TTY_REDIRECT = re.compile(r">\s*/dev/tty")
+STAGE_SKILLS = ["plan", "build", "review", "done"]
 
 
 class TestTerminalTitleFormat:
@@ -198,6 +201,32 @@ class TestTerminalTitleFormat:
             text = filepath.read_text()
             count += len(NEW_TITLE_FORMAT.findall(text))
         assert count >= 1, "No files found with the new terminal title format."
+
+    def test_all_osc_printf_redirect_to_tty(self):
+        """Every printf with OSC escape (\\033]0;) must redirect to /dev/tty."""
+        violations = []
+        for filepath in _all_doc_files():
+            text = filepath.read_text()
+            for i, line in enumerate(text.splitlines(), 1):
+                if OSC_PRINTF.search(line) and not TTY_REDIRECT.search(line):
+                    rel = filepath.relative_to(REPO_ROOT)
+                    violations.append(f"{rel}:{i}: missing > /dev/tty — {line.strip()}")
+        assert violations == [], (
+            "Terminal title printf without /dev/tty redirect (stdout is captured by Execute tool):\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    def test_all_stage_skills_have_terminal_title_step(self):
+        """All stage skills (plan, build, review, done) must have a Set Terminal Title step."""
+        missing = []
+        for skill in STAGE_SKILLS:
+            content = _read_skill(skill)
+            if "Set Terminal Title" not in content:
+                missing.append(skill)
+        assert missing == [], (
+            "Stage skills missing 'Set Terminal Title' step:\n"
+            + "\n".join(f"  - {v}" for v in missing)
+        )
 
 
 # --- Finding presentation: Tell me more, IMMEDIATE RESPONSE RULE, anti-rationalization ---
