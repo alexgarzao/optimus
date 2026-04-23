@@ -51,6 +51,7 @@ terminal display when available, otherwise use markdown tables.
 | **quick-report** | `/optimus-quick-report` | Compact daily status — active tasks with current status, ready-to-start, blocked. No git ops. Read-only. |
 | **batch** | `/optimus-batch` | Pipeline orchestrator — chains stages 1-5 for one or more tasks with user checkpoints between stages. Handles dependency ordering. |
 | **help** | `/optimus-help` | This skill — discovering what's available. |
+| **sync** | `/optimus-sync` | Sync all Optimus plugins — install new, update existing, remove orphaned. Recommended after new releases. |
 
 ### Execution Skills (task lifecycle, stages 1-5)
 

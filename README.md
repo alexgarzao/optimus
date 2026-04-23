@@ -19,6 +19,7 @@ Skills are classified as **Administrative** (run anywhere) or **Execution** (req
 | `resolve` | Resolves merge conflicts in tasks.md caused by parallel task execution across feature branches | `/optimus-resolve` |
 | `quick-report` | Compact daily status dashboard. Shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Read-only | `/optimus-quick-report` |
 | `help` | Lists all available Optimus skills with descriptions, usage commands, and when to use each one | `/optimus-help` |
+| `sync` | Sync all Optimus plugins — install new, update existing, remove orphaned. Recommended after new releases | `/optimus-sync` |
 
 ### Execution Skills (stages 1-5)
 
@@ -49,8 +50,15 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → [Revisando P
 
 ```bash
 droid plugin marketplace add https://github.com/alexgarzao/optimus
-droid plugin install <plugin-name>@optimus
+droid plugin install help@optimus
 ```
+
+Then run `/optimus-sync` to install all plugins at once.
+
+### Staying up to date
+
+Run `/optimus-sync` (or `make sync-plugins`) to sync all plugins — installs new,
+updates existing, removes orphaned. This is the recommended way to stay up to date.
 
 ## Quick Start
 

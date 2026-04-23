@@ -24,10 +24,10 @@ optimus/
 ├── deep-review/                       # Parallel code review (no PR context)
 ├── deep-doc-review/                   # Documentation review
 ├── coderabbit-review/                 # CodeRabbit CLI + TDD cycle
-├── help/                              # Skill discovery and help
+├── help/                              # Skill discovery, help, and plugin sync
 ├── quick-report/                      # Compact daily status dashboard
 ├── scripts/                           # Build tools (inline-protocols.py, tests)
-├── Makefile                           # test, lint, check-inline targets
+├── Makefile                           # test, lint, check-inline, sync-plugins targets
 └── docs/                              # Project documentation
     └── future-improvements.md         # Tracked improvements not yet prioritized
 ```
@@ -124,14 +124,23 @@ rationalize these away.
 ### Updating a plugin
 1. Edit the SKILL.md
 2. Commit, push
-3. Run `droid plugin update <name>@optimus`
+3. Run `/optimus-sync` (or `make sync-plugins`) to update all plugins at once
 
 ### Removing a plugin
 1. Remove from marketplace.json
 2. Remove directory
 3. Update README.md
 4. Commit, push
-5. Run `droid plugin uninstall <name>@optimus`
+5. Run `/optimus-sync` to remove orphaned plugins and update the rest
+
+### Syncing all plugins (for end users)
+Run `/optimus-sync` or `make sync-plugins`. This command:
+- Updates the Optimus marketplace
+- Installs new plugins that were added
+- Removes orphaned plugins that were removed
+- Updates all existing plugins (with automatic scope conflict resolution)
+
+This is the recommended way for end users to stay up to date.
 
 ## tasks.md Format
 
