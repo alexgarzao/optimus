@@ -273,6 +273,10 @@ Include a recommendation when one option is clearly better.
 
 ### 4. Wait for User Decision
 
+**AskUser `[topic]` format:** The `[topic]` label MUST include the progress indicator
+before the finding ID. Format: `(X of N) F#-Category`.
+Example: `[topic] (8 of 15) F8-DeadCode`.
+
 Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
 **Every AskUser MUST include a "Tell me more" option** alongside the fix/skip options.
 
@@ -730,7 +734,7 @@ Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Pr
 
 ### Protocol: Ring Droid Requirement Check
 
-**Referenced by:** check, pr-check, deep-review, deep-doc-review, coderabbit-review, plan (build delegates droid dispatch to dev-cycle)
+**Referenced by:** check, pr-check, deep-review, deep-doc-review, coderabbit-review, plan, build
 
 Before dispatching ring droids, verify the required droids are available. If any required
 droid is not installed, **STOP** and list missing droids.

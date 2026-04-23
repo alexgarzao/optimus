@@ -1,12 +1,11 @@
 ---
 name: optimus-build
-description: "Stage 2 of the task lifecycle. Executes a validated task specification end-to-end: identifies the task, loads context from Ring pre-dev artifacts, questions ambiguities upfront, then delegates execution to the dev-cycle skill. Commits only after user approval."
+description: "Stage 2 of the task lifecycle. Executes a validated task specification end-to-end: identifies the task, loads context from Ring pre-dev artifacts, questions ambiguities upfront, then executes each subtask via ring droid dispatch with mandatory user checkpoints. Commits only after user approval."
 trigger: >
   - After optimus-plan has PASSED for a task
   - When user requests full task execution with a task ID (e.g., "execute T-012")
   - When starting implementation of a validated task from a tasks file
 skip_when: >
-  - Already inside a dev-cycle execution (dev-cycle orchestrates its own gates)
   - Task is pure research or documentation (no code to verify)
   - No tasks file exists yet (use pre-dev workflow first)
 prerequisite: >
@@ -15,11 +14,13 @@ prerequisite: >
   - Reference docs exist (PRD, TRD, API design, data model)
   - Project rules file exists with coding standards
   - Project has lint, test, integration test, and E2E test commands configured
+  - Ring droids installed (backend-engineer-golang and/or backend-engineer-typescript, frontend-engineer)
 NOT_skip_when: >
-  - "Task is simple" -- Simple tasks still need the full dev-cycle gates.
+  - "Task is simple" -- Simple tasks still need ring droid dispatch and code review.
   - "I already know the codebase" -- Always explore before coding.
-  - "Tests can come later" -- dev-cycle enforces testing gates.
-  - "Code review is optional" -- dev-cycle Gate 4 is mandatory.
+  - "Tests can come later" -- TDD is enforced per subtask.
+  - "Code review is optional" -- Post-implementation review is mandatory.
+  - "I can implement this directly" -- Ring droid dispatch is mandatory for every subtask.
 examples:
   - name: Execute a full-stack task
     invocation: "Execute task T-012"
@@ -28,51 +29,43 @@ examples:
       2. Load context from reference docs
       3. Explore existing codebase patterns
       4. Ask all questions upfront
-      5. Invoke dev-cycle to execute 6-gate pipeline
-      6. Present summary and wait for commit approval
+      5. Execute each subtask via ring droid dispatch
+      6. User checkpoint after each subtask
+      7. Post-implementation code review
+      8. Present summary and wait for commit approval
   - name: Execute next task (auto-detect)
     invocation: "Execute the next task"
     expected_flow: >
       1. Discover tasks file, identify next pending task
       2. Suggest to user and confirm via AskUser
-      3. Standard execution flow via dev-cycle
-  - name: Resume interrupted execution
-    invocation: "Resume task T-012"
-    expected_flow: >
-      1. Invoke dev-cycle --resume
-      2. dev-cycle resumes from last completed gate
+      3. Standard execution flow with subtask loop
 related:
   complementary:
-    - dev-cycle  # external: ring ecosystem
-    - dev-implementation  # external: ring ecosystem
-    - dev-testing  # external: ring ecosystem
-    - requesting-code-review  # external: ring ecosystem
-    - dev-validation  # external: ring ecosystem
-  differentiation:
-    - name: dev-cycle
-      difference: >
-        dev-cycle is the 6-gate execution engine. optimus-build is the
-        preparation layer that handles task identification, context loading,
-        upfront questioning, and codebase exploration BEFORE invoking dev-cycle.
-        Use build when you need the full workflow; use dev-cycle directly
-        when context is already loaded and the task file path is known.
+    - ring-dev-team-backend-engineer-golang  # ring droid: Go implementation
+    - ring-dev-team-backend-engineer-typescript  # ring droid: TS implementation
+    - ring-dev-team-frontend-engineer  # ring droid: React/Next.js implementation
+    - ring-dev-team-qa-analyst  # ring droid: test implementation
+    - ring-default-code-reviewer  # ring droid: code review
+    - ring-default-business-logic-reviewer  # ring droid: business logic review
+    - ring-default-security-reviewer  # ring droid: security review
   sequence:
     after:
       - optimus-plan
       - pre-dev-task-breakdown  # external: ring ecosystem
       - pre-dev-subtask-creation  # external: ring ecosystem
     before:
-      - dev-feedback-loop  # external: ring ecosystem
+      - optimus-check
 verification:
   manual:
-    - All 6 dev-cycle gates passed
+    - All subtasks implemented via ring droid dispatch (not directly)
+    - User checkpoint passed after each subtask
     - Code review findings resolved or explicitly skipped
     - User approved final summary before commit
 ---
 
 # Task Executor
 
-Executes a validated task specification end-to-end: identifies the task, loads context, questions ambiguities upfront, then delegates execution to the dev-cycle skill for the 6-gate pipeline. Commits only after user approval.
+Executes a validated task specification end-to-end: identifies the task, loads context, questions ambiguities upfront, then executes each subtask via ring droid dispatch with mandatory user checkpoints between subtasks. Commits only after user approval.
 
 ---
 
@@ -221,56 +214,126 @@ Use the `AskUser` tool to ask ALL questions at once (max 4 per call, multiple ca
 
 After context is loaded and all questions are answered, execute the implementation.
 
-### Step 2.0: Choose Execution Strategy
+### Step 2.1: Load Subtasks
 
-**Tipo-aware gate selection:** Not all task types need all gates. Before choosing the
-execution strategy, check the task's **Tipo** column and adapt:
+Read all subtask `.md` files from the subtasks directory (derived from TaskSpec in
+Step 1.7). Sort by filename (`subtask_001.md`, `subtask_002.md`, etc.).
 
-| Tipo | Skip Gates | Reason |
-|------|-----------|--------|
-| `Feature`, `Fix`, `Refactor` | None — run all gates | Code changes need full validation |
-| `Chore` | Gate 1 (DevOps) may be the primary gate | Depends on task content |
-| `Docs` | Gate 1 (DevOps), Gate 2 (SRE), Gate 3 (Testing) | No production code — skip TDD, coverage, observability |
-| `Test` | Gate 1 (DevOps), Gate 2 (SRE) | Tests ARE the deliverable — skip DevOps and SRE but run Gate 3 for coverage |
+If `PARALLEL-PLAN.md` exists in the subtasks directory, read it to understand which
+subtasks can run in parallel vs sequentially.
 
-Pass the Tipo so dev-cycle can adapt its gate execution.
-
-### Step 2.1: Execute via dev-cycle
-
-Use the `Skill` tool to load and execute the dev-cycle:
-
+Present the execution plan to the user:
 ```
-Skill("dev-cycle")
+Subtasks to implement (N total):
+  1. subtask_001.md — [title from first heading]
+  2. subtask_002.md — [title from first heading]
+  ...
 ```
 
-Pass the tasks file path that contains the confirmed task. The dev-cycle handles:
+### Step 2.2: Execute Each Subtask via Ring Droid
 
-| Gate | Purpose | Sub-Skill |
-|------|---------|-----------|
-| Gate 0 | Implementation (TDD) | dev-implementation |
-| Gate 1 | DevOps (Docker, IaC) | dev-devops |
-| Gate 2 | SRE (observability validation) | dev-sre |
-| Gate 3 | Testing (unit tests, coverage ≥ 85%) | dev-testing |
-| Gate 4 | Code Review (3+ parallel reviewers) | requesting-code-review |
-| Gate 5 | Validation (user approval) | dev-validation |
+**HARD BLOCK — Ring droid dispatch is MANDATORY for every subtask:**
 
-Provide to dev-cycle:
-- The tasks file path and confirmed task ID
-- All Ring pre-dev artifacts loaded in Step 1.7
-- Codebase patterns found in Step 1.8
-- Answers to all questions from Step 1.9
-- Any user preferences or constraints mentioned during questioning
+The orchestrator (this agent) MUST NOT implement code directly — it MUST delegate
+to a ring droid via `Task` tool for every single subtask, regardless of size or
+complexity. The orchestrator's role is to manage the loop, run tests, and present
+results — never to write production code.
 
-While dev-cycle executes:
-- The dev-cycle manages its own state persistence, gate transitions, and agent dispatch
-- If dev-cycle encounters a blocker or needs user input, it will handle it through its own flow
-- Do NOT interfere with dev-cycle's gate execution — let it run its full pipeline
+**Anti-rationalization (excuses the agent MUST NOT use):**
+- "I can implement this small subtask directly" — NO. Dispatch a ring droid.
+- "The droid will take longer" — NO. Dispatch a ring droid.
+- "I already know what to do" — NO. Dispatch a ring droid.
+- "This is just a config change" — NO. Dispatch a ring droid.
+- "There's only one subtask" — NO. Dispatch a ring droid.
+
+For EACH subtask (sequentially, unless PARALLEL-PLAN.md allows parallel):
+
+**1. Dispatch the stack-appropriate ring droid** via `Task` tool:
+
+| Stack | Ring Droid |
+|-------|-----------|
+| Go | `ring-dev-team-backend-engineer-golang` |
+| TypeScript/Node.js | `ring-dev-team-backend-engineer-typescript` |
+| React/Next.js | `ring-dev-team-frontend-engineer` |
+| Tests only | `ring-dev-team-qa-analyst` |
+
+**2. The droid prompt MUST include:**
+- The subtask file content (full implementation steps + code examples from Ring pre-dev)
+- The task spec objective and acceptance criteria
+- Project rules and coding standards (from Step 1.6)
+- Codebase patterns discovered in Step 1.8
+- File paths for the droid to navigate (Read/Grep/Glob enabled)
+- Answers to questions from Step 1.9
+- Instruction: "Implement this subtask following TDD (RED-GREEN-REFACTOR).
+  Write failing test first, then minimal implementation, then refactor."
+
+**3. After the droid returns:**
+
+a. Run unit tests:
+```bash
+$TEST_CMD   # from .optimus/config.json, or fallback: make test
+```
+b. If tests fail → present the failure output (first 30 lines), ask user via `AskUser`:
+   "Unit tests failing after subtask X. Fix or skip?"
+c. If tests pass → present a summary of what changed (files created/modified, tests added)
+
+**4. MANDATORY USER CHECKPOINT:**
+
+**HARD BLOCK:** After EVERY subtask, the agent MUST ask the user before proceeding.
+The agent MUST NOT silently stop. The agent MUST NOT silently continue. The agent
+MUST NOT batch multiple subtasks without checkpoints.
+
+Ask via `AskUser`:
+```
+[topic] (X of N) Subtask-X
+[question] Subtask X/N complete: [one-line summary of what was done].
+  Unit tests: PASS (Y tests). Ready to proceed?
+[option] Continue to subtask X+1
+[option] Review changes first (git diff)
+[option] Stop here — I'll resume later
+```
+
+- If **Continue** → proceed to next subtask (loop back to step 1)
+- If **Review changes** → run `git diff` and present, then re-ask
+- If **Stop** → present partial progress summary and stop
+
+**If this is the LAST subtask** → proceed to Step 2.3 instead of asking to continue.
+
+### Step 2.3: Post-Implementation Verification
+
+After ALL subtasks are complete:
+
+1. **Run full verification:**
+   ```bash
+   $LINT_CMD    # from .optimus/config.json, or fallback: make lint
+   $TEST_CMD    # unit tests — final regression check
+   ```
+   If lint fails, fix formatting. If unit tests fail, present to user.
+
+2. **Measure coverage** — see AGENTS.md Protocol: Coverage Measurement.
+
+3. **Dispatch code review droids** in parallel via `Task` tool:
+   - `ring-default-code-reviewer`
+   - `ring-default-business-logic-reviewer`
+   - `ring-default-security-reviewer`
+   - `ring-default-ring-test-reviewer`
+
+   Each droid receives all files changed by this task + project rules + task spec.
+   Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists.
+
+4. **Consolidate review findings:** merge, deduplicate, sort by severity.
+
+5. **Present findings interactively** — one at a time, severity order, collect decisions
+   (same pattern as AGENTS.md "Common Patterns > Finding Presentation").
+
+6. **Apply approved fixes** — for each approved fix, apply directly (simple) or dispatch
+   ring droid (complex). Run unit tests after each fix.
 
 ---
 
 ## Phase 3: Post-Execution
 
-After implementation completes (via dev-cycle):
+After implementation and review complete:
 
 ### Step 3.1: Test Gap Cross-Reference
 
@@ -291,7 +354,8 @@ Present a structured summary including:
 - Task ID and title
 - Files created and modified
 - Tests added
-- dev-cycle gate results (all 6 gates)
+- Subtask execution results (X/N completed, tests passing)
+- Code review findings summary (fixed, skipped)
 - Decisions made during questioning and review phases
 
 ### Step 3.3: Commit
@@ -318,13 +382,13 @@ Offer to push commits — see AGENTS.md Protocol: Push Commits.
 - Do not add "nice to have" improvements
 
 ### Error Handling
-- If dev-cycle reports a blocker, present it to the user with context from Phase 1
-- If you discover a gap in the task spec during Phase 1, ask the user before invoking dev-cycle
+- If a ring droid reports a blocker, present it to the user with context from Phase 1
+- If you discover a gap in the task spec during Phase 1, ask the user before starting implementation
 
 ### Communication
-- Update the todo list at Phase 1 completion and after dev-cycle finishes
-- Report dev-cycle gate results as they complete
-- Never go silent — if dev-cycle is running, inform the user of progress
+- Update the todo list at Phase 1 completion and after each subtask completes
+- Report subtask progress as each completes (X/N)
+- Never go silent — always present results and ask before proceeding
 - **Next step suggestion:** After the final commit, inform the user: "Implementation
   complete. Next step: run `/optimus-check` to validate this task."
 
@@ -484,6 +548,44 @@ each task. If any task appears twice in the chain, a cycle exists. Report ALL ta
 in the cycle so the user can fix it with `/optimus-tasks`.
 
 
+### Finding Presentation (Unified Model)
+All cycle review skills follow this pattern:
+1. Collect findings from agents/tools
+2. Consolidate and deduplicate
+3. **Group same-nature findings** — after deduplication, identify findings that share the
+   same root cause or fix pattern (e.g., "missing error handling" in 5 handlers, "inconsistent
+   import path" in 4 files). If 2+ findings are of the same nature, merge them into a **single
+   grouped entry** listing all affected files/locations. Each group counts as ONE item in the
+   "Finding X of N" sequence. The user makes ONE decision for the entire group.
+4. Announce total findings count: `"### Total findings to review: N"` (where N reflects
+   grouped entries — a group of 5 same-nature findings counts as 1)
+5. Present overview table with severity counts
+6. **Deep research BEFORE presenting each finding** (see research checklist below)
+7. Walk through findings ONE AT A TIME with `"Finding X of N"` header, ordered by severity
+   (CRITICAL first, then HIGH, MEDIUM, LOW). **ALL findings MUST be presented regardless of
+   severity** — the agent NEVER skips, filters, or auto-resolves any finding. The decision to
+   fix or skip is ALWAYS the user's. For grouped entries, list all affected files/locations
+   within the single presentation.
+8. For each finding: present research-backed analysis + options, collect decision via AskUser.
+   **Every AskUser for a finding decision MUST include a "Tell me more" option.** This option
+   is always the **second-to-last** option (right before the free-text input that AskUser
+   provides automatically). This lets the user request deeper analysis with one click.
+   **AskUser `[topic]` format:** The `[topic]` label MUST include the progress indicator
+   before the finding ID. Format: `(X of N) F#-Category`.
+   Example: `[topic] (8 of 15) F8-DeadCode`.
+9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
+   (a question, disagreement, or request for clarification) instead of a decision:**
+   **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
+   Research the user's concern RIGHT NOW using `WebSearch`, codebase analysis, or both.
+   Provide a thorough answer with evidence (links, code references, best practice citations).
+   Only AFTER the user is satisfied, re-present the options and ask for their decision again.
+   This may go back and forth multiple times — that is expected and correct behavior.
+   **NEVER defer the response to the end of the findings loop.**
+10. After ALL N decisions collected: apply ALL approved fixes (see below)
+11. Run verification (see Verification Timing below)
+12. Present final summary
+
+
 ### Protocol: Active Version Guard
 
 **Referenced by:** all stage agents (1-5)
@@ -520,6 +622,47 @@ to the `Ativa` version. If not, present options before proceeding.
 6. **If "Cancel":** **STOP** — do not proceed with the stage
 
 Skills reference this as: "Check active version guard — see AGENTS.md Protocol: Active Version Guard."
+
+
+### Protocol: Coverage Measurement
+
+**Referenced by:** check, pr-check, coderabbit-review, verify, deep-review
+
+Measure test coverage using the project's configured commands. Check `.optimus/config.json`
+for custom commands first, then fall back to Makefile targets, then stack-specific commands.
+
+**Unit coverage command resolution order:**
+1. `.optimus/config.json` → `commands.test-coverage` (if present)
+2. `make test-coverage` (if Makefile target exists)
+3. Stack-specific fallback:
+   - Go: `go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out`
+   - Node: `npm test -- --coverage`
+   - Python: `pytest --cov=. --cov-report=term`
+
+If no unit coverage command is available, mark as **SKIP** — do not fail the verification.
+
+**Integration coverage command resolution order:**
+1. `.optimus/config.json` → `commands.test-integration-coverage` (if present)
+2. `make test-integration-coverage` (if Makefile target exists)
+3. Stack-specific fallback:
+   - Go: `go test -tags=integration -coverprofile=coverage-integration.out ./... && go tool cover -func=coverage-integration.out`
+   - Node: `npm run test:integration -- --coverage`
+   - Python: `pytest -m integration --cov=. --cov-report=term`
+
+If no integration coverage command is available, mark as **SKIP** — do not fail the verification.
+
+**Thresholds:**
+
+| Test Type | Threshold | Verdict if Below |
+|-----------|-----------|-----------------|
+| Unit tests | 85% | NEEDS_FIX / HIGH finding |
+| Integration tests | 70% | NEEDS_FIX / HIGH finding |
+
+**Coverage gap analysis:** Parse the coverage output to identify untested functions/methods
+(0% coverage). Flag business-logic functions with 0% as HIGH, infrastructure/generated
+code with 0% as SKIP.
+
+Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage Measurement."
 
 
 ### Protocol: Divergence Warning
@@ -636,6 +779,95 @@ If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
 - If no PR exists, skip.
 
 Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Title Validation."
+
+
+### Protocol: Per-Droid Quality Checklists
+
+**Referenced by:** check, pr-check, deep-review, coderabbit-review, plan
+
+Each droid type has specific dimensions it MUST verify beyond its core domain. Skills
+that dispatch review droids MUST include the applicable checklists in agent prompts.
+
+**Code Quality agent** (`ring-default-code-reviewer`) must additionally verify:
+- Resilience: external calls have timeout, retry with backoff, circuit breaker where appropriate
+- Resource lifecycle: all opened connections/handles are closed (defer, cleanup, graceful shutdown)
+- Concurrency: shared state has proper synchronization, no goroutine leaks, no deadlock risk
+- Performance: no N+1 queries, no unbounded queries, indexes exist for query patterns, no hot-path allocations
+- Configuration: no hardcoded values that should be environment-configurable, safe defaults
+- Cognitive complexity: functions with >3 nesting levels or >30 lines flagged for decomposition
+- Error handling: errors wrapped with context, consistent with codebase error patterns
+- Domain purity: no infrastructure concerns in domain layer, dependency direction correct
+- Resource leaks: DB connections, HTTP clients, file handles, channels properly closed
+
+**Business Logic agent** (`ring-default-business-logic-reviewer`) must additionally verify:
+- Spec traceability: each code path maps to a spec requirement (flag orphan logic with no spec backing)
+- Data integrity: transaction boundaries correct, partial writes impossible, rollback defined
+- Backward compatibility: existing consumers/contracts not broken by this change
+- API semantics: correct HTTP status codes, idempotent operations marked as such, pagination consistent
+- Domain edge cases: what happens with zero, negative, maximum, duplicate, concurrent values?
+- Business rule completeness: all business rules from spec have implementation AND test
+
+**Security agent** (`ring-default-security-reviewer`) must additionally verify:
+- Data privacy: PII not logged, sensitive fields masked in responses, LGPD/GDPR compliance
+- Error responses: no internal details leaked (stack traces, DB schemas, internal paths, SQL)
+- Rate limiting: high-throughput or public endpoints have rate limiting consideration
+- Input validation: happens at the right layer (not just client-side), consistent with codebase
+- Secrets: no hardcoded credentials, tokens, API keys in code or config files
+- Auth propagation: authentication context properly propagated through the call chain
+
+**Test Quality agent** (`ring-default-ring-test-reviewer`) must additionally verify:
+- Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag tests where assertions only check mock.Called() without verifying output/state
+- False positive risk: could these tests pass while the feature is actually broken?
+- Test coupling: are tests coupled to implementation details (private fields, internal struct layout)?
+- Spec traceability: for each acceptance criterion in the task spec, is there a test?
+- Integration tests: do they use real dependencies (testcontainers/docker) or just mocks?
+- Test isolation: can tests run in parallel without interference? Shared state between tests?
+- Error scenario completeness: each error return path has a corresponding test?
+- Boundary values: min, max, zero, empty, nil, negative tested where applicable?
+
+**Nil/Null Safety agent** (`ring-default-ring-nil-safety-reviewer`) must additionally verify:
+- Resource cleanup: nil checks before Close/Release calls
+- Channel safety: sends to nil/closed channels
+- Map safety: reads/writes to nil maps
+- Slice safety: index bounds after filtering/transforming
+
+**Ripple Effects agent** (`ring-default-ring-consequences-reviewer`) must additionally verify:
+- Values duplicated between files that should be a shared constant
+- Imports follow the project's layer architecture (no circular deps, no backwards imports)
+- New code follows the same patterns as existing code in the same domain
+- Backward compatibility: does this change break any existing consumer or API contract?
+- Configuration drift: new defaults reasonable? existing config overrides still valid?
+- Migration path: if breaking change, is migration strategy documented?
+- Shared state: new global/package-level state that could cause issues across modules?
+- Event/message contracts: changes to event payloads affect downstream consumers?
+
+**Dead Code agent** (`ring-default-ring-dead-code-reviewer`) must additionally verify:
+- Dead code: unused imports, unreachable branches, commented-out code
+- Zombie test infrastructure: test helpers, fixtures, mocks no longer used by any test
+- Feature flags: stale feature flag checks for flags that were already fully rolled out
+- Deprecated paths: code paths behind deprecated API versions with no remaining consumers
+
+**Spec Compliance / QA agent** (`ring-dev-team-qa-analyst`) must additionally verify:
+- Testability assessment: is the code structured for testability? (dependency injection, interfaces)
+- Operational readiness: can ops monitor, debug, and rollback this in production?
+- Acceptance criteria coverage: each AC has both success AND failure test scenarios
+- Cross-cutting scenarios: concurrent modifications, large datasets, special characters, timezone handling
+
+**Frontend specialist** (`ring-dev-team-frontend-engineer`) must additionally verify:
+- UX completeness: loading states, empty states, error states all handled
+- Accessibility: keyboard navigation, screen reader support, ARIA labels, color contrast
+- Responsive behavior: works across viewport sizes (mobile, tablet, desktop)
+- i18n readiness: no hardcoded user-facing strings, date/number formatting locale-aware
+- Performance: no unnecessary re-renders, large lists virtualized, images optimized
+
+**Backend specialist** (`ring-dev-team-backend-engineer-golang` or TS equivalent) must additionally verify:
+- Language idiomaticity: follows official style guide conventions
+- Graceful shutdown: SIGTERM handling, in-flight request draining
+- Connection pool sizing: appropriate for expected load
+- Context propagation: request context passed through the full call chain
+- Structured logging: logs include correlation IDs, operation names, durations
+
+Skills reference this as: "Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists."
 
 
 ### Protocol: Project Rules Discovery

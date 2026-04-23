@@ -237,6 +237,10 @@ Display the type, severity, affected file(s), problem description, suggested fix
 
 ### 3. Ask the User
 
+**AskUser `[topic]` format:** The `[topic]` label MUST include the progress indicator
+before the finding ID. Format: `(X of N) F#-Category`.
+Example: `[topic] (8 of 15) F8-DeadCode`.
+
 Use `AskUser` with contextual options:
 - Fix as suggested
 - Fix with adjustment (user specifies)
@@ -353,7 +357,7 @@ Dispatching a single agent in rounds 2+ creates false convergence — the agent 
 
 ### Protocol: Ring Droid Requirement Check
 
-**Referenced by:** check, pr-check, deep-review, deep-doc-review, coderabbit-review, plan (build delegates droid dispatch to dev-cycle)
+**Referenced by:** check, pr-check, deep-review, deep-doc-review, coderabbit-review, plan, build
 
 Before dispatching ring droids, verify the required droids are available. If any required
 droid is not installed, **STOP** and list missing droids.
