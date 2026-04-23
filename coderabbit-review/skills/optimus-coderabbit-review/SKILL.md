@@ -109,27 +109,8 @@ the same interactive resolution flow from Phase 3 onward.
 ### Step 1.3: Load Project Context
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
-2. **Identify test commands:** Check `.optimus/config.json` for custom commands first. If found, use configured commands (empty string means skip). Fall back to `Makefile`, `package.json` scripts, or CI config.
+2. **Verify Makefile targets (HARD BLOCK):** The project MUST have a `Makefile` with `lint` and `test` targets. If either is missing, **STOP**: "Project is missing required Makefile targets (`make lint`, `make test`). Add them before running coderabbit-review."
 3. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
-
-Store discovered commands:
-```bash
-CONFIG_FILE=".optimus/config.json"
-if [ -f "$CONFIG_FILE" ]; then
-  if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
-    echo "WARNING: .optimus/config.json is corrupted. Falling back to auto-detection."
-  else
-    LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
-    TEST_UNIT_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
-    TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
-    TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
-  fi
-fi
-LINT_CMD="${LINT_CMD:-make lint}"
-TEST_UNIT_CMD="${TEST_UNIT_CMD:-make test}"
-TEST_INTEGRATION_CMD="${TEST_INTEGRATION_CMD:-make test-integration}"
-TEST_E2E_CMD="${TEST_E2E_CMD:-make test-e2e}"
-```
 
 ---
 
@@ -355,7 +336,7 @@ For each approved fix:
 1. **RED:** Write a failing test (if one doesn't already exist for the scenario)
 2. **GREEN:** Implement the minimal fix
 3. **REFACTOR:** Improve if necessary
-4. **RUN UNIT TESTS:** Execute `$TEST_UNIT_CMD` to verify no regressions
+4. **RUN UNIT TESTS:** Execute `make test` to verify no regressions
 
 **For documentation fixes (docs, README, specs):** dispatch ring documentation droids
 (`ring-tw-team-functional-writer`, `ring-tw-team-api-writer`). Documentation
@@ -386,7 +367,7 @@ After all findings have been processed through the TDD cycle:
 
 **Run lint ONCE** after all fixes are applied, using the resolved command from Step 1.3:
 ```bash
-$LINT_CMD   # from .optimus/config.json, or fallback: make lint
+make lint
 ```
 If lint fails, fix formatting issues and re-run.
 
@@ -480,14 +461,14 @@ When the loop exits, proceed to Phase 7 (integration/E2E tests).
 expensive, so they run ONCE here — not during the fix/convergence cycle.
 
 ```bash
-$TEST_INTEGRATION_CMD   # from .optimus/config.json, or fallback: make test-integration
-$TEST_E2E_CMD           # from .optimus/config.json, or fallback: make test-e2e
+make test-integration        # Optional target — SKIP if missing
+make test-e2e                # Optional target — SKIP if missing
 ```
 
-| Test Type | Command | If command/target exists | If missing |
-|-----------|---------|------------------------|------------|
-| Integration | `$TEST_INTEGRATION_CMD` | **HARD BLOCK** if fails | SKIP |
-| E2E | `$TEST_E2E_CMD` | **HARD BLOCK** if fails | SKIP |
+| Test Type | Command | If target exists | If missing |
+|-----------|---------|-----------------|------------|
+| Integration | `make test-integration` | **HARD BLOCK** if fails | SKIP |
+| E2E | `make test-e2e` | **HARD BLOCK** if fails | SKIP |
 
 **If any test fails:**
 1. Present the failure output (first 30 lines)
@@ -643,13 +624,11 @@ All cycle review skills follow this pattern:
 
 **Referenced by:** check, pr-check, coderabbit-review, deep-review, build
 
-Measure test coverage using the project's configured commands. Check `.optimus/config.json`
-for custom commands first, then fall back to Makefile targets, then stack-specific commands.
+Measure test coverage using Makefile targets with stack-specific fallbacks.
 
 **Unit coverage command resolution order:**
-1. `.optimus/config.json` → `commands.test-coverage` (if present)
-2. `make test-coverage` (if Makefile target exists)
-3. Stack-specific fallback:
+1. `make test-coverage` (if Makefile target exists)
+2. Stack-specific fallback:
    - Go: `go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out`
    - Node: `npm test -- --coverage`
    - Python: `pytest --cov=. --cov-report=term`
@@ -657,9 +636,8 @@ for custom commands first, then fall back to Makefile targets, then stack-specif
 If no unit coverage command is available, mark as **SKIP** — do not fail the verification.
 
 **Integration coverage command resolution order:**
-1. `.optimus/config.json` → `commands.test-integration-coverage` (if present)
-2. `make test-integration-coverage` (if Makefile target exists)
-3. Stack-specific fallback:
+1. `make test-integration-coverage` (if Makefile target exists)
+2. Stack-specific fallback:
    - Go: `go test -tags=integration -coverprofile=coverage-integration.out ./... && go tool cover -func=coverage-integration.out`
    - Node: `npm run test:integration -- --coverage`
    - Python: `pytest -m integration --cov=. --cov-report=term`

@@ -653,7 +653,7 @@ All Optimus files live in the `.optimus/` directory at the project root:
 
 ```
 .optimus/
-├── config.json          # versionado — tasksDir, commands
+├── config.json          # versionado — tasksDir
 ├── tasks.md             # versionado — structural task data (NO status, NO branch)
 ├── state.json           # gitignored — operational state (status, branch per task)
 ├── stats.json           # gitignored — stage execution counters per task

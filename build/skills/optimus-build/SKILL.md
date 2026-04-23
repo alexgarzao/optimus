@@ -13,7 +13,7 @@ prerequisite: >
   - Pre-task validation has passed
   - Reference docs exist (PRD, TRD, API design, data model)
   - Project rules file exists with coding standards
-  - Project has lint, test, integration test, and E2E test commands configured
+  - Project has a Makefile with `lint` and `test` targets
   - Ring droids installed (backend-engineer-golang and/or backend-engineer-typescript, frontend-engineer)
 NOT_skip_when: >
   - "Task is simple" -- Simple tasks still need ring droid dispatch and code review.
@@ -171,30 +171,10 @@ Required ring droids are not installed. Install them before running this skill:
 Before loading docs, discover the project's structure and tooling:
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
-2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, test, integration test, and E2E test commands.
+2. **Verify Makefile targets (HARD BLOCK):** The project MUST have a `Makefile` with `lint` and `test` targets. If either is missing, **STOP**: "Project is missing required Makefile targets (`make lint`, `make test`). Add them before running build."
 3. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
 
 4. **Identify reference docs:** Look for `docs/pre-dev/`, `docs/`, or project-specific locations for tasks, PRD, TRD, API design, data model.
-
-Store discovered commands for use in subtask verification and post-implementation checks.
-Check `.optimus/config.json` first:
-```bash
-CONFIG_FILE=".optimus/config.json"
-if [ -f "$CONFIG_FILE" ]; then
-  if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
-    echo "WARNING: .optimus/config.json is corrupted. Falling back to auto-detection."
-  else
-    LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
-    TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
-    TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
-    TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
-  fi
-fi
-LINT_CMD="${LINT_CMD:-make lint}"
-TEST_CMD="${TEST_CMD:-make test}"
-TEST_INTEGRATION_CMD="${TEST_INTEGRATION_CMD:-make test-integration}"
-TEST_E2E_CMD="${TEST_E2E_CMD:-make test-e2e}"
-```
 
 ### Step 1.7: Load All Reference Documents
 
@@ -313,11 +293,7 @@ For EACH subtask (sequentially, unless PARALLEL-PLAN.md allows parallel):
 
 a. Run unit tests:
 ```bash
-if [ -n "$TEST_CMD" ]; then
-  $TEST_CMD   # from .optimus/config.json, or fallback: make test
-else
-  echo "WARNING: No test command configured. Skipping unit tests."
-fi
+make test
 ```
 b. **If tests fail (max 3 attempts per subtask):**
    1. **Logic bug** — dispatch the same ring droid with failure output and instruction:
@@ -358,19 +334,18 @@ After ALL subtasks are complete:
 
 1. **Run full verification:**
    ```bash
-   if [ -n "$LINT_CMD" ]; then $LINT_CMD; fi    # from .optimus/config.json, or fallback: make lint
-   if [ -n "$TEST_CMD" ]; then $TEST_CMD; fi    # unit tests — final regression check
+   make lint                # Lint — MANDATORY
+   make test                # Unit tests — final regression check
    ```
    If lint fails, fix formatting. If unit tests fail, present to user.
-   If either command is empty (config has `""`), mark as SKIP — do not fail.
 
 2. **Measure coverage** — see AGENTS.md Protocol: Coverage Measurement.
 
 3. **Run integration tests (if available):**
    ```bash
-   $TEST_INTEGRATION_CMD   # from .optimus/config.json, or fallback: make test-integration
+   make test-integration    # Optional target — SKIP if missing
    ```
-   If the command/target does not exist, mark as SKIP. If it fails, present failure
+   If the target does not exist, mark as SKIP. If it fails, present failure
    output and ask user via `AskUser`: "Integration tests failing. Fix or defer to check?"
 
 4. **Dispatch code review droids** in parallel via `Task` tool:
@@ -480,7 +455,7 @@ All Optimus files live in the `.optimus/` directory at the project root:
 
 ```
 .optimus/
-├── config.json          # versionado — tasksDir, commands
+├── config.json          # versionado — tasksDir
 ├── tasks.md             # versionado — structural task data (NO status, NO branch)
 ├── state.json           # gitignored — operational state (status, branch per task)
 ├── stats.json           # gitignored — stage execution counters per task
@@ -718,13 +693,11 @@ Skills reference this as: "Check active version guard — see AGENTS.md Protocol
 
 **Referenced by:** check, pr-check, coderabbit-review, deep-review, build
 
-Measure test coverage using the project's configured commands. Check `.optimus/config.json`
-for custom commands first, then fall back to Makefile targets, then stack-specific commands.
+Measure test coverage using Makefile targets with stack-specific fallbacks.
 
 **Unit coverage command resolution order:**
-1. `.optimus/config.json` → `commands.test-coverage` (if present)
-2. `make test-coverage` (if Makefile target exists)
-3. Stack-specific fallback:
+1. `make test-coverage` (if Makefile target exists)
+2. Stack-specific fallback:
    - Go: `go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out`
    - Node: `npm test -- --coverage`
    - Python: `pytest --cov=. --cov-report=term`
@@ -732,9 +705,8 @@ for custom commands first, then fall back to Makefile targets, then stack-specif
 If no unit coverage command is available, mark as **SKIP** — do not fail the verification.
 
 **Integration coverage command resolution order:**
-1. `.optimus/config.json` → `commands.test-integration-coverage` (if present)
-2. `make test-integration-coverage` (if Makefile target exists)
-3. Stack-specific fallback:
+1. `make test-integration-coverage` (if Makefile target exists)
+2. Stack-specific fallback:
    - Go: `go test -tags=integration -coverprofile=coverage-integration.out ./... && go tool cover -func=coverage-integration.out`
    - Node: `npm run test:integration -- --coverage`
    - Python: `pytest -m integration --cov=. --cov-report=term`

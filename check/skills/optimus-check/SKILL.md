@@ -12,7 +12,7 @@ prerequisite: >
   - Task execution is complete (user provides ID or skill auto-detects last executed task)
   - Changed files exist (committed or uncommitted -- both are supported)
   - Reference docs exist (task spec, coding standards)
-  - Project has lint and test commands configured
+  - Project has a Makefile with `lint` and `test` targets
 NOT_skip_when: >
   - "Task was simple" -- Simple tasks still need spec compliance checks.
   - "Tests already pass" -- Passing tests do not guarantee spec compliance or code quality.
@@ -166,31 +166,10 @@ Increment stage stats — see AGENTS.md Protocol: Increment Stage Stats. Use cou
 Before loading docs, discover the project's structure and tooling (reuse discoveries from optimus-build if available):
 
 1. **Identify stack:** Check for `go.mod`, `package.json`, `Makefile`, `Cargo.toml`, etc.
-2. **Identify test commands:** Look in `Makefile`, `package.json` scripts, or CI config for lint, test, integration test, and E2E test commands.
+2. **Verify Makefile targets (HARD BLOCK):** The project MUST have a `Makefile` with `lint` and `test` targets. If either is missing, **STOP**: "Project is missing required Makefile targets (`make lint`, `make test`). Add them before running check."
 3. **Identify project rules and AI instructions (MANDATORY):** Execute project rules discovery — see AGENTS.md Protocol: Project Rules Discovery.
 
 4. **Identify reference docs:** Look for task specs, API design, data model, and architecture docs.
-
-Store discovered commands for use in verification gates. Check `.optimus/config.json` first:
-```bash
-CONFIG_FILE=".optimus/config.json"
-if [ -f "$CONFIG_FILE" ]; then
-  if ! jq empty "$CONFIG_FILE" 2>/dev/null; then
-    echo "WARNING: .optimus/config.json is corrupted. Falling back to auto-detection."
-  else
-    LINT_CMD=$(jq -r '.commands.lint // empty' "$CONFIG_FILE" 2>/dev/null)
-    TEST_CMD=$(jq -r '.commands.test // empty' "$CONFIG_FILE" 2>/dev/null)
-    TEST_INTEGRATION_CMD=$(jq -r '.commands["test-integration"] // empty' "$CONFIG_FILE" 2>/dev/null)
-    TEST_E2E_CMD=$(jq -r '.commands["test-e2e"] // empty' "$CONFIG_FILE" 2>/dev/null)
-  fi
-fi
-LINT_CMD="${LINT_CMD:-make lint}"
-TEST_CMD="${TEST_CMD:-make test}"
-TEST_INTEGRATION_CMD="${TEST_INTEGRATION_CMD:-make test-integration}"
-TEST_E2E_CMD="${TEST_E2E_CMD:-make test-e2e}"
-```
-
-Fall back to Makefile/package.json/CI discovery if config.json is missing or keys absent.
 
 ### Step 1.2: Load Reference Documents
 
@@ -230,7 +209,7 @@ This determines which specialist agents to dispatch in Phase 3.
 
 Run ALL applicable checks simultaneously. Capture stdout, stderr, exit code for each.
 
-Check `.optimus/config.json` for custom commands first. If `commands.lint` exists, use it. If a command key is present but empty (`""`), skip that check entirely. If missing, fall back to auto-detection below.
+Run `make lint` for lint checks. Optional static analysis tools (vet, imports, format, docs) are auto-detected from the project stack.
 
 | # | Check | Command (discover from project) | What it detects |
 |---|-------|---------------------------------|-----------------|
@@ -254,8 +233,6 @@ Skip checks whose commands don't exist in the project (e.g., skip `go vet` in a 
 Unit tests should pass before proceeding to agent dispatch. This establishes
 the baseline — if unit tests are already failing, review findings may be unreliable.
 
-Check `.optimus/config.json` for custom `commands.test` first. Fall back to `make test` if not configured.
-
 ```bash
 make test                    # Unit tests — MANDATORY
 ```
@@ -267,8 +244,7 @@ make test                    # Unit tests — MANDATORY
 
 **If unit tests pass:** collect coverage data for analysis.
 
-Measure coverage — see AGENTS.md Protocol: Coverage Measurement. Use the protocol's
-command resolution order (config.json → Makefile → stack-specific).
+Measure coverage — see AGENTS.md Protocol: Coverage Measurement.
 
 **NOTE:** Integration and E2E tests are NOT run here. They run only in Phase 10
 (after re-run guard, before summary) or when the user invokes them directly.
@@ -566,8 +542,8 @@ Apply fixes using ring droids with TDD cycle — see AGENTS.md "Common Patterns 
 **After ALL fixes are applied**, run lint and unit tests one final time:
 
 ```bash
-$LINT_CMD                    # Lint — runs ONCE after all fixes (from .optimus/config.json, or fallback: make lint)
-$TEST_CMD                    # Unit tests — final regression check (from .optimus/config.json, or fallback: make test)
+make lint                    # Lint — runs ONCE after all fixes
+make test                    # Unit tests — final regression check
 ```
 
 If lint fails, fix formatting issues and re-run.
@@ -698,14 +674,14 @@ Execute re-run guard — see AGENTS.md Protocol: Re-run Guard.
 expensive, so they run ONCE at the end — not during the fix/convergence cycle.
 
 ```bash
-$TEST_INTEGRATION_CMD        # from .optimus/config.json, or fallback: make test-integration
-$TEST_E2E_CMD                # from .optimus/config.json, or fallback: make test-e2e
+make test-integration        # Integration tests — optional target
+make test-e2e                # E2E tests — optional target
 ```
 
-| Test Type | Command | If command/target exists | If missing |
-|-----------|---------|------------------------|------------|
-| Integration | `$TEST_INTEGRATION_CMD` | **HARD BLOCK** if fails | SKIP |
-| E2E | `$TEST_E2E_CMD` | **HARD BLOCK** if fails | SKIP |
+| Test Type | Command | If target exists | If missing |
+|-----------|---------|-----------------|------------|
+| Integration | `make test-integration` | **HARD BLOCK** if fails | SKIP |
+| E2E | `make test-e2e` | **HARD BLOCK** if fails | SKIP |
 
 **If any test fails:**
 1. Present the failure output (first 30 lines)
@@ -915,7 +891,7 @@ All Optimus files live in the `.optimus/` directory at the project root:
 
 ```
 .optimus/
-├── config.json          # versionado — tasksDir, commands
+├── config.json          # versionado — tasksDir
 ├── tasks.md             # versionado — structural task data (NO status, NO branch)
 ├── state.json           # gitignored — operational state (status, branch per task)
 ├── stats.json           # gitignored — stage execution counters per task
@@ -1272,13 +1248,11 @@ Skills reference this as: "Check active version guard — see AGENTS.md Protocol
 
 **Referenced by:** check, pr-check, coderabbit-review, deep-review, build
 
-Measure test coverage using the project's configured commands. Check `.optimus/config.json`
-for custom commands first, then fall back to Makefile targets, then stack-specific commands.
+Measure test coverage using Makefile targets with stack-specific fallbacks.
 
 **Unit coverage command resolution order:**
-1. `.optimus/config.json` → `commands.test-coverage` (if present)
-2. `make test-coverage` (if Makefile target exists)
-3. Stack-specific fallback:
+1. `make test-coverage` (if Makefile target exists)
+2. Stack-specific fallback:
    - Go: `go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out`
    - Node: `npm test -- --coverage`
    - Python: `pytest --cov=. --cov-report=term`
@@ -1286,9 +1260,8 @@ for custom commands first, then fall back to Makefile targets, then stack-specif
 If no unit coverage command is available, mark as **SKIP** — do not fail the verification.
 
 **Integration coverage command resolution order:**
-1. `.optimus/config.json` → `commands.test-integration-coverage` (if present)
-2. `make test-integration-coverage` (if Makefile target exists)
-3. Stack-specific fallback:
+1. `make test-integration-coverage` (if Makefile target exists)
+2. Stack-specific fallback:
    - Go: `go test -tags=integration -coverprofile=coverage-integration.out ./... && go tool cover -func=coverage-integration.out`
    - Node: `npm run test:integration -- --coverage`
    - Python: `pytest -m integration --cov=. --cov-report=term`

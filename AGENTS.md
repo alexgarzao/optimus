@@ -153,7 +153,7 @@ All Optimus files live in the `.optimus/` directory at the project root:
 
 ```
 .optimus/
-├── config.json          # versionado — tasksDir, commands
+├── config.json          # versionado — tasksDir
 ├── tasks.md             # versionado — structural task data (NO status, NO branch)
 ├── state.json           # gitignored — operational state (status, branch per task)
 ├── stats.json           # gitignored — stage execution counters per task
@@ -1065,13 +1065,11 @@ Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring D
 
 **Referenced by:** check, pr-check, coderabbit-review, deep-review, build
 
-Measure test coverage using the project's configured commands. Check `.optimus/config.json`
-for custom commands first, then fall back to Makefile targets, then stack-specific commands.
+Measure test coverage using Makefile targets with stack-specific fallbacks.
 
 **Unit coverage command resolution order:**
-1. `.optimus/config.json` → `commands.test-coverage` (if present)
-2. `make test-coverage` (if Makefile target exists)
-3. Stack-specific fallback:
+1. `make test-coverage` (if Makefile target exists)
+2. Stack-specific fallback:
    - Go: `go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out`
    - Node: `npm test -- --coverage`
    - Python: `pytest --cov=. --cov-report=term`
@@ -1079,9 +1077,8 @@ for custom commands first, then fall back to Makefile targets, then stack-specif
 If no unit coverage command is available, mark as **SKIP** — do not fail the verification.
 
 **Integration coverage command resolution order:**
-1. `.optimus/config.json` → `commands.test-integration-coverage` (if present)
-2. `make test-integration-coverage` (if Makefile target exists)
-3. Stack-specific fallback:
+1. `make test-integration-coverage` (if Makefile target exists)
+2. Stack-specific fallback:
    - Go: `go test -tags=integration -coverprofile=coverage-integration.out ./... && go tool cover -func=coverage-integration.out`
    - Node: `npm run test:integration -- --coverage`
    - Python: `pytest -m integration --cov=. --cov-report=term`
@@ -1494,36 +1491,30 @@ to the `Ativa` version. If not, present options before proceeding.
 
 Skills reference this as: "Check active version guard — see AGENTS.md Protocol: Active Version Guard."
 
-## Verification Command Configuration
+## Verification Command Convention
 
-Projects can customize verification commands via `.optimus/config.json` instead of relying
-on auto-detection from Makefile or stack conventions.
+All projects using Optimus MUST have a `Makefile` with standardized targets.
+Skills call `make <target>` directly — no configuration needed.
 
-### Config File
+### Required Makefile Targets (HARD BLOCK if missing)
 
-Location: `.optimus/config.json` (versioned)
+| Target | Purpose |
+|--------|---------|
+| `make lint` | Run linters |
+| `make test` | Run unit tests |
 
-```json
-{
-  "tasksDir": "docs/pre-dev",
-  "commands": {
-    "lint": "npm run lint",
-    "test": "npm test",
-    "test-integration": "npm run test:integration",
-    "test-e2e": "npx playwright test",
-    "test-coverage": "npm test -- --coverage"
-  }
-}
-```
+### Optional Makefile Targets (SKIP if missing)
 
-### Behavior
+| Target | Purpose |
+|--------|---------|
+| `make test-integration` | Run integration tests |
+| `make test-e2e` | Run E2E tests |
+| `make test-coverage` | Run unit tests with coverage report |
+| `make test-integration-coverage` | Run integration tests with coverage report |
 
-All skills that run verification commands (done, build,
-check, pr-check, coderabbit-review) MUST check for `.optimus/config.json` BEFORE auto-detecting
-commands. If the config file exists, use its commands instead of auto-detection.
-
-If a command key is missing from the config, fall back to auto-detection for that command.
-If a command key is present but empty (`""`), skip that check entirely.
+If an optional target does not exist, skills mark that check as **SKIP** — they do NOT
+fail or ask the user. For coverage targets, if `make test-coverage` is missing, skills
+fall back to stack-specific commands (see Protocol: Coverage Measurement).
 
 ## Common Patterns Across Skills
 
