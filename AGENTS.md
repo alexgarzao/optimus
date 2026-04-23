@@ -581,19 +581,17 @@ mode, it skips all task status logic. See its SKILL.md for detection rules.
 (o agente pergunta ao usuário via AskUser com opções: merge commit, squash, rebase, keep open,
 close without merging), ou manualmente pelo usuário depois.
 
-### done Checklist
+### done Gates
 
-Before marking done, done runs 8 checks:
-1. No uncommitted changes (`git status --porcelain` = empty)
-2. No unpushed commits (`git log @{u}..HEAD` = empty)
-3. PR ready to merge (if PR exists) — includes PR title validation (Conventional Commits)
-4. CI passing (if PR exists)
-5. `make lint` passes (or command from `.optimus/config.json`)
-6. `make test` passes (or command from `.optimus/config.json`)
-7. `make test-integration` passes (if target exists, or from config.json)
-8. `make test-e2e` passes (if target exists, or from config.json)
+Before marking done, done runs 3 sequential hard gates:
+1. No uncommitted changes (`git status --porcelain` = empty) — HARD BLOCK
+2. No unpushed commits (`git log @{u}..HEAD` = empty) — HARD BLOCK
+3. PR in final state (MERGED or CLOSED) or no PR exists — HARD BLOCK if OPEN
 
-ALL must pass (SKIP counts as pass). If any fails, status in state.json stays unchanged.
+Lint, tests, and CI validation are the responsibility of the PR pipeline (branch
+protection rules, CI workflows), not done. If the PR was merged, these already passed.
+
+If any gate fails, done stops immediately and status in state.json stays unchanged.
 
 ## Dry-Run Mode (all stages)
 
