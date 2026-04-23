@@ -143,6 +143,8 @@ starting the next task.
 
 For each task in the execution order:
 
+Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage=`batch` and include the current task ID in the title (e.g., `optimus: batch | T-003 — User Auth JWT`). Update the title each time the task changes.
+
 ### Step 2.1: Stage Dispatch
 
 **Before dispatching any stage,** verify the stage skill is available. If the skill fails
@@ -238,7 +240,7 @@ After completing a task (all stages done), re-evaluate the remaining task pool:
 
 ## Phase 3: Batch Summary
 
-After all tasks are processed (or the user stops):
+After all tasks are processed (or the user stops), restore terminal title (`printf '\033]0;\007'`):
 
 ```markdown
 ## Batch Execution Summary
@@ -597,6 +599,35 @@ and offer to run reconciliation before proceeding. This prevents tasks from sile
 appearing as `Pendente` when they actually have active worktrees.
 
 Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: State Management."
+
+
+### Protocol: Terminal Identification
+
+**Referenced by:** all stage agents (1-5), batch
+
+After the task ID is identified and confirmed, set the terminal title to show the
+current stage and task. This allows users running multiple agents in parallel terminals
+to identify each terminal at a glance.
+
+**Set title (after task ID is known):**
+
+```bash
+printf '\033]0;optimus: %s | %s — %s\007' "<stage-name>" "$TASK_ID" "$TASK_TITLE"
+```
+
+Example output in terminal tab: `optimus: check | T-003 — User Auth JWT`
+
+**Restore title (at stage completion or exit):**
+
+```bash
+printf '\033]0;\007'
+```
+
+**NOTE:** This uses the standard OSC (Operating System Command) escape sequence
+supported by iTerm2, Terminal.app, VS Code terminal, tmux, and most modern terminals.
+The sequence is silent — it produces no visible output.
+
+Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Terminal Identification."
 
 
 ### Protocol: tasks.md Validation (HARD BLOCK)

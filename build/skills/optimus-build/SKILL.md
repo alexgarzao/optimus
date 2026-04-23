@@ -107,7 +107,9 @@ Executes a validated task specification end-to-end: identifies the task, loads c
 
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`build`, status=`Em Andamento`.
 
-**On stage completion** (after Phase 3 post-execution): delete the session file.
+Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage=`build`.
+
+**On stage completion** (after Phase 3 post-execution): delete the session file and restore terminal title.
 
 ### Step 1.3: Validate and Update Task Status
 
@@ -983,6 +985,35 @@ Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
 7. If subtasks directory exists, read all `.md` files inside it
 
 Skills reference this as: "Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution."
+
+
+### Protocol: Terminal Identification
+
+**Referenced by:** all stage agents (1-5), batch
+
+After the task ID is identified and confirmed, set the terminal title to show the
+current stage and task. This allows users running multiple agents in parallel terminals
+to identify each terminal at a glance.
+
+**Set title (after task ID is known):**
+
+```bash
+printf '\033]0;optimus: %s | %s — %s\007' "<stage-name>" "$TASK_ID" "$TASK_TITLE"
+```
+
+Example output in terminal tab: `optimus: check | T-003 — User Auth JWT`
+
+**Restore title (at stage completion or exit):**
+
+```bash
+printf '\033]0;\007'
+```
+
+**NOTE:** This uses the standard OSC (Operating System Command) escape sequence
+supported by iTerm2, Terminal.app, VS Code terminal, tmux, and most modern terminals.
+The sequence is silent — it produces no visible output.
+
+Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Terminal Identification."
 
 
 ### Protocol: Workspace Auto-Navigation (HARD BLOCK)
