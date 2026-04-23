@@ -334,7 +334,7 @@ MUST NOT batch multiple subtasks without checkpoints.
 
 Ask via `AskUser`:
 ```
-[topic] (X of N) Subtask-X
+[topic] (X/N) Subtask-X
 [question] Subtask X/N complete: [one-line summary of what was done].
   Unit tests: PASS (Y tests). Ready to proceed?
 [option] Continue to subtask X+1
@@ -641,12 +641,12 @@ All cycle review skills follow this pattern:
    same root cause or fix pattern (e.g., "missing error handling" in 5 handlers, "inconsistent
    import path" in 4 files). If 2+ findings are of the same nature, merge them into a **single
    grouped entry** listing all affected files/locations. Each group counts as ONE item in the
-   "Finding X of N" sequence. The user makes ONE decision for the entire group.
+   "Finding X/N" sequence. The user makes ONE decision for the entire group.
 4. Announce total findings count: `"### Total findings to review: N"` (where N reflects
    grouped entries — a group of 5 same-nature findings counts as 1)
 5. Present overview table with severity counts
 6. **Deep research BEFORE presenting each finding** (see research checklist below)
-7. Walk through findings ONE AT A TIME with `"Finding X of N"` header, ordered by severity
+7. Walk through findings ONE AT A TIME with `"Finding X/N"` header, ordered by severity
    (CRITICAL first, then HIGH, MEDIUM, LOW). **ALL findings MUST be presented regardless of
    severity** — the agent NEVER skips, filters, or auto-resolves any finding. The decision to
    fix or skip is ALWAYS the user's. For grouped entries, list all affected files/locations
@@ -656,8 +656,8 @@ All cycle review skills follow this pattern:
    is always the **second-to-last** option (right before the free-text input that AskUser
    provides automatically). This lets the user request deeper analysis with one click.
    **AskUser `[topic]` format:** The `[topic]` label MUST include the progress indicator
-   before the finding ID. Format: `(X of N) F#-Category`.
-   Example: `[topic] (8 of 15) F8-DeadCode`.
+   before the finding ID. Format: `(X/N) F#-Category`.
+   Example: `[topic] (8/15) F8-DeadCode`.
 9. **IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds with free text
    (a question, disagreement, or request for clarification) instead of a decision:**
    **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
