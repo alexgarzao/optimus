@@ -106,6 +106,8 @@ class TestFirstTimeInstall:
         result = _run_sync(tmp_path)
         assert result.returncode == 0
         assert "Added:   2" in result.stdout
+        assert "(1/2)" in result.stdout
+        assert "(2/2)" in result.stdout
         log_content = log.read_text()
         assert "alpha@optimus" in log_content
         assert "beta@optimus" in log_content

@@ -10,6 +10,10 @@ trap 'echo ""; echo "WARNING: Sync interrupted. Re-run /optimus-sync to complete
 
 readonly MARKETPLACE_NAME="${OPTIMUS_MARKETPLACE_NAME:-optimus}"
 readonly DROID_TIMEOUT="${OPTIMUS_DROID_TIMEOUT:-60}"
+if ! [[ "$DROID_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
+  echo "ERROR: OPTIMUS_DROID_TIMEOUT must be a positive integer (got: '$DROID_TIMEOUT')"
+  exit 1
+fi
 
 _droid() {
   if command -v timeout >/dev/null 2>&1; then
@@ -64,7 +68,7 @@ fi
 INSTALLED=$(_droid plugin list 2>/dev/null \
   | grep -F "@${MARKETPLACE_NAME}" \
   | awk '{print $1}' \
-  | sed "s/@${MARKETPLACE_NAME}//" \
+  | while IFS= read -r _line; do echo "${_line%@${MARKETPLACE_NAME}}"; done \
   | sort) || true
 
 # Step 4: Calculate diffs
