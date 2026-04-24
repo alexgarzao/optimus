@@ -490,13 +490,27 @@ If the user invoked a dry-run (e.g., "dry-run resume T-XXX", "preview resume"):
 Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage label `RESUME`:
 
 ```bash
-printf '\033]0;optimus: RESUME %s — %s\007' "$TASK_ID" "$TASK_TITLE" > /dev/tty 2>/dev/null || true
+_optimus_set_title() {
+  local pid="$PPID" tty=""
+  for _ in 1 2 3 4; do
+    [ -z "$pid" ] || [ "$pid" = "1" ] && break
+    tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
+    case "$tty" in
+      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') ;;
+      *) break ;;
+    esac
+  done
+  [ -n "$tty" ] && [ "$tty" != "?" ] && [ "$tty" != "??" ] \
+    && [ -w "/dev/$tty" ] \
+    && printf '\033]0;%s\007' "$1" > "/dev/$tty" 2>/dev/null || true
+}
+_optimus_set_title "optimus: RESUME $TASK_ID — $TASK_TITLE"
 ```
 
 **On exit or after Phase 5 delegates to another stage skill**, restore the title:
 
 ```bash
-printf '\033]0;\007' > /dev/tty 2>/dev/null || true
+_optimus_set_title ""
 ```
 
 ### Step 4.2: Collect Worktree Telemetry
@@ -786,20 +800,42 @@ to identify each terminal at a glance.
 **Set title (after task ID is known):**
 
 ```bash
-printf '\033]0;optimus: %s %s — %s\007' "<STAGE>" "$TASK_ID" "$TASK_TITLE" > /dev/tty 2>/dev/null || true
+_optimus_set_title() {
+  # Resolve the parent-process TTY and emit an OSC 0 title sequence to it.
+  # The Execute tool runs bash without a controlling TTY, so /dev/tty fails
+  # with ENODEV. The parent (droid) process is attached to the real terminal
+  # (e.g. /dev/ttys008 on macOS, /dev/pts/N on Linux), and the child can
+  # write there. Walk up to 4 ancestors in case of nested shells.
+  local pid="$PPID" tty=""
+  for _ in 1 2 3 4; do
+    [ -z "$pid" ] || [ "$pid" = "1" ] && break
+    tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
+    case "$tty" in
+      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') ;;
+      *) break ;;
+    esac
+  done
+  [ -n "$tty" ] && [ "$tty" != "?" ] && [ "$tty" != "??" ] \
+    && [ -w "/dev/$tty" ] \
+    && printf '\033]0;%s\007' "$1" > "/dev/$tty" 2>/dev/null || true
+}
+_optimus_set_title "optimus: <STAGE> $TASK_ID — $TASK_TITLE"
 ```
 
 Example output in terminal tab: `optimus: REVIEW T-003 — User Auth JWT`
 
-**Why `/dev/tty`:** The Execute tool captures stdout, so escape sequences written to
-stdout never reach the terminal emulator. Redirecting to `/dev/tty` writes directly to
-the controlling terminal, bypassing capture. The `2>/dev/null || true` ensures silent
-failure in environments without a TTY (Docker, CI).
+**Why the parent-process TTY:** The Execute tool runs `bash -c` without a controlling
+terminal, so `/dev/tty` returns `ENODEV` ("Device not configured") and the OSC escape
+is silently dropped. Stdout is captured by the Droid CLI and not forwarded as raw
+bytes, so stdout does not work either. The resolver above asks `ps` for the parent's
+controlling TTY device path and writes directly to it — that device IS writable from
+the child and is connected to the user's real terminal (iTerm2, Terminal.app, tmux,
+etc.). If no ancestor has a TTY (Docker/CI), the function silently no-ops.
 
 **Restore title (at stage completion or exit):**
 
 ```bash
-printf '\033]0;\007' > /dev/tty 2>/dev/null || true
+_optimus_set_title ""
 ```
 
 **NOTE:** This uses the standard OSC (Operating System Command) escape sequence

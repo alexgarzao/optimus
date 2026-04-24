@@ -113,13 +113,27 @@ message. It never offers to redo `plan`, `build`, or `review`.
 **CRITICAL:** Set the terminal title so the user can identify this terminal at a glance. Execute this command NOW:
 
 ```bash
-printf '\033]0;optimus: DONE %s — %s\007' "$TASK_ID" "$TASK_TITLE" > /dev/tty 2>/dev/null || true
+_optimus_set_title() {
+  local pid="$PPID" tty=""
+  for _ in 1 2 3 4; do
+    [ -z "$pid" ] || [ "$pid" = "1" ] && break
+    tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
+    case "$tty" in
+      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') ;;
+      *) break ;;
+    esac
+  done
+  [ -n "$tty" ] && [ "$tty" != "?" ] && [ "$tty" != "??" ] \
+    && [ -w "/dev/$tty" ] \
+    && printf '\033]0;%s\007' "$1" > "/dev/$tty" 2>/dev/null || true
+}
+_optimus_set_title "optimus: DONE $TASK_ID — $TASK_TITLE"
 ```
 
 **On stage completion or exit**, restore the title:
 
 ```bash
-printf '\033]0;\007' > /dev/tty 2>/dev/null || true
+_optimus_set_title ""
 ```
 
 ### Step 1.1: Validate Task Status
