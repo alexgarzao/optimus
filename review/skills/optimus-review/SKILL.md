@@ -1070,6 +1070,65 @@ each task. If any task appears twice in the chain, a cycle exists. Report ALL ta
 in the cycle so the user can fix it with `/optimus-tasks`.
 
 
+### Protocol: Resolve Main Worktree Path
+
+**Referenced by:** State Management, Session State, Increment Stage Stats, Initialize .optimus Directory, and every skill that reads or writes any file under `.optimus/`.
+
+`.optimus/state.json`, `.optimus/stats.json`, `.optimus/sessions/`, and `.optimus/reports/`
+are **gitignored** (operational/temporary state). Because git does not share ignored files
+across linked worktrees (`git worktree add <dir>`), each worktree has an **independent
+copy** of these files. Reads and writes must always target the **main worktree** — never
+the current working directory.
+
+**Always resolve the main worktree before touching any `.optimus/` operational file:**
+
+```bash
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+if [ -z "$MAIN_WORKTREE" ]; then
+  echo "ERROR: Cannot determine main worktree — not in a git repository."
+  # STOP — do not proceed
+fi
+```
+
+After resolution, every `.optimus/` path uses `${MAIN_WORKTREE}/.optimus/` as the base:
+
+```bash
+OPTIMUS_DIR="${MAIN_WORKTREE}/.optimus"
+STATE_FILE="${OPTIMUS_DIR}/state.json"
+STATS_FILE="${OPTIMUS_DIR}/stats.json"
+SESSIONS_DIR="${OPTIMUS_DIR}/sessions"
+REPORTS_DIR="${OPTIMUS_DIR}/reports"
+```
+
+**Why this matters (real incident):** A skill executed from a linked worktree (e.g.,
+`<repo>-t-037-oauth2-tenant/`) that used `STATE_FILE=".optimus/state.json"` created the
+file inside that linked worktree. The subsequent `git worktree remove` (during task
+cleanup) deleted the worktree **together with the state.json update**, silently losing
+the status change. The main worktree's `state.json` was never touched, so the task
+remained stuck in `Validando Impl` even after the PR was merged.
+
+**Do NOT** assign paths relative to the current working directory:
+
+```bash
+STATE_FILE=".optimus/state.json"            # WRONG — resolves against $PWD
+mkdir -p .optimus/sessions .optimus/reports # WRONG — creates dirs in $PWD
+```
+
+**DO** resolve the main worktree first, then compose absolute paths:
+
+```bash
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
+mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports"
+```
+
+**Exception:** Versioned files (`.optimus/config.json`, `.optimus/tasks.md`) are shared
+across worktrees by git itself, so relative paths work for those. This protocol targets
+only the gitignored operational files.
+
+Skills reference this as: "Resolve main worktree — see AGENTS.md Protocol: Resolve Main Worktree Path."
+
+
 ### Convergence Loop (Full Roster Model)
 Applies to: plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review
 
@@ -1399,27 +1458,31 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 **Referenced by:** plan, review
 
 After the status change in state.json (and BEFORE any analysis work begins), increment
-the execution counter for the current stage in `.optimus/stats.json`. This tracks how many
-times each stage ran on each task — useful for spotting spec churn and review cycles.
+the execution counter for the current stage in `.optimus/stats.json` at the main
+worktree. This tracks how many times each stage ran on each task — useful for
+spotting spec churn and review cycles.
 
 **NOTE:** Only increment when NOT in dry-run mode.
 
-1. Read `.optimus/stats.json`. If the file does not exist, start with an empty object `{}`.
-   If the file exists but is corrupted, reset it:
+1. Resolve the main worktree — see Protocol: Resolve Main Worktree Path.
+2. Read `${MAIN_WORKTREE}/.optimus/stats.json`. If the file does not exist, start with
+   an empty object `{}`. If the file exists but is corrupted, reset it:
    ```bash
-   STATS_FILE=".optimus/stats.json"
+   # Resolve main worktree — see Protocol: Resolve Main Worktree Path.
+   MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+   STATS_FILE="${MAIN_WORKTREE}/.optimus/stats.json"
    if [ -f "$STATS_FILE" ] && ! jq empty "$STATS_FILE" 2>/dev/null; then
      echo "WARNING: stats.json is corrupted. Resetting counters."
      echo '{}' > "$STATS_FILE"
    fi
    ```
-2. If the task ID key does not exist, initialize it:
+3. If the task ID key does not exist, initialize it:
    ```json
    { "plan_runs": 0, "review_runs": 0 }
    ```
-3. Increment the appropriate counter (`plan_runs` for plan, `review_runs` for review).
-4. Set the timestamp field (`last_plan` or `last_review`) to the current UTC ISO 8601 time.
-5. Write the updated JSON back to `.optimus/stats.json` (pretty-printed, sorted keys).
+4. Increment the appropriate counter (`plan_runs` for plan, `review_runs` for review).
+5. Set the timestamp field (`last_plan` or `last_review`) to the current UTC ISO 8601 time.
+6. Write the updated JSON back to `${STATS_FILE}` (pretty-printed, sorted keys).
 
 **NOTE:** stats.json is gitignored — no commit needed.
 
@@ -1773,8 +1836,9 @@ status change in state.json** (before any work begins). This ensures crash recov
 a record even if the agent fails before producing any output. Do NOT wait until
 "key phase transitions" to write the initial session file.
 
-**Session file location:** `.optimus/sessions/session-<task-id>.json` (gitignored).
-Each task gets its own file (e.g., `.optimus/sessions/session-T-003.json`).
+**Session file location:** `${MAIN_WORKTREE}/.optimus/sessions/session-<task-id>.json`
+(gitignored; always resolved against the main worktree — see Protocol: Resolve Main
+Worktree Path). Each task gets its own file (e.g., `session-T-003.json`).
 
 ```json
 {
@@ -1798,7 +1862,9 @@ rather than restarting the entire analysis.
 **On stage start (after task ID is known):**
 
 ```bash
-SESSION_FILE=".optimus/sessions/session-${TASK_ID}.json"
+# Resolve main worktree — see Protocol: Resolve Main Worktree Path.
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+SESSION_FILE="${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
 if [ -f "$SESSION_FILE" ]; then
   if ! jq empty "$SESSION_FILE" 2>/dev/null; then
     echo "WARNING: Session file is corrupted. Deleting and proceeding fresh."
@@ -1852,7 +1918,9 @@ fi
 
 ```bash
 # Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
-mkdir -p .optimus/sessions .optimus/reports
+# (that protocol resolves MAIN_WORKTREE and creates the dirs at the main worktree)
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports"
 BRANCH_NAME=$(git branch --show-current 2>/dev/null || echo "detached")
 jq -n \
   --arg task_id "${TASK_ID}" --arg stage "<stage-name>" --arg status "<status>" \
@@ -1861,12 +1929,13 @@ jq -n \
   --arg notes "<progress>" \
   '{task_id: $task_id, stage: $stage, status: $status, branch: $branch,
     started_at: $started, updated_at: $updated, phase: $phase, notes: $notes}' \
-  > ".optimus/sessions/session-${TASK_ID}.json"
+  > "${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
 ```
 
 **On stage completion:** Delete the session file:
 ```bash
-rm -f ".optimus/sessions/session-${TASK_ID}.json"
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+rm -f "${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
 ```
 
 Skills reference this as: "Execute session state protocol from AGENTS.md using stage=`<name>`, status=`<status>`."
@@ -1876,7 +1945,10 @@ Skills reference this as: "Execute session state protocol from AGENTS.md using s
 
 **Referenced by:** all stage agents (1-4), tasks, report, quick-report, import, batch
 
-All status and branch data is stored in `.optimus/state.json` (gitignored).
+All status and branch data is stored in `.optimus/state.json` (gitignored). This file
+lives at the **main worktree root** — always resolve the main worktree before any
+read or write (see Protocol: Resolve Main Worktree Path). Writing to a linked
+worktree's copy silently loses data when the worktree is later removed.
 
 **Prerequisites:**
 
@@ -1885,12 +1957,18 @@ if ! command -v jq >/dev/null 2>&1; then
   echo "ERROR: jq is required for state management but not installed."
   # STOP — do not proceed
 fi
+# Resolve main worktree — see Protocol: Resolve Main Worktree Path.
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+if [ -z "$MAIN_WORKTREE" ]; then
+  echo "ERROR: Cannot determine main worktree — not in a git repository."
+  # STOP — do not proceed
+fi
+STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 ```
 
 **Reading state:**
 
 ```bash
-STATE_FILE=".optimus/state.json"
 if [ -f "$STATE_FILE" ]; then
   # Validate JSON integrity before reading
   if ! jq empty "$STATE_FILE" 2>/dev/null; then
@@ -1920,7 +1998,8 @@ A task with no entry in state.json is implicitly `Pendente`.
 
 ```bash
 # Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
-STATE_FILE=".optimus/state.json"
+# STATE_FILE is resolved in Prerequisites above (against MAIN_WORKTREE).
+mkdir -p "$(dirname "$STATE_FILE")"
 if [ ! -f "$STATE_FILE" ]; then
   echo '{}' > "$STATE_FILE"
 fi
@@ -1948,7 +2027,7 @@ fi
 **Removing entry (for Pendente reset):**
 
 ```bash
-STATE_FILE=".optimus/state.json"
+# STATE_FILE is resolved in Prerequisites above (against MAIN_WORKTREE).
 if [ ! -f "$STATE_FILE" ]; then
   echo "state.json does not exist — task is already implicitly Pendente."
 else
@@ -1964,8 +2043,9 @@ fi
 **Listing all tasks with status (for report/quick-report):**
 
 ```bash
-STATE_FILE=".optimus/state.json"
-TASKS_FILE=".optimus/tasks.md"
+# STATE_FILE is resolved in Prerequisites above (against MAIN_WORKTREE).
+# tasks.md is versioned and shared across worktrees, so a relative path is safe.
+TASKS_FILE="${MAIN_WORKTREE}/.optimus/tasks.md"
 # Validate state.json if it exists
 if [ -f "$STATE_FILE" ] && ! jq empty "$STATE_FILE" 2>/dev/null; then
   echo "WARNING: state.json is corrupted. Treating all tasks as Pendente."
