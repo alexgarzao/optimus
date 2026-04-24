@@ -236,7 +236,13 @@ gh api graphql -f query='
 
 If `pageInfo.hasNextPage` is `true`, re-run with `-f cursor="<endCursor>"` until all pages are fetched. Merge all nodes into a single list.
 
-For each thread, classify by the **first comment's author**:
+**Filter outdated threads:** Remove all threads where `isOutdated` is `true`. These
+threads reference code that was modified in subsequent commits — the comments are
+no longer relevant to the current diff. Do NOT include them as findings, do NOT
+dispatch agents to evaluate them, and do NOT attempt to reply/resolve them.
+Log the count for the summary: "Filtered N outdated threads (code was modified after comment)."
+
+For each remaining thread, classify by the **first comment's author**:
 
 | Author login | Source | Reply method |
 |-------------|--------|-------------|
@@ -256,7 +262,6 @@ Store each thread as:
   source: "deepsource" | "codacy" | "coderabbit" | "copilot" | "human",
   reply_method: "graphql" | "rest",
   is_resolved: true | false,
-  is_outdated: true | false,
   path: "<file>",
   line: <number>,
   body: "<first comment body>"
@@ -326,7 +331,8 @@ PR Threads:
   - CodeRabbit: X threads — A unresolved
   - Human reviewers: X threads from [usernames] — A unresolved
   - Other bots: X threads — A unresolved
-  Total: X threads, Y unresolved
+  - Outdated (filtered): X threads
+  Total: X threads, Y unresolved (Z outdated filtered)
 ```
 
 ### Step 1.4: Checkout PR Branch
