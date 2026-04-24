@@ -8,3 +8,11 @@ __pycache__/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# optimus-operational-files
+.optimus/config.json
+.optimus/state.json
+.optimus/stats.json
+.optimus/sessions/
+.optimus/reports/
+.optimus/logs/

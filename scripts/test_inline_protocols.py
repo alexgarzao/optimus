@@ -2,6 +2,7 @@
 """Tests for inline-protocols.py."""
 
 import importlib.util
+import re
 from pathlib import Path
 
 import pytest
@@ -130,7 +131,7 @@ class TestMatchRefToSection:
         "Protocol: tasks.md Validation (HARD BLOCK)": "...",
         "Protocol: TaskSpec Resolution": "...",
         "Protocol: Push Commits (optional)": "...",
-        "Convergence Loop (Full Roster Model)": "...",
+        "Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)": "...",
         "Finding Presentation (Unified Model)": "...",
     }
 
@@ -145,8 +146,11 @@ class TestMatchRefToSection:
         assert result == "Protocol: TaskSpec Resolution"
 
     def test_common_match(self):
-        result = ip.match_ref_to_section("Common: Convergence Loop", self.SECTIONS)
-        assert result == "Convergence Loop (Full Roster Model)"
+        result = ip.match_ref_to_section(
+            "Common: Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)",
+            self.SECTIONS,
+        )
+        assert result == "Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)"
 
     def test_no_match(self):
         assert ip.match_ref_to_section("Protocol: Nonexistent", self.SECTIONS) is None
@@ -158,6 +162,44 @@ class TestMatchRefToSection:
         }
         result = ip.match_ref_to_section("Protocol: Task", sections)
         assert result == "Protocol: Task"
+
+    def test_convergence_loop_resolves_against_live_agents_md(self):
+        """Regression guard: the live AGENTS.md heading must resolve via the parser.
+
+        Catches the failure mode where AGENTS.md heading drifts (e.g., adding/removing
+        'Protocol:' prefix) and SKILL.md references stop resolving. This is a higher-
+        fidelity check than the synthetic SECTIONS fixture above.
+        """
+        agents_md = Path(__file__).parent.parent / "AGENTS.md"
+        sections = _parse_real_agents_md(agents_md)
+        # The reference text emitted by extract_refs for SKILL.md content
+        # `AGENTS.md "Common Patterns > Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)"`
+        ref = "Common: Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)"
+        result = ip.match_ref_to_section(ref, sections)
+        assert result is not None, (
+            f"Live AGENTS.md heading did not resolve for ref {ref!r}. "
+            "Parser, heading, or match logic drifted."
+        )
+        assert "Convergence Loop" in result
+
+
+def _parse_real_agents_md(path):
+    """Minimal section parser used by the live regression test."""
+    sections: dict[str, str] = {}
+    current_key = None
+    current_lines: list[str] = []
+    for line in path.read_text().splitlines():
+        m = re.match(r"^(?:#{2,3})\s+(.+)$", line)
+        if m:
+            if current_key:
+                sections[current_key] = "\n".join(current_lines)
+            current_key = m.group(1).strip()
+            current_lines = []
+        else:
+            current_lines.append(line)
+    if current_key:
+        sections[current_key] = "\n".join(current_lines)
+    return sections
 
 
 # --- strip_existing_inline ---

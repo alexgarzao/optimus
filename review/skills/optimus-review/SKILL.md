@@ -63,6 +63,7 @@ verification:
   manual:
     - All findings resolved (fixed or explicitly skipped by user)
     - Verification gate passed after fixes applied
+    - Convergence loop run, skipped, or stopped (status recorded)
     - Validation summary presented to user
 ---
 
@@ -702,15 +703,18 @@ Required output format:
 
 ---
 
-## Phase 8: Convergence Loop (MANDATORY)
+## Phase 8: Convergence Loop (Optional — Gated)
 
-Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Loop".
+Execute the opt-in convergence loop — see AGENTS.md "Common Patterns > Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)".
 
-**Failure handling:** If the fresh sub-agent dispatch fails (Task tool error, ring droid
-unavailable), treat it as equivalent to "zero new findings" for that round but warn the
-user: "Convergence round X dispatch failed: &lt;error&gt;. Proceeding without additional
-validation. Consider re-running the review." Do NOT fail the entire review because one
-convergence round failed.
+**Behavioral contract for THIS phase:**
+- Round 1 already ran in Phase 3. THIS phase only handles rounds 2 through 5.
+- Present the **entry gate** before round 2 (`Run round 2` / `Skip convergence loop`).
+- Present the **per-round gate** before rounds 3, 4, 5 (`Continue` / `Stop here`).
+- If a dispatched round produces ZERO new findings, declare convergence and exit
+  silently — DO NOT ask the user whether to run another round.
+- Record the final loop status (`CONVERGED` / `USER_STOPPED` / `SKIPPED` /
+  `HARD_LIMIT` / `DISPATCH_FAILED_ABORTED`) for the Final Summary.
 
 **Stage-specific scope for convergence rounds 2+:**
 Dispatch the **same agent roster** from Phase 3 (all agents from the Agent Roster table).
@@ -720,7 +724,11 @@ dedup using strict matching (same file + same line range ±5 + same category).
 
 Include the cross-cutting analysis instructions (same 5 items from Phase 3 prompt).
 
-When the loop exits, proceed to Phase 9 (Re-run Guard).
+**Failure handling:** If a fresh sub-agent dispatch fails (Task tool error, ring droid
+unavailable), do NOT count as zero findings. Ask the user via `AskUser` whether to
+retry the round or stop (status `DISPATCH_FAILED_ABORTED` if user stops).
+
+When the loop exits (any status), proceed to Phase 9 (Re-run Guard).
 
 ---
 
@@ -773,6 +781,10 @@ _optimus_quiet_run "make-test-integration" make test-integration   # Optional fa
 ## Post-Task Validation Summary: T-XXX
 
 ### Verdict: APPROVED / APPROVED WITH CAVEATS / NEEDS REWORK
+
+### Convergence
+- Rounds dispatched (round 1 + convergence rounds): X
+- Status: CONVERGED | USER_STOPPED | SKIPPED | HARD_LIMIT | DISPATCH_FAILED_ABORTED
 
 ### Agent Results
 | Agent | Verdict | Issues Found | Fixed | Skipped |
@@ -931,7 +943,7 @@ When agents identify a missing test (from QA analyst, spec compliance, or any ot
 - The agent may recommend an option, but MUST wait for user approval via AskUser before proceeding
 - Do NOT auto-skip, auto-dismiss, or auto-resolve any finding regardless of severity
 - Do NOT group LOW findings and decide they "don't need attention" — present them individually
-- If the convergence loop finds only LOW findings, still present each one to the user — do NOT stop the loop without user confirmation
+- Within a dispatched round, present every finding regardless of severity. Whether to run another round is gated by user prompt.
 
 ### Dry-Run Mode
 If the user requests a dry-run (e.g., "dry-run review T-012", "preview review"):
@@ -940,7 +952,7 @@ If the user requests a dry-run (e.g., "dry-run review T-012", "preview review"):
 - **Do NOT apply any fixes** — skip Phase 7 (batch apply) entirely
 - **Do NOT change task status** — skip the status update in Step 1.0.8
 - **Do NOT increment stats** — skip Step 1.0.9 (stage stats)
-- **Do NOT run the convergence loop** — one pass is sufficient for estimation
+- **Do NOT enter the convergence loop (rounds 2+)** — round 1 (primary review pass) is sufficient for estimation
 - Present a summary showing: total findings, severity breakdown, estimated fix effort
 - This allows the user to see what would happen before committing to a full review
 
@@ -1273,29 +1285,6 @@ project repo). `tasks_git push` pushes the tasks repo. The project repo is unaff
 Skills reference this as: "Resolve tasks git scope — see AGENTS.md Protocol: Resolve Tasks Git Scope."
 
 
-### Convergence Loop (Full Roster Model)
-Applies to: plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review
-
-The convergence loop eliminates false convergence by dispatching the **same agent roster**
-as round 1 in every subsequent round:
-- **Round 1:** Orchestrator dispatches all specialist agents in parallel (with full session context)
-- **Rounds 2-5:** The **same agent roster** as round 1 is dispatched in parallel via `Task`
-  tool, each with zero prior context. Each agent reads all files fresh from disk.
-- **Round 2 is MANDATORY** — the "zero new findings" stop condition only applies from round 3 onward
-- **Sub-agents do NOT receive the findings ledger.** Dedup is performed entirely by the
-  orchestrator after agents return, using **strict matching**: same file + same line range
-  (±5 lines) + same category. "Description similarity" is NOT sufficient for dedup — the
-  file, location, and category must all match.
-- Stop only when: zero new findings (round 3+), round 5 reached, or user explicitly stops
-- LOW severity findings are NOT a reason to stop — ALL findings are presented to the user
-
-**Why full roster, not a single agent:** A single generalist agent structurally cannot
-replicate the coverage of 8-10 domain specialists. The security-reviewer catches injection
-risks a code-reviewer won't. The nil-safety-reviewer catches empty guards a QA analyst won't.
-Dispatching a single agent in rounds 2+ creates false convergence — the agent declares
-"zero new findings" because it lacks the domain depth, not because the code is clean.
-
-
 ### Deep Research Before Presenting (MANDATORY for cycle review skills)
 Applies to: plan, review, pr-check, coderabbit-review
 
@@ -1506,6 +1495,97 @@ to the `Ativa` version. If not, present options before proceeding.
 6. **If "Cancel":** **STOP** — do not proceed with the stage
 
 Skills reference this as: "Check active version guard — see AGENTS.md Protocol: Active Version Guard."
+
+
+### Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)
+Applies to: plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review, build
+
+Round 1 (the skill's primary agent dispatch) is MANDATORY and uses the per-skill
+default ring roster. Convergence rounds 2+ are OPTIONAL and gated behind explicit
+user prompts. Convergence detection (zero new findings) exits the loop silently
+without offering further rounds.
+
+- **Round 1:** Orchestrator dispatches the per-skill default roster of specialist
+  ring droids in parallel (with full session context). This round is NOT counted
+  as a "convergence round" — it is the skill's primary review pass.
+- **Rounds 2-5 (each gated by user prompt):** The **same agent roster** as round 1
+  is dispatched in parallel via `Task` tool, each with zero prior context. Each
+  agent reads all files fresh from disk.
+- **Sub-agents do NOT receive the findings ledger.** Dedup is performed entirely
+  by the orchestrator after agents return, using **strict matching**: same file +
+  same line range (±5 lines) + same category. "Description similarity" is NOT
+  sufficient for dedup — the file, location, and category must all match.
+- LOW severity findings are NOT a reason to skip presentation — ALL findings are
+  presented to the user.
+
+**Entry gate (before round 2 — MANDATORY):** After round 1 completes (decisions
+collected, fixes applied), ask via `AskUser`:
+```
+1. [question] Round 1 produced N findings (X fixed, Y skipped). Run convergence
+   round 2 (re-dispatches the same roster with clean context)?
+[topic] Convergence-Entry
+[option] Run round 2
+[option] Skip convergence loop
+```
+- "Skip convergence loop" → exit with status `SKIPPED`.
+- "Run round 2" → dispatch round 2.
+
+**Per-round gate (before rounds 3, 4, 5 — MANDATORY):** After each round 2+
+completes (findings presented, fixes applied), before dispatching the next round:
+```
+1. [question] Round N-1 produced M new findings. Run round N?
+[topic] Convergence-RoundN
+[option] Continue (run round N)
+[option] Stop here
+```
+- "Stop here" → exit with status `USER_STOPPED`.
+- "Continue" → dispatch round N.
+
+**Convergence detection (after each dispatched round — DO NOT ASK):** If a
+dispatched round returns ZERO new findings (using the strict matching rules
+above), the orchestrator MUST:
+1. Print: `Convergence reached at round N: zero new findings.`
+2. Exit immediately with status `CONVERGED`.
+3. NEVER offer to run another round — the user is informed, not asked.
+
+**Hard limit:** Round 5 is the maximum. After round 5 completes (with new
+findings present), exit with status `HARD_LIMIT` without asking.
+
+**Dispatch failure (default):** If a `Task` dispatch fails entirely (transport error,
+ring droid unavailable, etc.), do NOT count as zero findings (would falsely
+mark `CONVERGED`). Ask via `AskUser`:
+```
+1. [question] Round N dispatch failed: <error>. Retry, or stop here?
+[topic] Convergence-DispatchFail
+[option] Retry round N
+[option] Stop here
+```
+- "Retry round N" → re-dispatch.
+- "Stop here" → exit with status `DISPATCH_FAILED_ABORTED`.
+
+**Dispatch failure (build-specific carve-out):** `build` runs the convergence loop
+deep inside Phase 2.3 of a potentially hours-long multi-subtask implementation. A
+blocking prompt at this point is disruptive. `build` therefore MAY treat a single
+failed slot as "zero new findings for that slot" and continue silently with a
+printed warning. The user is informed via the Final Summary. If multiple slots
+fail in the same round, `build` falls back to the default behavior (ask immediately).
+This carve-out applies ONLY to `build`; all other skills use the default.
+
+**Exit statuses (recorded for the Final Summary):**
+
+| Status | Trigger |
+|--------|---------|
+| `CONVERGED` | A dispatched round returned zero new findings |
+| `USER_STOPPED` | User chose "Stop here" at a per-round gate (before rounds 3, 4, or 5) |
+| `SKIPPED` | User chose "Skip convergence loop" at the entry gate |
+| `HARD_LIMIT` | Round 5 completed with new findings still present |
+| `DISPATCH_FAILED_ABORTED` | Dispatch failure followed by user choosing to stop |
+
+**Why full roster, not a single agent:** A single generalist agent structurally cannot
+replicate the coverage of 8-10 domain specialists. The security-reviewer catches injection
+risks a code-reviewer won't. The nil-safety-reviewer catches empty guards a QA analyst won't.
+Dispatching a single agent in rounds 2+ creates false convergence — the agent declares
+"zero new findings" because it lacks the domain depth, not because the code is clean.
 
 
 ### Protocol: Coverage Measurement
@@ -2333,9 +2413,11 @@ whether to suggest advancement or offer a re-run. This protocol replaces the sta
 **Logic:**
 
 1. Count `total_findings` produced during this execution (all findings from round 1 AND
-   all subsequent convergence rounds, from all agents and static analysis — regardless of
-   whether they were fixed or skipped by the user). If findings were grouped (per Finding
-   Presentation item 3), count grouped entries, not individual occurrences.
+   any convergence rounds that were dispatched — note: with opt-in gating, the user may
+   have skipped them all, in which case only round 1 contributes — from all agents and
+   static analysis, regardless of whether they were fixed or skipped by the user). If
+   findings were grouped (per Finding Presentation item 3), count grouped entries, not
+   individual occurrences.
 2. **If `total_findings == 0`:** The analysis is clean. Suggest the next stage:
    - plan: "Spec validation clean — 0 findings. Next step: run `/optimus-build` to implement this task."
    - review: "Implementation review clean — 0 findings. Next step: run `/optimus-done` to close this task."
@@ -2356,7 +2438,7 @@ whether to suggest advancement or offer a re-run. This protocol replaces the sta
      check, status validation/change, workspace creation, divergence check
    - **Re-execute:** project structure discovery, document loading, static analysis,
      coverage profiling, agent dispatch (ALL agents), finding presentation, fix application,
-     convergence loop
+     convergence loop entry gate (and any rounds the user opts into)
    - **Session file:** After re-run starts, the session protocol (Protocol: Session State)
      resumes normal operation — update the session file at each phase transition as usual.
      This ensures crash recovery during a re-run resumes from the correct phase.
@@ -2441,14 +2523,22 @@ Each task gets its own file (e.g., `.optimus/sessions/session-T-003.json`).
   "updated_at": "2025-01-15T11:45:00Z",
   "phase": "Phase 1: Implementation",
   "convergence_round": 0,
+  "convergence_status": null,
   "findings_count": 0,
   "notes": "Implementation in progress"
 }
 ```
 
-**Convergence checkpoint:** During the convergence loop, update `convergence_round` and
-`findings_count` after each round completes. On resume, skip to the last completed round
-rather than restarting the entire analysis.
+**Convergence checkpoint:** During the convergence loop, update `convergence_round`,
+`convergence_status`, and `findings_count` after each round completes (and after each
+user gate decision). The `convergence_status` field MUST be persisted **before**
+proceeding past any user gate so crash recovery does not re-prompt an already-answered
+gate. Valid values: `null` (loop not entered yet, or round 1 not complete),
+`"IN_PROGRESS"` (a round was dispatched and the orchestrator has not yet recorded the
+exit status), `"CONVERGED"`, `"USER_STOPPED"`, `"SKIPPED"`, `"HARD_LIMIT"`,
+`"DISPATCH_FAILED_ABORTED"`. On resume, the orchestrator reads `convergence_status`
+to decide whether to skip the remainder of the loop (terminal status set), continue
+with the next gate (still `IN_PROGRESS`), or re-show the entry gate (`null`).
 
 **On stage start (after task ID is known):**
 

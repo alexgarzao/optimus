@@ -583,17 +583,47 @@ class TestMakefileConvention:
         )
 
 
-# --- Convergence model: Full Roster, no escalating scrutiny ---
+# --- Convergence model: Full Roster, opt-in gated ---
+
+
+# Skills that inline the Convergence Loop protocol (used by cross-file tests).
+SKILLS_WITH_CONVERGENCE = [
+    "plan", "review", "build", "pr-check",
+    "deep-review", "deep-doc-review", "coderabbit-review",
+]
+
+# Tolerant regex for the section heading: accepts em-dash (—), en-dash (–) or
+# hyphen (-), variable spacing, and optional "Protocol:" prefix.
+CONVERGENCE_HEADING_RE = re.compile(
+    r"(?:Protocol:\s*)?Convergence Loop\s*\(Full Roster Model\s*[—–-]\s*Opt[- ]?In,?\s*Gated\)",
+    re.IGNORECASE,
+)
+
+# Forbidden phrases that must not appear in any doc file.
+OBSOLETE_ROUND_2_MANDATORY_RE = re.compile(
+    r"round\s*2\s+is\s+mandatory", re.IGNORECASE,
+)
+
+
+def _assert_phrase_absent(content: str, pattern: re.Pattern, where: str, label: str):
+    """Helper: assert a forbidden phrase pattern is not present in content."""
+    if pattern.search(content):
+        raise AssertionError(f"{where} still contains forbidden phrase '{label}'")
 
 
 class TestConvergenceModel:
-    """Convergence loop must use Full Roster Model, not escalating scrutiny."""
+    """Convergence loop must use the Full Roster, Opt-In, Gated model."""
 
-    def test_agents_md_has_full_roster_model(self):
-        """AGENTS.md must define the Full Roster Model for convergence."""
-        content = AGENTS_MD.read_text()
-        assert "Full Roster Model" in content, \
-            "AGENTS.md missing 'Full Roster Model' convergence definition"
+    @pytest.fixture(scope="class")
+    def agents_md(self):
+        return AGENTS_MD.read_text()
+
+    def test_agents_md_has_full_roster_semantics(self, agents_md):
+        """AGENTS.md must require rounds 2+ to re-dispatch the same roster with zero context."""
+        assert "same agent roster" in agents_md, \
+            "AGENTS.md must require rounds 2+ to re-dispatch the same roster"
+        assert re.search(r"zero prior context", agents_md), \
+            "AGENTS.md must require each round 2+ agent to run with zero prior context"
 
     def test_no_escalating_scrutiny_references(self):
         """No doc file should mention 'escalating scrutiny' (replaced by Full Roster)."""
@@ -608,11 +638,96 @@ class TestConvergenceModel:
             + "\n".join(f"  - {v}" for v in violations)
         )
 
-    def test_convergence_round_2_mandatory(self):
-        """AGENTS.md must state that convergence round 2 is mandatory."""
-        content = AGENTS_MD.read_text()
-        assert "Round 2 is MANDATORY" in content, \
-            "AGENTS.md missing 'Round 2 is MANDATORY' convergence rule"
+    def test_convergence_loop_is_opt_in_gated(self, agents_md):
+        """AGENTS.md has the opt-in, gated convergence loop heading and all 5 exit statuses."""
+        assert CONVERGENCE_HEADING_RE.search(agents_md), \
+            "AGENTS.md missing opt-in, gated convergence loop section heading"
+        for status in ["CONVERGED", "USER_STOPPED", "SKIPPED",
+                       "HARD_LIMIT", "DISPATCH_FAILED_ABORTED"]:
+            assert status in agents_md, \
+                f"AGENTS.md missing convergence exit status '{status}'"
+
+    def test_no_obsolete_round_2_mandatory_anywhere(self):
+        """No doc file should claim Round 2 is mandatory (case-insensitive scan)."""
+        violations = []
+        for filepath in _all_doc_files():
+            text = filepath.read_text()
+            if OBSOLETE_ROUND_2_MANDATORY_RE.search(text):
+                rel = filepath.relative_to(REPO_ROOT)
+                violations.append(str(rel))
+        assert violations == [], (
+            "Stale 'Round 2 is mandatory' references found:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    def test_design_principles_summary_matches_protocol(self, agents_md):
+        """AGENTS.md Design Principle '2. No False Convergence' must describe opt-in model."""
+        m = re.search(
+            r"### 2\. No False Convergence\s*\n(.*?)(?=\n### )",
+            agents_md, re.DOTALL,
+        )
+        assert m, "Design Principle 2 block missing from AGENTS.md"
+        block = m.group(1)
+        assert not OBSOLETE_ROUND_2_MANDATORY_RE.search(block), (
+            "Design Principle 2 still claims Round 2 is mandatory — "
+            "contradicts the opt-in gated protocol"
+        )
+        assert re.search(r"opt[- ]?in", block, re.IGNORECASE), (
+            "Design Principle 2 must describe the opt-in gated model"
+        )
+
+    def test_entry_gate_clause_present(self, agents_md):
+        """AGENTS.md must define the Entry Gate (before round 2 → SKIPPED on skip)."""
+        assert re.search(
+            r"Entry gate.*before round 2.*Skip convergence loop.*SKIPPED",
+            agents_md, re.DOTALL,
+        ), "AGENTS.md missing Entry Gate clause tying SKIPPED to user skip"
+
+    def test_per_round_gate_clause_present(self, agents_md):
+        """AGENTS.md must define the Per-Round Gate (rounds 3+ → USER_STOPPED on stop)."""
+        assert re.search(
+            r"Per-round gate.*rounds? 3.*Stop here.*USER_STOPPED",
+            agents_md, re.DOTALL,
+        ), "AGENTS.md missing Per-Round Gate clause tying USER_STOPPED to user stop"
+
+    def test_convergence_detection_silent_exit(self, agents_md):
+        """AGENTS.md must forbid re-prompting when CONVERGED is detected (silent exit)."""
+        assert re.search(
+            r"zero new findings[\s\S]{0,400}CONVERGED[\s\S]{0,400}(NEVER|DO NOT)\s+(offer|ask)",
+            agents_md, re.IGNORECASE,
+        ), (
+            "AGENTS.md Convergence Detection must explicitly forbid re-prompting "
+            "on CONVERGED (look for 'NEVER offer' or 'DO NOT ask')"
+        )
+
+    def test_hard_limit_clause_present(self, agents_md):
+        """AGENTS.md must define round 5 as the hard limit → HARD_LIMIT."""
+        assert re.search(
+            r"Round 5 is the maximum[\s\S]{0,300}HARD_LIMIT",
+            agents_md, re.DOTALL,
+        ), "AGENTS.md missing Round-5 hard limit tying to HARD_LIMIT"
+
+    def test_dispatch_failure_clause_present(self, agents_md):
+        """AGENTS.md must define the Dispatch Failure path → Retry/Stop → DISPATCH_FAILED_ABORTED."""
+        assert re.search(
+            r"Dispatch failure[\s\S]{0,500}Retry round[\s\S]{0,500}DISPATCH_FAILED_ABORTED",
+            agents_md, re.DOTALL,
+        ), "AGENTS.md missing Dispatch Failure path tying to DISPATCH_FAILED_ABORTED"
+
+    def test_all_convergence_skills_carry_opt_in_protocol(self):
+        """Each consumer SKILL.md must inline the new heading and all 5 exit statuses."""
+        violations = []
+        for skill in SKILLS_WITH_CONVERGENCE:
+            content = _read_skill(skill)
+            if not CONVERGENCE_HEADING_RE.search(content):
+                violations.append(f"{skill}: missing Opt-In, Gated heading")
+            for status in ["CONVERGED", "USER_STOPPED", "SKIPPED",
+                           "HARD_LIMIT", "DISPATCH_FAILED_ABORTED"]:
+                if status not in content:
+                    violations.append(f"{skill}: missing status '{status}'")
+            if OBSOLETE_ROUND_2_MANDATORY_RE.search(content):
+                violations.append(f"{skill}: still contains 'Round 2 is mandatory'")
+        assert violations == [], "\n".join(violations)
 
 
 # --- tasks.md format spec: marker, Tipo, versions, state.json ---

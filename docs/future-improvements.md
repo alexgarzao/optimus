@@ -39,9 +39,9 @@ adding them requires simulating filesystem failures (harder to set up in CI).
 
 ## I1: Optimize Convergence Loop Token Cost
 
-**Status:** Open (tradeoff accepted — correctness over cost)
-**Affects:** plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review
-**Priority:** Low (demoted from Medium)
+**Status:** Resolved (rounds 2+ are now opt-in — user controls cost via gates)
+**Affects:** plan, review, build, pr-check, coderabbit-review, deep-review, deep-doc-review
+**Priority:** Low
 
 ### Context
 
@@ -55,23 +55,30 @@ The full-roster model dispatches the same agent count in rounds 2+ as round 1, r
 doubling the token cost per convergence round. This tradeoff was accepted: correctness
 is more valuable than token savings.
 
+A subsequent change (Convergence Loop opt-in / gated) made rounds 2+ entirely
+**user-controlled**: an entry gate before round 2, per-round gates before rounds 3-5,
+and silent exit on convergence detection. Users now decide round-by-round whether
+the additional token cost is justified, addressing the cost concern at its source
+without sacrificing correctness when the user opts in.
+
 ### Remaining Optimization Opportunities
 
-The optimizations below can reduce cost WITHOUT reverting to the single-agent model:
+The opt-in/gated model resolves items 3 (adaptive round 2) and 4 (scope-aware limits)
+of the original list — both are now under explicit user control. The optimizations
+below remain potential improvements that can further reduce cost WHEN the user opts
+into a convergence round, WITHOUT reverting to the single-agent model:
 
 1. **Delta-only rounds:** rounds 2+ receive only files modified by fixes (not all
    changed files). Each specialist still analyzes independently but with a smaller scope.
 2. **Selective agent dispatch:** rounds 2+ dispatch only agents relevant to the domains
    where fixes were applied (e.g., if only security fixes were made, only dispatch
    security + consequences reviewers).
-3. **Adaptive round 2:** make round 2 mandatory only when fixes were applied in round 1.
-   If the user skipped all findings, round 2 is unlikely to find new issues.
-4. **Scope-aware limits:** skills reviewing large scopes (deep-review on full codebase)
-   could have round 2 as optional (ask user) instead of mandatory.
+3. **Adaptive round 2:** [DONE — rounds 2+ are now opt-in regardless of fix application]
+4. **Scope-aware limits:** [DONE — all skills now have rounds 2+ as opt-in via user gates]
 
-### Decision Criteria
+### Decision Criteria (for items 1 & 2)
 
-Implement optimizations if:
+Implement remaining optimizations if:
 - Token cost of full-roster convergence is > 3x the cost of single-pass
 - An optimization (delta-only, selective dispatch) reduces cost by > 50% without
   increasing false convergence rate

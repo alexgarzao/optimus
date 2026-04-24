@@ -55,6 +55,7 @@ verification:
     - All findings presented to user
     - TDD cycle completed for each approved fix
     - All tests passing after fixes
+    - Convergence loop run, skipped, or stopped (status recorded)
     - Final summary presented
 ---
 
@@ -454,9 +455,21 @@ Required output format:
 
 ---
 
-## Phase 6: Convergence Loop (MANDATORY)
+## Phase 6: Convergence Loop (Optional — Gated)
 
-Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Loop".
+Execute the opt-in convergence loop — see AGENTS.md "Common Patterns > Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)".
+
+**Behavioral contract for THIS phase:**
+- "Round 1" maps to the aggregate of Phase 4 Step 4.1 per-fix Secondary Agent Validation
+  dispatches (this skill is fix-driven; the agent roster is dispatched per fix, not as
+  a single primary review pass). THIS phase (rounds 2 through 5) re-dispatches the same
+  roster ONCE over the full diff to catch issues missed during the per-fix passes.
+- Present the **entry gate** before round 2 (`Run round 2` / `Skip convergence loop`).
+- Present the **per-round gate** before rounds 3, 4, 5 (`Continue` / `Stop here`).
+- If a dispatched round produces ZERO new findings, declare convergence and exit
+  silently — DO NOT ask the user whether to run another round.
+- Record the final loop status (`CONVERGED` / `USER_STOPPED` / `SKIPPED` /
+  `HARD_LIMIT` / `DISPATCH_FAILED_ABORTED`) for the Final Summary.
 
 **Stage-specific scope for convergence rounds 2+:**
 Dispatch the **same agent roster** used in Phase 4 Step 4.1 (all 7 review droids). Each
@@ -468,10 +481,11 @@ Additionally, one agent in the roster should re-run CodeRabbit CLI
 (`coderabbit review --prompt-only --base <base-branch> --plain`) to get fresh static
 analysis. The other agents review the code from their specialist domains.
 
-**Failure handling:** If any agent dispatch fails, treat that agent's slot as "zero findings"
-for that round but warn the user. Do NOT fail the entire review.
+**Failure handling:** If a dispatched agent slot fails (Task tool error, ring droid
+unavailable), do NOT count as zero findings. Ask the user via `AskUser` whether to
+retry the round or stop (status `DISPATCH_FAILED_ABORTED` if user stops).
 
-When the loop exits, proceed to Phase 7 (integration tests).
+When the loop exits (any status), proceed to Phase 7 (integration tests).
 
 ---
 
@@ -514,8 +528,8 @@ After all phases complete:
 ## CodeRabbit Review — Summary
 
 ### Convergence
-- Rounds executed: X of 5
-- Status: CONVERGED / HARD LIMIT REACHED
+- Rounds dispatched (round 1 + convergence rounds): X
+- Status: CONVERGED | USER_STOPPED | SKIPPED | HARD_LIMIT | DISPATCH_FAILED_ABORTED
 
 ### Fixed (X findings)
 | # | Severity | File | Fix Applied | Tests Added | Round |
@@ -578,29 +592,6 @@ After all phases complete:
 The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
-### Convergence Loop (Full Roster Model)
-Applies to: plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review
-
-The convergence loop eliminates false convergence by dispatching the **same agent roster**
-as round 1 in every subsequent round:
-- **Round 1:** Orchestrator dispatches all specialist agents in parallel (with full session context)
-- **Rounds 2-5:** The **same agent roster** as round 1 is dispatched in parallel via `Task`
-  tool, each with zero prior context. Each agent reads all files fresh from disk.
-- **Round 2 is MANDATORY** — the "zero new findings" stop condition only applies from round 3 onward
-- **Sub-agents do NOT receive the findings ledger.** Dedup is performed entirely by the
-  orchestrator after agents return, using **strict matching**: same file + same line range
-  (±5 lines) + same category. "Description similarity" is NOT sufficient for dedup — the
-  file, location, and category must all match.
-- Stop only when: zero new findings (round 3+), round 5 reached, or user explicitly stops
-- LOW severity findings are NOT a reason to stop — ALL findings are presented to the user
-
-**Why full roster, not a single agent:** A single generalist agent structurally cannot
-replicate the coverage of 8-10 domain specialists. The security-reviewer catches injection
-risks a code-reviewer won't. The nil-safety-reviewer catches empty guards a QA analyst won't.
-Dispatching a single agent in rounds 2+ creates false convergence — the agent declares
-"zero new findings" because it lacks the domain depth, not because the code is clean.
-
-
 ### Finding Presentation (Unified Model)
 All cycle review skills follow this pattern:
 1. Collect findings from agents/tools
@@ -652,6 +643,97 @@ All cycle review skills follow this pattern:
 10. After ALL N decisions collected: apply ALL approved fixes (see below)
 11. Run verification (see Verification Timing below)
 12. Present final summary
+
+
+### Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)
+Applies to: plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review, build
+
+Round 1 (the skill's primary agent dispatch) is MANDATORY and uses the per-skill
+default ring roster. Convergence rounds 2+ are OPTIONAL and gated behind explicit
+user prompts. Convergence detection (zero new findings) exits the loop silently
+without offering further rounds.
+
+- **Round 1:** Orchestrator dispatches the per-skill default roster of specialist
+  ring droids in parallel (with full session context). This round is NOT counted
+  as a "convergence round" — it is the skill's primary review pass.
+- **Rounds 2-5 (each gated by user prompt):** The **same agent roster** as round 1
+  is dispatched in parallel via `Task` tool, each with zero prior context. Each
+  agent reads all files fresh from disk.
+- **Sub-agents do NOT receive the findings ledger.** Dedup is performed entirely
+  by the orchestrator after agents return, using **strict matching**: same file +
+  same line range (±5 lines) + same category. "Description similarity" is NOT
+  sufficient for dedup — the file, location, and category must all match.
+- LOW severity findings are NOT a reason to skip presentation — ALL findings are
+  presented to the user.
+
+**Entry gate (before round 2 — MANDATORY):** After round 1 completes (decisions
+collected, fixes applied), ask via `AskUser`:
+```
+1. [question] Round 1 produced N findings (X fixed, Y skipped). Run convergence
+   round 2 (re-dispatches the same roster with clean context)?
+[topic] Convergence-Entry
+[option] Run round 2
+[option] Skip convergence loop
+```
+- "Skip convergence loop" → exit with status `SKIPPED`.
+- "Run round 2" → dispatch round 2.
+
+**Per-round gate (before rounds 3, 4, 5 — MANDATORY):** After each round 2+
+completes (findings presented, fixes applied), before dispatching the next round:
+```
+1. [question] Round N-1 produced M new findings. Run round N?
+[topic] Convergence-RoundN
+[option] Continue (run round N)
+[option] Stop here
+```
+- "Stop here" → exit with status `USER_STOPPED`.
+- "Continue" → dispatch round N.
+
+**Convergence detection (after each dispatched round — DO NOT ASK):** If a
+dispatched round returns ZERO new findings (using the strict matching rules
+above), the orchestrator MUST:
+1. Print: `Convergence reached at round N: zero new findings.`
+2. Exit immediately with status `CONVERGED`.
+3. NEVER offer to run another round — the user is informed, not asked.
+
+**Hard limit:** Round 5 is the maximum. After round 5 completes (with new
+findings present), exit with status `HARD_LIMIT` without asking.
+
+**Dispatch failure (default):** If a `Task` dispatch fails entirely (transport error,
+ring droid unavailable, etc.), do NOT count as zero findings (would falsely
+mark `CONVERGED`). Ask via `AskUser`:
+```
+1. [question] Round N dispatch failed: <error>. Retry, or stop here?
+[topic] Convergence-DispatchFail
+[option] Retry round N
+[option] Stop here
+```
+- "Retry round N" → re-dispatch.
+- "Stop here" → exit with status `DISPATCH_FAILED_ABORTED`.
+
+**Dispatch failure (build-specific carve-out):** `build` runs the convergence loop
+deep inside Phase 2.3 of a potentially hours-long multi-subtask implementation. A
+blocking prompt at this point is disruptive. `build` therefore MAY treat a single
+failed slot as "zero new findings for that slot" and continue silently with a
+printed warning. The user is informed via the Final Summary. If multiple slots
+fail in the same round, `build` falls back to the default behavior (ask immediately).
+This carve-out applies ONLY to `build`; all other skills use the default.
+
+**Exit statuses (recorded for the Final Summary):**
+
+| Status | Trigger |
+|--------|---------|
+| `CONVERGED` | A dispatched round returned zero new findings |
+| `USER_STOPPED` | User chose "Stop here" at a per-round gate (before rounds 3, 4, or 5) |
+| `SKIPPED` | User chose "Skip convergence loop" at the entry gate |
+| `HARD_LIMIT` | Round 5 completed with new findings still present |
+| `DISPATCH_FAILED_ABORTED` | Dispatch failure followed by user choosing to stop |
+
+**Why full roster, not a single agent:** A single generalist agent structurally cannot
+replicate the coverage of 8-10 domain specialists. The security-reviewer catches injection
+risks a code-reviewer won't. The nil-safety-reviewer catches empty guards a QA analyst won't.
+Dispatching a single agent in rounds 2+ creates false convergence — the agent declares
+"zero new findings" because it lacks the domain depth, not because the code is clean.
 
 
 ### Protocol: Coverage Measurement

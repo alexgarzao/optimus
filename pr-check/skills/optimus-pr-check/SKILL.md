@@ -29,7 +29,7 @@ examples:
       5. Consolidate with source attribution and deduplication
       6. Interactive finding-by-finding resolution
       7. Apply fixes with TDD cycle, separate commits per finding
-      8. Coverage verification and convergence loop
+      8. Coverage verification and (optional) convergence loop
       9. Push commits
       10. Respond to ALL comment threads (commit SHA or won't-fix with suppression)
       11. Final summary with verdict
@@ -68,7 +68,7 @@ verification:
     - All findings presented interactively with progress indicator
     - Approved fixes applied with TDD cycle and separate commits
     - Coverage verification passed thresholds
-    - Convergence loop completed
+    - Convergence loop run, skipped, or stopped (status recorded)
     - ALL comment threads replied with commit SHA or won't-fix justification
     - Codacy/DeepSource suppression tags added for won't-fix findings
     - PR readiness verdict presented
@@ -1112,9 +1112,18 @@ HIGH priority gaps are presented as findings for user decision.
 
 ---
 
-## Phase 10: Convergence Loop (MANDATORY)
+## Phase 10: Convergence Loop (Optional — Gated)
 
-Execute the convergence loop — see AGENTS.md "Common Patterns > Convergence Loop".
+Execute the opt-in convergence loop — see AGENTS.md "Common Patterns > Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)".
+
+**Behavioral contract for THIS phase:**
+- Round 1 already ran in Phase 3. THIS phase only handles rounds 2 through 5.
+- Present the **entry gate** before round 2 (`Run round 2` / `Skip convergence loop`).
+- Present the **per-round gate** before rounds 3, 4, 5 (`Continue` / `Stop here`).
+- If a dispatched round produces ZERO new findings, declare convergence and exit
+  silently — DO NOT ask the user whether to run another round.
+- Record the final loop status (`CONVERGED` / `USER_STOPPED` / `SKIPPED` /
+  `HARD_LIMIT` / `DISPATCH_FAILED_ABORTED`) for the Final Summary in Phase 14.
 
 **Stage-specific scope for convergence rounds 2+:**
 Dispatch the **same agent roster** from Phase 3 (all 7 agents from Step 3.3). Each agent
@@ -1127,11 +1136,11 @@ Include existing PR comments from all sources (reuse data from Phase 1 — do NO
 Codacy/DeepSource comments, they only update after push). Include the cross-cutting
 analysis instructions (same 5 items from Step 3.3 prompt).
 
-**Failure handling:** If the fresh sub-agent dispatch fails (Task tool error, ring droid
-unavailable), treat it as equivalent to "zero new findings" for that round but warn the
-user. Do NOT fail the entire review.
+**Failure handling:** If a fresh sub-agent dispatch fails (Task tool error, ring droid
+unavailable), do NOT count as zero findings. Ask the user via `AskUser` whether to
+retry the round or stop (status `DISPATCH_FAILED_ABORTED` if user stops).
 
-When the loop exits, proceed to Phase 11 (integration tests).
+When the loop exits (any status), proceed to Phase 11 (integration tests).
 
 ---
 
@@ -1426,8 +1435,8 @@ gh api graphql -f query='
 - New agent findings: X
 
 ### Convergence
-- Rounds: X of 5
-- Status: CONVERGED / HARD LIMIT REACHED
+- Rounds dispatched (round 1 + convergence rounds): X
+- Status: CONVERGED | USER_STOPPED | SKIPPED | HARD_LIMIT | DISPATCH_FAILED_ABORTED
 
 ### Fixed (X findings)
 | # | Source | File(s) | Commit |
@@ -1498,7 +1507,7 @@ gh api graphql -f query='
 - ALWAYS announce total findings count (N) before presenting the first finding: `"### Total findings to review: N"`
 - Present findings ONE AT A TIME in severity order, ALWAYS showing "(X/N)" progress prefix in EVERY finding header
 - Collect ALL decisions first (Phase 6), then apply ALL approved fixes at once (Phase 8)
-- Coverage verification and convergence loop run ONLY after all fixes are applied
+- Coverage verification runs ONLY after all fixes are applied; the convergence loop is opt-in (gated)
 - No changes without user approval
 - BEFORE presenting each finding: deep research is MANDATORY — project patterns, architectural decisions, existing codebase, task focus, user/consumer use cases, UX impact, API best practices, engineering best practices, language-specific idioms. Option A must be the correct approach backed by research evidence, regardless of effort
 - If the user selects "Tell me more" or responds with free text: STOP, research and answer thoroughly RIGHT NOW — do NOT defer to the fix phase or continue to the next finding. NEVER batch responses.
@@ -1522,7 +1531,7 @@ If the user requests a dry-run (e.g., "dry-run pr-check", "preview PR review"):
 - **Do NOT apply fixes** — skip Phase 8 (TDD cycle)
 - **Do NOT push anything** — skip Phase 12
 - **Do NOT respond to PR comments** — skip Phase 13
-- **Do NOT run convergence loop** — one pass for preview
+- **Do NOT enter the convergence loop (rounds 2+)** — round 1 (primary review pass) is sufficient for preview
 - Present results as informational with estimated fix effort
 
 <!-- INLINE-PROTOCOLS:START -->
@@ -1530,29 +1539,6 @@ If the user requests a dry-run (e.g., "dry-run pr-check", "preview PR review"):
 
 The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
-
-### Convergence Loop (Full Roster Model)
-Applies to: plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review
-
-The convergence loop eliminates false convergence by dispatching the **same agent roster**
-as round 1 in every subsequent round:
-- **Round 1:** Orchestrator dispatches all specialist agents in parallel (with full session context)
-- **Rounds 2-5:** The **same agent roster** as round 1 is dispatched in parallel via `Task`
-  tool, each with zero prior context. Each agent reads all files fresh from disk.
-- **Round 2 is MANDATORY** — the "zero new findings" stop condition only applies from round 3 onward
-- **Sub-agents do NOT receive the findings ledger.** Dedup is performed entirely by the
-  orchestrator after agents return, using **strict matching**: same file + same line range
-  (±5 lines) + same category. "Description similarity" is NOT sufficient for dedup — the
-  file, location, and category must all match.
-- Stop only when: zero new findings (round 3+), round 5 reached, or user explicitly stops
-- LOW severity findings are NOT a reason to stop — ALL findings are presented to the user
-
-**Why full roster, not a single agent:** A single generalist agent structurally cannot
-replicate the coverage of 8-10 domain specialists. The security-reviewer catches injection
-risks a code-reviewer won't. The nil-safety-reviewer catches empty guards a QA analyst won't.
-Dispatching a single agent in rounds 2+ creates false convergence — the agent declares
-"zero new findings" because it lacks the domain depth, not because the code is clean.
-
 
 ### Deep Research Before Presenting (MANDATORY for cycle review skills)
 Applies to: plan, review, pr-check, coderabbit-review
@@ -1724,6 +1710,97 @@ The orchestrator applies the fix directly using Edit/MultiEdit tools. After appl
 **Ring droids are REQUIRED for complex fixes** — there is no alternative dispatch mechanism. If the
 required droids are not installed and a complex fix is needed, the skill MUST stop and
 inform the user which droids need to be installed.
+
+
+### Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)
+Applies to: plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review, build
+
+Round 1 (the skill's primary agent dispatch) is MANDATORY and uses the per-skill
+default ring roster. Convergence rounds 2+ are OPTIONAL and gated behind explicit
+user prompts. Convergence detection (zero new findings) exits the loop silently
+without offering further rounds.
+
+- **Round 1:** Orchestrator dispatches the per-skill default roster of specialist
+  ring droids in parallel (with full session context). This round is NOT counted
+  as a "convergence round" — it is the skill's primary review pass.
+- **Rounds 2-5 (each gated by user prompt):** The **same agent roster** as round 1
+  is dispatched in parallel via `Task` tool, each with zero prior context. Each
+  agent reads all files fresh from disk.
+- **Sub-agents do NOT receive the findings ledger.** Dedup is performed entirely
+  by the orchestrator after agents return, using **strict matching**: same file +
+  same line range (±5 lines) + same category. "Description similarity" is NOT
+  sufficient for dedup — the file, location, and category must all match.
+- LOW severity findings are NOT a reason to skip presentation — ALL findings are
+  presented to the user.
+
+**Entry gate (before round 2 — MANDATORY):** After round 1 completes (decisions
+collected, fixes applied), ask via `AskUser`:
+```
+1. [question] Round 1 produced N findings (X fixed, Y skipped). Run convergence
+   round 2 (re-dispatches the same roster with clean context)?
+[topic] Convergence-Entry
+[option] Run round 2
+[option] Skip convergence loop
+```
+- "Skip convergence loop" → exit with status `SKIPPED`.
+- "Run round 2" → dispatch round 2.
+
+**Per-round gate (before rounds 3, 4, 5 — MANDATORY):** After each round 2+
+completes (findings presented, fixes applied), before dispatching the next round:
+```
+1. [question] Round N-1 produced M new findings. Run round N?
+[topic] Convergence-RoundN
+[option] Continue (run round N)
+[option] Stop here
+```
+- "Stop here" → exit with status `USER_STOPPED`.
+- "Continue" → dispatch round N.
+
+**Convergence detection (after each dispatched round — DO NOT ASK):** If a
+dispatched round returns ZERO new findings (using the strict matching rules
+above), the orchestrator MUST:
+1. Print: `Convergence reached at round N: zero new findings.`
+2. Exit immediately with status `CONVERGED`.
+3. NEVER offer to run another round — the user is informed, not asked.
+
+**Hard limit:** Round 5 is the maximum. After round 5 completes (with new
+findings present), exit with status `HARD_LIMIT` without asking.
+
+**Dispatch failure (default):** If a `Task` dispatch fails entirely (transport error,
+ring droid unavailable, etc.), do NOT count as zero findings (would falsely
+mark `CONVERGED`). Ask via `AskUser`:
+```
+1. [question] Round N dispatch failed: <error>. Retry, or stop here?
+[topic] Convergence-DispatchFail
+[option] Retry round N
+[option] Stop here
+```
+- "Retry round N" → re-dispatch.
+- "Stop here" → exit with status `DISPATCH_FAILED_ABORTED`.
+
+**Dispatch failure (build-specific carve-out):** `build` runs the convergence loop
+deep inside Phase 2.3 of a potentially hours-long multi-subtask implementation. A
+blocking prompt at this point is disruptive. `build` therefore MAY treat a single
+failed slot as "zero new findings for that slot" and continue silently with a
+printed warning. The user is informed via the Final Summary. If multiple slots
+fail in the same round, `build` falls back to the default behavior (ask immediately).
+This carve-out applies ONLY to `build`; all other skills use the default.
+
+**Exit statuses (recorded for the Final Summary):**
+
+| Status | Trigger |
+|--------|---------|
+| `CONVERGED` | A dispatched round returned zero new findings |
+| `USER_STOPPED` | User chose "Stop here" at a per-round gate (before rounds 3, 4, or 5) |
+| `SKIPPED` | User chose "Skip convergence loop" at the entry gate |
+| `HARD_LIMIT` | Round 5 completed with new findings still present |
+| `DISPATCH_FAILED_ABORTED` | Dispatch failure followed by user choosing to stop |
+
+**Why full roster, not a single agent:** A single generalist agent structurally cannot
+replicate the coverage of 8-10 domain specialists. The security-reviewer catches injection
+risks a code-reviewer won't. The nil-safety-reviewer catches empty guards a QA analyst won't.
+Dispatching a single agent in rounds 2+ creates false convergence — the agent declares
+"zero new findings" because it lacks the domain depth, not because the code is clean.
 
 
 ### Protocol: Coverage Measurement
