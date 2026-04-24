@@ -143,7 +143,8 @@ def inline_protocols() -> None:
     # for protocol references (e.g., State Management references state.json format)
     foundational = {}
     for key in ["File Location", "Valid Status Values (stored in state.json)",
-                 "Task Spec Resolution", "Format Validation"]:
+                 "Task Spec Resolution", "Format Validation",
+                 "Protocol: Resolve Main Worktree Path"]:
         if key in sections:
             foundational[key] = sections[key]
 
@@ -187,6 +188,18 @@ def inline_protocols() -> None:
         needs_state = any("State Management" in k for k in sections_to_inline)
         needs_taskspec = any("TaskSpec" in k for k in sections_to_inline)
         needs_format = any("tasks.md Validation" in k for k in sections_to_inline)
+        # Any protocol that touches .optimus/ gitignored files needs the main-worktree
+        # resolver. Include it whenever State Management, Session State, Increment Stage
+        # Stats, or Initialize .optimus Directory is inlined.
+        needs_worktree_resolver = any(
+            any(trigger in k for trigger in (
+                "State Management",
+                "Session State",
+                "Increment Stage Stats",
+                "Initialize .optimus Directory",
+            ))
+            for k in sections_to_inline
+        )
 
         extra: dict[str, str] = {}
         if needs_state and "File Location" in foundational:
@@ -197,6 +210,10 @@ def inline_protocols() -> None:
             extra["Task Spec Resolution"] = foundational["Task Spec Resolution"]
         if needs_format and "Format Validation" in foundational:
             extra["Format Validation"] = foundational["Format Validation"]
+        if needs_worktree_resolver and "Protocol: Resolve Main Worktree Path" in foundational:
+            # Do not duplicate if already explicitly referenced by the skill.
+            if not any("Resolve Main Worktree Path" in k for k in sections_to_inline):
+                extra["Protocol: Resolve Main Worktree Path"] = foundational["Protocol: Resolve Main Worktree Path"]
 
         content = strip_existing_inline(raw_content).rstrip() + "\n"
 
