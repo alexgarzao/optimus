@@ -359,12 +359,13 @@ Ask via `AskUser`:
 
 After ALL subtasks are complete:
 
-1. **Run full verification:**
+1. **Run lint:**
    ```bash
-   make lint                # Lint — MANDATORY
-   make test                # Unit tests — final regression check
+   make lint                # Lint — MANDATORY (first run of this stage)
    ```
-   If lint fails, fix formatting. If unit tests fail, present to user.
+   If lint fails, fix formatting.
+
+   Unit tests already passed after the last subtask (Step 2.2 loop) — no need to re-run here.
 
 2. **Measure coverage** — see AGENTS.md Protocol: Coverage Measurement.
 
