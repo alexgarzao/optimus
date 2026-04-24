@@ -258,23 +258,21 @@ For checks that **pass**, note them for the Phase 5 overview.
 
 Skip checks whose commands don't exist in the project (e.g., skip `go vet` in a pure JS project).
 
-### Step 2.2: Run Unit Tests (Baseline)
+### Step 2.2: Run Unit Tests with Coverage (Baseline)
 
 Unit tests should pass before proceeding to agent dispatch. This establishes
 the baseline — if unit tests are already failing, review findings may be unreliable.
 
-```bash
-make test                    # Unit tests — MANDATORY
-```
+Run unit tests with coverage in a single pass via `make test-coverage` (see
+AGENTS.md Protocol: Coverage Measurement). Fallback to `make test` only if the
+coverage target is unavailable.
+
+Measure coverage — see AGENTS.md Protocol: Coverage Measurement.
 
 **If unit tests fail:**
 1. Present the failure output (first 30 lines)
 2. Ask the user via `AskUser`: "Unit tests are failing. Fix before continuing, or skip check?"
 3. Do NOT proceed to Phase 3 until unit tests pass or user explicitly chooses to skip
-
-**If unit tests pass:** collect coverage data for analysis.
-
-Measure coverage — see AGENTS.md Protocol: Coverage Measurement.
 
 **NOTE:** Integration tests are NOT run here. They run only in Phase 10
 (after re-run guard, before summary) or when the user invokes them directly.
@@ -586,16 +584,17 @@ Apply fixes using ring droids with TDD cycle — see AGENTS.md "Common Patterns 
 
 **After each fix:** run unit tests to verify no regressions.
 
-### Step 7.3: Final Verification (Lint + Unit Tests)
+### Step 7.3: Final Verification (Lint)
 
-**After ALL fixes are applied**, run lint and unit tests one final time:
+**After ALL fixes are applied**, run lint one final time:
 
 ```bash
 make lint                    # Lint — runs ONCE after all fixes
-make test                    # Unit tests — final regression check
 ```
 
 If lint fails, fix formatting issues and re-run.
+
+Unit tests run in Step 7.4 via `make test-coverage` (Protocol: Coverage Measurement) — no need to duplicate here.
 
 **Handling test failures (max 3 attempts per fix):**
 1. **Logic bug** — return to RED, adjust test/fix
@@ -719,8 +718,12 @@ Execute re-run guard — see AGENTS.md Protocol: Re-run Guard.
 **After the convergence loop exits**, run integration tests. These are slow and
 expensive, so they run ONCE at the end — not during the fix/convergence cycle.
 
+If Step 7.4 measured integration coverage via `make test-integration-coverage`,
+integration tests already ran — skip this phase (no-op).
+Otherwise (coverage target missing, marked SKIP in Step 7.4), run:
+
 ```bash
-make test-integration        # Integration tests — optional target
+make test-integration        # Optional fallback — SKIP if missing
 ```
 
 | Test Type | Command | If target exists | If missing |

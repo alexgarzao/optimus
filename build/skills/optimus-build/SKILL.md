@@ -373,9 +373,12 @@ After ALL subtasks are complete:
 
 2. **Measure coverage** — see AGENTS.md Protocol: Coverage Measurement.
 
-3. **Run integration tests (if available):**
+3. **Run integration tests (only if integration coverage was SKIPped):**
+   If item 2 measured integration coverage via `make test-integration-coverage`,
+   integration tests already ran — skip this step (no-op).
+   Otherwise (coverage target missing, marked SKIP in item 2), run:
    ```bash
-   make test-integration    # Optional target — SKIP if missing
+   make test-integration    # Optional fallback — SKIP if missing
    ```
    If the target does not exist, mark as SKIP. If it fails, present failure
    output and ask user via `AskUser`: "Integration tests failing. Fix or defer to check?"
