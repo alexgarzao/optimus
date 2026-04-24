@@ -48,7 +48,7 @@ terminal display when available, otherwise use markdown tables.
 | **report** | `/optimus-report` | Task status dashboard — shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only. |
 | **tasks** | `/optimus-tasks` | Creating, editing, removing, reordering, cancelling, or reopening tasks. Managing versions. Any administrative task management. |
 | **resolve** | `/optimus-resolve` | Resolving merge conflicts in `tasks.md` caused by parallel task execution across feature branches. |
-| **resume** | `/optimus-resume` | Resume a task after closing the terminal — locates/recreates the worktree for a given T-XXX, reports current status, and offers to invoke the next stage. Read-only on state.json. |
+| **resume** | `/optimus-resume` | Resume a task after closing the terminal — locates/recreates the worktree for a given T-XXX, reports current status, and offers to invoke the next stage. Read-only on state.json except for a user-confirmed Reset-to-Pendente recovery. |
 | **quick-report** | `/optimus-quick-report` | Compact daily status dashboard — shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Read-only. |
 | **batch** | `/optimus-batch` | Pipeline orchestrator — chains stages 1-4 for one or more tasks with user checkpoints between stages. |
 | **help** | `/optimus-help` | This skill — discovering what's available. |

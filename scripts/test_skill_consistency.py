@@ -661,16 +661,56 @@ class TestResumeAdmin:
             "AGENTS.md must classify resume as Admin in the Admin vs Execution table"
         )
 
-    def test_resume_does_not_write_state_json(self):
-        """resume SKILL.md must not contain writes to state.json."""
+    def test_resume_only_writes_state_json_via_reset_recovery(self):
+        """resume is read-only on state.json EXCEPT for a user-confirmed Reset-to-Pendente recovery.
+
+        The only accepted mutation is the jq 'del(.[$id])' block in Step 3.3 Case 3,
+        gated by an AskUser option. Any other write to state.json is forbidden.
+        """
         content = _read_skill("resume")
         body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
-        assert "> \"$STATE_FILE\"" not in body, (
-            "resume must not write to state.json"
+        # Must disclose the Reset-to-Pendente override
+        assert "Reset to Pendente" in body, (
+            "resume must disclose the Reset-to-Pendente recovery override"
         )
-        assert "state.json.tmp" not in body, (
-            "resume must not mutate state.json"
+        assert "del(.[$id])" in body, (
+            "resume must implement the Reset-to-Pendente via jq del"
         )
+        # Any state.json write MUST be inside the Reset-to-Pendente recovery block.
+        # Detect foreign mutation: "jq ... '.[" ... "] = {" outside Case 3.
+        foreign_write = re.compile(r"jq\s+.*'\.\[\$id\]\s*=\s*\{", re.MULTILINE)
+        assert not foreign_write.search(body), (
+            "resume must not assign new status/branch into state.json (only the gated del() is permitted)"
+        )
+
+    def test_resume_stops_on_corrupted_state_json(self):
+        """resume must STOP on state.json corruption, not silently rm -f."""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "state.json is corrupted" in body, (
+            "resume must detect corrupted state.json"
+        )
+        assert "jq empty \"$STATE_FILE\"" in body, (
+            "resume must jq-empty-validate state.json before reading"
+        )
+        # Must NOT include the destructive rm -f recovery in the body (inlined protocol has it;
+        # the body MUST override it).
+        body_mentions_rm_state = re.compile(r'rm\s+-f\s+"?\$STATE_FILE"?')
+        lines_with_rm = [
+            i for i, line in enumerate(body.splitlines(), 1)
+            if body_mentions_rm_state.search(line)
+        ]
+        # Allow references in prose/anti-rationalization (mentions rm -f in quotes/backticks),
+        # but the body should not have executable `rm -f "$STATE_FILE"` outside of prose.
+        # Check that any occurrence is inside a quoted anti-rationalization example.
+        for line_num in lines_with_rm:
+            line = body.splitlines()[line_num - 1]
+            # Accept if the line looks like anti-rationalization prose or fenced explanation
+            acceptable = ("`rm -f" in line or '"rm -f' in line or
+                          "NO." in line or "let me" in line.lower())
+            assert acceptable, (
+                f"resume body executes `rm -f $STATE_FILE` at line {line_num} — this is forbidden by the override"
+            )
 
     def test_resume_does_not_run_lint_or_tests(self):
         """resume SKILL.md must not run make lint or make test as execution steps."""
@@ -712,4 +752,101 @@ class TestResumeAdmin:
         )
         assert "/optimus-plan" in body, (
             "resume must reference /optimus-plan as the Pendente-flow delegate"
+        )
+
+    def test_resume_validates_task_id_format(self):
+        """resume must validate TASK_ID matches ^T-[0-9]+$ and refuse empty/malformed IDs."""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        # Look for the regex check and the Step 3.2 hard guard
+        assert re.search(r'\[\[\s*"\$TASK_ID"\s*=~\s*\^T-\[0-9\]\+\$\s*\]\]', body), (
+            "resume must have a regex guard for TASK_ID format (=~ ^T-[0-9]+$)"
+        )
+        # Must refuse at Step 3.2 before grep/awk
+        assert "Refusing worktree lookup to avoid matching main repo" in body, (
+            "resume must document the Step 3.2 guard to prevent matching the main repo"
+        )
+
+    def test_resume_checks_empty_tasks_table(self):
+        """resume must detect zero-data-row tables per AGENTS.md Format Validation item 15."""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "Reject Empty Tasks Table" in body or "zero-data-row" in body, (
+            "resume must have an explicit empty-table rejection step"
+        )
+        assert re.search(r"grep -cE '[^']*T-\[0-9\]\+", body), (
+            "resume must use grep -cE '^\\| T-[0-9]+ \\|' to count data rows"
+        )
+
+    def test_resume_checks_dependencies(self):
+        """resume must compute BLOCKING_DEPS and hide stage options when deps are not DONE."""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "BLOCKING_DEPS" in body, (
+            "resume must compute BLOCKING_DEPS from the Depends column"
+        )
+        assert "Dependency Check" in body, (
+            "resume must have an explicit Dependency Check step"
+        )
+        assert "Next stage is BLOCKED" in body, (
+            "resume must surface the BLOCKED warning in the Phase 4 summary"
+        )
+
+    def test_resume_checks_pr_state(self):
+        """resume must query gh pr view and adapt the next-stage recommendation to PR state."""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "gh pr view" in body, (
+            "resume must check PR state via gh pr view"
+        )
+        assert "PR_STATE" in body or "PR_INFO" in body, (
+            "resume must capture PR state/info for the summary"
+        )
+        # The Phase 4 recommendation table should mention both /optimus-pr-check and /optimus-done
+        assert "/optimus-pr-check" in body, (
+            "resume must recommend /optimus-pr-check for Validando Impl + OPEN PR"
+        )
+
+    def test_resume_reports_worktree_git_status(self):
+        """resume must report git status (uncommitted/unpushed/behind) in Phase 4 summary."""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "GIT_UNCOMMITTED" in body, (
+            "resume must count uncommitted changes in the worktree"
+        )
+        assert "GIT_UNPUSHED" in body, (
+            "resume must count unpushed commits in the worktree"
+        )
+
+    def test_resume_reads_session_file(self):
+        """resume must read .optimus/sessions/session-<task-id>.json when available."""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "SESSION_FILE" in body, (
+            "resume must inspect the session file for crash-recovery info"
+        )
+        assert "sessions/session-" in body, (
+            "resume must reference the session file path pattern"
+        )
+
+    def test_resume_reads_stats_file(self):
+        """resume must surface stats.json churn signals when plan_runs or review_runs >= 2."""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "STATS_FILE" in body, (
+            "resume must inspect stats.json for churn signals"
+        )
+        assert "plan_runs" in body and "review_runs" in body, (
+            "resume must display plan_runs and review_runs counters when significant"
+        )
+
+    def test_resume_sets_terminal_title(self):
+        """resume must set the terminal title per AGENTS.md Protocol: Terminal Identification."""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert re.search(r"printf\s+'\\033\]0;optimus:\s+RESUME\s+%s", body), (
+            "resume must set terminal title with RESUME label"
+        )
+        assert "> /dev/tty 2>/dev/null" in body, (
+            "resume must redirect the OSC sequence to /dev/tty"
         )
