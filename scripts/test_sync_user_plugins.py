@@ -308,6 +308,72 @@ class TestTimeoutWrapper:
         assert "timeout called with" in timeout_log.read_text()
 
 
+class TestSerialRetry:
+    def test_retries_transient_update_before_reinstall(self, tmp_path: Path) -> None:
+        log = tmp_path / "droid.log"
+        state_dir = tmp_path / "state"
+        state_dir.mkdir()
+        script = f"""
+CMD="$1 $2"
+case "$CMD" in
+  "plugin marketplace") exit 0 ;;
+  "plugin list") echo "alpha@optimus  installed" ;;
+  "plugin update")
+    count_file="{state_dir}/update.count"
+    count=$(cat "$count_file" 2>/dev/null || echo 0)
+    count=$((count + 1))
+    echo "$count" > "$count_file"
+    echo "update $3 #$count" >> "{log}"
+    if [ "$count" -eq 1 ]; then exit 1; fi
+    exit 0 ;;
+  "plugin uninstall") echo "uninstall $3" >> "{log}"; exit 0 ;;
+  "plugin install") echo "install $3" >> "{log}"; exit 0 ;;
+  *) echo "unknown: $@" >> "{log}" ;;
+esac
+"""
+        _create_mock_bin(tmp_path, "droid", script)
+        _create_marketplace(tmp_path, ["alpha"])
+        result = _run_sync(tmp_path)
+        assert result.returncode == 0
+        assert "Retrying failed plugin operations serially" in result.stdout
+        assert "Updated: 1" in result.stdout
+        log_content = log.read_text()
+        assert "update alpha@optimus #1" in log_content
+        assert "update alpha@optimus #2" in log_content
+        assert "uninstall alpha@optimus" not in log_content
+        assert "install alpha@optimus" not in log_content
+
+    def test_retries_transient_install_serially(self, tmp_path: Path) -> None:
+        log = tmp_path / "droid.log"
+        state_dir = tmp_path / "state"
+        state_dir.mkdir()
+        script = f"""
+CMD="$1 $2"
+case "$CMD" in
+  "plugin marketplace") exit 0 ;;
+  "plugin list") echo "" ;;
+  "plugin install")
+    count_file="{state_dir}/install.count"
+    count=$(cat "$count_file" 2>/dev/null || echo 0)
+    count=$((count + 1))
+    echo "$count" > "$count_file"
+    echo "install $3 #$count" >> "{log}"
+    if [ "$count" -eq 1 ]; then exit 1; fi
+    exit 0 ;;
+  *) echo "unknown: $@" >> "{log}" ;;
+esac
+"""
+        _create_mock_bin(tmp_path, "droid", script)
+        _create_marketplace(tmp_path, ["alpha"])
+        result = _run_sync(tmp_path)
+        assert result.returncode == 0
+        assert "Retrying failed plugin operations serially" in result.stdout
+        assert "Added:   1" in result.stdout
+        log_content = log.read_text()
+        assert "install alpha@optimus #1" in log_content
+        assert "install alpha@optimus #2" in log_content
+
+
 class TestMalformedMarketplace:
     def test_fails_on_malformed_json(self, tmp_path: Path) -> None:
         log = tmp_path / "droid.log"

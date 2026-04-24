@@ -32,6 +32,11 @@ _count_lines() {
   echo "$1" | grep -c . 2>/dev/null || echo 0
 }
 
+_read_result() {
+  local file="$1"
+  cat "$file" 2>/dev/null || echo "FAIL"
+}
+
 echo "=== Optimus Plugin Sync ==="
 echo ""
 
@@ -94,6 +99,9 @@ RESULTS_DIR=$(mktemp -d)
 _cleanup() { rm -rf "$RESULTS_DIR"; }
 trap '_cleanup; echo ""; _warn "Sync interrupted. Re-run /optimus-sync to complete."; exit 130' INT TERM
 trap '_cleanup' EXIT
+RETRY_REMOVALS=""
+RETRY_INSTALLS=""
+RETRY_UPDATES=""
 
 # Step 5: Remove orphaned plugins (parallel)
 if [ -n "$ORPHANED_PLUGINS" ]; then
@@ -105,11 +113,18 @@ if [ -n "$ORPHANED_PLUGINS" ]; then
       if _droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
         echo "OK" > "$RESULTS_DIR/remove-${plugin}"
       else
-        echo "FAIL" > "$RESULTS_DIR/remove-${plugin}"
+        echo "RETRY" > "$RESULTS_DIR/remove-${plugin}"
       fi
     ) &
   done <<< "$ORPHANED_PLUGINS"
   wait
+  while IFS= read -r plugin; do
+    [ -z "$plugin" ] && continue
+    if [ "$(_read_result "$RESULTS_DIR/remove-${plugin}")" = "RETRY" ]; then
+      RETRY_REMOVALS="${RETRY_REMOVALS}${plugin}
+"
+    fi
+  done <<< "$ORPHANED_PLUGINS"
 fi
 
 # Step 6: Install new plugins (parallel)
@@ -121,11 +136,18 @@ if [ -n "$NEW_PLUGINS" ]; then
       if _droid plugin install "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
         echo "OK" > "$RESULTS_DIR/install-${plugin}"
       else
-        echo "FAIL" > "$RESULTS_DIR/install-${plugin}"
+        echo "RETRY" > "$RESULTS_DIR/install-${plugin}"
       fi
     ) &
   done <<< "$NEW_PLUGINS"
   wait
+  while IFS= read -r plugin; do
+    [ -z "$plugin" ] && continue
+    if [ "$(_read_result "$RESULTS_DIR/install-${plugin}")" = "RETRY" ]; then
+      RETRY_INSTALLS="${RETRY_INSTALLS}${plugin}
+"
+    fi
+  done <<< "$NEW_PLUGINS"
 fi
 
 # Step 7: Update existing plugins (parallel)
@@ -137,16 +159,61 @@ if [ -n "$EXISTING_PLUGINS" ]; then
       if _droid plugin update "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
         echo "OK" > "$RESULTS_DIR/update-${plugin}"
       else
-        _droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1 || true
-        if _droid plugin install "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
-          echo "REINSTALLED" > "$RESULTS_DIR/update-${plugin}"
-        else
-          echo "FAIL" > "$RESULTS_DIR/update-${plugin}"
-        fi
+        echo "RETRY" > "$RESULTS_DIR/update-${plugin}"
       fi
     ) &
   done <<< "$EXISTING_PLUGINS"
   wait
+  while IFS= read -r plugin; do
+    [ -z "$plugin" ] && continue
+    if [ "$(_read_result "$RESULTS_DIR/update-${plugin}")" = "RETRY" ]; then
+      RETRY_UPDATES="${RETRY_UPDATES}${plugin}
+"
+    fi
+  done <<< "$EXISTING_PLUGINS"
+fi
+
+# Step 7.5: Retry transient failures serially
+if [ -n "$RETRY_REMOVALS$RETRY_INSTALLS$RETRY_UPDATES" ]; then
+  echo "Retrying failed plugin operations serially..."
+fi
+
+if [ -n "$RETRY_REMOVALS" ]; then
+  while IFS= read -r plugin; do
+    [ -z "$plugin" ] && continue
+    if _droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
+      echo "OK" > "$RESULTS_DIR/remove-${plugin}"
+    else
+      echo "FAIL" > "$RESULTS_DIR/remove-${plugin}"
+    fi
+  done <<< "$RETRY_REMOVALS"
+fi
+
+if [ -n "$RETRY_INSTALLS" ]; then
+  while IFS= read -r plugin; do
+    [ -z "$plugin" ] && continue
+    if _droid plugin install "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
+      echo "OK" > "$RESULTS_DIR/install-${plugin}"
+    else
+      echo "FAIL" > "$RESULTS_DIR/install-${plugin}"
+    fi
+  done <<< "$RETRY_INSTALLS"
+fi
+
+if [ -n "$RETRY_UPDATES" ]; then
+  while IFS= read -r plugin; do
+    [ -z "$plugin" ] && continue
+    if _droid plugin update "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
+      echo "OK" > "$RESULTS_DIR/update-${plugin}"
+      continue
+    fi
+    _droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1 || true
+    if _droid plugin install "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
+      echo "REINSTALLED" > "$RESULTS_DIR/update-${plugin}"
+    else
+      echo "FAIL" > "$RESULTS_DIR/update-${plugin}"
+    fi
+  done <<< "$RETRY_UPDATES"
 fi
 
 # Step 8: Collect results and print summary
@@ -155,7 +222,7 @@ REMOVED=0; ADDED=0; UPDATED=0; FAILED=0
 if [ -n "$ORPHANED_PLUGINS" ]; then
   while IFS= read -r plugin; do
     [ -z "$plugin" ] && continue
-    result=$(cat "$RESULTS_DIR/remove-${plugin}" 2>/dev/null || echo "FAIL")
+    result=$(_read_result "$RESULTS_DIR/remove-${plugin}")
     if [ "$result" = "OK" ]; then
       echo "  - $plugin ... OK"
       REMOVED=$((REMOVED + 1))
@@ -169,7 +236,7 @@ fi
 if [ -n "$NEW_PLUGINS" ]; then
   while IFS= read -r plugin; do
     [ -z "$plugin" ] && continue
-    result=$(cat "$RESULTS_DIR/install-${plugin}" 2>/dev/null || echo "FAIL")
+    result=$(_read_result "$RESULTS_DIR/install-${plugin}")
     if [ "$result" = "OK" ]; then
       echo "  + $plugin ... OK"
       ADDED=$((ADDED + 1))
@@ -183,7 +250,7 @@ fi
 if [ -n "$EXISTING_PLUGINS" ]; then
   while IFS= read -r plugin; do
     [ -z "$plugin" ] && continue
-    result=$(cat "$RESULTS_DIR/update-${plugin}" 2>/dev/null || echo "FAIL")
+    result=$(_read_result "$RESULTS_DIR/update-${plugin}")
     case "$result" in
       OK)          echo "  * $plugin ... OK";            UPDATED=$((UPDATED + 1)) ;;
       REINSTALLED) echo "  * $plugin ... OK (reinstalled)"; UPDATED=$((UPDATED + 1)) ;;
