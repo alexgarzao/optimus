@@ -17,6 +17,7 @@ Skills are classified as **Administrative** (run anywhere) or **Execution** (req
 | `tasks` | Administrative: Create, edit, remove, reorder, cancel, and reopen tasks. Manage versions and move tasks between versions. Runs on any branch | `/optimus-tasks` |
 | `batch` | Pipeline orchestrator: chains stages 1-4 for one or more tasks with user checkpoints between stages | `/optimus-batch` |
 | `resolve` | Administrative: Resolves merge conflicts in tasks.md caused by parallel task execution across feature branches | `/optimus-resolve` |
+| `resume` | Administrative: Resume a task after closing the terminal. Locates/recreates the worktree for a given T-XXX, reports current status, and offers to invoke the next stage. Read-only on state.json | `/optimus-resume` |
 | `quick-report` | Compact daily status dashboard. Shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Read-only | `/optimus-quick-report` |
 | `help` | Lists all available Optimus skills with descriptions, usage commands, and when to use each one | `/optimus-help` |
 | `sync` | Sync all Optimus plugins — install new, update existing, remove orphaned. Recommended after new releases | `/optimus-sync` |
@@ -86,6 +87,7 @@ Each plugin includes a short alias for quick access:
 | `/bt` | `/optimus-batch` | `/im` | `/optimus-import` |
 | `/qr` | `/optimus-quick-report` | `/rs` | `/optimus-resolve` |
 | `/rp` | `/optimus-report` | `/t` | `/optimus-tasks` |
+| `/rsm` | `/optimus-resume` | | |
 
 ## How it works
 

@@ -382,7 +382,7 @@ class TestPipelineFourStages:
 EXPECTED_PLUGINS = [
     "batch", "build", "coderabbit-review", "deep-doc-review", "deep-review",
     "done", "help", "import", "plan", "pr-check", "quick-report", "report",
-    "resolve", "review", "sync", "tasks",
+    "resolve", "resume", "review", "sync", "tasks",
 ]
 REMOVED_PLUGINS = ["verify-code", "codacy-review", "deepsource-review"]
 
@@ -423,13 +423,13 @@ class TestPluginCompleteness:
         )
 
     def test_expected_plugin_count(self):
-        """Marketplace must have exactly 16 plugins."""
+        """Marketplace must have exactly 17 plugins."""
         if not MARKETPLACE_JSON.exists():
             return
         marketplace = json.loads(MARKETPLACE_JSON.read_text())
         count = len(marketplace.get("plugins", []))
-        assert count == 16, (
-            f"Expected 16 plugins in marketplace, found {count}"
+        assert count == 17, (
+            f"Expected 17 plugins in marketplace, found {count}"
         )
 
     def test_no_removed_plugins_referenced(self):
@@ -648,4 +648,68 @@ class TestDoneRedesign:
         )
         assert "Options: Resume / Start fresh (delete session) / Continue (keep session file)" not in content, (
             "done should not include resume/start-fresh/continue options"
+        )
+
+
+class TestResumeAdmin:
+    """resume is an Administrative skill that resolves a task's workspace without altering state."""
+
+    def test_resume_is_classified_admin(self):
+        """AGENTS.md classification table must list resume as Admin."""
+        text = AGENTS_MD.read_text()
+        assert re.search(r"\|\s*Admin\s*\|\s*resume\s*\|", text), (
+            "AGENTS.md must classify resume as Admin in the Admin vs Execution table"
+        )
+
+    def test_resume_does_not_write_state_json(self):
+        """resume SKILL.md must not contain writes to state.json."""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "> \"$STATE_FILE\"" not in body, (
+            "resume must not write to state.json"
+        )
+        assert "state.json.tmp" not in body, (
+            "resume must not mutate state.json"
+        )
+
+    def test_resume_does_not_run_lint_or_tests(self):
+        """resume SKILL.md must not run make lint or make test as execution steps."""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        lines = body.splitlines()
+        violations = []
+        for i, line in enumerate(lines, 1):
+            stripped = line.strip()
+            if stripped.startswith("#") or stripped.startswith("**"):
+                continue
+            if re.search(r"^make (lint|test)\b", stripped):
+                violations.append(f"resume/SKILL.md:{i}: {stripped}")
+        assert violations == [], (
+            "resume should not run local lint/test:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    def test_resume_does_not_offer_resume_start_fresh_continue(self):
+        """resume must not expose the Resume/Start fresh/Continue trio as AskUser options."""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        # The SKILL.md may mention the phrase in prose rules ("Does NOT offer ..."),
+        # but must never present it as AskUser options like `Options: Resume / Start fresh / Continue`.
+        offending = re.compile(
+            r"Options:\s*Resume\s*/\s*Start fresh(\s*\(delete session\))?\s*/\s*Continue",
+            re.IGNORECASE,
+        )
+        assert not offending.search(body), (
+            "resume must not list Resume/Start fresh/Continue as AskUser options"
+        )
+
+    def test_resume_has_auto_detect_and_pendente_paths(self):
+        """resume must document the auto-detect and Pendente fallback behaviors."""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "Auto-Detect" in body, (
+            "resume must document the auto-detect flow when no T-XXX is provided"
+        )
+        assert "/optimus-plan" in body, (
+            "resume must reference /optimus-plan as the Pendente-flow delegate"
         )

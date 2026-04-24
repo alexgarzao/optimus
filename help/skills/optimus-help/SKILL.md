@@ -35,7 +35,7 @@ Lists all available Optimus skills organized by category.
 **Prerequisites:** Optimus requires the Ring ecosystem (droids + pre-dev workflow).
 Execution skills (plan, build, review, done) and review skills (pr-check, deep-review,
 coderabbit-review) require Ring droids to be installed. Administrative skills (import,
-report, tasks, resolve, quick-report, help) work without Ring droids.
+report, tasks, resolve, resume, quick-report, help) work without Ring droids.
 
 Present the following catalog to the user. Use the `<json-render>` format for rich
 terminal display when available, otherwise use markdown tables.
@@ -48,6 +48,7 @@ terminal display when available, otherwise use markdown tables.
 | **report** | `/optimus-report` | Task status dashboard — shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only. |
 | **tasks** | `/optimus-tasks` | Creating, editing, removing, reordering, cancelling, or reopening tasks. Managing versions. Any administrative task management. |
 | **resolve** | `/optimus-resolve` | Resolving merge conflicts in `tasks.md` caused by parallel task execution across feature branches. |
+| **resume** | `/optimus-resume` | Resume a task after closing the terminal — locates/recreates the worktree for a given T-XXX, reports current status, and offers to invoke the next stage. Read-only on state.json. |
 | **quick-report** | `/optimus-quick-report` | Compact daily status dashboard — shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Read-only. |
 | **batch** | `/optimus-batch` | Pipeline orchestrator — chains stages 1-4 for one or more tasks with user checkpoints between stages. |
 | **help** | `/optimus-help` | This skill — discovering what's available. |
@@ -92,6 +93,7 @@ Each plugin includes a short alias for quick access:
 | `/bt` | `/optimus-batch` | `/im` | `/optimus-import` |
 | `/qr` | `/optimus-quick-report` | `/rs` | `/optimus-resolve` |
 | `/rp` | `/optimus-report` | `/t` | `/optimus-tasks` |
+| `/rsm` | `/optimus-resume` | | |
 
 ---
 
@@ -111,6 +113,10 @@ on their situation:
 2. Then: `/optimus-plan` to validate and create workspace
 3. Then: `/optimus-build` to implement
 4. Or use `/optimus-batch` to run all stages in sequence with checkpoints
+
+### "I closed the terminal, how do I resume the task I was working on?"
+- Use `/optimus-resume T-XXX` — sets up the worktree for T-XXX and offers to invoke the next stage
+- If you forgot which task, run `/optimus-resume` alone — it auto-detects if there is exactly one in-progress task
 
 ### "I want a quick status check"
 - Use `/optimus-report` with "quick status" — shows only current task and next-up

@@ -538,6 +538,7 @@ It does NOT change task status and is NOT part of the pipeline stages.
    | Execution | done | Yes (auto-navigates) | Finds task worktree and navigates to it |
    | Admin | batch | Yes | Orchestrates stages, delegates to stage skills |
    | Admin | resolve | Yes | Only resolves merge conflicts in tasks.md |
+   | Admin | resume | Yes | Read-only on state.json; creates worktree only as recovery when branch exists but worktree is missing |
 
    **Administrative skills** manage tasks.md metadata and state.json. They never modify
    project code and can run on any branch.

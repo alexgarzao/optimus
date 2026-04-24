@@ -84,6 +84,11 @@
       "name": "quick-report",
       "description": "Compact daily status dashboard. Shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Read-only.",
       "source": "./quick-report"
+    },
+    {
+      "name": "resume",
+      "description": "Administrative: Resume a task after closing the terminal. Locates/recreates the worktree for a given T-XXX, reports current status, and offers to invoke the next stage. Read-only on state.json.",
+      "source": "./resume"
     }
   ]
 }
