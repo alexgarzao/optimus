@@ -322,10 +322,13 @@ For EACH subtask (sequentially, unless PARALLEL-PLAN.md allows parallel):
 
 **3. After the droid returns:**
 
-a. Run unit tests:
+a. Run unit tests quietly — see AGENTS.md Protocol: Quiet Command Execution:
 ```bash
-make test
+_optimus_quiet_run "make-test" make test
 ```
+The agent sees only a PASS/FAIL verdict; the full test log lives in
+`.optimus/logs/` if needed for diagnosis.
+
 b. **If tests fail (max 3 attempts per subtask):**
    1. **Logic bug** — dispatch the same ring droid with failure output and instruction:
       "Test failed after your implementation: <output>. Diagnose and fix." Re-run tests.
@@ -363,25 +366,27 @@ Ask via `AskUser`:
 
 After ALL subtasks are complete:
 
-1. **Run lint:**
+1. **Run lint quietly** — see AGENTS.md Protocol: Quiet Command Execution:
    ```bash
-   make lint                # Lint — MANDATORY (first run of this stage)
+   _optimus_quiet_run "make-lint" make lint   # MANDATORY (first run of this stage)
    ```
    If lint fails, fix formatting.
 
    Unit tests already passed after the last subtask (Step 2.2 loop) — no need to re-run here.
 
-2. **Measure coverage** — see AGENTS.md Protocol: Coverage Measurement.
+2. **Measure coverage** — see AGENTS.md Protocol: Coverage Measurement. Coverage
+   commands are wrapped in `_optimus_quiet_run` by the protocol.
 
 3. **Run integration tests (only if integration coverage was SKIPped):**
    If item 2 measured integration coverage via `make test-integration-coverage`,
    integration tests already ran — skip this step (no-op).
-   Otherwise (coverage target missing, marked SKIP in item 2), run:
+   Otherwise (coverage target missing, marked SKIP in item 2), run quietly:
    ```bash
-   make test-integration    # Optional fallback — SKIP if missing
+   _optimus_quiet_run "make-test-integration" make test-integration   # Optional fallback — SKIP if missing
    ```
-   If the target does not exist, mark as SKIP. If it fails, present failure
-   output and ask user via `AskUser`: "Integration tests failing. Fix or defer to check?"
+   If the target does not exist, mark as SKIP. If it fails, the helper prints
+   the last 50 lines of the log automatically — then ask user via `AskUser`:
+   "Integration tests failing. Fix or defer to check?"
 
 4. **Dispatch code review and spec compliance droids** in parallel via `Task` tool:
    - `ring-default-code-reviewer`
@@ -931,23 +936,55 @@ Skills reference this as: "Check active version guard — see AGENTS.md Protocol
 
 Measure test coverage using Makefile targets with stack-specific fallbacks.
 
+**Run coverage quietly.** Coverage commands are the single biggest source of
+verbose output (N packages × per-file coverage lines). Wrap them with
+`_optimus_quiet_run` (see Protocol: Quiet Command Execution) so the full output
+lands on disk and only a PASS/FAIL line reaches the agent. Then read only the
+"total" summary line to extract the percentage.
+
 **Unit coverage command resolution order:**
-1. `make test-coverage` (if Makefile target exists)
+1. `make test-coverage` (if Makefile target exists), run via `_optimus_quiet_run`
 2. Stack-specific fallback:
-   - Go: `go test -coverprofile=coverage-unit.out ./... && go tool cover -func=coverage-unit.out`
-   - Node: `npm test -- --coverage`
-   - Python: `pytest --cov=. --cov-report=term`
+   - Go: `go test -coverprofile=coverage-unit.out ./...` (wrapped) then `go tool cover -func=coverage-unit.out`
+   - Node: `npm test -- --coverage` (wrapped)
+   - Python: `pytest --cov=. --cov-report=term` (wrapped)
 
 If no unit coverage command is available, mark as **SKIP** — do not fail the verification.
 
 **Integration coverage command resolution order:**
-1. `make test-integration-coverage` (if Makefile target exists)
+1. `make test-integration-coverage` (if Makefile target exists), run via `_optimus_quiet_run`
 2. Stack-specific fallback:
-   - Go: `go test -tags=integration -coverprofile=coverage-integration.out ./... && go tool cover -func=coverage-integration.out`
-   - Node: `npm run test:integration -- --coverage`
-   - Python: `pytest -m integration --cov=. --cov-report=term`
+   - Go: `go test -tags=integration -coverprofile=coverage-integration.out ./...` (wrapped) then `go tool cover -func=coverage-integration.out`
+   - Node: `npm run test:integration -- --coverage` (wrapped)
+   - Python: `pytest -m integration --cov=. --cov-report=term` (wrapped)
 
 If no integration coverage command is available, mark as **SKIP** — do not fail the verification.
+
+**Extracting the percentage (agent-visible output):** after the wrapped run, emit
+only the total line. Examples:
+
+```bash
+# Go
+_optimus_quiet_run "make-test-coverage" make test-coverage
+if [ -f coverage-unit.out ]; then
+  go tool cover -func=coverage-unit.out | awk '/^total:/ {print "Unit coverage: " $NF}'
+fi
+
+# Node (Istanbul JSON/text-summary)
+_optimus_quiet_run "npm-test-coverage" npm test -- --coverage
+if [ -f coverage/coverage-summary.json ]; then
+  jq -r '.total.lines.pct | "Unit coverage: \(.)%"' coverage/coverage-summary.json
+fi
+
+# Python (pytest-cov)
+_optimus_quiet_run "pytest-cov" pytest --cov=. --cov-report=term --cov-report=json:coverage.json
+if [ -f coverage.json ]; then
+  jq -r '.totals.percent_covered_display | "Unit coverage: \(.)%"' coverage.json
+fi
+```
+
+The agent sees ~2 lines total (PASS verdict + "Unit coverage: 87.4%"). The full
+per-file breakdown stays in `.optimus/logs/` and in the native coverage files.
 
 **Thresholds:**
 
@@ -956,9 +993,13 @@ If no integration coverage command is available, mark as **SKIP** — do not fai
 | Unit tests | 85% | NEEDS_FIX / HIGH finding |
 | Integration tests | 70% | NEEDS_FIX / HIGH finding |
 
-**Coverage gap analysis:** Parse the coverage output to identify untested functions/methods
-(0% coverage). Flag business-logic functions with 0% as HIGH, infrastructure/generated
-code with 0% as SKIP.
+**Coverage gap analysis:** When scanning for untested functions/methods (0% coverage),
+read the coverage output file (not the agent turn stdout) — either the native
+`coverage-*.out` / `coverage-summary.json` / `coverage.json` file, or the
+`.optimus/logs/<timestamp>-*-coverage-*.log` file produced by `_optimus_quiet_run`
+(the trailing `-<pid>` segment is part of every helper-produced log filename).
+Flag business-logic functions with 0% as HIGH, infrastructure/generated code with
+0% as SKIP.
 
 Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage Measurement."
 
@@ -1553,6 +1594,124 @@ skill versions after pushing changes.
 Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Push Commits."
 
 
+### Protocol: Quiet Command Execution
+
+**Referenced by:** build, review, pr-check, coderabbit-review, deep-review (for `make test`, `make lint`, `make test-integration`, coverage runs)
+
+Long-running verification commands (`make test`, `make lint`, `make test-coverage`,
+`make test-integration`, `make test-integration-coverage`) often emit thousands of
+output lines. Capturing that output in the agent's context wastes tokens and slows
+down every turn, even when the command passes cleanly.
+
+This protocol defines `_optimus_quiet_run`, a bash helper that runs a command with
+stdout/stderr redirected to a log file under `.optimus/logs/` and emits **a single
+verdict line** based on the exit code. On failure it also prints the last 50 lines of
+the log so the agent can diagnose without ingesting the full output. The exit code
+is preserved, so downstream control flow (`if ...; then ... fi`) keeps working.
+
+**Helper (auto-inlined — do NOT manually copy):**
+
+This helper is automatically inlined into every consumer skill by
+`scripts/inline-protocols.py` (see Shared Protocols block at the end of each
+SKILL.md). You do NOT need to paste it into skills manually — editing this single
+source of truth is enough.
+
+```bash
+_optimus_quiet_run() {
+  # Usage: _optimus_quiet_run <label> <command> [args...]
+  # Runs <command> with stdout+stderr redirected to
+  # .optimus/logs/<timestamp>-<label>-<pid>.log. Prints a single PASS/FAIL line;
+  # on FAIL also prints last 50 lines of the log (terminal escapes stripped).
+  # Returns the command's exit code unchanged.
+  local label="$1"; shift
+  if [ -z "$label" ] || [ $# -eq 0 ]; then
+    echo "ERROR: _optimus_quiet_run requires <label> and <command>" >&2
+    return 2
+  fi
+  local safe
+  safe=$(printf '%s' "$label" | tr -c '[:alnum:]-_' '-' | sed 's/--*/-/g;s/^-//;s/-$//')
+  [ -z "$safe" ] && safe="run"
+  local ts
+  ts=$(date +%Y%m%d-%H%M%S)
+  # PID suffix prevents same-second same-label collisions (parallel or fast sequential).
+  local log=".optimus/logs/${ts}-${safe}-$$.log"
+  if ! mkdir -p "$(dirname "$log")" 2>/dev/null; then
+    echo "ERROR: _optimus_quiet_run cannot create $(dirname "$log") (permission denied, disk full, or read-only FS)" >&2
+    return 3
+  fi
+  # umask 0077 ensures log file is owner-read/write only (logs may contain
+  # sensitive test output: credentials in debug lines, internal stack traces).
+  if ( umask 0077; "$@" > "$log" 2>&1 ); then
+    echo "PASS: $label (log: $log)"
+    return 0
+  else
+    local rc=$?
+    echo "FAIL: $label (exit=$rc, log: $log)"
+    echo "--- last 50 lines ---"
+    # `cat -v` strips terminal escape sequences (non-printable bytes become ^X
+    # notation), preventing a malicious test from hijacking the terminal title
+    # or obscuring errors via ANSI/OSC sequences.
+    tail -n 50 "$log" | cat -v
+    return $rc
+  fi
+}
+```
+
+**Usage examples:**
+
+```bash
+_optimus_quiet_run "make-lint" make lint
+_optimus_quiet_run "make-test" make test
+_optimus_quiet_run "make-test-coverage" make test-coverage
+_optimus_quiet_run "make-test-integration" make test-integration
+```
+
+**Contract:**
+
+1. **Success path (exit 0):** one line `PASS: <label> (log: <path>)` — this is ALL the
+   output the agent reads. The full log stays on disk for manual inspection.
+2. **Failure path (exit != 0):** `FAIL: <label> (exit=N, log: <path>)` + a separator
+   line + the last 50 lines of the log (with terminal escape sequences stripped via
+   `cat -v`). The agent has enough context to diagnose or dispatch a fix droid
+   without loading the full output.
+3. **Exit code preserved:** the helper returns the same exit code as the wrapped
+   command. Downstream `if _optimus_quiet_run ...; then ... fi` works the same as
+   `if make test; then ... fi` would.
+4. **Log retention:** logs accumulate under `.optimus/logs/` (gitignored). Both
+   Protocol: Initialize .optimus Directory (admin/standalone skills) and
+   Protocol: Session State (stage agents at phase transitions) automatically
+   prune logs older than 30 days AND cap the directory at 500 most-recent
+   files, whichever limit hits first. Users may `rm .optimus/logs/*.log` at any
+   time to reclaim space manually.
+5. **Reserved exit codes:** `2` = missing/empty label or missing command;
+   `3` = cannot create `.optimus/logs/` (perm denied, disk full, read-only FS).
+   Any other exit code comes from the wrapped command.
+
+**Label naming convention:**
+- `make-<target>` for Makefile targets: `make-lint`, `make-test`, `make-test-coverage`, `make-test-integration`, `make-test-integration-coverage`
+- `<tool>` for direct tool invocations: `go-vet`, `goimports`, `gofmt`, `prettier`
+- `<tool>-<action>` when a single tool has multiple modes: `npm-test-coverage`, `pytest-cov`
+
+Keep labels short (≤30 chars) and filesystem-safe — the helper sanitizes aggressively,
+but readable labels produce readable log filenames in `.optimus/logs/`.
+
+**When the agent needs full output:** use `cat .optimus/logs/<filename>.log` or
+point a sub-agent to the log path (`Read` tool). Never re-run the command just to
+see the output — the log already has it.
+
+**Output parsing (e.g., coverage %):** do NOT parse the stdout of
+`_optimus_quiet_run`. Read the log file or, better, use a separate command that
+prints only the metric (example in Protocol: Coverage Measurement).
+
+**When NOT to use this helper:**
+- Commands whose output must be parsed by the agent turn-by-turn (rare for
+  verification, common for `git log`, `gh pr view`, etc.) — use normal Execute.
+- Interactive commands that expect TTY input.
+- Commands under 20 lines of output where the savings are negligible.
+
+Skills reference this as: "Run quietly — see AGENTS.md Protocol: Quiet Command Execution."
+
+
 ### Protocol: Ring Droid Requirement Check
 
 **Referenced by:** review, pr-check, deep-doc-review, coderabbit-review, plan, build
@@ -1688,8 +1847,26 @@ fi
 **On stage progress (at key phase transitions):**
 
 ```bash
-# Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
-mkdir -p .optimus/sessions .optimus/reports
+# Mirror Protocol: Initialize .optimus Directory (mkdir + gitignore) so stage
+# agents — which call Session State but not Initialize Directory — also create
+# the dirs and update .gitignore on first phase transition.
+mkdir -p .optimus/sessions .optimus/reports .optimus/logs
+if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
+  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> .gitignore
+fi
+# Log retention (idempotent — runs every phase transition): age-based + count-cap
+# prune. Stage agents are the heaviest log producers, so placing prune here
+# ensures it fires for build/review/plan/done (which call Session State but not
+# Initialize .optimus Directory).
+find .optimus/logs -type f -name '*.log' -mtime +30 -delete 2>/dev/null
+# Count-cap: keep at most 500 most-recent log files. Uses `while read -r` (not
+# `xargs`) for portability across GNU/BSD (`xargs -r` is GNU-only). Filename
+# safety: `_optimus_quiet_run` sanitizes labels to `[:alnum:]-_`, so log
+# filenames cannot contain spaces or newlines.
+if [ -d .optimus/logs ]; then
+  ls -1t .optimus/logs/*.log 2>/dev/null | tail -n +501 \
+    | while IFS= read -r _log_to_rm; do rm -f -- "$_log_to_rm"; done
+fi
 BRANCH_NAME=$(git branch --show-current 2>/dev/null)
 # `git branch --show-current` exits 0 with empty stdout on detached HEAD; the
 # `|| echo "detached"` fallback was dead code. Use an explicit check instead.

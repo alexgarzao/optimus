@@ -886,17 +886,37 @@ Skills reference this as: "Resolve default scope — see AGENTS.md Protocol: Def
 
 ### Protocol: Initialize .optimus Directory
 
-**Referenced by:** import, tasks, report (export), quick-report, batch, all stage agents (1-4) for session files
+**Referenced by:** import, tasks, report (export), quick-report, batch, pr-check, deep-review, coderabbit-review, all stage agents (1-4) for session files
 
 Before creating ANY file inside `.optimus/`, ensure the directory structure exists
-and that the entire `.optimus/` tree is gitignored (it is 100% operational/per-user):
+and that the entire `.optimus/` tree is gitignored (it is 100% operational/per-user).
 
 ```bash
-mkdir -p .optimus/sessions .optimus/reports
+mkdir -p .optimus/sessions .optimus/reports .optimus/logs
 if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
-  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n' >> .gitignore
+  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> .gitignore
+fi
+# Log retention (idempotent — fires once per init): age-based + count-cap prune.
+# Also duplicated in Protocol: Session State so stage agents (which call Session
+# State but not Initialize Directory) get pruning at every phase transition.
+# Both prune sites are no-ops on clean directories; running both is harmless.
+find .optimus/logs -type f -name '*.log' -mtime +30 -delete 2>/dev/null
+if [ -d .optimus/logs ]; then
+  ls -1t .optimus/logs/*.log 2>/dev/null | tail -n +501 \
+    | while IFS= read -r _log_to_rm; do rm -f -- "$_log_to_rm"; done
 fi
 ```
+
+**Log retention** for `.optimus/logs/` runs at TWO sites for full coverage:
+- **Protocol: Initialize .optimus Directory** (this protocol) — fires when
+  admin/standalone skills (`import`, `tasks`, `report`, `quick-report`, `batch`,
+  `pr-check`, `deep-review`, `coderabbit-review`) initialize `.optimus/`.
+- **Protocol: Session State** — fires at every stage agent (`plan`, `build`,
+  `review`, `done`) phase transition.
+
+Both sites are idempotent (no-op on clean directories) and use the same prune
+logic (30-day age cap + 500-file count cap). Running both per session is a
+harmless cheap operation.
 
 Everything inside `.optimus/` is gitignored. The planning tree is versioned
 separately at `<tasksDir>/tasks.md` (and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/`

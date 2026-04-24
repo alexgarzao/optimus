@@ -2062,8 +2062,26 @@ fi
 **On stage progress (at key phase transitions):**
 
 ```bash
-# Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
-mkdir -p .optimus/sessions .optimus/reports
+# Mirror Protocol: Initialize .optimus Directory (mkdir + gitignore) so stage
+# agents — which call Session State but not Initialize Directory — also create
+# the dirs and update .gitignore on first phase transition.
+mkdir -p .optimus/sessions .optimus/reports .optimus/logs
+if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
+  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> .gitignore
+fi
+# Log retention (idempotent — runs every phase transition): age-based + count-cap
+# prune. Stage agents are the heaviest log producers, so placing prune here
+# ensures it fires for build/review/plan/done (which call Session State but not
+# Initialize .optimus Directory).
+find .optimus/logs -type f -name '*.log' -mtime +30 -delete 2>/dev/null
+# Count-cap: keep at most 500 most-recent log files. Uses `while read -r` (not
+# `xargs`) for portability across GNU/BSD (`xargs -r` is GNU-only). Filename
+# safety: `_optimus_quiet_run` sanitizes labels to `[:alnum:]-_`, so log
+# filenames cannot contain spaces or newlines.
+if [ -d .optimus/logs ]; then
+  ls -1t .optimus/logs/*.log 2>/dev/null | tail -n +501 \
+    | while IFS= read -r _log_to_rm; do rm -f -- "$_log_to_rm"; done
+fi
 BRANCH_NAME=$(git branch --show-current 2>/dev/null)
 # `git branch --show-current` exits 0 with empty stdout on detached HEAD; the
 # `|| echo "detached"` fallback was dead code. Use an explicit check instead.

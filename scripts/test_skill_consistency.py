@@ -843,15 +843,32 @@ class TestDoneRedesign:
             "done missing 'PR in final state' gate"
 
     def test_done_no_local_lint_test(self):
-        """done SKILL.md must NOT contain make lint or make test as execution steps."""
+        """done SKILL.md must NOT contain make lint or make test as execution steps.
+
+        Catches both the bare form (`make test`) and the wrapped form
+        (`_optimus_quiet_run "make-test" make test`) so the invariant survives
+        the Quiet Command Execution helper migration. Wrapped regex accepts
+        single OR double quotes around the label, and any of the make targets
+        (lint, test, test-coverage, test-integration, test-integration-coverage).
+        """
         content = _read_skill("done")
         lines = content.splitlines()
         violations = []
+        # Bare form: `make lint`, `make test`, `make test-coverage`, etc.
+        bare_re = re.compile(
+            r"^make (lint|test)(-(coverage|integration|integration-coverage))?\b"
+        )
+        # Wrapped form: `_optimus_quiet_run "make-test" make test`, with single
+        # OR double quotes (or no quotes) around the label, and any verify variant.
+        wrapped_re = re.compile(
+            r'^_optimus_quiet_run\s+["\']?make-(lint|test)(-(coverage|integration|integration-coverage))?["\']?'
+            r'\s+make\s+(lint|test)(-(coverage|integration|integration-coverage))?\b'
+        )
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
             if stripped.startswith("#") or stripped.startswith("**"):
                 continue
-            if re.search(r"^make (lint|test)\b", stripped):
+            if bare_re.search(stripped) or wrapped_re.search(stripped):
                 violations.append(f"done/SKILL.md:{i}: {stripped}")
         assert violations == [], (
             "done should not run local lint/test (CI responsibility):\n"
@@ -949,16 +966,29 @@ class TestResumeAdmin:
             )
 
     def test_resume_does_not_run_lint_or_tests(self):
-        """resume SKILL.md must not run make lint or make test as execution steps."""
+        """resume SKILL.md must not run make lint or make test as execution steps.
+
+        Catches both the bare form and the wrapped form (Quiet Command
+        Execution). Wrapped regex accepts single/double quotes around label
+        and all verify variants (lint, test, test-coverage, test-integration,
+        test-integration-coverage).
+        """
         content = _read_skill("resume")
         body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
         lines = body.splitlines()
         violations = []
+        bare_re = re.compile(
+            r"^make (lint|test)(-(coverage|integration|integration-coverage))?\b"
+        )
+        wrapped_re = re.compile(
+            r'^_optimus_quiet_run\s+["\']?make-(lint|test)(-(coverage|integration|integration-coverage))?["\']?'
+            r'\s+make\s+(lint|test)(-(coverage|integration|integration-coverage))?\b'
+        )
         for i, line in enumerate(lines, 1):
             stripped = line.strip()
             if stripped.startswith("#") or stripped.startswith("**"):
                 continue
-            if re.search(r"^make (lint|test)\b", stripped):
+            if bare_re.search(stripped) or wrapped_re.search(stripped):
                 violations.append(f"resume/SKILL.md:{i}: {stripped}")
         assert violations == [], (
             "resume should not run local lint/test:\n"

@@ -96,3 +96,20 @@ Each skill is an installable plugin with:
 - `<plugin>/skills/optimus-<skill>/SKILL.md` — full instructions with frontmatter (trigger, prerequisite, etc.)
 
 Future improvements are tracked in `docs/future-improvements.md`.
+
+## Logs
+
+Verification skills (`build`, `review`, `pr-check`, `coderabbit-review`, `deep-review`)
+write the full output of `make test`, `make lint`, and similar commands to
+`.optimus/logs/<timestamp>-<label>-<pid>.log` instead of streaming it through the
+agent context. This cuts agent token usage by ~99% on the success path while
+preserving the full log for manual inspection (`cat .optimus/logs/<file>.log`).
+
+The directory is gitignored and auto-pruned during skill execution (logs older than
+30 days OR beyond the 500 most-recent files are removed; pruning happens both during
+admin/standalone skill init and at every stage agent phase transition). To clear all
+logs manually:
+
+```bash
+rm .optimus/logs/*.log
+```
