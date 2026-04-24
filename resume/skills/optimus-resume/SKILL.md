@@ -1,6 +1,6 @@
 ---
 name: optimus-resume
-description: "Resume a task after closing the terminal. Given a task ID (or auto-detecting a single in-progress task), locates or recreates the task's worktree, reports the current status, and offers to invoke the next stage. Read-only on state.json except for user-confirmed recovery (Reset to Pendente when branch is missing)."
+description: "Resume a task after closing the terminal. Given a task ID (or auto-detecting from the in-progress tasks recorded in state.json), locates or recreates the task's worktree, reports the current status, and offers to invoke the next stage. Read-only on state.json except for user-confirmed recovery (Reset to Pendente when branch is missing)."
 trigger: >
   - When user says "resume T-XXX", "retomar T-XXX", or "continuar T-XXX"
   - When user says "pick up where I left off" or "continue last task"
@@ -36,7 +36,7 @@ examples:
     invocation: "/rsm"
     expected_flow: >
       1. Auto-detect in-progress task from state.json
-      2. Locate the worktree; report status, PR, git diff stats, stats.json churn
+      2. Locate the worktree; report status, PR, uncommitted/unpushed/behind counts, stats.json churn
       3. AskUser: invoke the next recommended stage or skip
   - name: Task has no workspace yet
     invocation: "Resume T-020"
@@ -51,6 +51,7 @@ related:
     - optimus-plan
     - optimus-build
     - optimus-review
+    - optimus-pr-check
     - optimus-done
 verification:
   manual:
@@ -104,11 +105,37 @@ but empty `tasks.md` would otherwise surface as a misleading "No in-progress tas
 message in Step 2.2.
 
 ```bash
-TASK_ROWS=$(grep -cE '^\| T-[0-9]+ \|' "$TASKS_FILE")
-if [ "$TASK_ROWS" -eq 0 ]; then
+: "${TASKS_FILE:=.optimus/tasks.md}"
+if [ ! -f "$TASKS_FILE" ]; then
+  echo "ERROR: $TASKS_FILE not found. Run /optimus-import to create it."
+  # STOP
+fi
+TASK_ROWS=$(grep -cE '^\| T-[0-9]+ \|' "$TASKS_FILE" || echo 0)
+if ! [[ "$TASK_ROWS" =~ ^[0-9]+$ ]] || [ "$TASK_ROWS" -eq 0 ]; then
   echo "ERROR: No tasks found in $TASKS_FILE. Use /optimus-tasks to create a task or /optimus-import to import from Ring pre-dev."
   # STOP
 fi
+```
+
+### Step 1.4: Validate state.json Integrity (HARD BLOCK) — Single Authoritative Check
+
+All subsequent steps reference `$STATE_JSON` (cached) instead of re-reading or
+re-validating `$STATE_FILE`. This is the ONLY place where resume does integrity checks
+on state.json — downstream steps trust this.
+
+```bash
+STATE_FILE=".optimus/state.json"
+STATE_JSON=""
+if [ -f "$STATE_FILE" ]; then
+  if ! jq empty "$STATE_FILE" 2>/dev/null; then
+    echo "ERROR: state.json is corrupted and cannot be parsed."
+    echo "Resume is read-only and will NOT apply the destructive 'rm -f' recovery described in the inlined Protocol: State Management."
+    echo "Run /optimus-tasks to rebuild the operational state, or restore state.json from backup."
+    # STOP
+  fi
+  STATE_JSON=$(cat "$STATE_FILE")
+fi
+# STATE_JSON is now either valid JSON or the empty string (no state.json yet).
 ```
 
 ---
@@ -142,35 +169,22 @@ If no match → **STOP**: `"Task ${TASK_ID} not found in tasks.md. Run /optimus-
 
 ### Step 2.2: Auto-Detect (no ID provided)
 
-#### Step 2.2a: Validate state.json integrity (HARD BLOCK)
+Filter for a concrete non-terminal status (whitelist — prevents malformed `null`/missing
+status entries from surfacing as resumable tasks). Order by `updated_at` descending
+(most recent first) for stable UX.
 
 ```bash
-STATE_FILE=".optimus/state.json"
-if [ ! -f "$STATE_FILE" ]; then
+if [ -z "$STATE_JSON" ]; then
   echo "ERROR: No state.json found and no task ID provided. Run /optimus-report to see the project status."
   # STOP
 fi
-if ! jq empty "$STATE_FILE" 2>/dev/null; then
-  echo "ERROR: state.json is corrupted and cannot be parsed."
-  echo "Resume is read-only and will NOT apply the destructive 'rm -f' recovery described in the inlined Protocol: State Management."
-  echo "Run /optimus-tasks to rebuild the operational state, or restore state.json from backup."
-  # STOP
-fi
-```
-
-#### Step 2.2b: List in-progress tasks (all non-terminal) — cached
-
-Cache the parsed state once (F18 DRY) and filter for any non-terminal status
-(i.e., anything except `DONE` and `Cancelado`). Tasks in `Validando Spec`, `Em Andamento`,
-or `Validando Impl` are all valid targets for resume. Tasks without an entry in state.json
-are implicitly `Pendente` and require the Pendente flow via Step 2.1 (user must name them
-explicitly). Ordering is by `updated_at` descending (most recent first) for stable UX.
-
-```bash
-STATE_JSON=$(cat "$STATE_FILE")
 IN_PROGRESS=$(printf '%s' "$STATE_JSON" | jq -r '
   to_entries
-  | map(select(.value.status != "DONE" and .value.status != "Cancelado"))
+  | map(select(
+      .value.status == "Validando Spec"
+      or .value.status == "Em Andamento"
+      or .value.status == "Validando Impl"
+    ))
   | sort_by(.value.updated_at // "")
   | reverse
   | .[]
@@ -182,26 +196,44 @@ IN_PROGRESS=$(printf '%s' "$STATE_JSON" | jq -r '
 - **If exactly 1 task** → use that ID as `TASK_ID` (no AskUser — resume does not change status, so there is no expanded-confirmation requirement).
 - **If N tasks** → present via `AskUser` with one option per task (`T-XXX — <title> (<status>, updated <relative-time>)`) plus **Cancel**. Do NOT offer Resume/Start fresh/Continue.
 
-### Step 2.3: Read Task Metadata
+### Step 2.3: Read Task Metadata (HARD BLOCK)
 
-From tasks.md, extract the row for `TASK_ID` and capture:
-
-- `TASK_TITLE`
-- `TASK_TIPO`
-- `TASK_VERSION`
-- `TASK_DEPENDS` (comma-separated list, or `-`)
-
-Read operational state from the cached `STATE_JSON` (or read `$STATE_FILE` if `STATE_JSON`
-was not populated — path not reached via Step 2.1). **Validate the state.json integrity**
-before reading:
+Extract task metadata from tasks.md. The agent MUST execute the bash snippet literally;
+prose-level "capture TASK_TITLE…" is not sufficient because downstream steps consume the
+vars directly.
 
 ```bash
-if [ -f "$STATE_FILE" ]; then
-  if ! jq empty "$STATE_FILE" 2>/dev/null; then
-    echo "ERROR: state.json is corrupted. Run /optimus-tasks to rebuild, or restore from backup."
-    # STOP — resume does NOT apply the 'rm -f' destructive recovery from the inlined protocol
+# tasks.md columns by pipe index: | 1=<blank> | 2=ID | 3=Title | 4=Tipo | 5=Depends | 6=Priority | 7=Version | 8=Estimate | 9=TaskSpec | 10=<blank> |
+TASK_ROW=$(awk -F'|' -v id="$TASK_ID" '
+  { gsub(/^ +| +$/,"",$2) }
+  $2 == id { print; exit }
+' "$TASKS_FILE")
+
+if [ -z "$TASK_ROW" ]; then
+  echo "ERROR: Could not read row for $TASK_ID from $TASKS_FILE."
+  # STOP
+fi
+
+_trim() { printf '%s' "$1" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }
+TASK_TITLE=$(_trim   "$(printf '%s' "$TASK_ROW" | awk -F'|' '{print $3}')")
+TASK_TIPO=$(_trim    "$(printf '%s' "$TASK_ROW" | awk -F'|' '{print $4}')")
+TASK_DEPENDS=$(_trim "$(printf '%s' "$TASK_ROW" | awk -F'|' '{print $5}')")
+TASK_VERSION=$(_trim "$(printf '%s' "$TASK_ROW" | awk -F'|' '{print $7}')")
+
+for v in TASK_TITLE TASK_TIPO TASK_DEPENDS TASK_VERSION; do
+  eval "val=\${$v}"
+  if [ -z "$val" ]; then
+    echo "ERROR: $v is empty for $TASK_ID (could not parse tasks.md row)."
+    # STOP
   fi
-  STATE_JSON="${STATE_JSON:-$(cat "$STATE_FILE")}"
+done
+```
+
+Read operational state from the cached `STATE_JSON` (integrity already validated in
+Step 1.4; no re-validation here):
+
+```bash
+if [ -n "$STATE_JSON" ]; then
   TASK_STATUS=$(printf '%s' "$STATE_JSON" | jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"')
   TASK_BRANCH=$(printf '%s' "$STATE_JSON" | jq -r --arg id "$TASK_ID" '.[$id].branch // ""')
 else
@@ -222,19 +254,27 @@ AGENTS.md Task Lifecycle), compute whether all `TASK_DEPENDS` are `DONE`. This d
 block resume itself — the user may still want to inspect the workspace — but it constrains
 the Phase 5 options.
 
+Step 2.3 guarantees `TASK_DEPENDS` is non-empty (either `-` or a comma-separated list of
+`T-NNN`), so a bare `[ -z "$TASK_DEPENDS" ]` here would indicate a contract violation.
+
 ```bash
 BLOCKING_DEPS=""
-if [ "$TASK_DEPENDS" != "-" ] && [ -n "$TASK_DEPENDS" ]; then
-  IFS=',' read -ra DEPS <<< "$TASK_DEPENDS"
-  for DEP in "${DEPS[@]}"; do
-    DEP=$(echo "$DEP" | tr -d ' ')
-    [ -z "$DEP" ] && continue
-    DEP_STATUS=$(printf '%s' "${STATE_JSON:-{}}" | jq -r --arg id "$DEP" '.[$id].status // "Pendente"')
-    if [ "$DEP_STATUS" != "DONE" ]; then
-      BLOCKING_DEPS="${BLOCKING_DEPS}${DEP} (${DEP_STATUS}), "
-    fi
-  done
-  BLOCKING_DEPS=${BLOCKING_DEPS%, }
+if [ -z "$TASK_DEPENDS" ]; then
+  echo "ERROR: TASK_DEPENDS empty after Step 2.3 — contract violation."
+  # STOP
+fi
+if [ "$TASK_DEPENDS" != "-" ]; then
+  # Build a JSON array of dep IDs (trimmed). Single jq pass resolves all statuses.
+  DEPS_JSON=$(printf '%s' "$TASK_DEPENDS" | jq -Rc '
+    split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))
+  ')
+  BLOCKING_DEPS=$(printf '%s' "${STATE_JSON:-{}}" | jq -r --argjson deps "$DEPS_JSON" '
+    [ $deps[] as $d
+      | { id: $d, status: (.[$d].status // "Pendente") }
+      | select(.status != "DONE")
+      | "\(.id) (\(.status))"
+    ] | join(", ")
+  ')
 fi
 ```
 
@@ -252,7 +292,8 @@ Prefer the `branch` field from state.json. If empty, derive the expected branch 
 from Tipo + ID + Title per AGENTS.md Protocol: Branch Name Derivation.
 
 ```bash
-# F3/F11: real fallback implementation when state.json has no branch field
+# Sanitize title slug; the "2-4 words" guideline in AGENTS.md Protocol: Branch Name
+# Derivation is advisory, not enforced — the full sanitized slug is accepted.
 if [ -z "$TASK_BRANCH" ]; then
   case "$TASK_TIPO" in
     Feature)   TIPO_PREFIX="feat" ;;
@@ -289,7 +330,7 @@ fi
 
 ### Step 3.2: Look Up Worktree
 
-**Hard guard (HARD BLOCK — F1):** an empty or malformed `TASK_ID` would make the regex
+**Hard guard (HARD BLOCK):** an empty or malformed `TASK_ID` would make the regex
 `tolower(wt) ~ ""` match every worktree (the primary repo first), silently leading the
 user into implementing on `main`. Refuse before querying git.
 
@@ -299,20 +340,19 @@ if [ -z "$TASK_ID" ] || ! [[ "$TASK_ID" =~ ^T-[0-9]+$ ]]; then
   # STOP
 fi
 
-TASK_ID_LC=$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')
+# Use awk's literal index() (not regex ~) so a future relaxation of the TASK_ID format
+# (e.g., alphanumeric suffix) does not suddenly change semantics through regex metachars.
 WORKTREE_PATH=$(git worktree list --porcelain 2>/dev/null \
-  | awk -v id="$TASK_ID_LC" '
+  | awk -v id="$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')" '
       BEGIN { if (id == "") exit 1 }
       /^worktree / { wt=$2 }
-      /^branch /   { if (id != "" && (tolower(wt) ~ id || tolower($2) ~ id)) print wt }
+      /^branch /   { if (index(tolower(wt), id) > 0 || index(tolower($2), id) > 0) print wt }
     ' | head -1)
 
 if [ -z "$WORKTREE_PATH" ]; then
-  # Fallback: literal task-ID search. grep -F without a non-empty pattern would match
-  # everything, so guard explicitly.
-  if [ -n "$TASK_ID" ]; then
-    WORKTREE_PATH=$(git worktree list | grep -iF "$TASK_ID" | awk '{print $1}' | head -1)
-  fi
+  # Fallback: literal task-ID search. The Step 3.2 hard guard above already refused empty
+  # TASK_ID, so grep -F has a non-empty pattern here.
+  WORKTREE_PATH=$(git worktree list | grep -iF "$TASK_ID" | awk '{print $1}' | head -1)
 fi
 ```
 
@@ -322,7 +362,7 @@ fi
 
 2. **Worktree missing, branch exists locally** (`git rev-parse --verify "$TASK_BRANCH" >/dev/null 2>&1` succeeds):
 
-   **Hard guards (HARD BLOCK — F3) BEFORE attempting `git worktree add`:**
+   **Hard guards (HARD BLOCK) BEFORE attempting `git worktree add`:**
 
    ```bash
    PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
@@ -335,6 +375,8 @@ fi
      echo "ERROR: Empty repo name derived from '$PROJECT_ROOT'."
      # STOP
    fi
+   # Belt-and-suspenders: upstream guards (Step 2.1, Step 3.1, Step 3.2) already validated
+   # these, but we are at a filesystem-mutation boundary — refuse one more time.
    if [ -z "$TASK_ID" ] || [ -z "$TASK_BRANCH" ]; then
      echo "ERROR: TASK_ID or TASK_BRANCH empty before 'git worktree add'. Refusing."
      # STOP
@@ -343,17 +385,25 @@ fi
    SLUG=$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')
    SANITIZED_TITLE=$(echo "$TASK_TITLE" | tr '[:upper:]' '[:lower:]' \
      | tr -c 'a-z0-9-' '-' | tr -s '-' | sed 's/^-//;s/-$//' | cut -c1-40)
-   # F3: no trailing dash when sanitized title is empty
+   # No trailing dash when sanitized title is empty
    if [ -n "$SANITIZED_TITLE" ]; then
      WORKTREE_DIR="../${REPO_NAME}-${SLUG}-${SANITIZED_TITLE}"
    else
      WORKTREE_DIR="../${REPO_NAME}-${SLUG}"
    fi
-   git worktree add "$WORKTREE_DIR" "$TASK_BRANCH"
-   WORKTREE_PATH="$WORKTREE_DIR"
-   ```
 
-   Then `cd "$WORKTREE_PATH"`.
+   # HARD BLOCK on git worktree add failure (dir exists, branch checked out elsewhere, etc.)
+   if ! git worktree add "$WORKTREE_DIR" "$TASK_BRANCH"; then
+     echo "ERROR: 'git worktree add $WORKTREE_DIR $TASK_BRANCH' failed."
+     echo "       Possible causes: directory exists, branch checked out elsewhere, or local repo state."
+     # STOP
+   fi
+   WORKTREE_PATH="$WORKTREE_DIR"
+   if ! cd "$WORKTREE_PATH"; then
+     echo "ERROR: cd to $WORKTREE_PATH failed after successful worktree creation."
+     # STOP
+   fi
+   ```
 
 3. **Worktree missing AND branch missing:**
    - **If status is `Pendente` or has no state.json entry:** present via `AskUser`:
@@ -370,41 +420,52 @@ fi
 
    - **If status is in-progress but branch is missing (inconsistent state):**
 
-     Present via `AskUser` with three options. One of them is a **user-confirmed recovery**
-     that mutates state.json — the only place where resume writes state (F8 Option A).
+     Present via `AskUser` with two options. The first is a **user-confirmed recovery**
+     that mutates state.json — the only place where resume writes state. The second is
+     a plain abort. A "Re-run /optimus-plan" option without first resetting is **not
+     offered**: `/optimus-plan`'s anti-pulo rejects any status other than `Pendente` /
+     `Validando Spec`, so it would immediately STOP.
 
      ```
      Inconsistency: T-XXX has status <status> but branch <$TASK_BRANCH> does not exist.
      Possible recovery:
      ```
      Options:
-     - **Re-run /optimus-plan** — invoke the `optimus-plan` skill via the `Skill` tool to
-       recreate workspace. The delegate will detect and handle the missing branch.
-     - **Reset to Pendente (writes state.json)** — run a user-confirmed recovery that
-       removes the task entry from state.json so it appears as Pendente. This is the ONE
-       exception to resume's read-only contract; implemented as:
+     - **Reset to Pendente, then run /optimus-plan** — resume performs a user-confirmed
+       `jq del(.[$id])` on state.json (the ONE exception to resume's read-only contract),
+       clearing the task back to implicit Pendente. Then the agent invokes `optimus-plan`
+       via the `Skill` tool; plan's anti-pulo now accepts the task and will recreate the
+       workspace. Implemented as:
 
        ```bash
        STATE_FILE=".optimus/state.json"
-       if [ -f "$STATE_FILE" ] && jq empty "$STATE_FILE" 2>/dev/null; then
-         if jq --arg id "$TASK_ID" 'del(.[$id])' "$STATE_FILE" > "${STATE_FILE}.tmp"; then
-           if jq empty "${STATE_FILE}.tmp" 2>/dev/null; then
-             mv "${STATE_FILE}.tmp" "$STATE_FILE"
-             echo "state.json: removed entry for $TASK_ID (reset to Pendente)."
-           else
-             rm -f "${STATE_FILE}.tmp"
-             echo "ERROR: jq produced invalid JSON — state.json unchanged."
-             # STOP
-           fi
+       RESET_DONE=0
+       # STATE_JSON is already validated in Step 1.4, so STATE_FILE is guaranteed to exist
+       # and be parseable here (guarded upstream — no re-validation needed).
+       if jq --arg id "$TASK_ID" 'del(.[$id])' "$STATE_FILE" > "${STATE_FILE}.tmp"; then
+         if jq empty "${STATE_FILE}.tmp" 2>/dev/null; then
+           mv "${STATE_FILE}.tmp" "$STATE_FILE"
+           RESET_DONE=1
+           echo "state.json: removed entry for $TASK_ID (reset to Pendente)."
          else
            rm -f "${STATE_FILE}.tmp"
-           echo "ERROR: jq failed to update state.json."
+           echo "ERROR: jq produced invalid JSON — state.json unchanged."
            # STOP
          fi
+       else
+         rm -f "${STATE_FILE}.tmp"
+         echo "ERROR: jq failed to update state.json."
+         # STOP
+       fi
+       if [ "$RESET_DONE" -eq 1 ]; then
+         echo "T-$TASK_ID has been reset to Pendente. Invoking /optimus-plan via the Skill tool..."
+         # Then delegate to the optimus-plan skill via the Skill tool.
+       else
+         echo "T-$TASK_ID remains in its pre-existing state — no reset applied."
+         # STOP
        fi
        ```
 
-       After the reset, STOP with: `"T-$TASK_ID has been reset to Pendente. Run /optimus-plan T-$TASK_ID to restart the pipeline."`
      - **Abort** — **STOP** with: `"Inconsistency not resolved. Investigate via /optimus-tasks edit T-$TASK_ID before retrying."`
 
 ### Step 3.4: Dry-Run Short-Circuit
@@ -414,6 +475,9 @@ If the user invoked a dry-run (e.g., "dry-run resume T-XXX", "preview resume"):
 - Perform Steps 3.1–3.2 normally (read-only)
 - Do NOT run `git worktree add`
 - Do NOT `cd`
+- Do NOT run the Step 3.3 Case 3 "Reset to Pendente, then /optimus-plan" recovery — if
+  reached, STOP with: `"dry-run: no recovery attempted. Re-run without dry-run to repair state."`
+- Do NOT delegate to any other skill (no `Skill` tool invocation)
 - Proceed to Phase 4 and label the summary as **(dry-run, no changes applied)**
 - Skip Phase 5 entirely
 
@@ -421,7 +485,7 @@ If the user invoked a dry-run (e.g., "dry-run resume T-XXX", "preview resume"):
 
 ## Phase 4: Set Terminal Title and Report
 
-### Step 4.1: Set Terminal Title (F15)
+### Step 4.1: Set Terminal Title
 
 Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage label `RESUME`:
 
@@ -435,37 +499,53 @@ printf '\033]0;optimus: RESUME %s — %s\007' "$TASK_ID" "$TASK_TITLE" > /dev/tt
 printf '\033]0;\007' > /dev/tty 2>/dev/null || true
 ```
 
-### Step 4.2: Collect Worktree Telemetry (F12, F13, F14, F10)
+### Step 4.2: Collect Worktree Telemetry
 
 With `cd` into the worktree already done, gather read-only signals the user will want
 to see at a glance. All commands are silent-on-failure so a new/unusual repo layout
 degrades gracefully rather than blocking the summary.
 
+All telemetry vars are pre-initialized to stable defaults OUTSIDE the conditionals so
+consumers never touch an unset variable under `set -u`.
+
 ```bash
-# F12: git status of the worktree
+# Pre-initialize all telemetry vars (consistent convention)
+GIT_UNCOMMITTED=0
+GIT_UNPUSHED=-1           # -1 sentinel: numeric-safe for arithmetic, "unknown" for humans
+GIT_BEHIND=-1
+GIT_UPSTREAM_OK=0         # 0 = no upstream; 1 = upstream available
+SESSION_INFO=""
+STATS_INFO=""
+PR_INFO=""
+PR_STATE="UNKNOWN"        # Sentinel for "neither NONE nor a concrete gh state"
+
+# Git status of the worktree
 GIT_UNCOMMITTED=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')
 if git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
+  GIT_UPSTREAM_OK=1
   GIT_UNPUSHED=$(git log @{u}..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')
-  GIT_BEHIND=$(git rev-list HEAD..@{u} --count 2>/dev/null || echo 0)
-else
-  GIT_UNPUSHED="unknown (no upstream)"
-  GIT_BEHIND="unknown"
+  GIT_BEHIND=$(git rev-list HEAD..@{u} --count 2>/dev/null || echo -1)
 fi
 
-# F13: session file for this task (crash-recovery data from a stage skill)
+# Session file for this task (crash-recovery data from a stage skill)
 SESSION_FILE=".optimus/sessions/session-${TASK_ID}.json"
 if [ -f "$SESSION_FILE" ] && jq empty "$SESSION_FILE" 2>/dev/null; then
   SESSION_INFO=$(jq -r '"stage=\(.stage // "?"), phase=\(.phase // "?"), round=\(.convergence_round // 0), updated=\(.updated_at // "?")"' "$SESSION_FILE")
-else
-  SESSION_INFO=""
 fi
 
-# F14: stats.json churn signal
+# Stats.json churn signal — single jq pass for both counters + numeric-safe coercion
 STATS_FILE=".optimus/stats.json"
-STATS_INFO=""
-if [ -f "$STATS_FILE" ] && jq empty "$STATS_FILE" 2>/dev/null; then
-  PLAN_RUNS=$(jq -r --arg id "$TASK_ID" '.[$id].plan_runs // 0' "$STATS_FILE")
-  REVIEW_RUNS=$(jq -r --arg id "$TASK_ID" '.[$id].review_runs // 0' "$STATS_FILE")
+PLAN_RUNS=0
+REVIEW_RUNS=0
+if [ -f "$STATS_FILE" ]; then
+  STATS_PAIR=$(jq -r --arg id "$TASK_ID" '
+    "\((.[$id].plan_runs // 0) | tonumber? // 0 | floor) \((.[$id].review_runs // 0) | tonumber? // 0 | floor)"
+  ' "$STATS_FILE" 2>/dev/null)
+  if [ -n "$STATS_PAIR" ]; then
+    read -r PLAN_RUNS REVIEW_RUNS <<< "$STATS_PAIR"
+  fi
+  [[ "$PLAN_RUNS"   =~ ^[0-9]+$ ]] || PLAN_RUNS=0
+  [[ "$REVIEW_RUNS" =~ ^[0-9]+$ ]] || REVIEW_RUNS=0
   if [ "$PLAN_RUNS" -ge 2 ] || [ "$REVIEW_RUNS" -ge 2 ]; then
     STATS_INFO="plan_runs=${PLAN_RUNS}, review_runs=${REVIEW_RUNS}"
     if [ "$PLAN_RUNS" -ge 3 ] || [ "$REVIEW_RUNS" -ge 3 ]; then
@@ -474,15 +554,29 @@ if [ -f "$STATS_FILE" ] && jq empty "$STATS_FILE" 2>/dev/null; then
   fi
 fi
 
-# F10: PR state for the task branch
-PR_INFO=""
+# PR state for the task branch — three-state result:
+#   NONE    = gh confirmed no PR exists
+#   OPEN / CLOSED / MERGED = concrete gh state
+#   UNKNOWN = gh unavailable, unauthenticated, or transient error (network/rate-limit)
+# UNKNOWN must suppress PR-based recommendations in Step 4.4.
 if command -v gh >/dev/null 2>&1; then
-  PR_JSON=$(gh pr view "$TASK_BRANCH" --json number,state,title,url 2>/dev/null)
-  if [ -n "$PR_JSON" ]; then
-    PR_INFO=$(printf '%s' "$PR_JSON" | jq -r '"#\(.number) \(.state) — \(.title)"')
-    PR_STATE=$(printf '%s' "$PR_JSON" | jq -r '.state')
+  if gh auth status >/dev/null 2>&1; then
+    if PR_JSON=$(gh pr view "$TASK_BRANCH" --json number,state,title,url 2>/dev/null); then
+      if [ -n "$PR_JSON" ]; then
+        # Single jq pass extracting both state and summary line
+        PR_DATA=$(printf '%s' "$PR_JSON" | jq -r '
+          "\(.state // "UNKNOWN")\t#\(.number // "?") \(.state // "?") — \(.title // "?")"
+        ')
+        PR_STATE=$(printf '%s' "$PR_DATA" | awk -F'\t' '{print $1}')
+        PR_INFO=$(printf '%s' "$PR_DATA" | awk -F'\t' '{print $2}')
+      else
+        PR_STATE="NONE"
+      fi
+    else
+      PR_STATE="UNKNOWN (gh pr view failed — possibly network/rate-limit)"
+    fi
   else
-    PR_STATE="NONE"
+    PR_STATE="UNKNOWN (gh not authenticated)"
   fi
 else
   PR_STATE="UNKNOWN (gh not available)"
@@ -501,7 +595,7 @@ Emit a `<json-render>` block with the resume summary. Include:
 - Callout with the shell command the user must run in their own terminal to change cwd:
   `cd <absolute-worktree-path>`
 
-**F4: surface blocking deps.** If `BLOCKING_DEPS` is non-empty, add a warning Callout:
+**Surface blocking deps.** If `BLOCKING_DEPS` is non-empty, add a warning Callout:
 ```
 Next stage is BLOCKED — T-XXX depends on: <BLOCKING_DEPS>.
 Review these dependencies first via /optimus-report.
@@ -513,16 +607,19 @@ match. Subsequent tool calls in this Droid session will still use the internal c
 
 ### Step 4.4: Next-Stage Recommendation
 
-Map current status + PR state to the recommended next command (F10):
+Map current status + PR state to the recommended next command:
 
-| Current status     | PR state                 | Next recommended                               |
-|--------------------|--------------------------|------------------------------------------------|
-| `Validando Spec`   | any                      | `/optimus-build`                               |
-| `Em Andamento`     | any                      | `/optimus-review` (or re-run `/optimus-build`) |
-| `Validando Impl`   | OPEN                     | `/optimus-pr-check` (then `/optimus-done`)     |
-| `Validando Impl`   | MERGED / CLOSED / NONE   | `/optimus-done` (or re-run `/optimus-review`)  |
+| Current status     | PR state                      | Next recommended                               |
+|--------------------|-------------------------------|------------------------------------------------|
+| `Validando Spec`   | any                           | `/optimus-build`                               |
+| `Em Andamento`     | any                           | `/optimus-review` (or re-run `/optimus-build`) |
+| `Validando Impl`   | OPEN                          | `/optimus-pr-check` (then `/optimus-done`)     |
+| `Validando Impl`   | MERGED / CLOSED               | `/optimus-done` (or re-run `/optimus-review`)  |
+| `Validando Impl`   | NONE                          | `/optimus-done` (will require a PR — create one first) |
+| `Validando Impl`   | UNKNOWN (gh failure)          | **Suppressed** — show warning: "PR state could not be determined; inspect the branch manually before choosing /optimus-done or /optimus-pr-check." |
 
-Show the chosen recommendation in the summary.
+Show the chosen recommendation in the summary. When `PR_STATE` starts with `UNKNOWN`,
+the Phase 5 options must also omit any stage that depends on PR state (see Phase 5).
 
 ---
 
@@ -534,21 +631,28 @@ Ask the user via `AskUser`:
 Next step for T-XXX (<status>):
 ```
 
-**F4: Dependency-aware options.** If `BLOCKING_DEPS` is non-empty, the stage options are
+**Dependency-aware options.** If `BLOCKING_DEPS` is non-empty, the stage options are
 hidden — delegating would fail immediately on the dependency gate. Offer only:
 
 - **Run /optimus-report** — to review the blocking dependencies.
 - **Skip** — workspace is ready; user decides how to proceed.
 
-Otherwise (no blocking dependencies), options are chosen from status + PR state (F10):
+**PR-state suppressor.** If `PR_STATE` starts with `UNKNOWN` (gh failure: unavailable,
+unauthenticated, network/rate-limit), the `Validando Impl` options collapse to:
+
+- **Re-run /optimus-review** / **Skip**
+
+The user is asked to investigate gh before picking a stage that depends on PR state.
+
+Otherwise (no blocking deps, PR state known), options are chosen from status + PR state:
 
 - `Validando Spec`: **Run /optimus-build** / **Skip**
 - `Em Andamento`: **Run /optimus-review** / **Re-run /optimus-build** / **Skip**
 - `Validando Impl` + PR OPEN: **Run /optimus-pr-check** / **Run /optimus-done** / **Re-run /optimus-review** / **Skip**
 - `Validando Impl` + PR MERGED/CLOSED: **Run /optimus-done** / **Re-run /optimus-review** / **Skip**
-- `Validando Impl` + no PR: **Run /optimus-done** (will likely require a PR) / **Re-run /optimus-review** / **Skip**
+- `Validando Impl` + no PR (NONE): **Run /optimus-done** (will likely require a PR) / **Re-run /optimus-review** / **Skip**
 
-**F6: Skill tool contract (accurate wording).** If the user picks a stage, invoke the
+**Skill tool contract (accurate wording).** If the user picks a stage, invoke the
 corresponding skill via the `Skill` tool (e.g., `optimus-build`, `optimus-pr-check`,
 `optimus-done`). The `Skill` tool accepts only the skill name — it has no argument
 channel for `TASK_ID`. The delegate will locate the task from the conversation context

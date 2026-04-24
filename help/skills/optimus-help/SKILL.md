@@ -116,7 +116,7 @@ on their situation:
 
 ### "I closed the terminal, how do I resume the task I was working on?"
 - Use `/optimus-resume T-XXX` — sets up the worktree for T-XXX and offers to invoke the next stage
-- If you forgot which task, run `/optimus-resume` alone — it auto-detects if there is exactly one in-progress task
+- If you forgot which task, run `/optimus-resume` alone — it lists in-progress tasks (ordered by most recently updated) and asks you to pick, or uses the single in-progress task silently when there is only one
 
 ### "I want a quick status check"
 - Use `/optimus-report` with "quick status" — shows only current task and next-up

@@ -127,6 +127,42 @@ class TestDescriptionConsistency:
             + "\n".join(f"  - {v}" for v in violations)
         )
 
+    def test_readme_resume_row_matches_plugin_json(self):
+        """README.md resume row description must equal resume/plugin.json description.
+
+        README tends to drift silently because earlier versions of the test suite did not
+        compare it. This test catches the R4 class of regressions — a truncated description
+        that hides the user-confirmed state.json write exception.
+        """
+        readme = REPO_ROOT / "README.md"
+        resume_plugin = REPO_ROOT / "resume" / ".factory-plugin" / "plugin.json"
+        if not readme.exists() or not resume_plugin.exists():
+            return
+        pj = json.loads(resume_plugin.read_text())
+        pj_desc = pj["description"].strip()
+        # Strip the "Administrative: " prefix for the comparison — README uses it as a
+        # leading marker; the rest of the sentence must match verbatim.
+        if pj_desc.startswith("Administrative: "):
+            pj_rest = pj_desc
+        else:
+            pj_rest = "Administrative: " + pj_desc
+        # Find the resume row in README
+        lines = readme.read_text().splitlines()
+        resume_row = next(
+            (line for line in lines if line.startswith("| `resume`") or line.startswith("| resume |")),
+            None,
+        )
+        assert resume_row is not None, "README.md has no `resume` row"
+        # Extract the description column (between the first and third `|` separators)
+        parts = [p.strip() for p in resume_row.split("|")]
+        # parts: ['', '`resume`', '<description>', '`/optimus-resume`', '']
+        readme_desc = parts[2] if len(parts) >= 3 else ""
+        assert readme_desc == pj_rest, (
+            f"README.md resume description drift vs plugin.json:\n"
+            f"    README: {readme_desc}\n"
+            f"    plugin: {pj_rest}"
+        )
+
 
 # --- Stage rename: no stale 'check' references as stage name ---
 
@@ -849,4 +885,124 @@ class TestResumeAdmin:
         )
         assert "> /dev/tty 2>/dev/null" in body, (
             "resume must redirect the OSC sequence to /dev/tty"
+        )
+
+    # --- Round 2 regression tests ---
+
+    def test_resume_body_has_no_fcode_markers(self):
+        """No F# markers (F1, F3/F11, F18, etc.) should remain in the body — they are
+        non-durable references to historical finding indices. (R13)
+        """
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        # Accept "#<digits>" (PR numbers) but reject bare F<digits> markers
+        offending = []
+        for i, line in enumerate(body.splitlines(), 1):
+            for m in re.finditer(r"\bF\d+\b", line):
+                # Allow unit-qualified references that happen to start with F (none expected)
+                offending.append(f"line {i}: {line.strip()}")
+        assert offending == [], (
+            "resume body still contains F# markers (R13):\n"
+            + "\n".join(f"  - {v}" for v in offending[:20])
+        )
+
+    def test_resume_step_2_3_has_explicit_extraction(self):
+        """Step 2.3 must have bash extracting TASK_TITLE/TIPO/DEPENDS/VERSION with
+        non-empty assertions — prose-only is insufficient. (R1)
+        """
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "TASK_ROW=" in body, (
+            "resume Step 2.3 must capture the row into TASK_ROW via awk/grep"
+        )
+        assert re.search(r"awk -F'\|'.*print\s*\$3", body) or "print $3" in body, (
+            "resume Step 2.3 must extract columns 3/4/5/7 via awk -F'|'"
+        )
+        # Must loop over the captured vars and STOP if any is empty
+        assert "TASK_TITLE TASK_TIPO TASK_DEPENDS TASK_VERSION" in body or \
+               all(v in body for v in ["TASK_TITLE", "TASK_TIPO", "TASK_DEPENDS", "TASK_VERSION"]), (
+            "resume Step 2.3 must reference all four extracted vars"
+        )
+
+    def test_resume_git_worktree_add_checks_exit(self):
+        """`git worktree add` must be wrapped in `if !` to HARD BLOCK on failure. (R2)"""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert re.search(r"if\s+!\s+git worktree add", body), (
+            "resume must HARD BLOCK when `git worktree add` fails"
+        )
+        assert re.search(r"if\s+!\s+cd\s+\"\$WORKTREE_PATH\"", body), (
+            "resume must HARD BLOCK when `cd` after worktree creation fails"
+        )
+
+    def test_resume_three_state_pr(self):
+        """PR_STATE must distinguish NONE / concrete state / UNKNOWN. (R9)"""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "gh auth status" in body, (
+            "resume must probe gh auth before relying on gh pr view output"
+        )
+        assert "UNKNOWN" in body and "NONE" in body, (
+            "resume must differentiate UNKNOWN (gh failure) from NONE (no PR) in Phase 4"
+        )
+        # Phase 4.4 recommendation table must mention UNKNOWN suppression
+        assert "UNKNOWN" in body and "Suppressed" in body, (
+            "resume Phase 4.4 must suppress PR-dependent recommendations when PR_STATE is UNKNOWN"
+        )
+
+    def test_resume_case3_no_unsafe_plan_delegation(self):
+        """Step 3.3 Case 3 must NOT offer a bare 'Re-run /optimus-plan' option — plan's
+        anti-pulo rejects in-progress statuses. Use the chained "Reset then plan" option.
+        (R3)
+        """
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        # The in-progress Case 3 sub-case must use the chained option
+        assert "Reset to Pendente, then run /optimus-plan" in body, (
+            "resume Step 3.3 must offer 'Reset to Pendente, then run /optimus-plan'"
+        )
+        # And must not offer a bare "Re-run /optimus-plan" alongside
+        case3_section = body.split("Inconsistency: T-XXX has status")[-1]
+        case3_section = case3_section.split("**Abort**")[0] if "**Abort**" in case3_section else case3_section
+        assert "**Re-run /optimus-plan**" not in case3_section, (
+            "resume Step 3.3 Case 3 must NOT offer a bare 'Re-run /optimus-plan' option"
+        )
+
+    def test_resume_reset_tracks_success(self):
+        """Reset-to-Pendente must track RESET_DONE and print success only on actual write. (R8)"""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "RESET_DONE=0" in body, (
+            "resume must initialize RESET_DONE=0 before attempting the jq del"
+        )
+        assert "RESET_DONE=1" in body, (
+            "resume must set RESET_DONE=1 only after the mv succeeds"
+        )
+        assert 'RESET_DONE" -eq 1' in body or 'RESET_DONE" = 1' in body, (
+            "resume must gate the success message on RESET_DONE"
+        )
+
+    def test_resume_dry_run_forbids_reset(self):
+        """Step 3.4 must explicitly forbid the Reset-to-Pendente recovery in dry-run mode. (R25)"""
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert re.search(r"Do NOT run the Step 3.3 Case 3.*Reset", body), (
+            "resume Step 3.4 must forbid the Step 3.3 Case 3 Reset-to-Pendente recovery in dry-run mode"
+        )
+
+    def test_resume_whitelists_non_terminal_status(self):
+        """Auto-detect filter must whitelist concrete non-terminal statuses to avoid
+        treating null/missing status as in-progress. (R6)
+        """
+        content = _read_skill("resume")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        # Step 2.2 filter must use "or"-whitelist, not the negative "!="-blacklist
+        assert '.value.status == "Validando Spec"' in body, (
+            "resume Step 2.2 filter must whitelist Validando Spec explicitly"
+        )
+        assert '.value.status == "Em Andamento"' in body, (
+            "resume Step 2.2 filter must whitelist Em Andamento explicitly"
+        )
+        assert '.value.status == "Validando Impl"' in body, (
+            "resume Step 2.2 filter must whitelist Validando Impl explicitly"
         )
