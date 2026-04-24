@@ -20,26 +20,49 @@ REPO_ROOT = Path(__file__).parent.parent
 AGENTS_MD = REPO_ROOT / "AGENTS.md"
 MARKER_START = "<!-- INLINE-PROTOCOLS:START -->"
 MARKER_END = "<!-- INLINE-PROTOCOLS:END -->"
+# Max file size (5 MB) — prevents hanging on bloated or corrupted inputs.
+MAX_FILE_SIZE = 5 * 1024 * 1024
+
+# Module-level compiled patterns.
 HEADING_RE = re.compile(r'^(?:#{2,3})\s+(.+)$')
 PROTOCOL_RE = re.compile(r'AGENTS\.md Protocol:\s*([^\n"]+)')
 COMMON_PATTERN_RE = re.compile(r'AGENTS\.md\s*"Common Patterns\s*>\s*([^"]+)"')
 FINDING_PRESENTATION_RE = re.compile(r'AGENTS\.md\s*"Finding Presentation"')
+SENTENCE_BOUNDARY_RE = re.compile(r'\.\s+(?=[A-Z])')
+TRAILING_CONTEXT_RE = re.compile(r',\s+(?:with |followed )|;\s|\*\*')
+PAREN_SUFFIX_RE = re.compile(r'\s*\([^)]*\)\s*$')
+
 
 def parse_agents_md() -> dict[str, str]:
     """Parse AGENTS.md into named sections keyed by heading text."""
     if not AGENTS_MD.exists():
-        print(f"ERROR: {AGENTS_MD} not found. Run from repo root.")
+        print(f"ERROR: {AGENTS_MD} not found. Run from repo root.", file=sys.stderr)
+        sys.exit(1)
+    # Guard against bloated AGENTS.md.
+    if AGENTS_MD.stat().st_size > MAX_FILE_SIZE:
+        print(
+            f"ERROR: {AGENTS_MD} exceeds {MAX_FILE_SIZE} bytes — aborting.",
+            file=sys.stderr,
+        )
         sys.exit(1)
     lines = AGENTS_MD.read_text().splitlines()
-    sections = {}
+    sections: dict[str, str] = {}
     current_key = None
-    current_lines = []
+    current_lines: list[str] = []
 
     for line in lines:
         heading_match = HEADING_RE.match(line)
         if heading_match:
             title = heading_match.group(1).strip()
             if current_key:
+                # Warn on duplicate headings — last one wins, which can silently
+                # hide a misnamed protocol if two sections share a title.
+                if current_key in sections:
+                    print(
+                        f"  WARNING: Duplicate heading '{current_key}' — later "
+                        "definition wins",
+                        file=sys.stderr,
+                    )
                 sections[current_key] = "\n".join(current_lines)
             current_key = title
             current_lines = [line]
@@ -62,10 +85,13 @@ def extract_refs_from_content(content: str) -> set[str]:
         name = m.group(1).strip()
         # Split at sentence boundary (". " followed by uppercase letter) to remove
         # trailing sentences like ". Use stage=..." or ". Also load:"
-        name = re.split(r'\.\s+(?=[A-Z])', name)[0].strip()
+        name = SENTENCE_BOUNDARY_RE.split(name)[0].strip()
         # Clean remaining trailing context (comma clauses, bold markers, semicolons)
-        name = re.split(r',\s+(?:with |followed )|;\s|\*\*', name)[0].strip()
+        name = TRAILING_CONTEXT_RE.split(name)[0].strip()
         name = name.rstrip('.):')
+        # Skip empty names (can happen if a reference was e.g. "Protocol: ***").
+        if not name:
+            continue
         refs.add(f"Protocol: {name}")
 
     # Common pattern references: 'AGENTS.md "Common Patterns > X"'
@@ -87,7 +113,7 @@ def extract_refs_from_skill(skill_path: Path) -> set[str]:
 
 def _normalize_key(key: str) -> str:
     """Strip parenthetical suffixes like (HARD BLOCK), (optional) for matching."""
-    return re.sub(r'\s*\([^)]*\)\s*$', '', key).strip().lower()
+    return PAREN_SUFFIX_RE.sub('', key).strip().lower()
 
 
 def match_ref_to_section(ref: str, sections: dict[str, str]) -> str | None:
@@ -143,7 +169,9 @@ def inline_protocols() -> None:
     # for protocol references (e.g., State Management references state.json format)
     foundational = {}
     for key in ["File Location", "Valid Status Values (stored in state.json)",
-                 "Task Spec Resolution", "Format Validation"]:
+                 "Task Spec Resolution", "Format Validation",
+                 "Protocol: Resolve Tasks Git Scope",
+                 "Protocol: Migrate tasks.md to tasksDir"]:
         if key in sections:
             foundational[key] = sections[key]
 
@@ -156,9 +184,15 @@ def inline_protocols() -> None:
     for skill_path in skill_files:
         plugin_name = skill_path.parts[-4]  # e.g., "plan" from plan/skills/optimus-plan/SKILL.md
         try:
+            if skill_path.stat().st_size > MAX_FILE_SIZE:
+                print(
+                    f"  WARNING: {skill_path} exceeds {MAX_FILE_SIZE} bytes — skipping",
+                    file=sys.stderr,
+                )
+                continue
             raw_content = skill_path.read_text()
         except (OSError, UnicodeDecodeError) as e:
-            print(f"  ERROR: {skill_path}: {e} — skipping")
+            print(f"  ERROR: {skill_path}: {e} — skipping", file=sys.stderr)
             continue
 
         refs = extract_refs_from_content(raw_content)
@@ -198,6 +232,17 @@ def inline_protocols() -> None:
         if needs_format and "Format Validation" in foundational:
             extra["Format Validation"] = foundational["Format Validation"]
 
+        # tasks.md Validation depends on Resolve Tasks Git Scope (which defines
+        # TASKS_DIR/TASKS_FILE/TASKS_GIT_SCOPE/tasks_git). Always include the scope
+        # protocol and the migration protocol when validation is referenced.
+        if needs_format:
+            if "Protocol: Resolve Tasks Git Scope" in foundational and \
+               "Protocol: Resolve Tasks Git Scope" not in sections_to_inline:
+                extra["Protocol: Resolve Tasks Git Scope"] = foundational["Protocol: Resolve Tasks Git Scope"]
+            if "Protocol: Migrate tasks.md to tasksDir" in foundational and \
+               "Protocol: Migrate tasks.md to tasksDir" not in sections_to_inline:
+                extra["Protocol: Migrate tasks.md to tasksDir"] = foundational["Protocol: Migrate tasks.md to tasksDir"]
+
         content = strip_existing_inline(raw_content).rstrip() + "\n"
 
         inline_parts = []
@@ -225,14 +270,14 @@ def inline_protocols() -> None:
         try:
             skill_path.write_text(new_content)
         except OSError as e:
-            print(f"  ERROR: Failed to write {skill_path}: {e}")
+            print(f"  ERROR: Failed to write {skill_path}: {e}", file=sys.stderr)
             continue
 
         total_inlined += 1
         print(f"  {plugin_name}: inlined {len(sections_to_inline)} protocols + {len(extra)} foundational ({len(refs)} refs, {len(unmatched)} unmatched)")
         if unmatched:
             for u in unmatched:
-                print(f"    WARNING: unmatched ref: {u}")
+                print(f"    WARNING: unmatched ref: {u}", file=sys.stderr)
 
     print(f"\nDone. Inlined protocols into {total_inlined} SKILL.md files.")
 

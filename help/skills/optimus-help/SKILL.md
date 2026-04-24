@@ -44,7 +44,7 @@ terminal display when available, otherwise use markdown tables.
 
 | Skill | Command | When to Use |
 |-------|---------|-------------|
-| **import** | `/optimus-import` | Import Ring pre-dev artifacts into optimus format. Creates tasks.md with TaskSpec column. Re-runnable — only imports what's new. |
+| **import** | `/optimus-import` | Import Ring pre-dev artifacts into optimus format. Creates `<tasksDir>/tasks.md` (default: `docs/pre-dev/tasks.md`) with TaskSpec column. Re-runnable — only imports what's new. Supports tasksDir in same repo or a separate git repo. |
 | **report** | `/optimus-report` | Task status dashboard — shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only. |
 | **tasks** | `/optimus-tasks` | Creating, editing, removing, reordering, cancelling, or reopening tasks. Managing versions. Any administrative task management. |
 | **resolve** | `/optimus-resolve` | Resolving merge conflicts in `tasks.md` caused by parallel task execution across feature branches. |

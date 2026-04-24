@@ -4,6 +4,39 @@ Tracked improvements that are not yet prioritized for implementation.
 
 ---
 
+## I6: Additional Test Coverage for tasks.md Relocation Feature
+
+**Status:** Open
+**Affects:** scripts/test_skill_consistency.py
+**Priority:** Low
+
+### Context
+
+The tasks.md-to-tasksDir migration feature (commit ad0d8d7, hardened in subsequent
+review) has integration tests in `TestMigrationAndScopeIntegration` covering:
+scope detection (same-repo/separate-repo), non-git tasksDir rejection, dash-prefix
+rejection, path traversal, migration detection. Additional scenarios are identified
+as gaps:
+
+1. **End-to-end migration flow** — given a real legacy .optimus/tasks.md, run the
+   full migration bash and verify the final state (file location, git commits in
+   correct repos, gitignore updated).
+2. **Concurrent migration** — two shell processes running migration simultaneously
+   on the same project (expected: one succeeds, the other aborts cleanly).
+3. **Scale test** — tasks.md with 500+ rows; measure parsing time for `grep`/`awk`.
+4. **Special characters in task titles** — pipes, emojis, unicode — verify table
+   parsing does not break.
+5. **Migration rollback on partial failure** — inject failures at steps 2-5; verify
+   rollback code paths actually restore pre-migration state.
+
+### Why Not Now
+
+The current integration tests catch the most important regression risks (scope
+detection, security boundaries). The remaining scenarios are rare in practice;
+adding them requires simulating filesystem failures (harder to set up in CI).
+
+---
+
 ## I1: Optimize Convergence Loop Token Cost
 
 **Status:** Open (tradeoff accepted — correctness over cost)

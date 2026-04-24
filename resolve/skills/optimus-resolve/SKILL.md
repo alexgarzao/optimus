@@ -56,17 +56,23 @@ and cannot cause merge conflicts. This skill only resolves structural column con
 
 ## Phase 1: Detect and Parse Conflicts
 
-### Step 1.1: Verify Conflict Exists
+### Step 1.1: Resolve Paths and Verify Conflict Exists
+
+Execute AGENTS.md Protocol: Resolve Tasks Git Scope. This obtains `TASKS_FILE`,
+`TASKS_GIT_SCOPE`, `TASKS_GIT_REL`, and the `tasks_git` helper. In `separate-repo`
+scope, merge conflicts are resolved inside the tasks repo (not the project repo).
 
 Check if `tasks.md` has merge conflict markers:
 
 ```bash
-TASKS_FILE=".optimus/tasks.md"
+# TASKS_FILE was set by Protocol: Resolve Tasks Git Scope
 grep -c '<<<<<<<' "$TASKS_FILE" 2>/dev/null
 ```
 
 If no conflict markers found:
-- Check if a merge/rebase is in progress: `git status` (look for "You have unmerged paths")
+- Check if a merge/rebase is in progress in the correct repo:
+  - Same-repo: `git status` in project repo
+  - Separate-repo: `tasks_git status` in tasks repo
 - If no merge in progress → **STOP**: "No conflicts found in tasks.md. Nothing to resolve."
 - If merge in progress but tasks.md is not conflicted → **STOP**: "tasks.md is not conflicted. Use `git mergetool` for other files."
 
@@ -209,8 +215,10 @@ If validation fails, inform the user and offer to fix or abort.
 
 ### Step 4.3: Stage the File
 
+Use `tasks_git` so the file is staged in the correct repo (project or tasks repo):
+
 ```bash
-git add "$TASKS_FILE"
+tasks_git add "$TASKS_GIT_REL"
 ```
 
 ### Step 4.4: Inform Next Steps
@@ -245,3 +253,163 @@ Run `/optimus-report` to verify the dashboard looks correct.
   sides, always ask the user — do not guess
 - Validate the resolved file before staging — catch format errors before they propagate
 - This skill is read-then-write — it modifies ONLY tasks.md, never any other file
+
+<!-- INLINE-PROTOCOLS:START -->
+## Shared Protocols (from AGENTS.md)
+
+The following protocols are referenced by this skill. They are
+extracted from the Optimus AGENTS.md to make this plugin self-contained.
+
+### Protocol: Resolve Tasks Git Scope
+
+**Referenced by:** all stage agents (1-4), tasks, batch, resolve, import, resume, report, quick-report
+
+Resolves `TASKS_DIR` (Ring pre-dev root) and `TASKS_FILE` (`<tasksDir>/tasks.md`), then
+detects whether `tasksDir` lives in the same git repo as the project code or in a
+**separate** git repo. Exposes a `tasks_git` helper function so skills can run git
+commands on tasks.md uniformly regardless of scope.
+
+```bash
+# Step 1: Resolve tasksDir from config.json (if present) or fall back to default.
+CONFIG_FILE=".optimus/config.json"
+if [ -f "$CONFIG_FILE" ] && jq empty "$CONFIG_FILE" 2>/dev/null; then
+  TASKS_DIR=$(jq -r '.tasksDir // "docs/pre-dev"' "$CONFIG_FILE")
+else
+  TASKS_DIR="docs/pre-dev"
+fi
+# Reject "null" (jq -r prints literal "null" for JSON null) or empty string.
+case "$TASKS_DIR" in
+  ""|"null") TASKS_DIR="docs/pre-dev" ;;
+esac
+# Security: reject TASKS_DIR values starting with "-" (git option injection via
+# `git -C --exec-path=...` or similar). Trust boundary: config.json is now gitignored,
+# but a user could still receive a malicious config via Slack/email.
+case "$TASKS_DIR" in
+  -*)
+    echo "ERROR: tasksDir cannot start with '-' (security)." >&2
+    exit 1
+    ;;
+esac
+
+# Step 2: Derive TASKS_FILE.
+TASKS_FILE="${TASKS_DIR}/tasks.md"
+
+# Step 3: Detect git scope.
+PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$PROJECT_ROOT" ]; then
+  echo "ERROR: Not inside a git repository — optimus requires git." >&2
+  exit 1
+fi
+
+TASKS_REPO_ROOT=""
+if [ -d "$TASKS_DIR" ]; then
+  TASKS_REPO_ROOT=$(git -C "$TASKS_DIR" rev-parse --show-toplevel 2>/dev/null || echo "")
+fi
+
+if [ -z "$TASKS_REPO_ROOT" ]; then
+  if [ -d "$TASKS_DIR" ]; then
+    # Directory exists but is NOT inside a git repository — this is a
+    # misconfiguration. Without this guard, operations would silently target
+    # the project repo and fail confusingly.
+    echo "ERROR: tasksDir '$TASKS_DIR' exists but is not inside a git repository." >&2
+    echo "Options:" >&2
+    echo "  1. Initialize git in tasksDir: git -C \"$TASKS_DIR\" init" >&2
+    echo "  2. Point tasksDir to an existing git repo." >&2
+    echo "  3. Remove tasksDir to let optimus create it inside the project repo." >&2
+    exit 1
+  fi
+  # Fresh project: tasksDir does not exist yet — assume same-repo.
+  # Skills that create tasks.md will mkdir -p "$TASKS_DIR" first.
+  TASKS_GIT_SCOPE="same-repo"
+elif [ "$TASKS_REPO_ROOT" = "$PROJECT_ROOT" ]; then
+  TASKS_GIT_SCOPE="same-repo"
+else
+  TASKS_GIT_SCOPE="separate-repo"
+fi
+
+# Step 4: Compute the path to pass to git commands.
+# In same-repo, git runs from project root and we pass TASKS_FILE as is.
+# In separate-repo, git runs with -C "$TASKS_DIR" so paths are relative to TASKS_DIR.
+if [ "$TASKS_GIT_SCOPE" = "separate-repo" ]; then
+  # python3 is REQUIRED in separate-repo mode to compute the path from the tasks
+  # repo root. A naive "tasks.md" fallback would be wrong when TASKS_DIR is a
+  # subdir of the tasks repo (e.g., `tasks-repo/project-alfa/`), because
+  # `git show origin/main:tasks.md` resolves from repo root, not CWD.
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "ERROR: python3 is required for separate-repo mode (path computation)." >&2
+    echo "Install python3 or point tasksDir inside the project repo." >&2
+    exit 1
+  fi
+  TASKS_GIT_REL=$(python3 -c "import os,sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))" \
+    "$TASKS_FILE" "$TASKS_REPO_ROOT" 2>/dev/null)
+  if [ -z "$TASKS_GIT_REL" ]; then
+    echo "ERROR: Failed to compute TASKS_GIT_REL for '$TASKS_FILE' relative to '$TASKS_REPO_ROOT'." >&2
+    exit 1
+  fi
+else
+  TASKS_GIT_REL="$TASKS_FILE"
+fi
+
+# Step 5: Resolve the tasks repo's default branch once (used by tasks_git
+# operations that reference origin/$DEFAULT). This is DIFFERENT from
+# $DEFAULT_BRANCH (the project repo's default).
+if [ "$TASKS_GIT_SCOPE" = "separate-repo" ]; then
+  TASKS_DEFAULT_BRANCH=$(git -C "$TASKS_DIR" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+  if [ -z "$TASKS_DEFAULT_BRANCH" ]; then
+    # Fallback: check origin/main vs origin/master existence (deterministic,
+    # unlike `git branch --list main master` which can return either arbitrarily).
+    if git -C "$TASKS_DIR" show-ref --verify refs/remotes/origin/main >/dev/null 2>&1; then
+      TASKS_DEFAULT_BRANCH="main"
+    elif git -C "$TASKS_DIR" show-ref --verify refs/remotes/origin/master >/dev/null 2>&1; then
+      TASKS_DEFAULT_BRANCH="master"
+    fi
+  fi
+else
+  TASKS_DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+  if [ -z "$TASKS_DEFAULT_BRANCH" ]; then
+    if git show-ref --verify refs/remotes/origin/main >/dev/null 2>&1; then
+      TASKS_DEFAULT_BRANCH="main"
+    elif git show-ref --verify refs/remotes/origin/master >/dev/null 2>&1; then
+      TASKS_DEFAULT_BRANCH="master"
+    fi
+  fi
+fi
+
+# Security: reject malformed branch names (prevents injection via
+# `git diff origin/<weird>`).
+if [ -n "$TASKS_DEFAULT_BRANCH" ] && ! [[ "$TASKS_DEFAULT_BRANCH" =~ ^[a-zA-Z0-9._/-]+$ ]]; then
+  echo "ERROR: Invalid TASKS_DEFAULT_BRANCH format: '$TASKS_DEFAULT_BRANCH'" >&2
+  exit 1
+fi
+
+# Step 6: Define the tasks_git helper.
+tasks_git() {
+  if [ "$TASKS_GIT_SCOPE" = "separate-repo" ]; then
+    git -C "$TASKS_DIR" "$@"
+  else
+    git "$@"
+  fi
+}
+```
+
+**Usage:**
+```bash
+tasks_git add "$TASKS_GIT_REL"
+tasks_git commit -F "$COMMIT_MSG_FILE"
+# IMPORTANT: use $TASKS_DEFAULT_BRANCH (tasks repo default) — NOT $DEFAULT_BRANCH
+# (project repo default). They are the same in same-repo mode but may differ in
+# separate-repo mode (e.g., tasks repo is `master`, project repo is `main`).
+tasks_git diff "origin/$TASKS_DEFAULT_BRANCH" -- "$TASKS_GIT_REL"
+tasks_git show "origin/$TASKS_DEFAULT_BRANCH:$TASKS_GIT_REL"
+```
+
+**Rule:** Skills MUST use `tasks_git` (never raw `git`) when operating on `$TASKS_FILE`.
+Raw `git` on `$TASKS_FILE` breaks in separate-repo mode.
+
+**Rule:** When committing in separate-repo mode, commits land in the tasks repo (not the
+project repo). `tasks_git push` pushes the tasks repo. The project repo is unaffected.
+
+Skills reference this as: "Resolve tasks git scope — see AGENTS.md Protocol: Resolve Tasks Git Scope."
+
+
+<!-- INLINE-PROTOCOLS:END -->

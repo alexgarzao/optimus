@@ -270,7 +270,8 @@ class TestIdempotency:
 
         try:
             ip.inline_protocols()
-            output = capsys.readouterr().out
+            captured = capsys.readouterr()
+            output = captured.out + captured.err
             assert "ERROR" in output and "skipping" in output.lower()
         finally:
             skill.chmod(0o644)
@@ -337,7 +338,8 @@ class TestCriticalPaths:
 
         try:
             ip.inline_protocols()
-            output = capsys.readouterr().out
+            captured = capsys.readouterr()
+            output = captured.out + captured.err
             assert "ERROR" in output or "Failed to write" in output
         finally:
             skill.chmod(0o644)
@@ -413,5 +415,6 @@ class TestEdgeCases:
         skill.write_bytes(b'\xff\xfe see AGENTS.md Protocol: Z.\n')
 
         ip.inline_protocols()
-        output = capsys.readouterr().out
+        captured = capsys.readouterr()
+        output = captured.out + captured.err
         assert "ERROR" in output and "skipping" in output.lower()

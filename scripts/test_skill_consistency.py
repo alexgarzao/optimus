@@ -3,7 +3,11 @@
 
 import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).parent.parent
 AGENTS_MD = REPO_ROOT / "AGENTS.md"
@@ -105,22 +109,31 @@ class TestDescriptionConsistency:
     """marketplace.json and plugin.json descriptions must match for each plugin."""
 
     def test_marketplace_matches_plugin_json(self):
-        """Each plugin's marketplace.json description must equal its plugin.json description."""
+        """Each plugin's marketplace.json description must equal its plugin.json description.
+
+        Uses `.get()` with defaults so malformed entries produce readable assertion
+        failures instead of opaque KeyError tracebacks.
+        """
         if not MARKETPLACE_JSON.exists():
             return
         marketplace = json.loads(MARKETPLACE_JSON.read_text())
         violations = []
         for plugin in marketplace.get("plugins", []):
-            name = plugin["name"]
+            name = plugin.get("name")
+            if not name:
+                violations.append(f"marketplace entry missing 'name': {plugin}")
+                continue
             plugin_json = REPO_ROOT / name / ".factory-plugin" / "plugin.json"
             if not plugin_json.exists():
                 continue
             pj = json.loads(plugin_json.read_text())
-            if plugin["description"] != pj["description"]:
+            mk_desc = plugin.get("description", "")
+            pj_desc = pj.get("description", "")
+            if mk_desc != pj_desc:
                 violations.append(
                     f"{name}: marketplace.json != plugin.json\n"
-                    f"    marketplace: {plugin['description']}\n"
-                    f"    plugin.json: {pj['description']}"
+                    f"    marketplace: {mk_desc}\n"
+                    f"    plugin.json: {pj_desc}"
                 )
         assert violations == [], (
             "Description mismatch between marketplace.json and plugin.json:\n"
@@ -642,6 +655,177 @@ class TestTasksFormatSpec:
                 f"AGENTS.md missing column definition for '{col}'"
 
 
+# --- tasks.md location redesign: tasks.md lives in tasksDir (not in .optimus/) ---
+
+SKILLS_THAT_TOUCH_TASKS = [
+    "plan", "build", "review", "done", "batch", "resume",
+    "report", "quick-report", "resolve", "tasks", "import",
+]
+
+LEGACY_TASKS_PATH_RE = re.compile(r'\.optimus/tasks\.md')
+TASKS_GIT_HELPER_RE = re.compile(r'tasks_git\s*\(\)')
+
+
+class TestTasksDirLocation:
+    """tasks.md lives at <tasksDir>/tasks.md (not .optimus/tasks.md).
+    config.json is gitignored (not versioned).
+    """
+
+    def test_agents_md_no_legacy_hardcoded_tasks_file(self):
+        """AGENTS.md must not reference `.optimus/tasks.md` as the live location.
+        The only allowed references are inside Protocol: Migrate tasks.md to tasksDir
+        (where LEGACY_FILE=".optimus/tasks.md" is the source to migrate from).
+
+        Uses explicit protocol-end marker ("Skills reference this as: ...") to track
+        section boundaries rather than the fragile line-prefix heuristic.
+        """
+        content = AGENTS_MD.read_text()
+        violations = []
+        in_migration_section = False
+        for i, line in enumerate(content.splitlines(), 1):
+            if line.startswith("### Protocol: Migrate tasks.md to tasksDir"):
+                in_migration_section = True
+                continue
+            # Explicit end marker: every protocol closes with
+            # 'Skills reference this as: "... AGENTS.md Protocol: X."'
+            if in_migration_section and line.startswith("Skills reference this as:"):
+                in_migration_section = False
+                continue
+            # Also close on next top-level heading
+            if line.startswith("## ") or (line.startswith("### ") and "Migrate tasks.md to tasksDir" not in line):
+                if in_migration_section:
+                    in_migration_section = False
+            if LEGACY_TASKS_PATH_RE.search(line) and not in_migration_section:
+                violations.append(f"AGENTS.md:{i}: {line.strip()}")
+        assert violations == [], (
+            "AGENTS.md still references `.optimus/tasks.md` outside migration section:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    def test_skills_no_legacy_tasks_file_as_live_path(self):
+        """SKILL.md bodies must not assume `.optimus/tasks.md` as the current location.
+        Mentions are allowed only as legacy/migration context (e.g., 'if a legacy
+        .optimus/tasks.md exists'). Uses a 3-line context window to detect legacy
+        keywords split across lines."""
+        violations = []
+        for skill in SKILLS_THAT_TOUCH_TASKS:
+            paths = list(REPO_ROOT.glob(f"{skill}/skills/*/SKILL.md"))
+            if not paths:
+                continue
+            content = paths[0].read_text()
+            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            lines = body.splitlines()
+            for i, line in enumerate(lines, 1):
+                if not LEGACY_TASKS_PATH_RE.search(line):
+                    continue
+                # Check a 3-line context window (±1 line) for legacy/migration keywords
+                start = max(0, i - 2)
+                end = min(len(lines), i + 1)
+                context = " ".join(lines[start:end]).lower()
+                is_legacy_context = any(k in context for k in [
+                    "legacy", "migrate", "migration", "will migrate", "migrat"
+                ])
+                if not is_legacy_context:
+                    violations.append(f"{skill}/SKILL.md:{i}: {line.strip()}")
+        assert violations == [], (
+            "SKILL bodies use `.optimus/tasks.md` outside legacy/migration context:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    def test_agents_md_has_resolve_tasks_git_scope_protocol(self):
+        """AGENTS.md must define Protocol: Resolve Tasks Git Scope."""
+        content = AGENTS_MD.read_text()
+        assert "### Protocol: Resolve Tasks Git Scope" in content, \
+            "AGENTS.md missing Protocol: Resolve Tasks Git Scope"
+        assert "tasks_git()" in content, \
+            "AGENTS.md missing tasks_git() helper definition"
+        assert "TASKS_GIT_SCOPE" in content, \
+            "AGENTS.md missing TASKS_GIT_SCOPE variable"
+        assert '"same-repo"' in content, \
+            "AGENTS.md missing same-repo scope case"
+        assert '"separate-repo"' in content, \
+            "AGENTS.md missing separate-repo scope case"
+
+    def test_agents_md_has_migration_protocol(self):
+        """AGENTS.md must define Protocol: Migrate tasks.md to tasksDir."""
+        content = AGENTS_MD.read_text()
+        assert "### Protocol: Migrate tasks.md to tasksDir" in content, \
+            "AGENTS.md missing Protocol: Migrate tasks.md to tasksDir"
+        assert "LEGACY_FILE=\".optimus/tasks.md\"" in content, \
+            "AGENTS.md migration protocol missing LEGACY_FILE"
+
+    def test_config_json_is_gitignored(self):
+        """Protocol: Initialize .optimus Directory must include config.json in the
+        gitignore block."""
+        content = AGENTS_MD.read_text()
+        init_section = re.search(
+            r"### Protocol: Initialize \.optimus Directory(.*?)###\s+Protocol:",
+            content, re.DOTALL,
+        )
+        assert init_section, "Could not find Protocol: Initialize .optimus Directory"
+        block = init_section.group(1)
+        assert ".optimus/config.json" in block, \
+            "Protocol: Initialize .optimus Directory must gitignore .optimus/config.json"
+
+    def test_all_tasks_touching_skills_resolve_scope(self):
+        """Every skill that reads or writes tasks.md must reference Protocol:
+        Resolve Tasks Git Scope (directly or via tasks.md Validation)."""
+        missing = []
+        for skill in SKILLS_THAT_TOUCH_TASKS:
+            paths = list(REPO_ROOT.glob(f"{skill}/skills/*/SKILL.md"))
+            if not paths:
+                continue
+            content = paths[0].read_text()
+            # The inlined block OR body should contain the protocol; check whole file.
+            if "Protocol: Resolve Tasks Git Scope" not in content:
+                missing.append(skill)
+        assert missing == [], (
+            "Skills missing Resolve Tasks Git Scope reference:\n"
+            + "\n".join(f"  - {v}" for v in missing)
+        )
+
+    def test_tasks_git_helper_inlined_in_stage_skills(self):
+        """Stage skills (plan, build, review, done) and batch/resolve/tasks MUST
+        have the tasks_git() helper inlined so they can run git commands uniformly."""
+        required = ["plan", "build", "review", "done", "batch", "resolve", "tasks", "resume"]
+        missing = []
+        for skill in required:
+            paths = list(REPO_ROOT.glob(f"{skill}/skills/*/SKILL.md"))
+            if not paths:
+                continue
+            content = paths[0].read_text()
+            if not TASKS_GIT_HELPER_RE.search(content):
+                missing.append(skill)
+        assert missing == [], (
+            "Skills missing tasks_git() helper definition:\n"
+            + "\n".join(f"  - {v}" for v in missing)
+        )
+
+    def test_no_raw_git_add_of_tasks_file_in_bodies(self):
+        """Skills bodies must not use raw `git <verb> "$TASKS_FILE"` —
+        use `tasks_git <verb> "$TASKS_GIT_REL"` instead (for separate-repo support).
+        Verb list covers state-mutating and read operations that would break in
+        separate-repo mode: add/commit/diff/show/rm/mv/push/stash/reset/checkout/log/blame.
+        """
+        pattern = re.compile(
+            r'(?<!tasks_)\bgit\s+(add|commit|diff|show|rm|mv|push|stash|reset|checkout|log|blame)\s+.*\$TASKS_FILE'
+        )
+        violations = []
+        for skill in SKILLS_THAT_TOUCH_TASKS:
+            paths = list(REPO_ROOT.glob(f"{skill}/skills/*/SKILL.md"))
+            if not paths:
+                continue
+            content = paths[0].read_text()
+            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            for i, line in enumerate(body.splitlines(), 1):
+                if pattern.search(line):
+                    violations.append(f"{skill}/SKILL.md:{i}: {line.strip()}")
+        assert violations == [], (
+            "Skill bodies use raw `git <op> $TASKS_FILE` — must use `tasks_git`:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+
 # --- done redesign: 3 hard gates, no local lint/test ---
 
 
@@ -1022,3 +1206,230 @@ class TestResumeAdmin:
         assert '.value.status == "Validando Impl"' in body, (
             "resume Step 2.2 filter must whitelist Validando Impl explicitly"
         )
+
+
+# --- Integration tests for the tasks.md relocation + separate-repo feature ---
+
+
+def _has_git():
+    return shutil.which("git") is not None
+
+
+def _run(cmd, cwd=None, env=None):
+    """Run a command, capturing both stdout and stderr. Returns (rc, out, err)."""
+    result = subprocess.run(
+        cmd, cwd=cwd, env=env,
+        capture_output=True, text=True, check=False,
+    )
+    return result.returncode, result.stdout, result.stderr
+
+
+def _init_repo(path: Path):
+    """Initialize a minimal git repo at path with user configured."""
+    path.mkdir(parents=True, exist_ok=True)
+    _run(["git", "init", "--initial-branch=main"], cwd=path)
+    _run(["git", "config", "user.email", "test@example.com"], cwd=path)
+    _run(["git", "config", "user.name", "Test"], cwd=path)
+    _run(["git", "config", "commit.gpgsign", "false"], cwd=path)
+
+
+def _extract_protocol_bash(section_title: str) -> str:
+    """Extract the first bash code block under a protocol section in AGENTS.md."""
+    content = AGENTS_MD.read_text()
+    # Find the section
+    marker = f"### {section_title}"
+    idx = content.find(marker)
+    if idx == -1:
+        raise RuntimeError(f"Section '{section_title}' not found in AGENTS.md")
+    # Find next `### ` (next section) or end of content
+    next_idx = content.find("\n### ", idx + len(marker))
+    section = content[idx:next_idx] if next_idx != -1 else content[idx:]
+    # Extract first ```bash ... ``` block
+    bash_start = section.find("```bash\n")
+    if bash_start == -1:
+        raise RuntimeError(f"No bash block under '{section_title}'")
+    bash_end = section.find("\n```", bash_start + len("```bash\n"))
+    return section[bash_start + len("```bash\n"):bash_end]
+
+
+@pytest.mark.skipif(not _has_git(), reason="git not available")
+class TestMigrationAndScopeIntegration:
+    """Integration tests for the tasks.md relocation + separate-repo support.
+
+    These tests execute the bash blocks from AGENTS.md against real tmp git repos
+    to verify the protocols actually work — not just that their documentation exists.
+    """
+
+    def test_scope_resolution_same_repo(self, tmp_path: Path):
+        """Resolve Tasks Git Scope should detect same-repo when tasksDir is inside project."""
+        _init_repo(tmp_path)
+        (tmp_path / "docs" / "pre-dev").mkdir(parents=True, exist_ok=True)
+        bash = _extract_protocol_bash("Protocol: Resolve Tasks Git Scope")
+        # Run the bash and check the exported variables.
+        probe = f'{bash}\necho "SCOPE=$TASKS_GIT_SCOPE"\necho "DIR=$TASKS_DIR"\necho "FILE=$TASKS_FILE"\n'
+        rc, out, err = _run(["bash", "-c", probe], cwd=tmp_path)
+        assert rc == 0, f"Bash failed: {err}"
+        assert "SCOPE=same-repo" in out, f"Expected same-repo scope, got: {out}"
+        assert "DIR=docs/pre-dev" in out
+        assert "FILE=docs/pre-dev/tasks.md" in out
+
+    def test_scope_resolution_separate_repo(self, tmp_path: Path):
+        """Resolve Tasks Git Scope should detect separate-repo when tasksDir is in a different repo."""
+        project = tmp_path / "project"
+        tasks_repo = tmp_path / "tasks-repo"
+        _init_repo(project)
+        _init_repo(tasks_repo)
+        # Point tasksDir from project config to the tasks repo.
+        (project / ".optimus").mkdir()
+        config = project / ".optimus" / "config.json"
+        config.write_text(f'{{"tasksDir": "{tasks_repo}"}}\n')
+        bash = _extract_protocol_bash("Protocol: Resolve Tasks Git Scope")
+        probe = f'{bash}\necho "SCOPE=$TASKS_GIT_SCOPE"\necho "REL=$TASKS_GIT_REL"\n'
+        rc, out, err = _run(["bash", "-c", probe], cwd=project)
+        assert rc == 0, f"Bash failed: {err}\n\n{out}"
+        assert "SCOPE=separate-repo" in out
+        # Path relative to tasks repo root → just "tasks.md"
+        assert "REL=tasks.md" in out
+
+    def test_scope_resolution_rejects_dash_prefix(self, tmp_path: Path):
+        """Resolve Tasks Git Scope must reject TASKS_DIR starting with '-' (git injection)."""
+        _init_repo(tmp_path)
+        (tmp_path / ".optimus").mkdir()
+        config = tmp_path / ".optimus" / "config.json"
+        config.write_text('{"tasksDir": "--exec-path=/tmp/evil"}\n')
+        bash = _extract_protocol_bash("Protocol: Resolve Tasks Git Scope")
+        rc, out, err = _run(["bash", "-c", bash], cwd=tmp_path)
+        assert rc != 0, "Should reject dash-prefixed tasksDir"
+        assert "security" in err.lower() or "start with" in err.lower()
+
+    def test_scope_resolution_rejects_non_git_dir(self, tmp_path: Path):
+        """Resolve Tasks Git Scope must reject tasksDir that exists but is not a git repo.
+
+        The non-git directory must be truly outside any git repo — otherwise `git -C`
+        walks upward and finds the parent. We create the project repo in a subdir and
+        the non-git dir as a sibling.
+        """
+        project = tmp_path / "project"
+        _init_repo(project)
+        # non-git-dir is a sibling of project, at tmp_path level (not inside any git repo).
+        non_git = tmp_path / "not-a-git-repo"
+        non_git.mkdir()
+        (project / ".optimus").mkdir()
+        config = project / ".optimus" / "config.json"
+        config.write_text(f'{{"tasksDir": "{non_git}"}}\n')
+        bash = _extract_protocol_bash("Protocol: Resolve Tasks Git Scope")
+        rc, out, err = _run(["bash", "-c", bash], cwd=project)
+        assert rc != 0, f"Should reject non-git tasksDir (out={out}, err={err})"
+        assert "not inside a git repository" in err.lower()
+
+    def test_taskspec_rejects_path_traversal(self, tmp_path: Path):
+        """TaskSpec Resolution must reject ../../../etc/passwd escape attempts."""
+        _init_repo(tmp_path)
+        tasks_dir = tmp_path / "docs" / "pre-dev"
+        tasks_dir.mkdir(parents=True)
+        # Malicious TaskSpec
+        probe = f'''
+TASKS_DIR="{tasks_dir}"
+TASK_SPEC="../../../../etc/passwd"
+TASKS_DIR_ABS=$(cd "$TASKS_DIR" && pwd)
+RESOLVED_PATH=$(cd "$TASKS_DIR_ABS" && realpath -m "$TASK_SPEC" 2>/dev/null \
+  || python3 -c "import os,sys; print(os.path.realpath(os.path.join(sys.argv[1], sys.argv[2])))" "$TASKS_DIR_ABS" "$TASK_SPEC" 2>/dev/null)
+case "$RESOLVED_PATH" in
+  "$TASKS_DIR_ABS"/*) echo "ALLOWED" ;;
+  *) echo "BLOCKED" ;;
+esac
+'''
+        rc, out, err = _run(["bash", "-c", probe], cwd=tmp_path)
+        assert "BLOCKED" in out, f"Path traversal was not blocked: {out}"
+
+    def test_migration_detects_legacy_file(self, tmp_path: Path):
+        """Migration detection: given legacy file, NEEDS_MIGRATION=1."""
+        _init_repo(tmp_path)
+        (tmp_path / ".optimus").mkdir()
+        legacy = tmp_path / ".optimus" / "tasks.md"
+        legacy.write_text("<!-- optimus:tasks-v1 -->\n# Tasks\n")
+        probe = '''
+TASKS_FILE="docs/pre-dev/tasks.md"
+LEGACY_FILE=".optimus/tasks.md"
+if [ -f "$LEGACY_FILE" ] && [ -f "$TASKS_FILE" ]; then
+  echo "NEEDS_MIGRATION=0 both exist"
+elif [ -f "$LEGACY_FILE" ] && [ ! -f "$TASKS_FILE" ]; then
+  echo "NEEDS_MIGRATION=1"
+else
+  echo "NEEDS_MIGRATION=0"
+fi
+'''
+        rc, out, err = _run(["bash", "-c", probe], cwd=tmp_path)
+        assert rc == 0
+        assert "NEEDS_MIGRATION=1" in out
+
+    def test_migration_detects_both_files(self, tmp_path: Path):
+        """Migration detection: given both files exist, should warn and NOT migrate."""
+        _init_repo(tmp_path)
+        (tmp_path / ".optimus").mkdir()
+        (tmp_path / "docs" / "pre-dev").mkdir(parents=True)
+        (tmp_path / ".optimus" / "tasks.md").write_text("legacy\n")
+        (tmp_path / "docs" / "pre-dev" / "tasks.md").write_text("new\n")
+        probe = '''
+TASKS_FILE="docs/pre-dev/tasks.md"
+LEGACY_FILE=".optimus/tasks.md"
+if [ -f "$LEGACY_FILE" ] && [ -f "$TASKS_FILE" ]; then
+  echo "NEEDS_MIGRATION=0 both exist"
+elif [ -f "$LEGACY_FILE" ] && [ ! -f "$TASKS_FILE" ]; then
+  echo "NEEDS_MIGRATION=1"
+else
+  echo "NEEDS_MIGRATION=0"
+fi
+'''
+        rc, out, err = _run(["bash", "-c", probe], cwd=tmp_path)
+        assert rc == 0
+        assert "both exist" in out, f"Did not detect both-files case: {out}"
+
+
+# --- F19: Test that inline-protocols.py auto-injects scope+migration when tasks.md Validation is referenced ---
+
+
+class TestInlineProtocolsFoundational:
+    """Verify inline-protocols.py auto-injects foundational protocols for tasks.md Validation refs.
+
+    This is the `needs_format` branch added in commit ad0d8d7 — previously untested.
+    """
+
+    def test_needs_format_injects_scope_and_migration(self, tmp_path: Path):
+        """When a skill references Protocol: tasks.md Validation, the inlined block
+        MUST contain both Protocol: Resolve Tasks Git Scope AND Protocol: Migrate tasks.md to tasksDir."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "inline_protocols", REPO_ROOT / "scripts" / "inline-protocols.py",
+        )
+        ip = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ip)
+
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text(
+            "## Protocol: tasks.md Validation (HARD BLOCK)\nValidation content\n"
+            "## Protocol: Resolve Tasks Git Scope\nScope resolution content\n"
+            "## Protocol: Migrate tasks.md to tasksDir\nMigration content\n"
+        )
+        skill_dir = tmp_path / "myplugin" / "skills" / "optimus-myplugin"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_text("Body: see AGENTS.md Protocol: tasks.md Validation.\n")
+
+        # Monkey-patch paths
+        original_agents = ip.AGENTS_MD
+        original_root = ip.REPO_ROOT
+        try:
+            ip.AGENTS_MD = agents
+            ip.REPO_ROOT = tmp_path
+            ip.inline_protocols()
+        finally:
+            ip.AGENTS_MD = original_agents
+            ip.REPO_ROOT = original_root
+
+        inlined = skill.read_text()
+        assert "Scope resolution content" in inlined, \
+            "Resolve Tasks Git Scope was not auto-injected"
+        assert "Migration content" in inlined, \
+            "Migrate tasks.md to tasksDir was not auto-injected"
+        assert "Validation content" in inlined

@@ -59,17 +59,23 @@ from Ring — only references it via the TaskSpec column.
 **CRITICAL:** This agent NEVER deletes original Ring files. It creates/updates tasks.md,
 leaving Ring pre-dev artifacts untouched.
 
-**NOTE:** Configuration is stored in `.optimus/config.json`:
+**NOTE:** Configuration is stored in `.optimus/config.json` (gitignored, per-user):
 - `tasksDir`: path to Ring pre-dev artifacts root (default: `docs/pre-dev`)
-- Tasks file is always `.optimus/tasks.md` (not configurable)
+- Tasks file is always at `<tasksDir>/tasks.md` (derived from tasksDir)
+- `tasksDir` may point to a directory in the same repo as the project, OR to a
+  path in a separate git repo (for teams that keep task tracking independent from code)
 
 ---
 
 ## Phase 1: Discovery
 
-### Step 1.1: Resolve tasksDir
+### Step 1.1: Resolve tasksDir and Git Scope
 
-Read `.optimus/config.json` for `tasksDir`. If not configured, ask the user:
+Execute Protocol: Resolve Tasks Git Scope (see AGENTS.md) to obtain `TASKS_DIR`,
+`TASKS_FILE`, `TASKS_GIT_SCOPE`, `TASKS_GIT_REL`, and the `tasks_git` helper.
+
+If `TASKS_DIR` could not be auto-resolved from config and the default (`docs/pre-dev`)
+does not match the user's preference, ask via `AskUser`:
 
 ```
 Where are the Ring pre-dev artifacts located?
@@ -77,15 +83,19 @@ Where are the Ring pre-dev artifacts located?
 
 Options via `AskUser`:
 - **docs/pre-dev** (default)
-- **Custom path** — user specifies
+- **Custom path** — user specifies (can be absolute or relative; may live in a
+  separate git repo)
 
-Store as `TASKS_DIR`.
+If the user picks a non-default path, persist it to `.optimus/config.json` (see Step 3.3).
 
-**Validate path exists:** Verify `TASKS_DIR` is a valid directory:
+**Validate path exists:** If the directory does not exist, offer to create it:
 ```bash
-test -d "$TASKS_DIR"
+if [ ! -d "$TASKS_DIR" ]; then
+  # AskUser: tasksDir does not exist. Create it?
+  mkdir -p "$TASKS_DIR"
+fi
 ```
-If the directory does not exist, **STOP**: "tasksDir path `<TASKS_DIR>` does not exist. Check `.optimus/config.json` or provide a valid path."
+If the user refuses, **STOP**: "tasksDir path `<TASKS_DIR>` does not exist."
 
 ### Step 1.2: Scan for Ring Pre-Dev Artifacts
 
@@ -108,7 +118,11 @@ workflow first (`ring:pre-dev-full` or `ring:pre-dev-feature`) to generate task 
 
 ### Step 1.3: Check Existing tasks.md
 
-Check if `.optimus/tasks.md` exists.
+Check if `<TASKS_DIR>/tasks.md` exists (the new standard location).
+
+**Migration check (HARD BLOCK):** Execute AGENTS.md Protocol: Migrate tasks.md to tasksDir.
+If a legacy `.optimus/tasks.md` exists and `<TASKS_DIR>/tasks.md` does not, the protocol
+offers migration before proceeding.
 
 **If tasks.md exists in optimus format** (first line is `<!-- optimus:tasks-v1 -->`):
 - Read existing tasks from the table
@@ -132,8 +146,8 @@ I found N tasks.md files in this project:
 
 | # | Path | Optimus format? | Tasks |
 |---|------|-----------------|-------|
-| 1 | .optimus/tasks.md | Yes | 42 tasks (27 done, 15 pending) |
-| 2 | docs/pre-dev/tasks.md | No | (Ring Gate 7 output) |
+| 1 | docs/pre-dev/tasks.md | Yes | 42 tasks (27 done, 15 pending) |
+| 2 | .optimus/tasks.md | Yes | Legacy location — will migrate |
 
 How should I proceed?
 ```
@@ -296,29 +310,39 @@ Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Di
 
 **If creating from scratch:**
 
-Create `.optimus/tasks.md` with:
+Create `<TASKS_DIR>/tasks.md` (typically `docs/pre-dev/tasks.md`) with:
 1. Format marker: `<!-- optimus:tasks-v1 -->` (MUST be the first line)
 2. H1 heading: `# Tasks`
 3. `## Versions` section with the versions table (from Step 1.5)
 4. The tasks table with all imported tasks, including the `TaskSpec` column
 
+Ensure the directory exists first:
+```bash
+mkdir -p "$TASKS_DIR"
+```
+
 **If appending to existing:**
 
 Add new rows to the existing table. Do not modify existing rows.
 
-### Step 3.3: Register in .optimus/config.json
+### Step 3.3: Register in .optimus/config.json (only if non-default)
 
-Register `tasksDir`:
+`config.json` is gitignored and optional. Only create/update it if `TASKS_DIR` differs
+from the hardcoded default (`docs/pre-dev`). If the user kept the default, skip this
+step — skills resolve the default automatically:
 
 ```bash
-if [ ! -f .optimus/config.json ]; then
-  echo '{}' > .optimus/config.json
-fi
-if jq --arg dir "$TASKS_DIR" '.tasksDir = $dir' .optimus/config.json > .optimus/config.json.tmp; then
-  mv .optimus/config.json.tmp .optimus/config.json
-else
-  rm -f .optimus/config.json.tmp
-  echo "ERROR: Failed to update config.json"
+if [ "$TASKS_DIR" != "docs/pre-dev" ]; then
+  # Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
+  if [ ! -f .optimus/config.json ]; then
+    echo '{}' > .optimus/config.json
+  fi
+  if jq --arg dir "$TASKS_DIR" '.tasksDir = $dir' .optimus/config.json > .optimus/config.json.tmp; then
+    mv .optimus/config.json.tmp .optimus/config.json
+  else
+    rm -f .optimus/config.json.tmp
+    echo "ERROR: Failed to update config.json"
+  fi
 fi
 ```
 
@@ -328,20 +352,51 @@ fi
 a TaskSpec before deleting the old file:
 
 ```bash
-if [ -n "$EXISTING_FILE" ] && [ "$EXISTING_FILE" != ".optimus/tasks.md" ]; then
+if [ -n "$EXISTING_FILE" ] && [ "$EXISTING_FILE" != "$TASKS_FILE" ]; then
   # Count tasks with TaskSpec = -
-  MISSING_SPECS=$(grep -cE '\| -\s*\|\s*$' .optimus/tasks.md 2>/dev/null || echo 0)
+  MISSING_SPECS=$(grep -cE '\| -\s*\|\s*$' "$TASKS_FILE" 2>/dev/null || echo 0)
   if [ "$MISSING_SPECS" -gt 0 ]; then
     echo "WARNING: $MISSING_SPECS tasks still have no TaskSpec (TaskSpec = -)."
     echo "Keeping old file as reference until all specs are generated."
   else
     EXISTING_TASKS_DIR="$(dirname "$EXISTING_FILE")/tasks"
-    git rm -r "$EXISTING_FILE" 2>/dev/null || rm -f "$EXISTING_FILE"
+    # Remove the existing file using the correct repo (project-repo for legacy
+    # .optimus/tasks.md, tasks-repo for existing files inside tasksDir).
     PROJECT_ROOT=$(git rev-parse --show-toplevel)
-    case "$EXISTING_TASKS_DIR" in
-      "$PROJECT_ROOT"/*) git rm -r "$EXISTING_TASKS_DIR" 2>/dev/null || rm -rf "$EXISTING_TASKS_DIR" ;;
-      *) echo "ERROR: Path outside project root — refusing to delete '$EXISTING_TASKS_DIR'" ;;
-    esac
+    TASKS_REPO_ROOT=""
+    if [ "$TASKS_GIT_SCOPE" = "separate-repo" ]; then
+      TASKS_REPO_ROOT=$(git -C "$TASKS_DIR" rev-parse --show-toplevel 2>/dev/null || echo "")
+    fi
+    # Decide which repo owns EXISTING_FILE and EXISTING_TASKS_DIR based on
+    # whether the path is inside PROJECT_ROOT or TASKS_REPO_ROOT.
+    _remove_path() {
+      local p="$1"
+      case "$p" in
+        "$PROJECT_ROOT"/*|"./"*)
+          git rm -r "$p" 2>/dev/null || rm -rf "$p"
+          ;;
+        *)
+          if [ -n "$TASKS_REPO_ROOT" ]; then
+            case "$p" in
+              "$TASKS_REPO_ROOT"/*)
+                tasks_git rm -r "$p" 2>/dev/null || rm -rf "$p"
+                ;;
+              *)
+                echo "ERROR: Path outside known repos — refusing to delete '$p'" >&2
+                return 1
+                ;;
+            esac
+          else
+            echo "ERROR: Path outside project root — refusing to delete '$p'" >&2
+            return 1
+          fi
+          ;;
+      esac
+    }
+    _remove_path "$EXISTING_FILE" || true
+    if [ -d "$EXISTING_TASKS_DIR" ]; then
+      _remove_path "$EXISTING_TASKS_DIR" || true
+    fi
   fi
 fi
 ```
@@ -351,13 +406,19 @@ fi
 specs (via `/optimus-tasks` or re-running import), the old file can be removed by
 re-running import.
 
+Commit tasks.md using `tasks_git` (may be a different repo than the project repo in
+separate-repo scope):
+
 ```bash
-git add .optimus/
+tasks_git add "$TASKS_GIT_REL"
 COMMIT_MSG_FILE=$(mktemp)
-printf 'chore: import Ring pre-dev tasks to optimus format\n\nImported N tasks from %s/tasks/.\nOriginal Ring files preserved.' "$TASKS_DIR" > "$COMMIT_MSG_FILE"
-git commit -F "$COMMIT_MSG_FILE"
+printf 'chore(tasks): import Ring pre-dev tasks to optimus format\n\nImported N tasks from %s/tasks/.\nOriginal Ring files preserved.' "$TASKS_DIR" > "$COMMIT_MSG_FILE"
+tasks_git commit -F "$COMMIT_MSG_FILE"
 rm -f "$COMMIT_MSG_FILE"
 ```
+
+If `config.json` was updated in Step 3.3 (non-default tasksDir), the change is local —
+do NOT commit it (it's gitignored).
 
 ### Step 3.5: Final Summary
 
@@ -366,8 +427,8 @@ rm -f "$COMMIT_MSG_FILE"
 
 - **Tasks imported:** N
 - **Ring source:** <TASKS_DIR>/tasks/ (N task specs, M subtask files)
-- **Tracking created:** .optimus/tasks.md
-- **Registered in:** .optimus/config.json (tasksDir)
+- **Tracking created:** <TASKS_DIR>/tasks.md
+- **tasksDir:** <TASKS_DIR> (<same-repo|separate-repo>)
 - **Ring files:** NOT modified
 
 ### Next Steps
@@ -396,19 +457,29 @@ extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
 ### File Location
 
-All Optimus files live in the `.optimus/` directory at the project root:
+Optimus splits its files into two trees:
+
+**Operational tree (`.optimus/`) — 100% gitignored, per-user/per-machine:**
 
 ```
 .optimus/
-├── config.json          # versionado — tasksDir
-├── tasks.md             # versionado — structural task data (NO status, NO branch)
+├── config.json          # gitignored — optional overrides (tasksDir, defaultScope)
 ├── state.json           # gitignored — operational state (status, branch per task)
 ├── stats.json           # gitignored — stage execution counters per task
 ├── sessions/            # gitignored — session state for crash recovery
 └── reports/             # gitignored — exported reports
 ```
 
-**Configuration** is stored in `.optimus/config.json`:
+**Planning tree (`<tasksDir>/`) — versioned, shared with the team:**
+
+```
+<tasksDir>/              # default: docs/pre-dev/
+├── tasks.md             # versioned — structural task data (NO status, NO branch)
+├── tasks/               # versioned — Ring pre-dev task specs (task_001.md, ...)
+└── subtasks/            # versioned — Ring pre-dev subtask specs (T-001/, ...)
+```
+
+**Configuration** (optional) is stored in `.optimus/config.json`:
 
 ```json
 {
@@ -417,16 +488,21 @@ All Optimus files live in the `.optimus/` directory at the project root:
 }
 ```
 
-- **`tasksDir`**: Path to the Ring pre-dev artifacts root. Default: `docs/pre-dev`.
-  The import and stage agents look for task specs at `<tasksDir>/tasks/` and subtasks
-  at `<tasksDir>/subtasks/`.
+- **`tasksDir`** (optional): Path to the Ring pre-dev artifacts root. Default:
+  `docs/pre-dev`. The import and stage agents look for `tasks.md`, `tasks/`, and
+  `subtasks/` inside this directory. Can point to a path inside the project repo
+  (default case) OR to a path in a separate git repo (for teams that separate task
+  tracking from code).
 - **`defaultScope`** (optional): Default version scope used by `report` and `quick-report`
   when the user does not specify one in the invocation. Valid values: `ativa`, `upcoming`,
   `all`, or a specific version name (must exist in the Versions table). When set, skills
   skip the "Which version scope do you want to see?" prompt. See Protocol: Default Scope
   Resolution.
 
-**Tasks file** is always `.optimus/tasks.md` — not configurable.
+Since `config.json` is gitignored, it exists ONLY when the user overrides a default.
+Projects using the defaults do not need a `config.json`.
+
+**Tasks file** is always at `<tasksDir>/tasks.md` (derived from `tasksDir`).
 
 **Operational state** is stored in `.optimus/state.json` (gitignored):
 
@@ -461,13 +537,15 @@ All Optimus files live in the `.optimus/` directory at the project root:
 - `report` reads this file to display churn metrics.
 
 Agents resolve paths:
-1. **Read `.optimus/config.json`** for `tasksDir`. Fallback: `docs/pre-dev`.
-2. **Tasks file:** `.optimus/tasks.md` (fixed path).
-3. **If tasks.md not found:** **STOP** and suggest running `import` to create one.
+1. **Read `.optimus/config.json`** for `tasksDir` if it exists. Fallback: `docs/pre-dev`.
+2. **Tasks file:** `${tasksDir}/tasks.md` (derived, not configurable separately).
+3. **If `<tasksDir>/tasks.md` not found:** **STOP** and suggest running `import` to create one.
 
-The `.optimus/state.json`, `.optimus/stats.json`, `.optimus/sessions/`, and
-`.optimus/reports/` are gitignored (operational/temporary state).
-The `.optimus/config.json` and `.optimus/tasks.md` are versioned (structural data).
+Everything inside `.optimus/` is gitignored. The planning tree (`<tasksDir>/tasks.md`,
+`<tasksDir>/tasks/`, `<tasksDir>/subtasks/`) is versioned (structural data shared with
+the team) — but the repo that versions it depends on `tasksDir`: if `tasksDir` is inside
+the project repo, it is committed alongside the code; if `tasksDir` is in a separate
+repo, it is committed there.
 
 
 ### Valid Status Values (stored in state.json)
@@ -498,20 +576,255 @@ These operations require explicit user confirmation.
 **Referenced by:** import, tasks, report (export), quick-report, batch, all stage agents (1-4) for session files
 
 Before creating ANY file inside `.optimus/`, ensure the directory structure exists
-and operational/temporary files are gitignored:
+and that the entire `.optimus/` tree is gitignored (it is 100% operational/per-user):
 
 ```bash
 mkdir -p .optimus/sessions .optimus/reports
 if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
-  printf '\n# optimus-operational-files\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n' >> .gitignore
+  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n' >> .gitignore
 fi
 ```
 
-The `.optimus/config.json` and `.optimus/tasks.md` are versioned (structural data).
-The `.optimus/state.json`, `.optimus/stats.json`, `sessions/`, and `reports/` are
-gitignored (operational/temporary state).
+Everything inside `.optimus/` is gitignored. The planning tree is versioned
+separately at `<tasksDir>/tasks.md` (and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/`
+for Ring specs) — see the File Location section above.
+
+**NOTE:** If a legacy project has `.optimus/config.json` tracked in git (from before
+this change), skills running the migration helper (see Protocol: Migrate tasks.md to
+tasksDir) will offer to run `git rm --cached .optimus/config.json` so the local file
+is preserved but untracked.
 
 Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
+
+
+### Protocol: Migrate tasks.md to tasksDir
+
+**Referenced by:** import, tasks, plan, build, review, done, resume, report, quick-report, batch
+
+Detects and migrates projects that have a legacy `.optimus/tasks.md` (versioned inside
+`.optimus/`) to the new location `<tasksDir>/tasks.md`.
+
+**Detection (run at the start of every skill that reads/writes tasks.md):**
+
+```bash
+# Requires Protocol: Resolve Tasks Git Scope to have been executed first
+# (TASKS_DIR, TASKS_FILE, TASKS_GIT_SCOPE, tasks_git available).
+LEGACY_FILE=".optimus/tasks.md"
+BOTH_EXIST=0
+if [ -f "$LEGACY_FILE" ] && [ -f "$TASKS_FILE" ]; then
+  # Partial/failed migration OR manual copy. Use new location but WARN the user.
+  echo "WARNING: Both legacy ($LEGACY_FILE) and new ($TASKS_FILE) tasks.md exist." >&2
+  echo "         This indicates a partial prior migration or manual copy." >&2
+  echo "         Using $TASKS_FILE. After confirming contents, remove the legacy file." >&2
+  NEEDS_MIGRATION=0
+  BOTH_EXIST=1
+elif [ -f "$LEGACY_FILE" ] && [ ! -f "$TASKS_FILE" ]; then
+  NEEDS_MIGRATION=1
+else
+  NEEDS_MIGRATION=0
+fi
+```
+
+**Dry-run mode:** If the skill is running in dry-run (per Dry-Run Mode section above),
+DO NOT offer migration and DO NOT execute any migration step. Emit the plan and proceed:
+
+```
+[DRY-RUN] Migration would be offered for this task:
+[DRY-RUN]   Legacy: $LEGACY_FILE
+[DRY-RUN]   New:    $TASKS_FILE
+[DRY-RUN]   Scope:  $TASKS_GIT_SCOPE
+[DRY-RUN]   Would use: git mv (same-repo) OR cp + two commits (separate-repo)
+```
+
+**Config.json team-shared values warning:** If `.optimus/config.json` is currently tracked
+in git and contains values (e.g., `defaultScope`), migration will untrack it. The values
+are preserved locally but no longer shared via git. Warn user BEFORE untracking:
+
+```bash
+if git ls-files --error-unmatch .optimus/config.json >/dev/null 2>&1; then
+  if [ -f .optimus/config.json ]; then
+    CONFIG_KEYS=$(jq -r 'keys | join(", ")' .optimus/config.json 2>/dev/null || echo "unknown")
+    echo "WARNING: .optimus/config.json is currently tracked with values: $CONFIG_KEYS" >&2
+    echo "         Untracking will make these per-user. Team members need to re-apply locally." >&2
+    # AskUser: Proceed with untrack? / Keep tracked (deviates from Optimus convention)
+  fi
+fi
+```
+
+**If `NEEDS_MIGRATION=1`, ask the user via `AskUser`:**
+
+```
+A legacy tasks.md was found at .optimus/tasks.md. The new location is ${TASKS_FILE}.
+Migrate now? (Recommended — keeping the old location will break other skills.)
+```
+
+Options:
+- **Migrate now** — copy → add in target repo → remove from project repo
+- **Skip this time** — continue with the legacy file (emit warning; this will break)
+- **Abort** — stop the current command so you can migrate manually
+
+**Migration flow (when user chooses "Migrate now"):**
+
+Checkpoint file: write `.optimus/.migration-in-progress` BEFORE starting. This marker
+lets subsequent invocations detect interrupted migrations:
+
+```bash
+mkdir -p .optimus
+printf '%s\n' "$TASKS_FILE" > .optimus/.migration-in-progress
+```
+
+**Symlink safety (HARD BLOCK):** refuse to migrate if source or destination is a symlink
+(prevents arbitrary file-write via symlink target):
+```bash
+if [ -L "$LEGACY_FILE" ] || [ -L "$TASKS_FILE" ]; then
+  echo "ERROR: Source or destination is a symlink — refusing to migrate." >&2
+  rm -f .optimus/.migration-in-progress
+  exit 1
+fi
+```
+
+**Scope-branched migration:** explicit `if` so the agent executes the correct branch:
+
+```bash
+if [ "$TASKS_GIT_SCOPE" = "same-repo" ]; then
+  # Same-repo: atomic git mv in a single commit (preserves history via rename-detect).
+  mkdir -p "$TASKS_DIR"
+  if ! git mv "$LEGACY_FILE" "$TASKS_FILE"; then
+    echo "ERROR: git mv failed. Migration aborted — no changes made." >&2
+    rm -f .optimus/.migration-in-progress
+    exit 1
+  fi
+  COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
+  chmod 600 "$COMMIT_MSG_FILE"
+  printf '%s' "chore(tasks): move tasks.md to tasksDir" > "$COMMIT_MSG_FILE"
+  if ! git commit -F "$COMMIT_MSG_FILE"; then
+    echo "ERROR: Commit failed. Reverting git mv..." >&2
+    # Revert: restore legacy from HEAD, remove new from working tree
+    git reset HEAD -- "$LEGACY_FILE" "$TASKS_FILE" 2>/dev/null
+    git checkout HEAD -- "$LEGACY_FILE" 2>/dev/null
+    rm -f "$TASKS_FILE"
+    rm -f "$COMMIT_MSG_FILE" .optimus/.migration-in-progress
+    exit 1
+  fi
+  rm -f "$COMMIT_MSG_FILE"
+else
+  # Separate-repo: two commits in two repos. Rollback is per-repo on failure.
+  mkdir -p "$TASKS_DIR"
+  if ! cp "$LEGACY_FILE" "$TASKS_FILE"; then
+    echo "ERROR: cp failed. Migration aborted." >&2
+    rm -f .optimus/.migration-in-progress
+    exit 1
+  fi
+  # Commit #1: in tasks repo
+  if ! tasks_git add "$TASKS_GIT_REL"; then
+    echo "ERROR: tasks_git add failed. Rolling back..." >&2
+    rm -f "$TASKS_FILE"
+    rm -f .optimus/.migration-in-progress
+    exit 1
+  fi
+  COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
+  chmod 600 "$COMMIT_MSG_FILE"
+  printf '%s' "chore(tasks): migrate tasks.md to tasksDir" > "$COMMIT_MSG_FILE"
+  if ! tasks_git commit -F "$COMMIT_MSG_FILE"; then
+    echo "ERROR: tasks_git commit failed. Rolling back..." >&2
+    tasks_git reset HEAD -- "$TASKS_GIT_REL" 2>/dev/null
+    rm -f "$TASKS_FILE"
+    rm -f "$COMMIT_MSG_FILE" .optimus/.migration-in-progress
+    exit 1
+  fi
+  rm -f "$COMMIT_MSG_FILE"
+  # Commit #2: in project repo
+  if ! git rm "$LEGACY_FILE"; then
+    echo "ERROR: git rm failed in project repo. Tasks repo already committed." >&2
+    echo "Manual cleanup needed: rm $LEGACY_FILE && git add -A && git commit" >&2
+    rm -f .optimus/.migration-in-progress
+    exit 1
+  fi
+  COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
+  chmod 600 "$COMMIT_MSG_FILE"
+  printf '%s' "chore: move tasks.md to separate tasks repo (${TASKS_DIR})" > "$COMMIT_MSG_FILE"
+  if ! git commit -F "$COMMIT_MSG_FILE"; then
+    echo "ERROR: Commit failed in project repo. Tasks repo already committed." >&2
+    echo "Manual cleanup needed: git commit after resolving." >&2
+    rm -f "$COMMIT_MSG_FILE" .optimus/.migration-in-progress
+    exit 1
+  fi
+  rm -f "$COMMIT_MSG_FILE"
+fi
+```
+
+**Untrack `.optimus/config.json` if previously versioned** (legacy projects). Check
+commit exit code; restore index on failure:
+
+```bash
+if git ls-files --error-unmatch .optimus/config.json >/dev/null 2>&1; then
+  git rm --cached .optimus/config.json
+  COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
+  chmod 600 "$COMMIT_MSG_FILE"
+  printf '%s' "chore: untrack .optimus/config.json (now gitignored)" > "$COMMIT_MSG_FILE"
+  if ! git commit -F "$COMMIT_MSG_FILE"; then
+    # Restore to index so user can retry
+    git reset HEAD .optimus/config.json 2>/dev/null
+    rm -f "$COMMIT_MSG_FILE"
+    echo "ERROR: Failed to untrack config.json. Index restored." >&2
+    # Do not exit — migration of tasks.md already succeeded; user can retry untrack
+  else
+    rm -f "$COMMIT_MSG_FILE"
+  fi
+fi
+```
+
+**Ensure `.gitignore` includes the operational-files block:**
+Execute Protocol: Initialize .optimus Directory. Commit if `.gitignore` was modified.
+
+**Post-migration validation:** Verify the migrated tasks.md still passes Format
+Validation (see AGENTS.md Format Validation section). If it fails (e.g., legacy
+file was manually edited and lacks a `## Versions` section), inform user and suggest
+running `/optimus-import` to rebuild:
+
+```bash
+if ! grep -q '^<!-- optimus:tasks-v1 -->' "$TASKS_FILE"; then
+  echo "WARNING: Migrated tasks.md does not have the optimus format marker." >&2
+  echo "         Run /optimus-import to rebuild in the correct format." >&2
+fi
+if ! grep -q '^## Versions' "$TASKS_FILE"; then
+  echo "WARNING: Migrated tasks.md has no ## Versions section." >&2
+  echo "         Run /optimus-import to rebuild in the correct format." >&2
+fi
+```
+
+**Migration success: clear checkpoint marker and log each step.**
+```bash
+rm -f .optimus/.migration-in-progress
+echo "INFO: Migration completed successfully:" >&2
+echo "  - Legacy location: $LEGACY_FILE" >&2
+echo "  - New location:    $TASKS_FILE" >&2
+echo "  - Git scope:       $TASKS_GIT_SCOPE" >&2
+```
+
+**Report success:**
+```
+Migration complete. tasks.md is now at ${TASKS_FILE}.
+Remember to push both repos (project + tasks) when you're ready.
+```
+
+**Interrupted migration recovery (on skill startup):**
+
+```bash
+if [ -f .optimus/.migration-in-progress ]; then
+  INTERRUPTED_FILE=$(cat .optimus/.migration-in-progress 2>/dev/null)
+  echo "WARNING: Previous migration was interrupted. Expected target: $INTERRUPTED_FILE" >&2
+  # AskUser: Retry migration / Clear marker / Abort
+fi
+```
+
+**If user chose "Skip this time":** Emit a warning and proceed using the legacy location
+for this invocation only. The skill MUST use `$LEGACY_FILE` as `$TASKS_FILE` for the
+remainder of this execution.
+
+**If user chose "Abort":** **STOP** the current command.
+
+Skills reference this as: "Check tasks.md migration — see AGENTS.md Protocol: Migrate tasks.md to tasksDir."
 
 
 ### Protocol: State Management
@@ -524,8 +837,8 @@ All status and branch data is stored in `.optimus/state.json` (gitignored).
 
 ```bash
 if ! command -v jq >/dev/null 2>&1; then
-  echo "ERROR: jq is required for state management but not installed."
-  # STOP — do not proceed
+  echo "ERROR: jq is required for state management but not installed." >&2
+  exit 1
 fi
 ```
 
@@ -567,8 +880,8 @@ if [ ! -f "$STATE_FILE" ]; then
   echo '{}' > "$STATE_FILE"
 fi
 if [ -z "$TASK_ID" ] || [ -z "$NEW_STATUS" ]; then
-  echo "ERROR: Cannot write state — TASK_ID or NEW_STATUS is empty."
-  # STOP — do not proceed
+  echo "ERROR: Cannot write state — TASK_ID or NEW_STATUS is empty." >&2
+  exit 1
 fi
 UPDATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 if jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" --arg branch "$BRANCH_NAME" --arg ts "$UPDATED_AT" \
@@ -577,13 +890,13 @@ if jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" --arg branch "$BRANCH_NAME"
     mv "${STATE_FILE}.tmp" "$STATE_FILE"
   else
     rm -f "${STATE_FILE}.tmp"
-    echo "ERROR: jq produced invalid JSON — state.json unchanged"
-    # STOP — do not proceed
+    echo "ERROR: jq produced invalid JSON — state.json unchanged" >&2
+    exit 1
   fi
 else
   rm -f "${STATE_FILE}.tmp"
-  echo "ERROR: jq failed to update state.json"
-  # STOP — do not proceed
+  echo "ERROR: jq failed to update state.json" >&2
+  exit 1
 fi
 ```
 
@@ -607,7 +920,7 @@ fi
 
 ```bash
 STATE_FILE=".optimus/state.json"
-TASKS_FILE=".optimus/tasks.md"
+# TASKS_FILE is resolved via Protocol: Resolve Tasks Git Scope (<tasksDir>/tasks.md).
 # Validate state.json if it exists
 if [ -f "$STATE_FILE" ] && ! jq empty "$STATE_FILE" 2>/dev/null; then
   echo "WARNING: state.json is corrupted. Treating all tasks as Pendente."
