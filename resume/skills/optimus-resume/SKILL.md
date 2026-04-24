@@ -124,7 +124,13 @@ re-validating `$STATE_FILE`. This is the ONLY place where resume does integrity 
 on state.json — downstream steps trust this.
 
 ```bash
-STATE_FILE=".optimus/state.json"
+# Resolve main worktree — see AGENTS.md Protocol: Resolve Main Worktree Path.
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+if [ -z "$MAIN_WORKTREE" ]; then
+  echo "ERROR: Cannot determine main worktree — not in a git repository."
+  # STOP
+fi
+STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 STATE_JSON=""
 if [ -f "$STATE_FILE" ]; then
   if ! jq empty "$STATE_FILE" 2>/dev/null; then
@@ -438,7 +444,8 @@ fi
        workspace. Implemented as:
 
        ```bash
-       STATE_FILE=".optimus/state.json"
+       # STATE_FILE is already resolved from MAIN_WORKTREE in Step 1.4.
+       # See AGENTS.md Protocol: Resolve Main Worktree Path.
        RESET_DONE=0
        # STATE_JSON is already validated in Step 1.4, so STATE_FILE is guaranteed to exist
        # and be parseable here (guarded upstream — no re-validation needed).
@@ -542,13 +549,14 @@ if git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then
 fi
 
 # Session file for this task (crash-recovery data from a stage skill)
-SESSION_FILE=".optimus/sessions/session-${TASK_ID}.json"
+# MAIN_WORKTREE was resolved in Step 1.4 — see AGENTS.md Protocol: Resolve Main Worktree Path.
+SESSION_FILE="${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
 if [ -f "$SESSION_FILE" ] && jq empty "$SESSION_FILE" 2>/dev/null; then
   SESSION_INFO=$(jq -r '"stage=\(.stage // "?"), phase=\(.phase // "?"), round=\(.convergence_round // 0), updated=\(.updated_at // "?")"' "$SESSION_FILE")
 fi
 
 # Stats.json churn signal — single jq pass for both counters + numeric-safe coercion
-STATS_FILE=".optimus/stats.json"
+STATS_FILE="${MAIN_WORKTREE}/.optimus/stats.json"
 PLAN_RUNS=0
 REVIEW_RUNS=0
 if [ -f "$STATS_FILE" ]; then
@@ -787,6 +795,65 @@ Where:
 3. Derive from Tipo + ID + Title (always works)
 
 Skills reference this as: "Derive branch name — see AGENTS.md Protocol: Branch Name Derivation."
+
+
+### Protocol: Resolve Main Worktree Path
+
+**Referenced by:** State Management, Session State, Increment Stage Stats, Initialize .optimus Directory, and every skill that reads or writes any file under `.optimus/`.
+
+`.optimus/state.json`, `.optimus/stats.json`, `.optimus/sessions/`, and `.optimus/reports/`
+are **gitignored** (operational/temporary state). Because git does not share ignored files
+across linked worktrees (`git worktree add <dir>`), each worktree has an **independent
+copy** of these files. Reads and writes must always target the **main worktree** — never
+the current working directory.
+
+**Always resolve the main worktree before touching any `.optimus/` operational file:**
+
+```bash
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+if [ -z "$MAIN_WORKTREE" ]; then
+  echo "ERROR: Cannot determine main worktree — not in a git repository."
+  # STOP — do not proceed
+fi
+```
+
+After resolution, every `.optimus/` path uses `${MAIN_WORKTREE}/.optimus/` as the base:
+
+```bash
+OPTIMUS_DIR="${MAIN_WORKTREE}/.optimus"
+STATE_FILE="${OPTIMUS_DIR}/state.json"
+STATS_FILE="${OPTIMUS_DIR}/stats.json"
+SESSIONS_DIR="${OPTIMUS_DIR}/sessions"
+REPORTS_DIR="${OPTIMUS_DIR}/reports"
+```
+
+**Why this matters (real incident):** A skill executed from a linked worktree (e.g.,
+`<repo>-t-037-oauth2-tenant/`) that used `STATE_FILE=".optimus/state.json"` created the
+file inside that linked worktree. The subsequent `git worktree remove` (during task
+cleanup) deleted the worktree **together with the state.json update**, silently losing
+the status change. The main worktree's `state.json` was never touched, so the task
+remained stuck in `Validando Impl` even after the PR was merged.
+
+**Do NOT** assign paths relative to the current working directory:
+
+```bash
+STATE_FILE=".optimus/state.json"            # WRONG — resolves against $PWD
+mkdir -p .optimus/sessions .optimus/reports # WRONG — creates dirs in $PWD
+```
+
+**DO** resolve the main worktree first, then compose absolute paths:
+
+```bash
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
+mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports"
+```
+
+**Exception:** Versioned files (`.optimus/config.json`, `.optimus/tasks.md`) are shared
+across worktrees by git itself, so relative paths work for those. This protocol targets
+only the gitignored operational files.
+
+Skills reference this as: "Resolve main worktree — see AGENTS.md Protocol: Resolve Main Worktree Path."
 
 
 ### Protocol: Terminal Identification
