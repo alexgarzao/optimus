@@ -60,8 +60,24 @@ Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
 **HARD BLOCK:** Find and validate tasks.md — see AGENTS.md Protocol: tasks.md Validation.
 
-### Step 1.0.2: Resolve Workspace (HARD BLOCK)
-Resolve workspace — see AGENTS.md Protocol: Workspace Auto-Navigation. Branch-task cross-validation is included in this protocol.
+### Step 1.0.2: Resolve Current Workspace (HARD BLOCK)
+
+Use the Workspace Auto-Navigation guardrails, but for `done` apply a stricter rule:
+when the user does **not** specify a task ID, close only the task from the **current**
+feature branch/worktree. Never offer a list of multiple tasks to close.
+
+1. If the user specified a task ID explicitly, resolve that task and perform the usual
+   branch-task cross-validation.
+2. If the user did **not** specify a task ID:
+   - If the current branch is a task feature branch/worktree, resolve the task from the
+     current branch and continue.
+   - If the current branch is the default branch (or the workspace does not map to exactly
+     one task), **STOP** and tell the user:
+     ```
+     /optimus-done only closes the current task from the current branch.
+     Switch to the task branch/worktree first, or run `/optimus-done T-XXX`.
+     ```
+3. Do NOT scan all `Validando Impl` tasks and do NOT present a multi-task chooser.
 
 ### Step 1.0.3: Identify Task to Close
 
@@ -70,16 +86,25 @@ Resolve workspace — see AGENTS.md Protocol: Workspace Auto-Navigation. Branch-
 - Confirm with the user using `AskUser`: "I'll close task T-012: [task title]. Correct?"
 
 **If the user did NOT specify a task ID:**
-1. Look for tasks with status `Validando Impl`
-2. If exactly one found, suggest it
-3. If multiple found, ask the user which one to close
-4. If none found, inform the user there are no tasks ready to close
+1. Use the task resolved from the current feature branch/worktree in Step 1.0.2
+2. If no current task can be resolved safely, **STOP** and ask the user to switch to the
+   task branch/worktree or invoke `/optimus-done T-XXX`
+3. Do NOT offer multiple tasks as choices
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to close.
 
-### Step 1.0.3.1: Check Session State
+### Step 1.0.3.1: Session State (done-specific)
 
-Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`done`, status=`DONE`.
+`done` must not offer to resume, start fresh, redo previous stages, or restart the
+stage from zero.
+
+If `.optimus/sessions/session-T-XXX.json` exists:
+- If it is corrupted or stale, delete it silently and proceed
+- Otherwise, reuse/overwrite it for the current `done` execution and proceed
+- Do NOT present options like `Resume`, `Start fresh`, or `Continue`
+
+`done` either continues with the current close gates or stops with a clear blocking
+message. It never offers to redo `plan`, `build`, or `review`.
 
 **On marking DONE** (Phase 3): delete the session file and restore terminal title.
 
@@ -589,117 +614,6 @@ If `tasks-hooks.sh` does not exist, hooks are silently skipped.
 Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol: Notification Hooks."
 
 
-### Protocol: Session State
-
-**Referenced by:** all stage agents (1-4)
-
-Stage agents write a session state file to track progress. This enables resumption
-when a session is interrupted (agent crash, user closes terminal, context window limit).
-
-**IMPORTANT — Write timing:** The session file MUST be written **immediately after the
-status change in state.json** (before any work begins). This ensures crash recovery has
-a record even if the agent fails before producing any output. Do NOT wait until
-"key phase transitions" to write the initial session file.
-
-**Session file location:** `.optimus/sessions/session-<task-id>.json` (gitignored).
-Each task gets its own file (e.g., `.optimus/sessions/session-T-003.json`).
-
-```json
-{
-  "task_id": "T-003",
-  "stage": "<stage-name>",
-  "status": "<stage-output-status>",
-  "branch": "feat/t-003-user-auth",
-  "started_at": "2025-01-15T10:30:00Z",
-  "updated_at": "2025-01-15T11:45:00Z",
-  "phase": "Phase 1: Implementation",
-  "convergence_round": 0,
-  "findings_count": 0,
-  "notes": "Implementation in progress"
-}
-```
-
-**Convergence checkpoint:** During the convergence loop, update `convergence_round` and
-`findings_count` after each round completes. On resume, skip to the last completed round
-rather than restarting the entire analysis.
-
-**On stage start (after task ID is known):**
-
-```bash
-SESSION_FILE=".optimus/sessions/session-${TASK_ID}.json"
-if [ -f "$SESSION_FILE" ]; then
-  if ! jq empty "$SESSION_FILE" 2>/dev/null; then
-    echo "WARNING: Session file is corrupted. Deleting and proceeding fresh."
-    rm -f "$SESSION_FILE"
-  else
-    cat "$SESSION_FILE"
-  fi
-fi
-```
-
-- If the file exists AND the task's status in `state.json` matches the session's `status`:
-  - Present via `AskUser`:
-    ```
-    Previous session found:
-      Task: T-XXX — [title]
-      Stage: <stage-name>
-      Last active: <time since updated_at>
-      Progress: <phase from session>
-    Resume this session?
-    ```
-    Options: Resume / Start fresh (delete session) / Continue (keep session file)
-  - If **Resume**: skip to the phase indicated in the session file
-  - If **Start fresh (delete session)**: delete the session file and proceed from the beginning
-  - If **Continue (keep session file)**: proceed from the beginning without deleting the session file
-- If the file is stale (>24h) or the task status has changed → delete and proceed normally.
-  **Staleness check example:**
-  ```bash
-  UPDATED=$(jq -r '.updated_at // empty' "$SESSION_FILE" 2>/dev/null)
-  if [ -n "$UPDATED" ]; then
-    NOW_EPOCH=$(date +%s)
-    if [ "$(uname)" = "Darwin" ]; then
-      UPDATED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED" +%s 2>/dev/null || echo 0)
-    else
-      UPDATED_EPOCH=$(date -d "$UPDATED" +%s 2>/dev/null || echo 0)
-    fi
-    AGE=$(( NOW_EPOCH - UPDATED_EPOCH ))
-    if [ "$AGE" -gt 86400 ]; then
-      echo "Session file is stale (>24h). Deleting."
-      rm -f "$SESSION_FILE"
-    fi
-  fi
-  ```
-- **External status change detection:** If the session file exists AND the task's status
-  does NOT match the session's `status`, check if the difference is explainable by normal
-  stage progression (e.g., session says `Em Andamento` but task is now `Validando Impl` —
-  the task was advanced externally via `/optimus-tasks`). If the status change is NOT
-  explainable by forward progression, treat the session as stale and delete it.
-- If no file exists → proceed normally
-
-**On stage progress (at key phase transitions):**
-
-```bash
-# Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
-mkdir -p .optimus/sessions .optimus/reports
-BRANCH_NAME=$(git branch --show-current 2>/dev/null || echo "detached")
-jq -n \
-  --arg task_id "${TASK_ID}" --arg stage "<stage-name>" --arg status "<status>" \
-  --arg branch "${BRANCH_NAME}" --arg started "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  --arg updated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg phase "<current-phase>" \
-  --arg notes "<progress>" \
-  '{task_id: $task_id, stage: $stage, status: $status, branch: $branch,
-    started_at: $started, updated_at: $updated, phase: $phase, notes: $notes}' \
-  > ".optimus/sessions/session-${TASK_ID}.json"
-```
-
-**On stage completion:** Delete the session file:
-```bash
-rm -f ".optimus/sessions/session-${TASK_ID}.json"
-```
-
-Skills reference this as: "Execute session state protocol from AGENTS.md using stage=`<name>`, status=`<status>`."
-
-
 ### Protocol: State Management
 
 **Referenced by:** all stage agents (1-4), tasks, report, quick-report, import, batch
@@ -828,79 +742,6 @@ and offer to run reconciliation before proceeding. This prevents tasks from sile
 appearing as `Pendente` when they actually have active worktrees.
 
 Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: State Management."
-
-
-### Protocol: Workspace Auto-Navigation (HARD BLOCK)
-
-**Referenced by:** stages 2-4
-
-Execution stages (2-4) resolve the correct workspace automatically. The agent MUST
-be in the task's worktree before proceeding with any work.
-
-```bash
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-if [ -z "$DEFAULT_BRANCH" ]; then
-  DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
-fi
-if [ -z "$DEFAULT_BRANCH" ]; then
-  echo "ERROR: Cannot determine default branch. Set it with: git remote set-head origin <branch>"
-  # STOP — do not proceed
-fi
-CURRENT_BRANCH=$(git branch --show-current 2>/dev/null)
-if [ -z "$CURRENT_BRANCH" ]; then
-  echo "ERROR: Cannot determine current branch (detached HEAD state). Checkout a branch first."
-  # STOP — do not proceed
-fi
-```
-
-**Resolution order:**
-
-1. **Already on a feature branch?**
-   - Derive the expected branch name from the task's Tipo + ID + Title (see Protocol:
-     Branch Name Derivation). Also read the `branch` field from state.json if available.
-   - Cross-validate: check that `CURRENT_BRANCH` matches the expected/derived branch.
-   - If matches → proceed silently.
-   - If does not match → warn via `AskUser`: "Expected branch `<expected>` for T-XXX,
-     but you are on `<current>`. Continue on current branch, or switch?"
-
-2. **On the default branch (auto-navigate)?**
-   - Read state.json and list tasks with status compatible with the current stage
-     (use the Transition Table to determine which statuses are valid).
-     Tasks with no entry in state.json are `Pendente`.
-   - **If 0 eligible tasks** → **STOP**: "No tasks in `<expected-status>` found."
-   - **If 1 eligible task** → suggest via `AskUser`: "Found task T-XXX — [title] in
-     worktree `<path>`. Continue with this task?"
-   - **If N eligible tasks** → list all with worktree paths via `AskUser`:
-     ```
-     Multiple tasks available:
-       T-001 — User auth (Em Andamento) → /projeto-t-001-.../
-       T-002 — Login page (Em Andamento) → /projeto-t-002-.../
-     Which task should I continue?
-     ```
-   - After task is identified, locate the worktree by task ID:
-     ```bash
-     git worktree list | grep -iF "<task-id>"
-     ```
-   - **If worktree found** → change working directory to the worktree path.
-   - **If worktree NOT found** → derive the branch name (Protocol: Branch Name Derivation)
-     and verify it exists:
-     ```bash
-     if ! git rev-parse --verify "<branch-name>" >/dev/null 2>&1; then
-       # Branch doesn't exist — ask user for recovery
-       # AskUser: "No worktree or branch found for T-XXX.
-       #   This may indicate stage-1 crashed before creating it.
-       #   Options: Create branch from HEAD / Re-run /optimus-plan"
-     fi
-     ```
-     If the branch exists, create the worktree automatically:
-     ```bash
-     REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
-     WORKTREE_DIR="../${REPO_NAME}-$(echo <task-id> | tr '[:upper:]' '[:lower:]')-<keywords>"
-     git worktree add "$WORKTREE_DIR" "<branch-name>"
-     ```
-     Then change working directory to the new worktree.
-
-Skills reference this as: "Resolve workspace (HARD BLOCK) — see AGENTS.md Protocol: Workspace Auto-Navigation."
 
 
 ### Protocol: tasks.md Validation (HARD BLOCK)

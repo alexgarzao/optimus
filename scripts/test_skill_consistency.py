@@ -621,3 +621,31 @@ class TestDoneRedesign:
             "done should not run local lint/test (CI responsibility):\n"
             + "\n".join(f"  - {v}" for v in violations)
         )
+
+    def test_done_closes_current_task_only(self):
+        """done should close the current task only when no explicit task ID is provided."""
+        content = _read_skill("done")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "only closes the current task from the current branch" in body, (
+            "done must state that no-ID execution closes only the current branch task"
+        )
+        assert "Never offer a list of multiple tasks to close" in body, (
+            "done must forbid a multi-task chooser"
+        )
+        assert "If multiple found, ask the user which one to close" not in body, (
+            "done should not ask the user to choose from multiple tasks"
+        )
+
+    def test_done_does_not_offer_resume_or_restart(self):
+        """done should not offer resume/start-fresh/restart style choices."""
+        content = _read_skill("done")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "Session State (done-specific)" in body, (
+            "done should define its own session-state behavior"
+        )
+        assert "must not offer to resume, start fresh, redo previous stages" in body, (
+            "done must explicitly forbid resume/restart flows"
+        )
+        assert "Options: Resume / Start fresh (delete session) / Continue (keep session file)" not in content, (
+            "done should not include resume/start-fresh/continue options"
+        )
