@@ -307,13 +307,19 @@ All Optimus files live in the `.optimus/` directory at the project root:
 
 ```json
 {
-  "tasksDir": "docs/pre-dev"
+  "tasksDir": "docs/pre-dev",
+  "defaultScope": "ativa"
 }
 ```
 
 - **`tasksDir`**: Path to the Ring pre-dev artifacts root. Default: `docs/pre-dev`.
   The import and stage agents look for task specs at `<tasksDir>/tasks/` and subtasks
   at `<tasksDir>/subtasks/`.
+- **`defaultScope`** (optional): Default version scope used by `report` and `quick-report`
+  when the user does not specify one in the invocation. Valid values: `ativa`, `upcoming`,
+  `all`, or a specific version name (must exist in the Versions table). When set, skills
+  skip the "Which version scope do you want to see?" prompt. See Protocol: Default Scope
+  Resolution.
 
 **Tasks file** is always `.optimus/tasks.md` — not configurable.
 
