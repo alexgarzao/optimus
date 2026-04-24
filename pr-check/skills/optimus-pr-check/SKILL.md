@@ -268,6 +268,29 @@ Store each thread as:
 }
 ```
 
+#### Step 1.3.1.5: Fetch ALL PR Review Bodies (MANDATORY)
+
+**HARD BLOCK:** CodeRabbit embeds its "Duplicate comments" and "⚠️ Outside diff range comments" sections inside **review bodies** — NOT in review threads (Step 1.3.1) or general comments (Step 1.3.2). A review body is the top-level markdown of a submitted review (`PullRequestReview` in the API), separate from inline review comments.
+
+If you skip this step, both sections are silently lost, and findings CodeRabbit already reported in prior reviews will never be surfaced to the user.
+
+```bash
+gh api repos/<owner>/<repo>/pulls/<number>/reviews \
+  --jq '[.[] | {id, state, submitted_at, user: .user.login, body}]' \
+  > /tmp/pr-reviews.json
+```
+
+**Processing rules:**
+
+1. Filter to `user == "coderabbitai[bot]"` with non-empty body.
+2. Sort by `submitted_at` descending.
+3. For the MOST RECENT review with `state` in `("CHANGES_REQUESTED", "COMMENTED")` and body containing either `♻️ Duplicate comments` OR `⚠️ Outside diff range comments`, apply the parsing algorithm in Step 1.3.3.
+4. Store the extracted findings indexed by source review ID (for traceability in Phase 4 attribution).
+
+**Why only the most recent review:** Earlier reviews are superseded — their duplicates either got resolved (don't reappear in latest) or are still unresolved (reappear in latest's "Duplicate comments" section). The latest review is CodeRabbit's current view of all unresolved findings.
+
+**Do NOT** rely on `gh pr view --comments` (Step 1.3.2) to surface these sections. That command includes review bodies in its output but concatenates them unstructured with issue comments, making reliable per-review parsing impossible.
+
 #### Step 1.3.2: Fetch General PR Comments
 
 ```bash
@@ -307,9 +330,111 @@ Extract: severity (HIGH/MEDIUM/LOW), annotation_level, message, file, line.
 Extract: shortcode, severity, category, analyzer, title, explanation, file, line.
 
 **CodeRabbit comments** (author: `coderabbitai[bot]`):
-- Inline review comments with suggestions
-- **Duplicated Comments section:** CodeRabbit embeds a `<details>` block titled "Duplicate comments" in its review body listing findings it already reported in previous reviews but remain unresolved. Parse each entry as a separate finding and tag with `origin: duplicate` (see tagging rules below).
-- **Outside diff range section:** CodeRabbit embeds a `<details>` block titled `⚠️ Outside diff range comments` in its review body with suggestions about code OUTSIDE the PR diff. Parse each entry (file path, line, suggestion) as a separate finding and tag with `origin: outside-diff` (see tagging rules below).
+- Inline review comments with suggestions (from thread fetch, Step 1.3.1)
+- **Duplicated Comments section** (from review body fetch, Step 1.3.1.5): `<details>` block titled `♻️ Duplicate comments (N)` in the review body listing findings already reported in previous reviews but still unresolved. These are the findings whose inline threads typically became `isOutdated: true` (and were filtered out by Step 1.3.1) — the review body is the ONLY remaining source. Parse per algorithm below and tag with `origin: duplicate`.
+- **Outside diff range section** (from review body fetch, Step 1.3.1.5): `<details>` block titled `⚠️ Outside diff range comments (N)` with suggestions about code OUTSIDE the PR diff. Parse per same algorithm and tag with `origin: outside-diff`.
+
+**Deterministic parsing algorithm (MANDATORY for both sections):**
+
+The `<details>` block for a CodeRabbit special section has this exact nested structure:
+
+```
+<details>
+<summary>♻️ Duplicate comments (N)</summary><blockquote>
+<details>
+<summary>path/to/fileA.py (K1)</summary><blockquote>
+
+`LINE_RANGE`: _⚠️ Potential issue_ | _<EMOJI> <LABEL>_
+
+**<Finding title.>**
+
+<body paragraph(s)>
+
+<details><summary>🐛 Minimal fix</summary>...diff...</details>
+<details><summary>🤖 Prompt for AI Agents</summary>...prompt...</details>
+
+---
+
+`LINE_RANGE`: _⚠️ Potential issue_ | _<EMOJI> <LABEL>_
+
+**<Second finding title.>**
+
+... (same structure) ...
+
+</blockquote></details>
+
+<details>
+<summary>path/to/fileB.go (K2)</summary><blockquote>
+... (K2 findings) ...
+</blockquote></details>
+
+</blockquote></details>
+```
+
+**Steps (apply to the latest CodeRabbit review body from Step 1.3.1.5):**
+
+1. **Locate the outer `<details>` block.** Match the opening summary line with case-sensitive regex:
+   - For duplicates: `<summary>♻️ Duplicate comments \((\d+)\)</summary>` → capture `N_TOTAL`.
+   - For outside-diff: `<summary>⚠️ Outside diff range comments \((\d+)\)</summary>` → capture `N_TOTAL`.
+   - If no match → no findings in this section (N=0); skip parsing.
+
+2. **Extract the outer blockquote body** — everything between the `<blockquote>` right after the summary and its matching `</blockquote></details>`. Track nesting: every inner `<details>` opens a level; every matching `</details>` closes one. Stop when the outer level closes.
+
+3. **Iterate inner per-file `<details>` blocks.** Match: `<summary>(.+?) \((\d+)\)</summary>` where the filename pattern allows `/`, `.`, `_`, `-`. Capture `FILE_PATH` and `K_COUNT` per block.
+
+4. **Within each per-file blockquote, split by `---` separator at the top level.** A `---` counts as a finding separator only if it is at the same nesting level as the finding headers — NOT inside any nested `<details>`. Implementation: walk line-by-line, maintain an integer `depth` (increment on `<details>`, decrement on `</details>`); a line matching `^\s*---\s*$` is a separator **only when `depth == 0`**.
+
+5. **Each resulting slice is ONE finding.** Parse its header:
+   - First non-empty line: `` `(\d+(?:-\d+)?)`: _(⚠️ Potential issue|🛠️ Refactor suggestion|🧹 Nitpick|...)_ \| _(🔴|🟠|🟡|🔵) (Critical|Major|Minor|Trivial)_ ``
+   - Capture `LINE_RANGE`, `TYPE_LABEL`, `SEVERITY_EMOJI`, `SEVERITY_LABEL`.
+   - Next bold line (`**...**`) is the `TITLE`.
+   - Everything until the first nested `<details>` or end-of-slice is the `DESCRIPTION`.
+   - If a `<details><summary>🐛 Minimal fix</summary>` exists, capture its content as `FIX_DIFF`.
+
+6. **Severity mapping:**
+   | Emoji | Label | Severity |
+   |-------|-------|----------|
+   | 🔴 | Critical | CRITICAL |
+   | 🟠 | Major | HIGH |
+   | 🟡 | Minor | MEDIUM |
+   | 🔵 | Trivial | LOW |
+
+7. **Count validation (HARD BLOCK):** After parsing:
+   - Sum per-file extracted findings → must equal `N_TOTAL` from the outer summary.
+   - Per-file extracted count → must equal `K_COUNT` from that file's summary.
+   - **On mismatch: STOP.** Print: `"Parser extracted X of N duplicate comments from review <id>. Aborting to prevent silent loss. Expected N=<N>, got X=<X>. File breakdown: {path: expected_K vs got_K}. Investigate the review body format."` Then ask the user via `AskUser` whether to proceed with the partial set or abort the entire skill run.
+   - This validation is the PRIMARY guardrail against the historical bug where one of two duplicate comments was silently missed.
+
+**Cross-validation fallback via "Prompt for all review comments" section:**
+
+CodeRabbit additionally emits a `<details>` block titled `🤖 Prompt for all review comments with AI agents` near the end of the review body. Inside its code fence, findings appear as a flat bullet list grouped by section and file:
+
+```
+Inline comments:
+In `@path/to/file.py`:
+- Around line 361-376: <description>
+- Around line 257-266: <description>
+
+Duplicate comments:
+In `@path/to/file.py`:
+- Around line 146-169: <description>
+- Around line 11-12: <description>
+
+Outside diff range comments:
+In `@path/to/other.go`:
+- Around line 42: <description>
+```
+
+**Parse this block IN ADDITION TO the `<details>` parsing:**
+1. Match: `<details>\s*<summary>🤖 Prompt for all review comments with AI agents</summary>`.
+2. Extract the code fence content.
+3. For each section header (`Inline comments:`, `Duplicate comments:`, `Outside diff range comments:`), extract bullets matching: `^- Around line ([\d\-]+):\s+(.+)$` under each `In \`@(.+?)\`:` header.
+4. Map section → origin tag (`inline`, `duplicate`, `outside-diff`).
+
+**Reconciliation (MANDATORY):** Take the **UNION** of findings from both sources (the `<details>` parse AND the "Prompt for all" parse). Match by `(file, line_range)` tuple.
+- Findings present in both → merge (use `<details>` block's richer metadata as primary, use "Prompt for all" description as fallback if `<details>` description was empty).
+- Findings only in one source → keep as-is, log which source surfaced it (for debugging).
+- **Never take the intersection** — one source missing a finding is a parsing bug, not ground truth.
 
 **CodeRabbit origin tagging rules:**
 When presenting findings from CodeRabbit, ALWAYS include the origin tag in the finding header:
@@ -539,11 +664,22 @@ Existing PR Comments — evaluate ALL of these (validate or contest each one):
   CodeRabbit Comments (inline):
   [paste all CodeRabbit inline review comments]
 
-  CodeRabbit Duplicate Comments:
-  [paste entries from "Duplicate comments" section — tag each as DUPLICATE]
+  CodeRabbit Duplicate Comments (pre-parsed from review body — see Step 1.3.1.5 and 1.3.3):
+  [render as a markdown table with EVERY finding from the <details> parse PLUS the "Prompt for all" parse UNION, one row each. Do NOT rely on the agent to reparse HTML.]
 
-  CodeRabbit Outside Diff Range Comments:
-  [paste entries from "⚠️ Outside diff range comments" section — tag each as OUTSIDE-DIFF]
+  | ID | File | Lines | Severity | Title | Description | Fix diff (if any) | Source review ID |
+  |----|------|-------|----------|-------|-------------|-------------------|------------------|
+  | D1 | scripts/enforce_signed_commit.py | 146-169 | CRITICAL | env /usr/bin/command git commit bypass | Inside the env branch, ... | ```diff ... ``` | 4167400017 |
+  | D2 | scripts/enforce_signed_commit.py | 11-12 | CRITICAL | Treat background & as separator | tokenize_command() emits &, but split_segments() ... | ```diff -SHELL_SEPARATORS = {"&&"...} +SHELL_SEPARATORS = {"&&"...,"&"} ``` | 4167400017 |
+
+  **HARD BLOCK:** The count of rows in this table MUST equal the (N) in the review's "♻️ Duplicate comments (N)" summary. If the orchestrator could not produce a matching count, the run was aborted at Step 1.3.3 (count validation). If you see a mismatch here, STOP and report it.
+
+  CodeRabbit Outside Diff Range Comments (pre-parsed from review body — see Step 1.3.1.5 and 1.3.3):
+  [render as a markdown table using the same column schema as above; rows tagged OUTSIDE-DIFF]
+
+  | ID | File | Lines | Severity | Title | Description | Fix diff (if any) | Source review ID |
+  |----|------|-------|----------|-------|-------------|-------------------|------------------|
+  | O1 | ... | ... | ... | ... | ... | ... | ... |
 
   Human Reviewer Comments:
   [paste all human reviewer comments]
