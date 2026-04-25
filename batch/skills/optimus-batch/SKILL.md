@@ -1021,14 +1021,17 @@ to identify each terminal at a glance.
 
 ```bash
 _optimus_set_title() {
-  # Multi-layer title updater. Empirical testing showed that some iTerm2
-  # profiles silently discard OSC 0/1/2 (the "Terminal may set window title"
-  # preference) while still honoring OSC 1337 (proprietary) and AppleScript.
-  # We emit all viable channels so the title actually changes regardless of
-  # the user's profile setup. The Execute tool runs bash without a
-  # controlling TTY, so /dev/tty fails with ENODEV; we resolve the parent
-  # process's TTY via ps instead. Walk up to 4 ancestors in case of nested
-  # shells.
+  # iTerm2 AppleScript title updater. Empirical testing showed that Optimus
+  # tasks always run in "divorced" iTerm2 sessions where the profile's
+  # autoNameFormat is locked to a literal — OSC 0/1/2 and OSC 1337
+  # SetUserVar are both ineffective in that state, so AppleScript's
+  # `set name of s` is the only channel that actually mutates session.name.
+  # The Execute tool runs bash without a controlling TTY, so /dev/tty fails
+  # with ENODEV; we resolve the parent process's TTY via ps instead. Walk
+  # up to 4 ancestors in case of nested shells. First run triggers a macOS
+  # TCC prompt ("droid wants to control iTerm"); approving enables this
+  # permanently. Silent no-op outside macOS/iTerm2 or when osascript is
+  # unavailable — non-iTerm2 / non-macOS users get no title update.
   local title="$1"
   local pid="$PPID" tty=""
   for _ in 1 2 3 4; do
@@ -1039,33 +1042,9 @@ _optimus_set_title() {
       *) break ;;
     esac
   done
-
-  # Layer C — broad OSC 0+1+2: covers Terminal.app, Linux terminals, Kitty,
-  # Alacritty, WezTerm, VS Code, and iTerm2 profiles where "Terminal may
-  # set window title" is enabled. OSC 1 is the form xterm calls "icon name"
-  # and iTerm2 maps to session.name; OSC 2 is the window title; OSC 0 sets
-  # both. Emitting all three maximizes compatibility.
-  if [ -n "$tty" ] && [ "$tty" != "?" ] && [ "$tty" != "??" ] && [ -w "/dev/$tty" ]; then
-    printf '\033]0;%s\007\033]1;%s\007\033]2;%s\007' "$title" "$title" "$title" > "/dev/$tty" 2>/dev/null || true
-
-    # Layer B — iTerm2 OSC 1337 SetUserVar bypasses profile restrictions on
-    # title-setting OSC. Reference it in profile Title or Badge format as
-    # \(user.optimusTitle). Harmless on other terminals (they ignore
-    # OSC 1337).
-    if [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; then
-      local b64
-      b64=$(printf '%s' "$title" | base64 | tr -d '\n')
-      printf '\033]1337;SetUserVar=optimusTitle=%s\007' "$b64" > "/dev/$tty" 2>/dev/null || true
-    fi
-  fi
-
-  # Layer A — iTerm2 AppleScript: only channel that actually mutates
-  # session.name when the profile blocks OSC 0/1/2. First run triggers a
-  # macOS TCC prompt ("droid wants to control iTerm"); approving enables
-  # this layer permanently. Silent no-op outside macOS/iTerm2 or when
-  # osascript is unavailable.
   if { [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; } \
-     && command -v osascript >/dev/null 2>&1 && [ -n "$tty" ]; then
+     && command -v osascript >/dev/null 2>&1 && [ -n "$tty" ] \
+     && [ "$tty" != "?" ] && [ "$tty" != "??" ]; then
     osascript \
       -e 'on run argv' \
       -e '  set targetTty to "/dev/" & item 1 of argv' \
@@ -1093,12 +1072,11 @@ _optimus_set_title "optimus: <STAGE> $TASK_ID — $TASK_TITLE"
 Example output in terminal tab: `optimus: REVIEW T-003 — User Auth JWT`
 
 **Why the parent-process TTY:** The Execute tool runs `bash -c` without a controlling
-terminal, so `/dev/tty` returns `ENODEV` ("Device not configured") and the OSC escape
-is silently dropped. Stdout is captured by the Droid CLI and not forwarded as raw
-bytes, so stdout does not work either. The resolver above asks `ps` for the parent's
-controlling TTY device path and writes directly to it — that device IS writable from
-the child and is connected to the user's real terminal (iTerm2, Terminal.app, tmux,
-etc.). If no ancestor has a TTY (Docker/CI), the function silently no-ops.
+terminal, so `/dev/tty` returns `ENODEV` ("Device not configured"). The resolver above
+asks `ps` for the parent's controlling TTY device path and matches it against iTerm2's
+session list via AppleScript — that device is connected to the user's real iTerm2
+session. If no ancestor has a TTY (Docker/CI) or osascript is unavailable, the
+function silently no-ops.
 
 **Restore title (at stage completion or exit):**
 
@@ -1106,25 +1084,22 @@ etc.). If no ancestor has a TTY (Docker/CI), the function silently no-ops.
 _optimus_set_title ""
 ```
 
-**NOTE:** This uses the standard OSC (Operating System Command) escape sequence
-supported by iTerm2, Terminal.app, VS Code terminal, tmux, and most modern terminals.
-The sequence is silent — it produces no visible output.
+**NOTE:** This helper is iTerm2-on-macOS only. Optimus tasks always run in
+"divorced" iTerm2 sessions, where AppleScript's `set name of s` is the only
+channel that reliably mutates `session.name`. Non-iTerm2 / non-macOS users
+will not see a title update.
 
 **Troubleshooting iTerm2 (if the title still doesn't update):**
 
-1. **Profiles > Terminal > "Terminal may set window title"** must be checked.
-   When it is OFF, iTerm2 silently discards OSC 0/1/2 (Layer C). Layer A
-   (AppleScript) keeps working through the scripting interface, so
-   `session.name` will still update — just not via the OSC channel.
-2. **Window > Edit Tab Title** must be empty. A manually-set tab title is
+1. **Window > Edit Tab Title** must be empty. A manually-set tab title is
    sticky on the tab label and overrides the session name visually, even
    when `session.name` is updated correctly underneath.
-3. The first run on macOS triggers a TCC prompt ("`droid` wants to control
-   `iTerm`"). Approve it to enable Layer A. Denying degrades the helper to
-   Layer C+B only.
-4. Alternative display location: set **Profiles > General > Badge** to
-   `\(user.optimusTitle)`. Layer B exposes the title there regardless of
-   the title-setting profile restriction.
+2. The first run on macOS triggers a TCC prompt ("`droid` wants to control
+   `iTerm`"). Approve it to enable the helper. Denying makes the helper a
+   silent no-op.
+3. The helper requires the parent process to have a controlling TTY. Inside
+   Docker/CI without a TTY, no ancestor will resolve and the helper will
+   silently no-op.
 
 Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Terminal Identification."
 

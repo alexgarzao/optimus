@@ -225,10 +225,6 @@ OLD_TITLE_FORMAT = re.compile(
 NEW_TITLE_FORMAT = re.compile(
     r'optimus:\s*(?:%s|[A-Z]+|<\w+>)\s+(?:%s|\$TASK_ID|T-\d+)\s*—\s*(?:%s|\$TASK_TITLE|[\w][\w ]*)'
 )
-OSC_PRINTF = re.compile(r"printf.*(\\033|\\e|\\x1b)\](?:0|1|2);")
-# Resolver writes to the parent-process TTY device (/dev/$tty). Legacy /dev/tty
-# is accepted during the transition window inside auto-inlined protocol blocks.
-TTY_REDIRECT = re.compile(r'>\s*"?/dev/(?:\$[A-Za-z_][A-Za-z0-9_]*|tty)"?\s+2>/dev/null')
 TITLE_SKILLS = ["plan", "build", "review", "done", "batch"]
 
 
@@ -261,24 +257,6 @@ class TestTerminalTitleFormat:
             + "\n".join(f"  - {v}" for v in missing)
         )
 
-    def test_all_osc_printf_redirect_to_tty(self):
-        """Every printf with OSC escape (\\033]0;) must redirect to a TTY device.
-
-        The resolver writes to the parent-process TTY (/dev/$tty). Legacy /dev/tty
-        is still accepted (auto-inlined blocks may contain it until regenerated),
-        but any printf with an OSC sequence MUST redirect somewhere."""
-        violations = []
-        for filepath in _all_doc_files():
-            text = filepath.read_text()
-            for i, line in enumerate(text.splitlines(), 1):
-                if OSC_PRINTF.search(line) and not TTY_REDIRECT.search(line):
-                    rel = filepath.relative_to(REPO_ROOT)
-                    violations.append(f"{rel}:{i}: missing TTY redirect — {line.strip()}")
-        assert violations == [], (
-            "Terminal title printf without TTY redirect (stdout is captured by Execute tool):\n"
-            + "\n".join(f"  - {v}" for v in violations)
-        )
-
     def test_all_stage_skills_have_terminal_title_step(self):
         """All stage/batch skills must have a Set Terminal Title step."""
         missing = []
@@ -292,18 +270,14 @@ class TestTerminalTitleFormat:
         )
 
     def test_all_title_skills_have_restore_title(self):
-        """All title skills must have a restore terminal title command.
-
-        Accepts either the legacy `printf '\\033]0;\\007' > /dev/tty ...` form
-        (still present in auto-inlined protocol blocks) or the new
-        `_optimus_set_title ""` helper call.
+        """All title skills must have a restore terminal title command
+        via the `_optimus_set_title ""` helper call.
         """
-        restore_legacy = re.compile(r"printf.*\\033\](?:0|1|2);\\007.*>\s*\"?/dev/")
         restore_helper = re.compile(r'_optimus_set_title\s+""')
         missing = []
         for skill in TITLE_SKILLS:
             content = _read_skill(skill)
-            if not (restore_legacy.search(content) or restore_helper.search(content)):
+            if not restore_helper.search(content):
                 missing.append(skill)
         assert missing == [], (
             "Skills missing restore terminal title command:\n"
@@ -326,24 +300,6 @@ class TestTerminalTitleFormat:
             "Skills missing AppleScript Layer A (osascript set name of s):\n"
             + "\n".join(f"  - {v}" for v in missing)
         )
-
-    def test_helper_has_setuservar_layer(self):
-        """Layer B (OSC 1337 SetUserVar=optimusTitle) must be present.
-
-        Exposes the title as a user variable that can be referenced via
-        `\\(user.optimusTitle)` in iTerm2 Profile Title or Badge formats,
-        surviving profiles that block OSC 0/1/2 title setting.
-        """
-        missing = []
-        for skill in TITLE_SKILLS:
-            content = _read_skill(skill)
-            if "SetUserVar=optimusTitle" not in content:
-                missing.append(skill)
-        assert missing == [], (
-            "Skills missing SetUserVar Layer B (OSC 1337 optimusTitle):\n"
-            + "\n".join(f"  - {v}" for v in missing)
-        )
-
 
 # --- Finding presentation: Tell me more, IMMEDIATE RESPONSE RULE, anti-rationalization ---
 
@@ -1262,8 +1218,8 @@ class TestResumeAdmin:
         assert re.search(r'optimus:\s+RESUME\s+\$TASK_ID', body), (
             "resume must set terminal title with RESUME label"
         )
-        assert re.search(r'>\s*"?/dev/\$[A-Za-z_]+"?\s+2>/dev/null', body), (
-            "resume must redirect the OSC sequence to the parent-process TTY (/dev/$tty)"
+        assert re.search(r'_optimus_set_title\s+"optimus:\s+RESUME', body), (
+            "resume must invoke the _optimus_set_title helper with the RESUME label"
         )
 
     # --- Round 2 regression tests ---

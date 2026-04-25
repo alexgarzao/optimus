@@ -138,16 +138,9 @@ _optimus_set_title() {
       *) break ;;
     esac
   done
-  if [ -n "$tty" ] && [ "$tty" != "?" ] && [ "$tty" != "??" ] && [ -w "/dev/$tty" ]; then
-    printf '\033]0;%s\007\033]1;%s\007\033]2;%s\007' "$title" "$title" "$title" > "/dev/$tty" 2>/dev/null || true
-    if [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; then
-      local b64
-      b64=$(printf '%s' "$title" | base64 | tr -d '\n')
-      printf '\033]1337;SetUserVar=optimusTitle=%s\007' "$b64" > "/dev/$tty" 2>/dev/null || true
-    fi
-  fi
   if { [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; } \
-     && command -v osascript >/dev/null 2>&1 && [ -n "$tty" ]; then
+     && command -v osascript >/dev/null 2>&1 && [ -n "$tty" ] \
+     && [ "$tty" != "?" ] && [ "$tty" != "??" ]; then
     osascript \
       -e 'on run argv' \
       -e '  set targetTty to "/dev/" & item 1 of argv' \
