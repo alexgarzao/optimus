@@ -23,6 +23,14 @@ MARKER_END = "<!-- INLINE-PROTOCOLS:END -->"
 # Max file size (5 MB) — prevents hanging on bloated or corrupted inputs.
 MAX_FILE_SIZE = 5 * 1024 * 1024
 
+# Substring used to detect the format-validation protocol heading. Anchored to a
+# single source of truth so that future heading renames update the matcher in
+# exactly one place. A regression test parses live AGENTS.md and asserts that
+# at least one heading contains this token.
+VALIDATION_PROTOCOL_TOKEN = "optimus-tasks.md Validation"
+MIGRATE_PROTOCOL_KEY = "Protocol: Migrate tasks.md to tasksDir"
+RENAME_PROTOCOL_KEY = "Protocol: Rename tasks.md to optimus-tasks.md"
+
 # Module-level compiled patterns.
 HEADING_RE = re.compile(r'^(?:#{2,3})\s+(.+)$')
 PROTOCOL_RE = re.compile(r'AGENTS\.md Protocol:\s*([^\n"]+)')
@@ -171,7 +179,8 @@ def inline_protocols() -> None:
     for key in ["File Location", "Valid Status Values (stored in state.json)",
                  "Task Spec Resolution", "Format Validation",
                  "Protocol: Resolve Tasks Git Scope",
-                 "Protocol: Migrate tasks.md to tasksDir"]:
+                 MIGRATE_PROTOCOL_KEY,
+                 RENAME_PROTOCOL_KEY]:
         if key in sections:
             foundational[key] = sections[key]
 
@@ -217,10 +226,20 @@ def inline_protocols() -> None:
             if key not in sections_to_inline:
                 sections_to_inline[key] = sections[key]
 
+        # Pair sibling startup protocols: any skill that inlines the legacy
+        # Migrate also needs Rename (and vice versa). Both run on skill startup
+        # to detect/repair filename and location drift.
+        if MIGRATE_PROTOCOL_KEY in sections_to_inline and RENAME_PROTOCOL_KEY in sections \
+                and RENAME_PROTOCOL_KEY not in sections_to_inline:
+            sections_to_inline[RENAME_PROTOCOL_KEY] = sections[RENAME_PROTOCOL_KEY]
+        if RENAME_PROTOCOL_KEY in sections_to_inline and MIGRATE_PROTOCOL_KEY in sections \
+                and MIGRATE_PROTOCOL_KEY not in sections_to_inline:
+            sections_to_inline[MIGRATE_PROTOCOL_KEY] = sections[MIGRATE_PROTOCOL_KEY]
+
         # Also check if State Management is referenced -> include foundational state.json docs
         needs_state = any("State Management" in k for k in sections_to_inline)
         needs_taskspec = any("TaskSpec" in k for k in sections_to_inline)
-        needs_format = any("tasks.md Validation" in k for k in sections_to_inline)
+        needs_format = any(VALIDATION_PROTOCOL_TOKEN in k for k in sections_to_inline)
 
         extra: dict[str, str] = {}
         if needs_state and "File Location" in foundational:
@@ -232,16 +251,22 @@ def inline_protocols() -> None:
         if needs_format and "Format Validation" in foundational:
             extra["Format Validation"] = foundational["Format Validation"]
 
-        # tasks.md Validation depends on Resolve Tasks Git Scope (which defines
-        # TASKS_DIR/TASKS_FILE/TASKS_GIT_SCOPE/tasks_git). Always include the scope
-        # protocol and the migration protocol when validation is referenced.
+        # optimus-tasks.md Validation depends on Resolve Tasks Git Scope (which defines
+        # TASKS_DIR/TASKS_FILE/TASKS_GIT_SCOPE/tasks_git). Defensive scaffold:
+        # the pairing block above already injects Migrate+Rename when either is
+        # explicitly referenced; this block adds them when ONLY Validation is
+        # referenced (currently unreachable from real skills, but kept as a
+        # safety net for future skills that might under-reference).
         if needs_format:
             if "Protocol: Resolve Tasks Git Scope" in foundational and \
                "Protocol: Resolve Tasks Git Scope" not in sections_to_inline:
                 extra["Protocol: Resolve Tasks Git Scope"] = foundational["Protocol: Resolve Tasks Git Scope"]
-            if "Protocol: Migrate tasks.md to tasksDir" in foundational and \
-               "Protocol: Migrate tasks.md to tasksDir" not in sections_to_inline:
-                extra["Protocol: Migrate tasks.md to tasksDir"] = foundational["Protocol: Migrate tasks.md to tasksDir"]
+            if MIGRATE_PROTOCOL_KEY in foundational and \
+               MIGRATE_PROTOCOL_KEY not in sections_to_inline:
+                extra[MIGRATE_PROTOCOL_KEY] = foundational[MIGRATE_PROTOCOL_KEY]
+            if RENAME_PROTOCOL_KEY in foundational and \
+               RENAME_PROTOCOL_KEY not in sections_to_inline:
+                extra[RENAME_PROTOCOL_KEY] = foundational[RENAME_PROTOCOL_KEY]
 
         content = strip_existing_inline(raw_content).rstrip() + "\n"
 

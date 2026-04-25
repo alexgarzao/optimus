@@ -189,7 +189,7 @@ Present the full findings table for a bird's-eye view:
 | # | Type | Severity | File(s) | Problem | Suggested Fix | Tradeoff | Recommendation |
 |---|------|----------|---------|---------|---------------|----------|----------------|
 | 1 | INCONSISTENCY | CRITICAL | api-design.md, data-model.md | Field X defined as VARCHAR(50) in data-model but string with no limit in API design | Align to VARCHAR(100) in both | Changing limit may affect validation | Fix both docs |
-| 2 | GAP | HIGH | tasks.md | Task T-008 does not define Testing Strategy | Add section with unit + integration tests | Additional writing effort | Add before implementation |
+| 2 | GAP | HIGH | optimus-tasks.md | Task T-008 does not define Testing Strategy | Add section with unit + integration tests | Additional writing effort | Add before implementation |
 | ... | ... | ... | ... | ... | ... | ... | ... |
 
 ### Summary by Severity

@@ -720,11 +720,11 @@ class TestConvergenceModel:
         assert violations == [], "\n".join(violations)
 
 
-# --- tasks.md format spec: marker, Tipo, versions, state.json ---
+# --- optimus-tasks.md format spec: marker, Tipo, versions, state.json ---
 
 
 class TestTasksFormatSpec:
-    """tasks.md format invariants must be defined in AGENTS.md."""
+    """optimus-tasks.md format invariants must be defined in AGENTS.md."""
 
     def test_agents_md_defines_format_marker(self):
         """AGENTS.md must define the tasks-v1 format marker."""
@@ -745,11 +745,11 @@ class TestTasksFormatSpec:
             assert status in content, f"AGENTS.md missing version status '{status}'"
 
     def test_status_lives_in_state_json(self):
-        """AGENTS.md must state that status is NOT stored in tasks.md."""
+        """AGENTS.md must state that status is NOT stored in optimus-tasks.md."""
         content = AGENTS_MD.read_text()
-        assert "NOT stored in tasks.md" in content or \
-            "NOT in tasks.md" in content, (
-            "AGENTS.md missing statement that status lives in state.json, not tasks.md"
+        assert "NOT stored in optimus-tasks.md" in content or \
+            "NOT in optimus-tasks.md" in content, (
+            "AGENTS.md missing statement that status lives in state.json, not optimus-tasks.md"
         )
 
     def test_agents_md_has_column_spec(self):
@@ -760,7 +760,7 @@ class TestTasksFormatSpec:
                 f"AGENTS.md missing column definition for '{col}'"
 
 
-# --- tasks.md location redesign: tasks.md lives in tasksDir (not in .optimus/) ---
+# --- optimus-tasks.md location redesign: optimus-tasks.md lives in tasksDir (not in .optimus/) ---
 
 SKILLS_THAT_TOUCH_TASKS = [
     "plan", "build", "review", "done", "batch", "resume",
@@ -772,7 +772,7 @@ TASKS_GIT_HELPER_RE = re.compile(r'tasks_git\s*\(\)')
 
 
 class TestTasksDirLocation:
-    """tasks.md lives at <tasksDir>/tasks.md (not .optimus/tasks.md).
+    """optimus-tasks.md lives at <tasksDir>/optimus-tasks.md (not .optimus/tasks.md).
     config.json is gitignored (not versioned).
     """
 
@@ -859,6 +859,19 @@ class TestTasksDirLocation:
         assert "LEGACY_FILE=\".optimus/tasks.md\"" in content, \
             "AGENTS.md migration protocol missing LEGACY_FILE"
 
+    def test_agents_md_has_rename_protocol(self):
+        """AGENTS.md must define Protocol: Rename tasks.md to optimus-tasks.md.
+
+        This protocol handles the secondary rename `<tasksDir>/tasks.md` →
+        `<tasksDir>/optimus-tasks.md` (distinct from the legacy `.optimus/tasks.md`
+        relocation handled by Protocol: Migrate tasks.md to tasksDir).
+        """
+        content = AGENTS_MD.read_text()
+        assert "### Protocol: Rename tasks.md to optimus-tasks.md" in content, \
+            "AGENTS.md missing Protocol: Rename tasks.md to optimus-tasks.md"
+        assert 'OLD_TASKS_FILE="${TASKS_DIR}/tasks.md"' in content, \
+            "AGENTS.md rename protocol missing OLD_TASKS_FILE"
+
     def test_config_json_is_gitignored(self):
         """Protocol: Initialize .optimus Directory must include config.json in the
         gitignore block."""
@@ -873,8 +886,8 @@ class TestTasksDirLocation:
             "Protocol: Initialize .optimus Directory must gitignore .optimus/config.json"
 
     def test_all_tasks_touching_skills_resolve_scope(self):
-        """Every skill that reads or writes tasks.md must reference Protocol:
-        Resolve Tasks Git Scope (directly or via tasks.md Validation)."""
+        """Every skill that reads or writes optimus-tasks.md must reference Protocol:
+        Resolve Tasks Git Scope (directly or via optimus-tasks.md Validation)."""
         missing = []
         for skill in SKILLS_THAT_TOUCH_TASKS:
             paths = list(REPO_ROOT.glob(f"{skill}/skills/*/SKILL.md"))
@@ -1343,7 +1356,7 @@ class TestResumeAdmin:
         )
 
 
-# --- Integration tests for the tasks.md relocation + separate-repo feature ---
+# --- Integration tests for the optimus-tasks.md relocation + separate-repo feature ---
 
 
 def _has_git():
@@ -1389,7 +1402,7 @@ def _extract_protocol_bash(section_title: str) -> str:
 
 @pytest.mark.skipif(not _has_git(), reason="git not available")
 class TestMigrationAndScopeIntegration:
-    """Integration tests for the tasks.md relocation + separate-repo support.
+    """Integration tests for the optimus-tasks.md relocation + separate-repo support.
 
     These tests execute the bash blocks from AGENTS.md against real tmp git repos
     to verify the protocols actually work — not just that their documentation exists.
@@ -1406,7 +1419,7 @@ class TestMigrationAndScopeIntegration:
         assert rc == 0, f"Bash failed: {err}"
         assert "SCOPE=same-repo" in out, f"Expected same-repo scope, got: {out}"
         assert "DIR=docs/pre-dev" in out
-        assert "FILE=docs/pre-dev/tasks.md" in out
+        assert "FILE=docs/pre-dev/optimus-tasks.md" in out
 
     def test_scope_resolution_separate_repo(self, tmp_path: Path):
         """Resolve Tasks Git Scope should detect separate-repo when tasksDir is in a different repo."""
@@ -1423,8 +1436,8 @@ class TestMigrationAndScopeIntegration:
         rc, out, err = _run(["bash", "-c", probe], cwd=project)
         assert rc == 0, f"Bash failed: {err}\n\n{out}"
         assert "SCOPE=separate-repo" in out
-        # Path relative to tasks repo root → just "tasks.md"
-        assert "REL=tasks.md" in out
+        # Path relative to tasks repo root → just "optimus-tasks.md"
+        assert "REL=optimus-tasks.md" in out
 
     def test_scope_resolution_rejects_dash_prefix(self, tmp_path: Path):
         """Resolve Tasks Git Scope must reject TASKS_DIR starting with '-' (git injection)."""
@@ -1484,7 +1497,7 @@ esac
         legacy = tmp_path / ".optimus" / "tasks.md"
         legacy.write_text("<!-- optimus:tasks-v1 -->\n# Tasks\n")
         probe = '''
-TASKS_FILE="docs/pre-dev/tasks.md"
+TASKS_FILE="docs/pre-dev/optimus-tasks.md"
 LEGACY_FILE=".optimus/tasks.md"
 if [ -f "$LEGACY_FILE" ] && [ -f "$TASKS_FILE" ]; then
   echo "NEEDS_MIGRATION=0 both exist"
@@ -1504,9 +1517,9 @@ fi
         (tmp_path / ".optimus").mkdir()
         (tmp_path / "docs" / "pre-dev").mkdir(parents=True)
         (tmp_path / ".optimus" / "tasks.md").write_text("legacy\n")
-        (tmp_path / "docs" / "pre-dev" / "tasks.md").write_text("new\n")
+        (tmp_path / "docs" / "pre-dev" / "optimus-tasks.md").write_text("new\n")
         probe = '''
-TASKS_FILE="docs/pre-dev/tasks.md"
+TASKS_FILE="docs/pre-dev/optimus-tasks.md"
 LEGACY_FILE=".optimus/tasks.md"
 if [ -f "$LEGACY_FILE" ] && [ -f "$TASKS_FILE" ]; then
   echo "NEEDS_MIGRATION=0 both exist"
@@ -1521,17 +1534,17 @@ fi
         assert "both exist" in out, f"Did not detect both-files case: {out}"
 
 
-# --- F19: Test that inline-protocols.py auto-injects scope+migration when tasks.md Validation is referenced ---
+# --- F19: Test that inline-protocols.py auto-injects scope+migration when optimus-tasks.md Validation is referenced ---
 
 
 class TestInlineProtocolsFoundational:
-    """Verify inline-protocols.py auto-injects foundational protocols for tasks.md Validation refs.
+    """Verify inline-protocols.py auto-injects foundational protocols for optimus-tasks.md Validation refs.
 
     This is the `needs_format` branch added in commit ad0d8d7 — previously untested.
     """
 
     def test_needs_format_injects_scope_and_migration(self, tmp_path: Path):
-        """When a skill references Protocol: tasks.md Validation, the inlined block
+        """When a skill references Protocol: optimus-tasks.md Validation, the inlined block
         MUST contain both Protocol: Resolve Tasks Git Scope AND Protocol: Migrate tasks.md to tasksDir."""
         import importlib.util
         spec = importlib.util.spec_from_file_location(
@@ -1542,14 +1555,15 @@ class TestInlineProtocolsFoundational:
 
         agents = tmp_path / "AGENTS.md"
         agents.write_text(
-            "## Protocol: tasks.md Validation (HARD BLOCK)\nValidation content\n"
+            "## Protocol: optimus-tasks.md Validation (HARD BLOCK)\nValidation content\n"
             "## Protocol: Resolve Tasks Git Scope\nScope resolution content\n"
             "## Protocol: Migrate tasks.md to tasksDir\nMigration content\n"
+            "## Protocol: Rename tasks.md to optimus-tasks.md\nRename content\n"
         )
         skill_dir = tmp_path / "myplugin" / "skills" / "optimus-myplugin"
         skill_dir.mkdir(parents=True)
         skill = skill_dir / "SKILL.md"
-        skill.write_text("Body: see AGENTS.md Protocol: tasks.md Validation.\n")
+        skill.write_text("Body: see AGENTS.md Protocol: optimus-tasks.md Validation.\n")
 
         # Monkey-patch paths
         original_agents = ip.AGENTS_MD
@@ -1567,4 +1581,48 @@ class TestInlineProtocolsFoundational:
             "Resolve Tasks Git Scope was not auto-injected"
         assert "Migration content" in inlined, \
             "Migrate tasks.md to tasksDir was not auto-injected"
+        assert "Validation content" in inlined
+
+    def test_needs_format_injects_rename_protocol(self, tmp_path: Path):
+        """When a skill references Protocol: optimus-tasks.md Validation, the inlined block
+        MUST also contain Protocol: Rename tasks.md to optimus-tasks.md.
+
+        Regression coverage for the secondary rename protocol that handles
+        `<tasksDir>/tasks.md` → `<tasksDir>/optimus-tasks.md` on disk. Mirrors the
+        Migrate protocol regression test above; the Rename protocol must be auto-
+        injected into the same set of skills (those that reference the format
+        validation protocol)."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "inline_protocols", REPO_ROOT / "scripts" / "inline-protocols.py",
+        )
+        ip = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ip)
+
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text(
+            "## Protocol: optimus-tasks.md Validation (HARD BLOCK)\nValidation content\n"
+            "## Protocol: Resolve Tasks Git Scope\nScope resolution content\n"
+            "## Protocol: Migrate tasks.md to tasksDir\nMigration content\n"
+            "## Protocol: Rename tasks.md to optimus-tasks.md\nRename content\n"
+        )
+        skill_dir = tmp_path / "myplugin" / "skills" / "optimus-myplugin"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_text("Body: see AGENTS.md Protocol: optimus-tasks.md Validation.\n")
+
+        # Monkey-patch paths
+        original_agents = ip.AGENTS_MD
+        original_root = ip.REPO_ROOT
+        try:
+            ip.AGENTS_MD = agents
+            ip.REPO_ROOT = tmp_path
+            ip.inline_protocols()
+        finally:
+            ip.AGENTS_MD = original_agents
+            ip.REPO_ROOT = original_root
+
+        inlined = skill.read_text()
+        assert "Rename content" in inlined, \
+            "Rename tasks.md to optimus-tasks.md was not auto-injected"
         assert "Validation content" in inlined

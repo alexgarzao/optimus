@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "import",
-      "description": "Import Ring pre-dev artifacts into optimus format. Creates tasks.md with TaskSpec column. Re-runnable — only imports what's new.",
+      "description": "Import Ring pre-dev artifacts into optimus format. Creates optimus-tasks.md with TaskSpec column. Re-runnable — only imports what's new.",
       "source": "./import"
     },
     {
@@ -52,7 +52,7 @@
     },
     {
       "name": "resolve",
-      "description": "Administrative: Resolves merge conflicts in tasks.md caused by parallel task execution across feature branches.",
+      "description": "Administrative: Resolves merge conflicts in optimus-tasks.md caused by parallel task execution across feature branches.",
       "source": "./resolve"
     },
     {

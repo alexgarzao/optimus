@@ -12,7 +12,7 @@
       "name": "optimus-import",
       "source": "./import",
       "version": "1.0.0",
-      "description": "Import Ring pre-dev artifacts into optimus format. Creates tasks.md with TaskSpec column. Re-runnable — only imports what's new.",
+      "description": "Import Ring pre-dev artifacts into optimus format. Creates optimus-tasks.md with TaskSpec column. Re-runnable — only imports what's new.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
       "license": "MIT"
@@ -93,7 +93,7 @@
       "name": "optimus-resolve",
       "source": "./resolve",
       "version": "1.0.0",
-      "description": "Administrative: Resolves merge conflicts in tasks.md caused by parallel task execution across feature branches.",
+      "description": "Administrative: Resolves merge conflicts in optimus-tasks.md caused by parallel task execution across feature branches.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
       "license": "MIT"

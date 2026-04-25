@@ -4,7 +4,7 @@ Tracked improvements that are not yet prioritized for implementation.
 
 ---
 
-## I6: Additional Test Coverage for tasks.md Relocation Feature
+## I6: Additional Test Coverage for optimus-tasks.md Relocation Feature
 
 **Status:** Open
 **Affects:** scripts/test_skill_consistency.py
@@ -12,7 +12,7 @@ Tracked improvements that are not yet prioritized for implementation.
 
 ### Context
 
-The tasks.md-to-tasksDir migration feature (commit ad0d8d7, hardened in subsequent
+The optimus-tasks.md-to-tasksDir migration feature (commit ad0d8d7, hardened in subsequent
 review) has integration tests in `TestMigrationAndScopeIntegration` covering:
 scope detection (same-repo/separate-repo), non-git tasksDir rejection, dash-prefix
 rejection, path traversal, migration detection. Additional scenarios are identified
@@ -23,7 +23,7 @@ as gaps:
    correct repos, gitignore updated).
 2. **Concurrent migration** — two shell processes running migration simultaneously
    on the same project (expected: one succeeds, the other aborts cleanly).
-3. **Scale test** — tasks.md with 500+ rows; measure parsing time for `grep`/`awk`.
+3. **Scale test** — optimus-tasks.md with 500+ rows; measure parsing time for `grep`/`awk`.
 4. **Special characters in task titles** — pipes, emojis, unicode — verify table
    parsing does not break.
 5. **Migration rollback on partial failure** — inject failures at steps 2-5; verify
@@ -106,7 +106,7 @@ Weight each task's contribution to version progress by its Estimate column
 (S=1, M=2, L=3, XL=5, or similar). Progress becomes:
 `Sum(weight of DONE tasks) / Sum(weight of all non-cancelled tasks)`.
 
-The Estimate column already exists in tasks.md and comes from Ring pre-dev, so
+The Estimate column already exists in optimus-tasks.md and comes from Ring pre-dev, so
 no extra data collection is needed.
 
 ### Analysis
@@ -166,7 +166,7 @@ Portuguese. This creates a barrier for non-Portuguese-speaking users and contrib
 ### Considerations
 
 - Requires a migration path for state.json (existing status values)
-- tasks.md format marker may need versioning (v1 → v2)
+- optimus-tasks.md format marker may need versioning (v1 → v2)
 - All protocol references to status names must be updated atomically
 - Consider keeping Portuguese as an alias during transition period
 
