@@ -1602,7 +1602,7 @@ If either is missing from the discovered roster, the protocol returns `MIN_NOT_M
 instead of a roster. The caller is responsible for STOP semantics — typically a
 message instructing the user to install the missing droids and re-run.
 
-Skills reference this as: "Execute Protocol: Discover Review Droids — see AGENTS.md."
+Skills reference this as: "Execute Protocol: Discover Review Droids — see AGENTS.md Protocol: Discover Review Droids."
 
 ### Protocol: Divergence Warning
 
@@ -1733,7 +1733,7 @@ Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol:
 
 ### Protocol: Ring Droid Requirement Check
 
-**Referenced by:** review, pr-check, deep-doc-review, coderabbit-review, plan, build
+**Referenced by:** review, deep-doc-review, coderabbit-review, plan, build
 
 Before dispatching ring droids, verify the required droids are available. If any required
 droid is not installed, **STOP** and list missing droids.

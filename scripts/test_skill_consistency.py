@@ -1656,3 +1656,39 @@ class TestInlineProtocolsFoundational:
         assert "Rename content" in inlined, \
             "Rename tasks.md to optimus-tasks.md was not auto-injected"
         assert "Validation content" in inlined
+
+    def test_discover_review_droids_inlined_in_consumers(self):
+        """Both pr-check and deep-review must reference Protocol: Discover Review
+        Droids in their body AND have it inlined in their <!-- INLINE-PROTOCOLS -->
+        block. Catches regressions where inline-protocols.py silently fails to
+        sync due to reference-format drift.
+        """
+        consumers = [
+            "pr-check/skills/optimus-pr-check/SKILL.md",
+            "deep-review/skills/optimus-deep-review/SKILL.md",
+        ]
+        missing_body = []
+        missing_inlined = []
+        for rel in consumers:
+            path = REPO_ROOT / rel
+            content = path.read_text()
+            # Body reference
+            if "Protocol: Discover Review Droids" not in content:
+                missing_body.append(rel)
+            # Inlined block (between markers)
+            m = re.search(
+                r"<!-- INLINE-PROTOCOLS:START -->(.*?)<!-- INLINE-PROTOCOLS:END -->",
+                content, re.DOTALL,
+            )
+            if not m or "### Protocol: Discover Review Droids" not in m.group(1):
+                missing_inlined.append(rel)
+        assert not missing_body, (
+            f"Skills reference Protocol: Discover Review Droids in body but it's "
+            f"missing in: {missing_body}"
+        )
+        assert not missing_inlined, (
+            f"Skills reference Protocol: Discover Review Droids but it's NOT "
+            f"inlined in their <!-- INLINE-PROTOCOLS --> block: {missing_inlined}. "
+            f"Likely cause: scripts/inline-protocols.py regex did not match the "
+            f"reference syntax. Re-run the syncer and inspect."
+        )
