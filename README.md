@@ -60,16 +60,13 @@ Then run `/optimus-sync` to install all plugins at once.
 
 ### Claude Code
 
-One-liner bootstrap (resolves the chicken-and-egg problem):
-
 ```bash
-git clone --depth 1 https://github.com/alexgarzao/optimus ~/.optimus/repo \
-  && mkdir -p ~/.claude/skills/default/optimus-sync \
-  && cp ~/.optimus/repo/sync/skills/optimus-sync/SKILL.md \
-        ~/.claude/skills/default/optimus-sync/SKILL.md
+claude plugin marketplace add https://github.com/alexgarzao/optimus
+claude plugin install optimus-sync@optimus
 ```
 
-Then open Claude Code and run `/optimus-sync` — it will install all other plugins automatically.
+Reopen Claude Code (so the new plugin is discovered), then run `/optimus-sync` —
+it installs all other plugins automatically via Claude Code's native plugin system.
 
 **Note:** Command aliases (`/sp`, `/bd`, etc.) are not supported on Claude Code.
 Use the full skill name (e.g., `/optimus-plan`, `/optimus-build`).
