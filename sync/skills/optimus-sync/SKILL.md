@@ -8,7 +8,7 @@ trigger: >
 skip_when: >
   - User wants to install a single specific plugin (use `droid plugin install` directly)
 prerequisite: >
-  - At least one supported platform: droid CLI installed OR ~/.claude/ directory exists
+  - At least one supported platform: droid CLI installed OR ~/.claude/skills/ directory exists
   - jq installed and available
   - For Droid: Optimus marketplace registered (`droid plugin marketplace add https://github.com/alexgarzao/optimus`)
   - For Claude Code: git installed (for repo cache clone/update)
@@ -22,9 +22,8 @@ examples:
       1. Detect available platforms (Droid, Claude Code, or both)
       2. Update marketplace / repo cache
       3. Calculate changes per platform (new/orphaned/existing)
-      4. Show plan and ask for confirmation
-      5. Execute each operation with progress
-      6. Show per-platform summary
+      4. Execute each operation with progress
+      5. Show per-platform summary
 related:
   complementary:
     - optimus-help
@@ -57,13 +56,13 @@ Check that at least one supported platform is available.
 ### Step 1.1: Detect platforms
 
 ```bash
-HAS_DROID=false; HAS_CLAUDE=false
+HAS_DROID=false; HAS_CLAUDE_CODE=false
 command -v droid >/dev/null 2>&1 && HAS_DROID=true
-[ -d "$HOME/.claude" ] && HAS_CLAUDE=true
-echo "Droid: $HAS_DROID | Claude Code: $HAS_CLAUDE"
+[ -d "$HOME/.claude/skills" ] && HAS_CLAUDE_CODE=true
+echo "Droid: $HAS_DROID | Claude Code: $HAS_CLAUDE_CODE"
 ```
 
-If both are `false`, **STOP**: "No supported platform found. Install Droid from https://docs.factory.ai or create ~/.claude/ for Claude Code support."
+If both are `false`, **STOP**: "No supported platform found. Install Droid from https://docs.factory.ai or create ~/.claude/skills/ for Claude Code support."
 
 ### Step 1.2: Check jq
 
@@ -136,66 +135,24 @@ Compare `EXPECTED` vs each platform's `INSTALLED` to determine three lists per p
 
 ---
 
-## Phase 4: Show Plan
+## Phase 4: Execute
 
-Present the plan to the user before executing. Show **per-platform** counts:
+Run the sync shell script. The script detects platforms, syncs both, and prints
+a per-platform summary.
 
-```
-Platforms: Droid, Claude Code
-
-Droid:       Expected: N | Installed: N | New: N | Orphaned: N | Update: N
-Claude Code: Expected: N | Installed: N | New: N | Orphaned: N | Update: N
-```
-
-If there are new/orphaned/existing plugins, list them with `+`/`-`/`*` prefixes.
-
-Use `<json-render>` with a Table component for clear display.
-
-Then ask the user via `AskUser`:
-
-```
-Ready to sync N plugins across M platform(s). Proceed?
-```
-
-Options:
-- **Proceed** — execute all operations
-- **Cancel** — abort sync
-
-If **Cancel**, **STOP**.
-
----
-
-## Phase 5: Execute
-
-Run all operations in a **single Execute call** using the sync shell script. The script
-detects platforms, syncs both, and prints a per-platform summary.
+Resolve script path (prefer local repo, fall back to cache):
 
 ```bash
-bash sync/scripts/sync-user-plugins.sh 2>&1
-```
-
-If not running inside the Optimus repo (script not available), construct equivalent
-commands:
-
-**For Droid:** parallel `droid plugin update` calls (same as before).
-
-**For Claude Code:** copy SKILL.md files from repo cache:
-```bash
-CACHE=~/.optimus/repo
-DEST=~/.claude/skills/default
-for plugin in <space-separated list>; do
-  src="$CACHE/${plugin}/skills/optimus-${plugin}/SKILL.md"
-  dest_dir="$DEST/optimus-${plugin}"
-  mkdir -p "$dest_dir"
-  cp "$src" "$dest_dir/SKILL.md"
-done
+SCRIPT="${OPTIMUS_CACHE_DIR:-$HOME/.optimus/repo}/sync/scripts/sync-user-plugins.sh"
+[ -f sync/scripts/sync-user-plugins.sh ] && SCRIPT="sync/scripts/sync-user-plugins.sh"
+bash "$SCRIPT" 2>&1
 ```
 
 Use a 90-second timeout for the entire Execute call.
 
 ---
 
-## Phase 6: Summary
+## Phase 5: Summary
 
 Present the final summary using `<json-render>` with **per-platform** metrics:
 

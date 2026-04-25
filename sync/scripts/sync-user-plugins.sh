@@ -25,9 +25,9 @@ readonly OPTIMUS_REPO_URL="${OPTIMUS_REPO_URL:-https://github.com/alexgarzao/opt
 
 # ─── Platform detection ───────────────────────────────────────────────────────
 HAS_DROID=false
-HAS_CLAUDE=false
+HAS_CLAUDE_CODE=false
 command -v droid >/dev/null 2>&1 && HAS_DROID=true
-[ -d "$HOME/.claude" ] && HAS_CLAUDE=true
+[ -d "$HOME/.claude/skills" ] && HAS_CLAUDE_CODE=true
 
 # ─── Validate inputs ─────────────────────────────────────────────────────────
 if [ "$HAS_DROID" = true ]; then
@@ -37,10 +37,10 @@ if [ "$HAS_DROID" = true ]; then
   fi
 fi
 
-if [ "$HAS_DROID" = false ] && [ "$HAS_CLAUDE" = false ]; then
+if [ "$HAS_DROID" = false ] && [ "$HAS_CLAUDE_CODE" = false ]; then
   _error "No supported platform found."
   echo "  Install Droid from: https://docs.factory.ai" >&2
-  echo "  Or create ~/.claude/ for Claude Code support." >&2
+  echo "  Or create ~/.claude/skills/ for Claude Code support." >&2
   exit 1
 fi
 
@@ -61,13 +61,25 @@ _droid() {
   fi
 }
 
-_count_lines() {
-  echo "$1" | grep -c . 2>/dev/null || echo 0
-}
-
 _read_result() {
   local file="$1"
   cat "$file" 2>/dev/null || echo "FAIL"
+}
+
+# _compute_diffs <expected> <installed>
+# Sets globals: NEW_PLUGINS, ORPHANED_PLUGINS, EXISTING_PLUGINS
+_compute_diffs() {
+  local expected="$1"
+  local installed="$2"
+  if [ -z "$installed" ]; then
+    NEW_PLUGINS="$expected"
+    ORPHANED_PLUGINS=""
+    EXISTING_PLUGINS=""
+  else
+    NEW_PLUGINS=$(comm -23 <(echo "$expected") <(echo "$installed"))
+    ORPHANED_PLUGINS=$(comm -13 <(echo "$expected") <(echo "$installed"))
+    EXISTING_PLUGINS=$(comm -12 <(echo "$expected") <(echo "$installed"))
+  fi
 }
 
 # ─── Get expected plugins from marketplace JSON ──────────────────────────────
@@ -93,8 +105,10 @@ _resolve_expected_plugins() {
     script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local repo_root
     repo_root="$(cd "$script_dir/../.." && pwd)"
-    if [ -f "$repo_root/.factory-plugin/marketplace.json" ]; then
-      marketplace_file="$repo_root/.factory-plugin/marketplace.json"
+    if [ -f "$repo_root/AGENTS.md" ] && [ -f "$repo_root/sync/scripts/sync-user-plugins.sh" ]; then
+      if [ -f "$repo_root/.factory-plugin/marketplace.json" ]; then
+        marketplace_file="$repo_root/.factory-plugin/marketplace.json"
+      fi
     fi
   fi
 
@@ -112,6 +126,16 @@ _resolve_expected_plugins() {
     return 1
   fi
 
+  # Validate plugin names (path-traversal defense)
+  local p
+  while IFS= read -r p; do
+    [ -z "$p" ] && continue
+    if ! [[ "$p" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
+      _error "Invalid plugin name in marketplace.json: '$p' (must match ^[a-z0-9][a-z0-9_-]*\$)"
+      return 1
+    fi
+  done <<< "$expected"
+
   echo "$expected"
 }
 
@@ -124,12 +148,6 @@ _sync_droid() {
   echo "── Droid (Factory) ──"
   echo ""
 
-  # Update marketplace
-  echo "Updating marketplace..."
-  if ! _droid plugin marketplace update "$MARKETPLACE_NAME" 2>/dev/null; then
-    _warn "Could not update marketplace. Proceeding with cached version."
-  fi
-
   # Get installed optimus plugins
   local installed
   installed=$(_droid plugin list 2>/dev/null \
@@ -139,20 +157,16 @@ _sync_droid() {
     | sort) || true
 
   # Calculate diffs
-  local new_plugins orphaned_plugins existing_plugins
-  if [ -z "$installed" ]; then
-    new_plugins="$expected"
-    orphaned_plugins=""
-    existing_plugins=""
-  else
-    new_plugins=$(comm -23 <(echo "$expected") <(echo "$installed"))
-    orphaned_plugins=$(comm -13 <(echo "$expected") <(echo "$installed"))
-    existing_plugins=$(comm -12 <(echo "$expected") <(echo "$installed"))
-  fi
+  _compute_diffs "$expected" "$installed"
+  local new_plugins="$NEW_PLUGINS"
+  local orphaned_plugins="$ORPHANED_PLUGINS"
+  local existing_plugins="$EXISTING_PLUGINS"
 
   # All operations run in parallel using temp dir for result collection
   local results_dir
   results_dir=$(mktemp -d)
+  local _saved_trap
+  _saved_trap=$(trap -p INT TERM)
   # shellcheck disable=SC2064
   trap "rm -rf '$results_dir'; echo ''; _warn 'Sync interrupted. Re-run /optimus-sync to complete.'; exit 130" INT TERM
   local retry_removals="" retry_installs="" retry_updates=""
@@ -271,6 +285,7 @@ _sync_droid() {
 
   # Collect results
   local removed=0 added=0 updated=0 failed=0
+  local result
 
   if [ -n "$orphaned_plugins" ]; then
     while IFS= read -r plugin; do
@@ -313,40 +328,53 @@ _sync_droid() {
   fi
 
   rm -rf "$results_dir"
+  eval "${_saved_trap:-trap - INT TERM}"
 
   echo ""
   echo "  Droid — Added: $added | Updated: $updated | Removed: $removed | Failed: $failed"
 
-  [ "$failed" -gt 0 ] && return 1
-  return 0
+  local rc=0
+  [ "$failed" -gt 0 ] && rc=1
+  return $rc
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Repo Cache Management (used by Claude Code sync and as marketplace fallback)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-# Track whether repo cache is usable (set by _ensure_repo_cache)
-_REPO_CACHE_OK=false
+# Track whether repo cache is usable (set by _ensure_repo_cache).
+# Possible values: "true" (fresh), "stale" (cached but fetch failed), "false" (unusable).
+_REPO_CACHE_OK="false"
 
 _ensure_repo_cache() {
   local repo_dir="$OPTIMUS_CACHE_DIR"
 
   if [ -d "$repo_dir/.git" ]; then
+    # Verify the cache origin matches OPTIMUS_REPO_URL before using it.
+    local actual_url
+    actual_url=$(git -C "$repo_dir" config --get remote.origin.url 2>/dev/null || echo "")
+    if [ "$actual_url" != "$OPTIMUS_REPO_URL" ]; then
+      _error "Repo cache at $repo_dir has unexpected origin: '$actual_url' (expected '$OPTIMUS_REPO_URL'). Refusing to use it. Delete it manually if intentional."
+      _REPO_CACHE_OK="false"
+      return 0  # Soft failure — script can continue if Source 1 or 3 work
+    fi
+
     echo "Updating repo cache..."
     if ! git -C "$repo_dir" fetch --depth 1 origin main 2>/dev/null; then
-      _warn "Could not fetch latest. Using cached version."
+      _warn "Could not fetch latest. Using cached (possibly stale) version."
+      _REPO_CACHE_OK="stale"
     else
       git -C "$repo_dir" reset --hard origin/main 2>/dev/null || true
+      _REPO_CACHE_OK="true"
     fi
-    _REPO_CACHE_OK=true
   else
     echo "Cloning repo cache..."
     if git clone --depth 1 "$OPTIMUS_REPO_URL" "$repo_dir" 2>/dev/null; then
-      _REPO_CACHE_OK=true
+      _REPO_CACHE_OK="true"
     else
       _warn "Could not clone repo. Claude Code sync requires a repo cache."
       echo "  Run: git clone --depth 1 ${OPTIMUS_REPO_URL} ${repo_dir}" >&2
-      _REPO_CACHE_OK=false
+      _REPO_CACHE_OK="false"
     fi
   fi
 }
@@ -362,7 +390,7 @@ _sync_claude_code() {
 
   local repo_dir="$OPTIMUS_CACHE_DIR"
 
-  if [ "$_REPO_CACHE_OK" = false ]; then
+  if [ "$_REPO_CACHE_OK" = "false" ]; then
     echo "  Claude Code — Added: 0 | Updated: 0 | Removed: 0 | Failed: 0 (skipped)"
     return 0
   fi
@@ -370,27 +398,21 @@ _sync_claude_code() {
   local skills_dir="$CLAUDE_SKILLS_DIR"
   mkdir -p "$skills_dir"
 
-  # Step 3: Get currently installed optimus skills
+  # Get currently installed optimus skills
   local installed=""
   if [ -d "$skills_dir" ]; then
     installed=$(find "$skills_dir" -maxdepth 1 -type d -name 'optimus-*' -exec basename {} \; 2>/dev/null | sed 's/^optimus-//' | sort) || true
   fi
 
-  # Step 4: Calculate diffs
-  local new_plugins orphaned_plugins existing_plugins
-  if [ -z "$installed" ]; then
-    new_plugins="$expected"
-    orphaned_plugins=""
-    existing_plugins=""
-  else
-    new_plugins=$(comm -23 <(echo "$expected") <(echo "$installed"))
-    orphaned_plugins=$(comm -13 <(echo "$expected") <(echo "$installed"))
-    existing_plugins=$(comm -12 <(echo "$expected") <(echo "$installed"))
-  fi
+  # Calculate diffs
+  _compute_diffs "$expected" "$installed"
+  local new_plugins="$NEW_PLUGINS"
+  local orphaned_plugins="$ORPHANED_PLUGINS"
+  local existing_plugins="$EXISTING_PLUGINS"
 
   local added=0 updated=0 removed=0 failed=0 unchanged=0
 
-  # Step 5: Install new plugins
+  # Install new plugins
   if [ -n "$new_plugins" ]; then
     while IFS= read -r plugin; do
       [ -z "$plugin" ] && continue
@@ -398,7 +420,9 @@ _sync_claude_code() {
       local dest_dir="$skills_dir/optimus-${plugin}"
       if [ -f "$src" ]; then
         mkdir -p "$dest_dir"
+        rm -f "$dest_dir/SKILL.md"
         cp "$src" "$dest_dir/SKILL.md"
+        touch "$dest_dir/.optimus-managed"
         echo "  + $plugin ... OK"
         added=$((added + 1))
       else
@@ -408,12 +432,13 @@ _sync_claude_code() {
     done <<< "$new_plugins"
   fi
 
-  # Step 6: Update existing plugins (skip if unchanged)
+  # Update existing plugins (skip if unchanged)
   if [ -n "$existing_plugins" ]; then
     while IFS= read -r plugin; do
       [ -z "$plugin" ] && continue
       local src="$repo_dir/${plugin}/skills/optimus-${plugin}/SKILL.md"
-      local dest="$skills_dir/optimus-${plugin}/SKILL.md"
+      local dest_dir="$skills_dir/optimus-${plugin}"
+      local dest="$dest_dir/SKILL.md"
       if [ ! -f "$src" ]; then
         echo "  * $plugin ... FAIL (source not found)"
         failed=$((failed + 1))
@@ -422,23 +447,39 @@ _sync_claude_code() {
       if [ -f "$dest" ] && diff -q "$src" "$dest" >/dev/null 2>&1; then
         echo "  * $plugin ... unchanged"
         unchanged=$((unchanged + 1))
+        # Idempotently ensure the marker exists for pre-existing installs.
+        touch "$dest_dir/.optimus-managed"
       else
-        mkdir -p "$skills_dir/optimus-${plugin}"
+        mkdir -p "$dest_dir"
+        rm -f "$dest"
         cp "$src" "$dest"
+        touch "$dest_dir/.optimus-managed"
         echo "  * $plugin ... OK"
         updated=$((updated + 1))
       fi
     done <<< "$existing_plugins"
   fi
 
-  # Step 7: Remove orphaned plugins (ONLY optimus- prefixed)
+  # Remove orphaned plugins (ONLY optimus- prefixed, ONLY with .optimus-managed marker)
   if [ -n "$orphaned_plugins" ]; then
     while IFS= read -r plugin; do
       [ -z "$plugin" ] && continue
       local target_dir="$skills_dir/optimus-${plugin}"
       if [ -d "$target_dir" ]; then
-        rm -rf "$target_dir"
-        echo "  - $plugin ... OK"
+        if [ -f "$target_dir/.optimus-managed" ]; then
+          if rm -rf "$target_dir" 2>/dev/null; then
+            echo "  - $plugin"
+            removed=$((removed + 1))
+          else
+            echo "  - $plugin (FAIL)"
+            failed=$((failed + 1))
+          fi
+        else
+          echo "  - $plugin (skipped — no .optimus-managed marker; user-created?)"
+          # Not counted as removed or failed
+        fi
+      else
+        echo "  - $plugin (already gone)"
         removed=$((removed + 1))
       fi
     done <<< "$orphaned_plugins"
@@ -448,6 +489,9 @@ _sync_claude_code() {
   local summary="Claude Code — Added: $added | Updated: $updated | Removed: $removed | Failed: $failed"
   if [ "$unchanged" -gt 0 ]; then
     summary="$summary | Unchanged: $unchanged"
+  fi
+  if [ "$_REPO_CACHE_OK" = "stale" ]; then
+    summary="$summary (cache: stale)"
   fi
   echo "  $summary"
 
@@ -465,15 +509,26 @@ echo ""
 # Detect platforms
 platforms=""
 if [ "$HAS_DROID" = true ]; then platforms="${platforms}Droid "; fi
-if [ "$HAS_CLAUDE" = true ]; then platforms="${platforms}Claude Code "; fi
+if [ "$HAS_CLAUDE_CODE" = true ]; then platforms="${platforms}Claude Code "; fi
 echo "Platforms: $platforms"
 echo ""
 
-# Ensure repo cache is populated (needed for Claude Code sync and marketplace fallback)
-if [ "$HAS_CLAUDE" = true ]; then
-  _ensure_repo_cache
+# Surface a custom OPTIMUS_REPO_URL so users notice it on each run.
+_default_url="https://github.com/alexgarzao/optimus"
+if [ "$OPTIMUS_REPO_URL" != "$_default_url" ]; then
+  echo "Note: using custom OPTIMUS_REPO_URL=$OPTIMUS_REPO_URL"
   echo ""
 fi
+
+# Refresh both marketplace sources before resolving EXPECTED
+if [ "$HAS_DROID" = true ]; then
+  echo "Updating Droid marketplace..."
+  _droid plugin marketplace update "$MARKETPLACE_NAME" >/dev/null 2>&1 || _warn "Could not update Droid marketplace. Using cached version."
+fi
+if [ "$HAS_CLAUDE_CODE" = true ]; then
+  _ensure_repo_cache
+fi
+echo ""
 
 # Resolve expected plugins (shared across platforms)
 EXPECTED=$(_resolve_expected_plugins) || exit 1
@@ -487,7 +542,7 @@ if [ "$HAS_DROID" = true ]; then
   echo ""
 fi
 
-if [ "$HAS_CLAUDE" = true ]; then
+if [ "$HAS_CLAUDE_CODE" = true ]; then
   _sync_claude_code "$EXPECTED" || claude_rc=$?
   echo ""
 fi
