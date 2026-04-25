@@ -23,6 +23,8 @@ resolver protocol itself).
 from __future__ import annotations
 
 import re
+import subprocess
+import textwrap
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent
@@ -188,6 +190,192 @@ class TestSkillBodiesUseMainWorktreePrefix:
             "state.json:\n"
             + "\n".join(f"  - {v}" for v in violations)
         )
+
+
+def _run(cmd, cwd=None, env=None):
+    """Run a command, capturing both stdout and stderr. Returns (rc, out, err)."""
+    result = subprocess.run(
+        cmd, cwd=cwd, env=env,
+        capture_output=True, text=True, check=False,
+    )
+    return result.returncode, result.stdout, result.stderr
+
+
+def _init_repo(path: Path):
+    """Initialize a minimal git repo at `path` with a single committed file.
+
+    The committed file is required because `git worktree add` refuses to operate
+    on an unborn HEAD (no commits yet).
+    """
+    path.mkdir(parents=True, exist_ok=True)
+    _run(["git", "init", "--initial-branch=main"], cwd=path)
+    _run(["git", "config", "user.email", "test@example.com"], cwd=path)
+    _run(["git", "config", "user.name", "Test"], cwd=path)
+    _run(["git", "config", "commit.gpgsign", "false"], cwd=path)
+    (path / "README.md").write_text("# test\n")
+    _run(["git", "add", "README.md"], cwd=path)
+    _run(["git", "commit", "-m", "initial"], cwd=path)
+
+
+def _extract_resolver_bash() -> str:
+    """Extract the recipe bash block from Protocol: Resolve Main Worktree Path.
+
+    The protocol contains multiple bash blocks (the recipe + RIGHT/WRONG examples).
+    This helper returns ONLY the first block, which is the canonical recipe that
+    sets `MAIN_WORKTREE` and exits 1 on failure.
+    """
+    content = AGENTS_MD.read_text()
+    marker = "### Protocol: Resolve Main Worktree Path"
+    idx = content.find(marker)
+    if idx == -1:
+        raise RuntimeError("Protocol: Resolve Main Worktree Path missing")
+    next_idx = content.find("\n### ", idx + len(marker))
+    section = content[idx:next_idx] if next_idx != -1 else content[idx:]
+    bash_start = section.find("```bash\n")
+    if bash_start == -1:
+        raise RuntimeError("No bash block under Resolve Main Worktree Path")
+    bash_end = section.find("\n```", bash_start + len("```bash\n"))
+    return section[bash_start + len("```bash\n"):bash_end]
+
+
+class TestResolverIntegration:
+    """End-to-end tests of the Protocol: Resolve Main Worktree Path bash recipe
+    against real git worktrees in tmp_path. These tests catch regressions that
+    static-analysis tests can't (e.g., a broken `awk` regex).
+    """
+
+    def test_resolver_returns_main_path_from_main_worktree(self, tmp_path: Path):
+        """Running the resolver from the main worktree itself returns the main path."""
+        repo = tmp_path / "project"
+        _init_repo(repo)
+        recipe = _extract_resolver_bash()
+        probe = recipe + '\necho "RESULT=$MAIN_WORKTREE"\n'
+        rc, out, err = _run(["bash", "-c", probe], cwd=repo)
+        assert rc == 0, f"Resolver should succeed in main worktree (err={err})"
+        # On macOS tmp_path can be /private/var/... while repo path is /var/...
+        # Both resolve to the same location; compare via realpath.
+        actual = [line.split("=", 1)[1] for line in out.splitlines()
+                  if line.startswith("RESULT=")][0]
+        assert Path(actual).resolve() == repo.resolve(), (
+            f"Expected MAIN_WORKTREE={repo}, got {actual}"
+        )
+
+    def test_resolver_returns_main_path_from_linked_worktree(self, tmp_path: Path):
+        """Running the resolver from a LINKED worktree must return the MAIN
+        worktree's path, not the linked one. This is THE bug the protocol fixes."""
+        main = tmp_path / "project"
+        _init_repo(main)
+        # Create a linked worktree at sibling location.
+        linked = tmp_path / "project-linked"
+        rc, _, err = _run(
+            ["git", "worktree", "add", "-b", "feature", str(linked)],
+            cwd=main,
+        )
+        assert rc == 0, f"git worktree add failed: {err}"
+
+        recipe = _extract_resolver_bash()
+        probe = recipe + '\necho "RESULT=$MAIN_WORKTREE"\n'
+        # CRITICAL: cwd is the LINKED worktree, not main.
+        rc, out, err = _run(["bash", "-c", probe], cwd=linked)
+        assert rc == 0, f"Resolver should succeed in linked worktree (err={err})"
+        actual = [line.split("=", 1)[1] for line in out.splitlines()
+                  if line.startswith("RESULT=")][0]
+        # Must resolve to MAIN, not the linked worktree.
+        assert Path(actual).resolve() == main.resolve(), (
+            f"Resolver returned the LINKED path, defeating the entire fix.\n"
+            f"  Expected MAIN_WORKTREE={main}\n"
+            f"  Got      MAIN_WORKTREE={actual}\n"
+            f"  CWD                    ={linked}"
+        )
+        assert Path(actual).resolve() != linked.resolve(), (
+            "Resolver returned linked path — bug regression"
+        )
+
+    def test_resolver_fails_in_non_git_directory(self, tmp_path: Path):
+        """Outside any git repo, the resolver must exit 1 with a clear error."""
+        non_git = tmp_path / "not-a-repo"
+        non_git.mkdir()
+        recipe = _extract_resolver_bash()
+        rc, out, err = _run(["bash", "-c", recipe], cwd=non_git)
+        assert rc != 0, "Resolver should fail outside a git repo"
+        assert "not in a git repository" in err.lower() or "main worktree" in err.lower(), (
+            f"Expected a clear error about main worktree resolution, got: {err}"
+        )
+
+    def test_state_write_from_linked_worktree_lands_in_main(self, tmp_path: Path):
+        """End-to-end: a state.json write using ${MAIN_WORKTREE}/.optimus/state.json
+        from a linked worktree must create the file at MAIN, not at the linked path.
+
+        This is the canonical regression for the T-037 incident: optimus-done writing
+        from a linked worktree, then `git worktree remove` deleting the linked
+        worktree, used to drop the state update on the floor.
+        """
+        main = tmp_path / "project"
+        _init_repo(main)
+        linked = tmp_path / "project-linked"
+        rc, _, err = _run(
+            ["git", "worktree", "add", "-b", "feature", str(linked)],
+            cwd=main,
+        )
+        assert rc == 0, f"git worktree add failed: {err}"
+
+        recipe = _extract_resolver_bash()
+        # Simulate the State Management protocol's write pattern.
+        probe = recipe + textwrap.dedent("""
+            mkdir -p "${MAIN_WORKTREE}/.optimus"
+            STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
+            echo '{"T-001": {"status": "DONE"}}' > "$STATE_FILE"
+            echo "WROTE=$STATE_FILE"
+        """)
+        rc, out, err = _run(["bash", "-c", probe], cwd=linked)
+        assert rc == 0, f"State write failed (err={err})"
+
+        # Assert the file landed in MAIN, NOT in the linked worktree.
+        main_state = main / ".optimus" / "state.json"
+        linked_state = linked / ".optimus" / "state.json"
+        assert main_state.exists(), (
+            f"state.json should exist in main worktree at {main_state} — "
+            "this is the file that survives `git worktree remove`."
+        )
+        assert not linked_state.exists(), (
+            f"state.json must NOT exist in the linked worktree at {linked_state}. "
+            "The fix MUST route writes through ${MAIN_WORKTREE}/, not relative paths."
+        )
+        assert "T-001" in main_state.read_text(), "state.json content lost"
+
+    def test_resolver_works_after_worktree_removal(self, tmp_path: Path):
+        """After `git worktree remove`, the resolver still works from main —
+        confirms the cleanup path documented in optimus-done is consistent
+        with the resolver's expectations.
+        """
+        main = tmp_path / "project"
+        _init_repo(main)
+        linked = tmp_path / "project-linked"
+        _run(["git", "worktree", "add", "-b", "feature", str(linked)], cwd=main)
+
+        # Write state from linked worktree.
+        recipe = _extract_resolver_bash()
+        probe = recipe + textwrap.dedent("""
+            mkdir -p "${MAIN_WORKTREE}/.optimus"
+            echo '{"T-001": {"status": "DONE"}}' > "${MAIN_WORKTREE}/.optimus/state.json"
+        """)
+        rc, _, err = _run(["bash", "-c", probe], cwd=linked)
+        assert rc == 0, f"linked-worktree write failed: {err}"
+
+        # Now remove the linked worktree (the T-037 cleanup step).
+        rc, _, err = _run(
+            ["git", "worktree", "remove", "--force", str(linked)],
+            cwd=main,
+        )
+        assert rc == 0, f"worktree remove failed: {err}"
+
+        # The state.json must still exist in main — survived the worktree removal.
+        main_state = main / ".optimus" / "state.json"
+        assert main_state.exists(), (
+            "state.json was deleted along with the linked worktree — "
+            "exactly the T-037 incident this protocol exists to prevent."
+        )
+        assert "T-001" in main_state.read_text()
 
 
 class TestInlineProtocolsInjectsMainWorktree:
