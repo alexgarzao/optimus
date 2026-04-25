@@ -30,6 +30,7 @@ MAX_FILE_SIZE = 5 * 1024 * 1024
 VALIDATION_PROTOCOL_TOKEN = "optimus-tasks.md Validation"
 MIGRATE_PROTOCOL_KEY = "Protocol: Migrate tasks.md to tasksDir"
 RENAME_PROTOCOL_KEY = "Protocol: Rename tasks.md to optimus-tasks.md"
+MAIN_WORKTREE_PROTOCOL_KEY = "Protocol: Resolve Main Worktree Path"
 
 # Module-level compiled patterns.
 HEADING_RE = re.compile(r'^(?:#{2,3})\s+(.+)$')
@@ -180,7 +181,8 @@ def inline_protocols() -> None:
                  "Task Spec Resolution", "Format Validation",
                  "Protocol: Resolve Tasks Git Scope",
                  MIGRATE_PROTOCOL_KEY,
-                 RENAME_PROTOCOL_KEY]:
+                 RENAME_PROTOCOL_KEY,
+                 MAIN_WORKTREE_PROTOCOL_KEY]:
         if key in sections:
             foundational[key] = sections[key]
 
@@ -240,6 +242,20 @@ def inline_protocols() -> None:
         needs_state = any("State Management" in k for k in sections_to_inline)
         needs_taskspec = any("TaskSpec" in k for k in sections_to_inline)
         needs_format = any(VALIDATION_PROTOCOL_TOKEN in k for k in sections_to_inline)
+        # Any protocol that touches .optimus/ operational files needs the
+        # main-worktree resolver. Detected by: explicit reference, or by
+        # transitive use via State Management / Session State / Stage Stats /
+        # Initialize .optimus Directory.
+        needs_main_worktree = (
+            any("Resolve Main Worktree Path" in k for k in sections_to_inline)
+            or needs_state
+            or any("Session State" in k for k in sections_to_inline)
+            or any("Increment Stage Stats" in k for k in sections_to_inline)
+            or any("Initialize .optimus Directory" in k for k in sections_to_inline)
+            or any("Divergence Warning" in k for k in sections_to_inline)
+            or MIGRATE_PROTOCOL_KEY in sections_to_inline
+            or RENAME_PROTOCOL_KEY in sections_to_inline
+        )
 
         extra: dict[str, str] = {}
         if needs_state and "File Location" in foundational:
@@ -267,6 +283,14 @@ def inline_protocols() -> None:
             if RENAME_PROTOCOL_KEY in foundational and \
                RENAME_PROTOCOL_KEY not in sections_to_inline:
                 extra[RENAME_PROTOCOL_KEY] = foundational[RENAME_PROTOCOL_KEY]
+
+        # Auto-inject Resolve Main Worktree Path into any skill that touches
+        # .optimus/ operational files. The bug it fixes (worktree isolation)
+        # affects every skill that reads/writes state.json, stats.json, sessions,
+        # reports, or migration/rename checkpoint markers.
+        if needs_main_worktree and MAIN_WORKTREE_PROTOCOL_KEY in foundational \
+                and MAIN_WORKTREE_PROTOCOL_KEY not in sections_to_inline:
+            extra[MAIN_WORKTREE_PROTOCOL_KEY] = foundational[MAIN_WORKTREE_PROTOCOL_KEY]
 
         content = strip_existing_inline(raw_content).rstrip() + "\n"
 

@@ -712,8 +712,17 @@ detects whether `tasksDir` lives in the same git repo as the project code or in 
 commands on optimus-tasks.md uniformly regardless of scope.
 
 ```bash
+# Step 0: Resolve main worktree — see AGENTS.md Protocol: Resolve Main Worktree Path.
+# Required because .optimus/config.json is gitignored and lives only in the main
+# worktree's filesystem; resolving it relative to PWD would miss it from a linked
+# worktree.
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+if [ -z "$MAIN_WORKTREE" ]; then
+  echo "ERROR: Cannot determine main worktree — not in a git repository." >&2
+  exit 1
+fi
 # Step 1: Resolve tasksDir from config.json (if present) or fall back to default.
-CONFIG_FILE=".optimus/config.json"
+CONFIG_FILE="${MAIN_WORKTREE}/.optimus/config.json"
 if [ -f "$CONFIG_FILE" ] && jq empty "$CONFIG_FILE" 2>/dev/null; then
   TASKS_DIR=$(jq -r '.tasksDir // "docs/pre-dev"' "$CONFIG_FILE")
 else
@@ -852,6 +861,55 @@ Raw `git` on `$TASKS_FILE` breaks in separate-repo mode.
 project repo). `tasks_git push` pushes the tasks repo. The project repo is unaffected.
 
 Skills reference this as: "Resolve tasks git scope — see AGENTS.md Protocol: Resolve Tasks Git Scope."
+
+
+### Protocol: Resolve Main Worktree Path
+
+**Referenced by:** all skills that read or write `.optimus/` operational files (state.json, stats.json, sessions, reports, logs, and checkpoint markers).
+
+**Why:** `.optimus/` is gitignored. Git does NOT propagate ignored files across linked worktrees (`git worktree add` creates a sibling working tree but does not share gitignored files). When a skill runs from a linked worktree (the common case for `/optimus-build`, `/optimus-review`, `/optimus-done` which default to the task's worktree), reads and writes against `.optimus/state.json` resolve to the worktree's isolated copy. Updates never reach the main worktree. When the linked worktree is later removed (e.g., by `/optimus-done` cleanup), the writes are lost — silent data loss.
+
+**Recipe:**
+
+```bash
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+if [ -z "$MAIN_WORKTREE" ]; then
+  echo "ERROR: Cannot determine main worktree — not in a git repository." >&2
+  exit 1
+fi
+```
+
+The first `worktree` line in `git worktree list --porcelain` is always the main worktree (where the bare `.git/` directory or the repo's HEAD lives), regardless of where the command is run from.
+
+**Path resolution pattern:**
+
+After resolving `MAIN_WORKTREE`, every `.optimus/` path MUST be prefixed:
+
+```bash
+# RIGHT (works from any worktree):
+STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
+SESSION_FILE="${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
+STATS_FILE="${MAIN_WORKTREE}/.optimus/stats.json"
+mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" \
+         "${MAIN_WORKTREE}/.optimus/reports" \
+         "${MAIN_WORKTREE}/.optimus/logs"
+
+# WRONG (resolves against PWD, breaks in linked worktrees):
+STATE_FILE=".optimus/state.json"
+SESSION_FILE=".optimus/sessions/session-${TASK_ID}.json"
+STATS_FILE=".optimus/stats.json"
+mkdir -p .optimus/sessions .optimus/reports .optimus/logs
+```
+
+**What does NOT need this protocol:**
+
+- `<tasksDir>/optimus-tasks.md` and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/` — versioned content, propagated by git across worktrees automatically.
+- `.optimus/config.json` — when **versioned** (legacy projects), it propagates via git; when **gitignored** (current default after Migrate protocol untracks it), it suffers the same isolation as state.json. **Treat `.optimus/config.json` as gitignored and resolve via `$MAIN_WORKTREE` for safety in current projects** — the cost is a single `git worktree list` call.
+- `.gitignore` itself — versioned, propagated via git.
+
+**Idempotency:** the resolution is read-only against git metadata; safe to call multiple times in the same skill execution. Cache `MAIN_WORKTREE` in a local variable rather than re-running `git worktree list` for each path.
+
+Skills reference this as: "Resolve main worktree — see AGENTS.md Protocol: Resolve Main Worktree Path."
 
 
 ### Finding Presentation (Unified Model)
@@ -1126,6 +1184,9 @@ same-repo and separate-repo scopes.
 `tasks_git` are defined.
 
 ```bash
+# Requires Protocol: Resolve Main Worktree Path to have run first
+# (or resolve inline; see that protocol).
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
 if [ -z "$TASKS_DEFAULT_BRANCH" ]; then
   echo "WARNING: Cannot determine default branch for tasks repo. Skipping divergence check."
   # Skip — this is a warning, not a HARD BLOCK
@@ -1133,7 +1194,7 @@ else
   # Throttle fetch: only re-fetch if the cached timestamp is older than 5 minutes.
   # Each stage skill would otherwise pay ~2s network latency per invocation.
   # The cache lives in the PROJECT repo's .optimus/ (always present, gitignored).
-  FETCH_MARKER=".optimus/.last-tasks-fetch"
+  FETCH_MARKER="${MAIN_WORKTREE}/.optimus/.last-tasks-fetch"
   NOW_EPOCH=$(date +%s)
   SHOULD_FETCH=1
   if [ -f "$FETCH_MARKER" ]; then
@@ -1144,7 +1205,7 @@ else
   fi
   if [ "$SHOULD_FETCH" = "1" ]; then
     if tasks_git fetch origin "$TASKS_DEFAULT_BRANCH" --quiet 2>/dev/null; then
-      mkdir -p .optimus
+      mkdir -p "${MAIN_WORKTREE}/.optimus"
       printf '%s' "$NOW_EPOCH" > "$FETCH_MARKER"
     else
       echo "WARNING: Could not fetch from origin. Divergence check may use stale data."
@@ -1260,12 +1321,15 @@ if [ -L "$LEGACY_FILE" ] || [ -L "$TASKS_FILE" ]; then
 fi
 ```
 
-Checkpoint file: write `.optimus/.migration-in-progress` BEFORE starting. This marker
-lets subsequent invocations detect interrupted migrations:
+Checkpoint file: write `${MAIN_WORKTREE}/.optimus/.migration-in-progress` BEFORE starting.
+This marker lets subsequent invocations detect interrupted migrations:
 
 ```bash
-mkdir -p .optimus
-printf '%s\n' "$TASKS_FILE" > .optimus/.migration-in-progress
+# Requires Protocol: Resolve Main Worktree Path to have run first
+# (or resolve inline; see that protocol).
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+mkdir -p "${MAIN_WORKTREE}/.optimus"
+printf '%s\n' "$TASKS_FILE" > "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
 ```
 
 **Scope-branched migration:** explicit `if` so the agent executes the correct branch:
@@ -1276,7 +1340,7 @@ if [ "$TASKS_GIT_SCOPE" = "same-repo" ]; then
   mkdir -p "$TASKS_DIR"
   if ! git mv "$LEGACY_FILE" "$TASKS_FILE"; then
     echo "ERROR: git mv failed. Migration aborted — no changes made." >&2
-    rm -f .optimus/.migration-in-progress
+    rm -f "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
     exit 1
   fi
   COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
@@ -1288,7 +1352,7 @@ if [ "$TASKS_GIT_SCOPE" = "same-repo" ]; then
     git reset HEAD -- "$LEGACY_FILE" "$TASKS_FILE" 2>/dev/null
     git checkout HEAD -- "$LEGACY_FILE" 2>/dev/null
     rm -f "$TASKS_FILE"
-    rm -f "$COMMIT_MSG_FILE" .optimus/.migration-in-progress
+    rm -f "$COMMIT_MSG_FILE" "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
     exit 1
   fi
   rm -f "$COMMIT_MSG_FILE"
@@ -1297,14 +1361,14 @@ else
   mkdir -p "$TASKS_DIR"
   if ! cp "$LEGACY_FILE" "$TASKS_FILE"; then
     echo "ERROR: cp failed. Migration aborted." >&2
-    rm -f .optimus/.migration-in-progress
+    rm -f "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
     exit 1
   fi
   # Commit #1: in tasks repo
   if ! tasks_git add "$TASKS_GIT_REL"; then
     echo "ERROR: tasks_git add failed. Rolling back..." >&2
     rm -f "$TASKS_FILE"
-    rm -f .optimus/.migration-in-progress
+    rm -f "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
     exit 1
   fi
   COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
@@ -1314,7 +1378,7 @@ else
     echo "ERROR: tasks_git commit failed. Rolling back..." >&2
     tasks_git reset HEAD -- "$TASKS_GIT_REL" 2>/dev/null
     rm -f "$TASKS_FILE"
-    rm -f "$COMMIT_MSG_FILE" .optimus/.migration-in-progress
+    rm -f "$COMMIT_MSG_FILE" "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
     exit 1
   fi
   rm -f "$COMMIT_MSG_FILE"
@@ -1322,7 +1386,7 @@ else
   if ! git rm "$LEGACY_FILE"; then
     echo "ERROR: git rm failed in project repo. Tasks repo already committed." >&2
     echo "Manual cleanup needed: rm $LEGACY_FILE && git add -A && git commit" >&2
-    rm -f .optimus/.migration-in-progress
+    rm -f "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
     exit 1
   fi
   COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
@@ -1331,7 +1395,7 @@ else
   if ! git commit -F "$COMMIT_MSG_FILE"; then
     echo "ERROR: Commit failed in project repo. Tasks repo already committed." >&2
     echo "Manual cleanup needed: git commit after resolving." >&2
-    rm -f "$COMMIT_MSG_FILE" .optimus/.migration-in-progress
+    rm -f "$COMMIT_MSG_FILE" "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
     exit 1
   fi
   rm -f "$COMMIT_MSG_FILE"
@@ -1380,7 +1444,7 @@ fi
 
 **Migration success: clear checkpoint marker and log each step.**
 ```bash
-rm -f .optimus/.migration-in-progress
+rm -f "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
 echo "INFO: Migration completed successfully:" >&2
 echo "  - Legacy location: $LEGACY_FILE" >&2
 echo "  - New location:    $TASKS_FILE" >&2
@@ -1396,8 +1460,11 @@ Remember to push both repos (project + tasks) when you're ready.
 **Interrupted migration recovery (on skill startup):**
 
 ```bash
-if [ -f .optimus/.migration-in-progress ]; then
-  INTERRUPTED_FILE=$(cat .optimus/.migration-in-progress 2>/dev/null)
+# Requires Protocol: Resolve Main Worktree Path to have run first
+# (or resolve inline; see that protocol).
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+if [ -f "${MAIN_WORKTREE}/.optimus/.migration-in-progress" ]; then
+  INTERRUPTED_FILE=$(cat "${MAIN_WORKTREE}/.optimus/.migration-in-progress" 2>/dev/null)
   echo "WARNING: Previous migration was interrupted. Expected target: $INTERRUPTED_FILE" >&2
   # AskUser: Retry migration / Clear marker / Abort
 fi
@@ -1801,7 +1868,7 @@ _optimus_quiet_run "make-test-integration" make test-integration
 Keep labels short (≤30 chars) and filesystem-safe — the helper sanitizes aggressively,
 but readable labels produce readable log filenames in `.optimus/logs/`.
 
-**When the agent needs full output:** use `cat .optimus/logs/<filename>.log` or
+**When the agent needs full output:** use `cat "${MAIN_WORKTREE}/.optimus/logs/<filename>.log"` or
 point a sub-agent to the log path (`Read` tool). Never re-run the command just to
 see the output — the log already has it.
 
@@ -1892,12 +1959,15 @@ Options:
 
 **Rename flow (when user chooses "Rename now"):**
 
-Checkpoint file: write `.optimus/.rename-in-progress` BEFORE starting. This marker
-lets subsequent invocations detect interrupted renames:
+Checkpoint file: write `${MAIN_WORKTREE}/.optimus/.rename-in-progress` BEFORE starting.
+This marker lets subsequent invocations detect interrupted renames:
 
 ```bash
-mkdir -p .optimus
-printf '%s\n' "$TASKS_FILE" > .optimus/.rename-in-progress
+# Requires Protocol: Resolve Main Worktree Path to have run first
+# (or resolve inline; see that protocol).
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+mkdir -p "${MAIN_WORKTREE}/.optimus"
+printf '%s\n' "$TASKS_FILE" > "${MAIN_WORKTREE}/.optimus/.rename-in-progress"
 ```
 
 **Scope-branched rename:** explicit `if` so the agent executes the correct branch:
@@ -1907,7 +1977,7 @@ if [ "$TASKS_GIT_SCOPE" = "same-repo" ]; then
   # Same-repo: atomic git mv in a single commit (preserves history via rename-detect).
   if ! git mv "$OLD_TASKS_FILE" "$TASKS_FILE"; then
     echo "ERROR: git mv failed. Rename aborted — no changes made." >&2
-    rm -f .optimus/.rename-in-progress
+    rm -f "${MAIN_WORKTREE}/.optimus/.rename-in-progress"
     exit 1
   fi
   COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
@@ -1919,7 +1989,7 @@ if [ "$TASKS_GIT_SCOPE" = "same-repo" ]; then
     git reset HEAD -- "$OLD_TASKS_FILE" "$TASKS_FILE" 2>/dev/null
     git checkout HEAD -- "$OLD_TASKS_FILE" 2>/dev/null
     rm -f "$TASKS_FILE"
-    rm -f "$COMMIT_MSG_FILE" .optimus/.rename-in-progress
+    rm -f "$COMMIT_MSG_FILE" "${MAIN_WORKTREE}/.optimus/.rename-in-progress"
     exit 1
   fi
   rm -f "$COMMIT_MSG_FILE"
@@ -1929,12 +1999,12 @@ else
     "$OLD_TASKS_FILE" "$TASKS_REPO_ROOT" 2>/dev/null)
   if [ -z "$OLD_TASKS_GIT_REL" ]; then
     echo "ERROR: Failed to compute path for legacy file relative to tasks repo." >&2
-    rm -f .optimus/.rename-in-progress
+    rm -f "${MAIN_WORKTREE}/.optimus/.rename-in-progress"
     exit 1
   fi
   if ! tasks_git mv "$OLD_TASKS_GIT_REL" "$TASKS_GIT_REL"; then
     echo "ERROR: tasks_git mv failed. Rename aborted — no changes made." >&2
-    rm -f .optimus/.rename-in-progress
+    rm -f "${MAIN_WORKTREE}/.optimus/.rename-in-progress"
     exit 1
   fi
   COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
@@ -1944,7 +2014,7 @@ else
     echo "ERROR: Commit failed in tasks repo. Manual cleanup needed:" >&2
     echo "  cd $TASKS_DIR && git reset HEAD -- $OLD_TASKS_GIT_REL $TASKS_GIT_REL" >&2
     echo "  git checkout HEAD -- $OLD_TASKS_GIT_REL && rm -f $TASKS_GIT_REL" >&2
-    rm -f "$COMMIT_MSG_FILE" .optimus/.rename-in-progress
+    rm -f "$COMMIT_MSG_FILE" "${MAIN_WORKTREE}/.optimus/.rename-in-progress"
     exit 1
   fi
   rm -f "$COMMIT_MSG_FILE"
@@ -1953,7 +2023,7 @@ fi
 
 **Rename success: clear checkpoint marker and log.**
 ```bash
-rm -f .optimus/.rename-in-progress
+rm -f "${MAIN_WORKTREE}/.optimus/.rename-in-progress"
 echo "INFO: Rename completed successfully:" >&2
 echo "  - Old name:  $OLD_TASKS_FILE" >&2
 echo "  - New name:  $TASKS_FILE" >&2
@@ -1985,8 +2055,11 @@ Remember to push the tasks repo when you're ready.
 **Interrupted rename recovery (on skill startup):**
 
 ```bash
-if [ -f .optimus/.rename-in-progress ]; then
-  INTERRUPTED_FILE=$(cat .optimus/.rename-in-progress 2>/dev/null)
+# Requires Protocol: Resolve Main Worktree Path to have run first
+# (or resolve inline; see that protocol).
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+if [ -f "${MAIN_WORKTREE}/.optimus/.rename-in-progress" ]; then
+  INTERRUPTED_FILE=$(cat "${MAIN_WORKTREE}/.optimus/.rename-in-progress" 2>/dev/null)
   echo "WARNING: Previous rename was interrupted. Expected target: $INTERRUPTED_FILE" >&2
   # AskUser: Retry rename / Clear marker / Abort
 fi
@@ -2053,8 +2126,9 @@ status change in state.json** (before any work begins). This ensures crash recov
 a record even if the agent fails before producing any output. Do NOT wait until
 "key phase transitions" to write the initial session file.
 
-**Session file location:** `.optimus/sessions/session-<task-id>.json` (gitignored).
-Each task gets its own file (e.g., `.optimus/sessions/session-T-003.json`).
+**Session file location:** `${MAIN_WORKTREE}/.optimus/sessions/session-<task-id>.json` (gitignored).
+Each task gets its own file (e.g., `${MAIN_WORKTREE}/.optimus/sessions/session-T-003.json`).
+The `$MAIN_WORKTREE` prefix is REQUIRED — see Protocol: Resolve Main Worktree Path.
 
 ```json
 {
@@ -2086,7 +2160,10 @@ with the next gate (still `IN_PROGRESS`), or re-show the entry gate (`null`).
 **On stage start (after task ID is known):**
 
 ```bash
-SESSION_FILE=".optimus/sessions/session-${TASK_ID}.json"
+# Requires Protocol: Resolve Main Worktree Path to have run first
+# (or resolve inline; see that protocol).
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+SESSION_FILE="${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
 if [ -f "$SESSION_FILE" ]; then
   if ! jq empty "$SESSION_FILE" 2>/dev/null; then
     echo "WARNING: Session file is corrupted. Deleting and proceeding fresh."
@@ -2144,10 +2221,13 @@ fi
 **On stage progress (at key phase transitions):**
 
 ```bash
+# Requires Protocol: Resolve Main Worktree Path to have run first
+# (or resolve inline; see that protocol).
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
 # Mirror Protocol: Initialize .optimus Directory (mkdir + gitignore) so stage
 # agents — which call Session State but not Initialize Directory — also create
 # the dirs and update .gitignore on first phase transition.
-mkdir -p .optimus/sessions .optimus/reports .optimus/logs
+mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports" "${MAIN_WORKTREE}/.optimus/logs"
 if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
   printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> .gitignore
 fi
@@ -2155,13 +2235,13 @@ fi
 # prune. Stage agents are the heaviest log producers, so placing prune here
 # ensures it fires for build/review/plan/done (which call Session State but not
 # Initialize .optimus Directory).
-find .optimus/logs -type f -name '*.log' -mtime +30 -delete 2>/dev/null
+find "${MAIN_WORKTREE}/.optimus/logs" -type f -name '*.log' -mtime +30 -delete 2>/dev/null
 # Count-cap: keep at most 500 most-recent log files. Uses `while read -r` (not
 # `xargs`) for portability across GNU/BSD (`xargs -r` is GNU-only). Filename
 # safety: `_optimus_quiet_run` sanitizes labels to `[:alnum:]-_`, so log
 # filenames cannot contain spaces or newlines.
-if [ -d .optimus/logs ]; then
-  ls -1t .optimus/logs/*.log 2>/dev/null | tail -n +501 \
+if [ -d "${MAIN_WORKTREE}/.optimus/logs" ]; then
+  ls -1t "${MAIN_WORKTREE}/.optimus/logs"/*.log 2>/dev/null | tail -n +501 \
     | while IFS= read -r _log_to_rm; do rm -f -- "$_log_to_rm"; done
 fi
 BRANCH_NAME=$(git branch --show-current 2>/dev/null)
@@ -2175,12 +2255,12 @@ jq -n \
   --arg notes "<progress>" \
   '{task_id: $task_id, stage: $stage, status: $status, branch: $branch,
     started_at: $started, updated_at: $updated, phase: $phase, notes: $notes}' \
-  > ".optimus/sessions/session-${TASK_ID}.json"
+  > "${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
 ```
 
 **On stage completion:** Delete the session file:
 ```bash
-rm -f ".optimus/sessions/session-${TASK_ID}.json"
+rm -f "${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
 ```
 
 Skills reference this as: "Execute session state protocol from AGENTS.md using stage=`<name>`, status=`<status>`."
@@ -2204,7 +2284,10 @@ fi
 **Reading state:**
 
 ```bash
-STATE_FILE=".optimus/state.json"
+# Requires Protocol: Resolve Main Worktree Path to have run first
+# (or resolve inline; see that protocol).
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 if [ -f "$STATE_FILE" ]; then
   # Validate JSON integrity before reading
   if ! jq empty "$STATE_FILE" 2>/dev/null; then
@@ -2233,8 +2316,11 @@ A task with no entry in state.json is implicitly `Pendente`.
 **Writing state:**
 
 ```bash
+# Requires Protocol: Resolve Main Worktree Path to have run first
+# (or resolve inline; see that protocol).
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
 # Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
-STATE_FILE=".optimus/state.json"
+STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 if [ ! -f "$STATE_FILE" ]; then
   echo '{}' > "$STATE_FILE"
 fi
@@ -2262,7 +2348,10 @@ fi
 **Removing entry (for Pendente reset):**
 
 ```bash
-STATE_FILE=".optimus/state.json"
+# Requires Protocol: Resolve Main Worktree Path to have run first
+# (or resolve inline; see that protocol).
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 if [ ! -f "$STATE_FILE" ]; then
   echo "state.json does not exist — task is already implicitly Pendente."
 else
@@ -2278,7 +2367,10 @@ fi
 **Listing all tasks with status (for report/quick-report):**
 
 ```bash
-STATE_FILE=".optimus/state.json"
+# Requires Protocol: Resolve Main Worktree Path to have run first
+# (or resolve inline; see that protocol).
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 # TASKS_FILE is resolved via Protocol: Resolve Tasks Git Scope (<tasksDir>/optimus-tasks.md).
 # Validate state.json if it exists
 if [ -f "$STATE_FILE" ] && ! jq empty "$STATE_FILE" 2>/dev/null; then

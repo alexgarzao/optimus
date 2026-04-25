@@ -592,6 +592,55 @@ After all phases complete:
 The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
+### Protocol: Resolve Main Worktree Path
+
+**Referenced by:** all skills that read or write `.optimus/` operational files (state.json, stats.json, sessions, reports, logs, and checkpoint markers).
+
+**Why:** `.optimus/` is gitignored. Git does NOT propagate ignored files across linked worktrees (`git worktree add` creates a sibling working tree but does not share gitignored files). When a skill runs from a linked worktree (the common case for `/optimus-build`, `/optimus-review`, `/optimus-done` which default to the task's worktree), reads and writes against `.optimus/state.json` resolve to the worktree's isolated copy. Updates never reach the main worktree. When the linked worktree is later removed (e.g., by `/optimus-done` cleanup), the writes are lost — silent data loss.
+
+**Recipe:**
+
+```bash
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+if [ -z "$MAIN_WORKTREE" ]; then
+  echo "ERROR: Cannot determine main worktree — not in a git repository." >&2
+  exit 1
+fi
+```
+
+The first `worktree` line in `git worktree list --porcelain` is always the main worktree (where the bare `.git/` directory or the repo's HEAD lives), regardless of where the command is run from.
+
+**Path resolution pattern:**
+
+After resolving `MAIN_WORKTREE`, every `.optimus/` path MUST be prefixed:
+
+```bash
+# RIGHT (works from any worktree):
+STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
+SESSION_FILE="${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
+STATS_FILE="${MAIN_WORKTREE}/.optimus/stats.json"
+mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" \
+         "${MAIN_WORKTREE}/.optimus/reports" \
+         "${MAIN_WORKTREE}/.optimus/logs"
+
+# WRONG (resolves against PWD, breaks in linked worktrees):
+STATE_FILE=".optimus/state.json"
+SESSION_FILE=".optimus/sessions/session-${TASK_ID}.json"
+STATS_FILE=".optimus/stats.json"
+mkdir -p .optimus/sessions .optimus/reports .optimus/logs
+```
+
+**What does NOT need this protocol:**
+
+- `<tasksDir>/optimus-tasks.md` and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/` — versioned content, propagated by git across worktrees automatically.
+- `.optimus/config.json` — when **versioned** (legacy projects), it propagates via git; when **gitignored** (current default after Migrate protocol untracks it), it suffers the same isolation as state.json. **Treat `.optimus/config.json` as gitignored and resolve via `$MAIN_WORKTREE` for safety in current projects** — the cost is a single `git worktree list` call.
+- `.gitignore` itself — versioned, propagated via git.
+
+**Idempotency:** the resolution is read-only against git metadata; safe to call multiple times in the same skill execution. Cache `MAIN_WORKTREE` in a local variable rather than re-running `git worktree list` for each path.
+
+Skills reference this as: "Resolve main worktree — see AGENTS.md Protocol: Resolve Main Worktree Path."
+
+
 ### Finding Presentation (Unified Model)
 All cycle review skills follow this pattern:
 1. Collect findings from agents/tools
@@ -818,7 +867,10 @@ Before creating ANY file inside `.optimus/`, ensure the directory structure exis
 and that the entire `.optimus/` tree is gitignored (it is 100% operational/per-user).
 
 ```bash
-mkdir -p .optimus/sessions .optimus/reports .optimus/logs
+# Requires Protocol: Resolve Main Worktree Path to have run first
+# (or resolve inline; see that protocol).
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports" "${MAIN_WORKTREE}/.optimus/logs"
 if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
   printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> .gitignore
 fi
@@ -826,9 +878,9 @@ fi
 # Also duplicated in Protocol: Session State so stage agents (which call Session
 # State but not Initialize Directory) get pruning at every phase transition.
 # Both prune sites are no-ops on clean directories; running both is harmless.
-find .optimus/logs -type f -name '*.log' -mtime +30 -delete 2>/dev/null
-if [ -d .optimus/logs ]; then
-  ls -1t .optimus/logs/*.log 2>/dev/null | tail -n +501 \
+find "${MAIN_WORKTREE}/.optimus/logs" -type f -name '*.log' -mtime +30 -delete 2>/dev/null
+if [ -d "${MAIN_WORKTREE}/.optimus/logs" ]; then
+  ls -1t "${MAIN_WORKTREE}/.optimus/logs"/*.log 2>/dev/null | tail -n +501 \
     | while IFS= read -r _log_to_rm; do rm -f -- "$_log_to_rm"; done
 fi
 ```
@@ -1158,7 +1210,7 @@ _optimus_quiet_run "make-test-integration" make test-integration
 Keep labels short (≤30 chars) and filesystem-safe — the helper sanitizes aggressively,
 but readable labels produce readable log filenames in `.optimus/logs/`.
 
-**When the agent needs full output:** use `cat .optimus/logs/<filename>.log` or
+**When the agent needs full output:** use `cat "${MAIN_WORKTREE}/.optimus/logs/<filename>.log"` or
 point a sub-agent to the log path (`Read` tool). Never re-run the command just to
 see the output — the log already has it.
 
