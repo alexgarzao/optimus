@@ -113,6 +113,7 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 
 ```bash
 _optimus_set_title() {
+  local title="$1"
   local pid="$PPID" tty=""
   for _ in 1 2 3 4; do
     [ -z "$pid" ] || [ "$pid" = "1" ] && break
@@ -122,9 +123,36 @@ _optimus_set_title() {
       *) break ;;
     esac
   done
-  [ -n "$tty" ] && [ "$tty" != "?" ] && [ "$tty" != "??" ] \
-    && [ -w "/dev/$tty" ] \
-    && printf '\033]0;%s\007' "$1" > "/dev/$tty" 2>/dev/null || true
+  if [ -n "$tty" ] && [ "$tty" != "?" ] && [ "$tty" != "??" ] && [ -w "/dev/$tty" ]; then
+    printf '\033]0;%s\007\033]1;%s\007\033]2;%s\007' "$title" "$title" "$title" > "/dev/$tty" 2>/dev/null || true
+    if [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; then
+      local b64
+      b64=$(printf '%s' "$title" | base64 | tr -d '\n')
+      printf '\033]1337;SetUserVar=optimusTitle=%s\007' "$b64" > "/dev/$tty" 2>/dev/null || true
+    fi
+  fi
+  if { [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; } \
+     && command -v osascript >/dev/null 2>&1 && [ -n "$tty" ]; then
+    osascript \
+      -e 'on run argv' \
+      -e '  set targetTty to "/dev/" & item 1 of argv' \
+      -e '  set newName to item 2 of argv' \
+      -e '  tell application "iTerm2"' \
+      -e '    repeat with w in windows' \
+      -e '      repeat with t in tabs of w' \
+      -e '        repeat with s in sessions of t' \
+      -e '          if (tty of s as string) is targetTty then' \
+      -e '            try' \
+      -e '              set name of s to newName' \
+      -e '            end try' \
+      -e '          end if' \
+      -e '        end repeat' \
+      -e '      end repeat' \
+      -e '    end repeat' \
+      -e '  end tell' \
+      -e 'end run' \
+      -- "$tty" "$title" >/dev/null 2>&1 || true
+  fi
 }
 _optimus_set_title "optimus: BUILD $TASK_ID — $TASK_TITLE"
 ```

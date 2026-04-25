@@ -225,7 +225,7 @@ OLD_TITLE_FORMAT = re.compile(
 NEW_TITLE_FORMAT = re.compile(
     r'optimus:\s*(?:%s|[A-Z]+|<\w+>)\s+(?:%s|\$TASK_ID|T-\d+)\s*—\s*(?:%s|\$TASK_TITLE|[\w][\w ]*)'
 )
-OSC_PRINTF = re.compile(r"printf.*(\\033|\\e|\\x1b)\]0;")
+OSC_PRINTF = re.compile(r"printf.*(\\033|\\e|\\x1b)\](?:0|1|2);")
 # Resolver writes to the parent-process TTY device (/dev/$tty). Legacy /dev/tty
 # is accepted during the transition window inside auto-inlined protocol blocks.
 TTY_REDIRECT = re.compile(r'>\s*"?/dev/(?:\$[A-Za-z_][A-Za-z0-9_]*|tty)"?\s+2>/dev/null')
@@ -298,7 +298,7 @@ class TestTerminalTitleFormat:
         (still present in auto-inlined protocol blocks) or the new
         `_optimus_set_title ""` helper call.
         """
-        restore_legacy = re.compile(r"printf.*\\033\]0;\\007.*>\s*\"?/dev/")
+        restore_legacy = re.compile(r"printf.*\\033\](?:0|1|2);\\007.*>\s*\"?/dev/")
         restore_helper = re.compile(r'_optimus_set_title\s+""')
         missing = []
         for skill in TITLE_SKILLS:
@@ -307,6 +307,40 @@ class TestTerminalTitleFormat:
                 missing.append(skill)
         assert missing == [], (
             "Skills missing restore terminal title command:\n"
+            + "\n".join(f"  - {v}" for v in missing)
+        )
+
+    def test_helper_has_applescript_layer(self):
+        """Layer A (AppleScript) must be present in every TITLE_SKILLS helper.
+
+        iTerm2 profiles with "Terminal may set window title" disabled silently
+        discard OSC 0/1/2 title updates. AppleScript `set name of session` is
+        the only channel that reliably mutates session.name in that scenario.
+        """
+        missing = []
+        for skill in TITLE_SKILLS:
+            content = _read_skill(skill)
+            if "osascript" not in content or "set name of s to" not in content:
+                missing.append(skill)
+        assert missing == [], (
+            "Skills missing AppleScript Layer A (osascript set name of s):\n"
+            + "\n".join(f"  - {v}" for v in missing)
+        )
+
+    def test_helper_has_setuservar_layer(self):
+        """Layer B (OSC 1337 SetUserVar=optimusTitle) must be present.
+
+        Exposes the title as a user variable that can be referenced via
+        `\\(user.optimusTitle)` in iTerm2 Profile Title or Badge formats,
+        surviving profiles that block OSC 0/1/2 title setting.
+        """
+        missing = []
+        for skill in TITLE_SKILLS:
+            content = _read_skill(skill)
+            if "SetUserVar=optimusTitle" not in content:
+                missing.append(skill)
+        assert missing == [], (
+            "Skills missing SetUserVar Layer B (OSC 1337 optimusTitle):\n"
             + "\n".join(f"  - {v}" for v in missing)
         )
 

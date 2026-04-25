@@ -1021,11 +1021,15 @@ to identify each terminal at a glance.
 
 ```bash
 _optimus_set_title() {
-  # Resolve the parent-process TTY and emit an OSC 0 title sequence to it.
-  # The Execute tool runs bash without a controlling TTY, so /dev/tty fails
-  # with ENODEV. The parent (droid) process is attached to the real terminal
-  # (e.g. /dev/ttys008 on macOS, /dev/pts/N on Linux), and the child can
-  # write there. Walk up to 4 ancestors in case of nested shells.
+  # Multi-layer title updater. Empirical testing showed that some iTerm2
+  # profiles silently discard OSC 0/1/2 (the "Terminal may set window title"
+  # preference) while still honoring OSC 1337 (proprietary) and AppleScript.
+  # We emit all viable channels so the title actually changes regardless of
+  # the user's profile setup. The Execute tool runs bash without a
+  # controlling TTY, so /dev/tty fails with ENODEV; we resolve the parent
+  # process's TTY via ps instead. Walk up to 4 ancestors in case of nested
+  # shells.
+  local title="$1"
   local pid="$PPID" tty=""
   for _ in 1 2 3 4; do
     [ -z "$pid" ] || [ "$pid" = "1" ] && break
@@ -1035,9 +1039,53 @@ _optimus_set_title() {
       *) break ;;
     esac
   done
-  [ -n "$tty" ] && [ "$tty" != "?" ] && [ "$tty" != "??" ] \
-    && [ -w "/dev/$tty" ] \
-    && printf '\033]0;%s\007' "$1" > "/dev/$tty" 2>/dev/null || true
+
+  # Layer C — broad OSC 0+1+2: covers Terminal.app, Linux terminals, Kitty,
+  # Alacritty, WezTerm, VS Code, and iTerm2 profiles where "Terminal may
+  # set window title" is enabled. OSC 1 is the form xterm calls "icon name"
+  # and iTerm2 maps to session.name; OSC 2 is the window title; OSC 0 sets
+  # both. Emitting all three maximizes compatibility.
+  if [ -n "$tty" ] && [ "$tty" != "?" ] && [ "$tty" != "??" ] && [ -w "/dev/$tty" ]; then
+    printf '\033]0;%s\007\033]1;%s\007\033]2;%s\007' "$title" "$title" "$title" > "/dev/$tty" 2>/dev/null || true
+
+    # Layer B — iTerm2 OSC 1337 SetUserVar bypasses profile restrictions on
+    # title-setting OSC. Reference it in profile Title or Badge format as
+    # \(user.optimusTitle). Harmless on other terminals (they ignore
+    # OSC 1337).
+    if [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; then
+      local b64
+      b64=$(printf '%s' "$title" | base64 | tr -d '\n')
+      printf '\033]1337;SetUserVar=optimusTitle=%s\007' "$b64" > "/dev/$tty" 2>/dev/null || true
+    fi
+  fi
+
+  # Layer A — iTerm2 AppleScript: only channel that actually mutates
+  # session.name when the profile blocks OSC 0/1/2. First run triggers a
+  # macOS TCC prompt ("droid wants to control iTerm"); approving enables
+  # this layer permanently. Silent no-op outside macOS/iTerm2 or when
+  # osascript is unavailable.
+  if { [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; } \
+     && command -v osascript >/dev/null 2>&1 && [ -n "$tty" ]; then
+    osascript \
+      -e 'on run argv' \
+      -e '  set targetTty to "/dev/" & item 1 of argv' \
+      -e '  set newName to item 2 of argv' \
+      -e '  tell application "iTerm2"' \
+      -e '    repeat with w in windows' \
+      -e '      repeat with t in tabs of w' \
+      -e '        repeat with s in sessions of t' \
+      -e '          if (tty of s as string) is targetTty then' \
+      -e '            try' \
+      -e '              set name of s to newName' \
+      -e '            end try' \
+      -e '          end if' \
+      -e '        end repeat' \
+      -e '      end repeat' \
+      -e '    end repeat' \
+      -e '  end tell' \
+      -e 'end run' \
+      -- "$tty" "$title" >/dev/null 2>&1 || true
+  fi
 }
 _optimus_set_title "optimus: <STAGE> $TASK_ID — $TASK_TITLE"
 ```
@@ -1061,6 +1109,22 @@ _optimus_set_title ""
 **NOTE:** This uses the standard OSC (Operating System Command) escape sequence
 supported by iTerm2, Terminal.app, VS Code terminal, tmux, and most modern terminals.
 The sequence is silent — it produces no visible output.
+
+**Troubleshooting iTerm2 (if the title still doesn't update):**
+
+1. **Profiles > Terminal > "Terminal may set window title"** must be checked.
+   When it is OFF, iTerm2 silently discards OSC 0/1/2 (Layer C). Layer A
+   (AppleScript) keeps working through the scripting interface, so
+   `session.name` will still update — just not via the OSC channel.
+2. **Window > Edit Tab Title** must be empty. A manually-set tab title is
+   sticky on the tab label and overrides the session name visually, even
+   when `session.name` is updated correctly underneath.
+3. The first run on macOS triggers a TCC prompt ("`droid` wants to control
+   `iTerm`"). Approve it to enable Layer A. Denying degrades the helper to
+   Layer C+B only.
+4. Alternative display location: set **Profiles > General > Badge** to
+   `\(user.optimusTitle)`. Layer B exposes the title there regardless of
+   the title-setting profile restriction.
 
 Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Terminal Identification."
 
