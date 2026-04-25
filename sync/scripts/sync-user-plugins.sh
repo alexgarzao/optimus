@@ -4,12 +4,18 @@ set -euo pipefail
 # Syncs installed Optimus plugins with the marketplace.
 # Supports two platforms:
 #   - Droid (Factory): uses `droid plugin install/update/uninstall`
-#   - Claude Code: copies SKILL.md files to ~/.claude/skills/default/optimus-<name>/
+#   - Claude Code: uses `claude plugin install/update/uninstall` (native plugin system)
 #
 # Detects which platforms are available and syncs both in a single run.
 # - Installs new plugins that were added to the marketplace
 # - Removes orphaned plugins that were removed from the marketplace
 # - Updates all existing plugins (with uninstall+reinstall fallback for Droid scope conflicts)
+#
+# Plugin name conventions:
+#   - Droid:        bare names (e.g. `plan`, `build`, `sync`) — matches `.factory-plugin/marketplace.json`
+#   - Claude Code:  prefixed names (e.g. `optimus-plan`) — matches `.claude-plugin/marketplace.json`
+#   - The EXPECTED list returned by `_resolve_expected_plugins` is in BARE form (legacy contract).
+#     `_sync_claude_code` adds the `optimus-` prefix when building Claude Code commands.
 
 _error() { echo "ERROR: $*" >&2; }
 _warn() { echo "WARNING: $*" >&2; }
@@ -19,15 +25,14 @@ trap 'echo ""; _warn "Sync interrupted. Re-run /optimus-sync to complete."; exit
 # ─── Configurable constants ───────────────────────────────────────────────────
 readonly MARKETPLACE_NAME="${OPTIMUS_MARKETPLACE_NAME:-optimus}"
 readonly DROID_TIMEOUT="${OPTIMUS_DROID_TIMEOUT:-60}"
-readonly OPTIMUS_CACHE_DIR="${OPTIMUS_CACHE_DIR:-$HOME/.optimus/repo}"
-readonly CLAUDE_SKILLS_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills/default}"
 readonly OPTIMUS_REPO_URL="${OPTIMUS_REPO_URL:-https://github.com/alexgarzao/optimus}"
+readonly CLAUDE_MARKETPLACE_FILE="${CLAUDE_MARKETPLACE_FILE:-$HOME/.claude/plugins/marketplaces/${MARKETPLACE_NAME}/.claude-plugin/marketplace.json}"
 
 # ─── Platform detection ───────────────────────────────────────────────────────
 HAS_DROID=false
 HAS_CLAUDE_CODE=false
 command -v droid >/dev/null 2>&1 && HAS_DROID=true
-[ -d "$HOME/.claude/skills" ] && HAS_CLAUDE_CODE=true
+command -v claude >/dev/null 2>&1 && HAS_CLAUDE_CODE=true
 
 # ─── Validate inputs ─────────────────────────────────────────────────────────
 if [ "$HAS_DROID" = true ]; then
@@ -40,7 +45,7 @@ fi
 if [ "$HAS_DROID" = false ] && [ "$HAS_CLAUDE_CODE" = false ]; then
   _error "No supported platform found."
   echo "  Install Droid from: https://docs.factory.ai" >&2
-  echo "  Or create ~/.claude/skills/ for Claude Code support." >&2
+  echo "  Or install Claude Code: https://docs.anthropic.com/claude-code" >&2
   exit 1
 fi
 
@@ -83,20 +88,25 @@ _compute_diffs() {
 }
 
 # ─── Get expected plugins from marketplace JSON ──────────────────────────────
-# Resolves marketplace.json from: Droid cache, Optimus repo cache, or repo root.
-# Returns the list of expected plugin names (sorted, one per line) via stdout.
+# Resolves marketplace.json from one of three sources, preferring fresher caches.
+# Returns the list of expected plugin names in BARE form (one per line, sorted)
+# via stdout. Both Droid (`.factory-plugin/marketplace.json`) and Claude Code
+# (`.claude-plugin/marketplace.json`) sources are supported; for Claude Code the
+# `optimus-` prefix is stripped so the contract stays bare across platforms.
 
 _resolve_expected_plugins() {
   local marketplace_file=""
+  local strip_prefix=false
 
   # Source 1: Droid marketplace cache
   if [ "$HAS_DROID" = true ]; then
     marketplace_file=$(find ~/.factory -path "*/marketplaces/${MARKETPLACE_NAME}/.factory-plugin/marketplace.json" -type f 2>/dev/null | head -1)
   fi
 
-  # Source 2: Optimus repo cache
-  if [ -z "$marketplace_file" ] && [ -f "$OPTIMUS_CACHE_DIR/.factory-plugin/marketplace.json" ]; then
-    marketplace_file="$OPTIMUS_CACHE_DIR/.factory-plugin/marketplace.json"
+  # Source 2: Claude Code marketplace cache
+  if [ -z "$marketplace_file" ] && [ "$HAS_CLAUDE_CODE" = true ] && [ -f "$CLAUDE_MARKETPLACE_FILE" ]; then
+    marketplace_file="$CLAUDE_MARKETPLACE_FILE"
+    strip_prefix=true
   fi
 
   # Source 3: Running from inside the optimus repo
@@ -108,19 +118,31 @@ _resolve_expected_plugins() {
     if [ -f "$repo_root/AGENTS.md" ] && [ -f "$repo_root/sync/scripts/sync-user-plugins.sh" ]; then
       if [ -f "$repo_root/.factory-plugin/marketplace.json" ]; then
         marketplace_file="$repo_root/.factory-plugin/marketplace.json"
+      elif [ -f "$repo_root/.claude-plugin/marketplace.json" ]; then
+        marketplace_file="$repo_root/.claude-plugin/marketplace.json"
+        strip_prefix=true
       fi
     fi
   fi
 
   if [ -z "$marketplace_file" ]; then
     _error "Marketplace '${MARKETPLACE_NAME}' not found. Register it first:"
-    echo "  droid plugin marketplace add ${OPTIMUS_REPO_URL}" >&2
-    echo "  Or run: git clone --depth 1 ${OPTIMUS_REPO_URL} ${OPTIMUS_CACHE_DIR}" >&2
+    if [ "$HAS_DROID" = true ]; then
+      echo "  droid plugin marketplace add ${OPTIMUS_REPO_URL}" >&2
+    fi
+    if [ "$HAS_CLAUDE_CODE" = true ]; then
+      echo "  claude plugin marketplace add ${OPTIMUS_REPO_URL}" >&2
+    fi
     return 1
   fi
 
   local expected
-  expected=$(jq -r '.plugins[].name' "$marketplace_file" | sort)
+  if [ "$strip_prefix" = true ]; then
+    # Claude Code marketplace uses `optimus-<name>` — strip prefix to get bare names.
+    expected=$(jq -r '.plugins[].name' "$marketplace_file" | sed 's/^optimus-//' | sort)
+  else
+    expected=$(jq -r '.plugins[].name' "$marketplace_file" | sort)
+  fi
   if [ -z "$expected" ]; then
     _error "No plugins found in marketplace."
     return 1
@@ -339,70 +361,38 @@ _sync_droid() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Repo Cache Management (used by Claude Code sync and as marketplace fallback)
-# ═══════════════════════════════════════════════════════════════════════════════
-
-# Track whether repo cache is usable (set by _ensure_repo_cache).
-# Possible values: "true" (fresh), "stale" (cached but fetch failed), "false" (unusable).
-_REPO_CACHE_OK="false"
-
-_ensure_repo_cache() {
-  local repo_dir="$OPTIMUS_CACHE_DIR"
-
-  if [ -d "$repo_dir/.git" ]; then
-    # Verify the cache origin matches OPTIMUS_REPO_URL before using it.
-    local actual_url
-    actual_url=$(git -C "$repo_dir" config --get remote.origin.url 2>/dev/null || echo "")
-    if [ "$actual_url" != "$OPTIMUS_REPO_URL" ]; then
-      _error "Repo cache at $repo_dir has unexpected origin: '$actual_url' (expected '$OPTIMUS_REPO_URL'). Refusing to use it. Delete it manually if intentional."
-      _REPO_CACHE_OK="false"
-      return 0  # Soft failure — script can continue if Source 1 or 3 work
-    fi
-
-    echo "Updating repo cache..."
-    if ! git -C "$repo_dir" fetch --depth 1 origin main 2>/dev/null; then
-      _warn "Could not fetch latest. Using cached (possibly stale) version."
-      _REPO_CACHE_OK="stale"
-    else
-      git -C "$repo_dir" reset --hard origin/main 2>/dev/null || true
-      _REPO_CACHE_OK="true"
-    fi
-  else
-    echo "Cloning repo cache..."
-    if git clone --depth 1 "$OPTIMUS_REPO_URL" "$repo_dir" 2>/dev/null; then
-      _REPO_CACHE_OK="true"
-    else
-      _warn "Could not clone repo. Claude Code sync requires a repo cache."
-      echo "  Run: git clone --depth 1 ${OPTIMUS_REPO_URL} ${repo_dir}" >&2
-      _REPO_CACHE_OK="false"
-    fi
-  fi
-}
-
-# ═══════════════════════════════════════════════════════════════════════════════
 # Claude Code Sync
 # ═══════════════════════════════════════════════════════════════════════════════
+#
+# Schema observed for `claude plugin list --json` (Claude Code 2.1.x):
+#   [
+#     {
+#       "id": "<plugin-name>@<marketplace-name>",
+#       "version": "1.0.0",
+#       "scope": "user",
+#       "enabled": true,
+#       "installPath": "/Users/.../.claude/plugins/cache/<marketplace>/<plugin>/<version>",
+#       "installedAt": "2026-...",
+#       "lastUpdated": "2026-...",
+#       "gitCommitSha": "..."   // optional
+#       "mcpServers": {...}     // optional
+#     },
+#     ...
+#   ]
+# We filter by marketplace via `select(.id | endswith("@<marketplace>"))`.
 
 _sync_claude_code() {
-  local expected="$1"
+  local expected="$1"  # bare plugin names, one per line, sorted
+  local marketplace="${2:-$MARKETPLACE_NAME}"
+
   echo "── Claude Code ──"
   echo ""
 
-  local repo_dir="$OPTIMUS_CACHE_DIR"
-
-  if [ "$_REPO_CACHE_OK" = "false" ]; then
-    echo "  Claude Code — Added: 0 | Updated: 0 | Removed: 0 | Failed: 0 (skipped)"
-    return 0
-  fi
-
-  local skills_dir="$CLAUDE_SKILLS_DIR"
-  mkdir -p "$skills_dir"
-
-  # Get currently installed optimus skills
+  # Get currently installed optimus plugins (bare names, sorted)
   local installed=""
-  if [ -d "$skills_dir" ]; then
-    installed=$(find "$skills_dir" -maxdepth 1 -type d -name 'optimus-*' -exec basename {} \; 2>/dev/null | sed 's/^optimus-//' | sort) || true
-  fi
+  installed=$(claude plugin list --json 2>/dev/null \
+    | jq -r --arg mp "@${marketplace}" '.[] | select(.id | endswith($mp)) | .id | sub("@.*$"; "") | sub("^optimus-"; "")' \
+    | sort) || true
 
   # Calculate diffs
   _compute_diffs "$expected" "$installed"
@@ -410,90 +400,52 @@ _sync_claude_code() {
   local orphaned_plugins="$ORPHANED_PLUGINS"
   local existing_plugins="$EXISTING_PLUGINS"
 
-  local added=0 updated=0 removed=0 failed=0 unchanged=0
+  local added=0 updated=0 removed=0 failed=0
 
   # Install new plugins
   if [ -n "$new_plugins" ]; then
     while IFS= read -r plugin; do
       [ -z "$plugin" ] && continue
-      local src="$repo_dir/${plugin}/skills/optimus-${plugin}/SKILL.md"
-      local dest_dir="$skills_dir/optimus-${plugin}"
-      if [ -f "$src" ]; then
-        mkdir -p "$dest_dir"
-        rm -f "$dest_dir/SKILL.md"
-        cp "$src" "$dest_dir/SKILL.md"
-        touch "$dest_dir/.optimus-managed"
+      if claude plugin install "optimus-${plugin}@${marketplace}" --scope user >/dev/null 2>&1; then
         echo "  + $plugin ... OK"
         added=$((added + 1))
       else
-        echo "  + $plugin ... FAIL (source not found)"
+        echo "  + $plugin ... FAIL"
         failed=$((failed + 1))
       fi
     done <<< "$new_plugins"
   fi
 
-  # Update existing plugins (skip if unchanged)
+  # Update existing plugins
   if [ -n "$existing_plugins" ]; then
     while IFS= read -r plugin; do
       [ -z "$plugin" ] && continue
-      local src="$repo_dir/${plugin}/skills/optimus-${plugin}/SKILL.md"
-      local dest_dir="$skills_dir/optimus-${plugin}"
-      local dest="$dest_dir/SKILL.md"
-      if [ ! -f "$src" ]; then
-        echo "  * $plugin ... FAIL (source not found)"
-        failed=$((failed + 1))
-        continue
-      fi
-      if [ -f "$dest" ] && diff -q "$src" "$dest" >/dev/null 2>&1; then
-        echo "  * $plugin ... unchanged"
-        unchanged=$((unchanged + 1))
-        # Idempotently ensure the marker exists for pre-existing installs.
-        touch "$dest_dir/.optimus-managed"
-      else
-        mkdir -p "$dest_dir"
-        rm -f "$dest"
-        cp "$src" "$dest"
-        touch "$dest_dir/.optimus-managed"
+      if claude plugin update "optimus-${plugin}@${marketplace}" >/dev/null 2>&1; then
         echo "  * $plugin ... OK"
         updated=$((updated + 1))
+      else
+        echo "  * $plugin ... FAIL"
+        failed=$((failed + 1))
       fi
     done <<< "$existing_plugins"
   fi
 
-  # Remove orphaned plugins (ONLY optimus- prefixed, ONLY with .optimus-managed marker)
+  # Remove orphaned plugins
   if [ -n "$orphaned_plugins" ]; then
     while IFS= read -r plugin; do
       [ -z "$plugin" ] && continue
-      local target_dir="$skills_dir/optimus-${plugin}"
-      if [ -d "$target_dir" ]; then
-        if [ -f "$target_dir/.optimus-managed" ]; then
-          if rm -rf "$target_dir" 2>/dev/null; then
-            echo "  - $plugin"
-            removed=$((removed + 1))
-          else
-            echo "  - $plugin (FAIL)"
-            failed=$((failed + 1))
-          fi
-        else
-          echo "  - $plugin (skipped — no .optimus-managed marker; user-created?)"
-          # Not counted as removed or failed
-        fi
-      else
-        echo "  - $plugin (already gone)"
+      if claude plugin uninstall "optimus-${plugin}@${marketplace}" >/dev/null 2>&1; then
+        echo "  - $plugin ... OK"
         removed=$((removed + 1))
+      else
+        echo "  - $plugin ... FAIL"
+        failed=$((failed + 1))
       fi
     done <<< "$orphaned_plugins"
   fi
 
   echo ""
-  local summary="Claude Code — Added: $added | Updated: $updated | Removed: $removed | Failed: $failed"
-  if [ "$unchanged" -gt 0 ]; then
-    summary="$summary | Unchanged: $unchanged"
-  fi
-  if [ "$_REPO_CACHE_OK" = "stale" ]; then
-    summary="$summary (cache: stale)"
-  fi
-  echo "  $summary"
+  echo "  Claude Code — Added: $added | Updated: $updated | Removed: $removed | Failed: $failed"
 
   [ "$failed" -gt 0 ] && return 1
   return 0
@@ -526,7 +478,8 @@ if [ "$HAS_DROID" = true ]; then
   _droid plugin marketplace update "$MARKETPLACE_NAME" >/dev/null 2>&1 || _warn "Could not update Droid marketplace. Using cached version."
 fi
 if [ "$HAS_CLAUDE_CODE" = true ]; then
-  _ensure_repo_cache
+  echo "Updating Claude Code marketplace..."
+  claude plugin marketplace update "$MARKETPLACE_NAME" >/dev/null 2>&1 || _warn "Could not update Claude Code marketplace. Using cached version."
 fi
 echo ""
 
@@ -543,7 +496,7 @@ if [ "$HAS_DROID" = true ]; then
 fi
 
 if [ "$HAS_CLAUDE_CODE" = true ]; then
-  _sync_claude_code "$EXPECTED" || claude_rc=$?
+  _sync_claude_code "$EXPECTED" "$MARKETPLACE_NAME" || claude_rc=$?
   echo ""
 fi
 

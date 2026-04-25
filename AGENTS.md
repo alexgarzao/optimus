@@ -118,93 +118,92 @@ rationalize these away.
 
 ## Multi-Platform Support
 
-Optimus skills can be installed on two platforms simultaneously:
+Optimus skills can be installed on two platforms simultaneously, each using its
+native plugin system:
 
 | Aspect | Droid (Factory) | Claude Code |
 |--------|-----------------|-------------|
-| **Install mechanism** | `droid plugin install/update/uninstall` | Copy SKILL.md to `~/.claude/skills/default/optimus-<name>/` |
-| **Marketplace** | `~/.factory/marketplaces/optimus/` | `~/.optimus/repo/` (git clone cache) |
-| **Skill discovery** | Plugin registry | Filesystem auto-discovery |
+| **Install mechanism** | `droid plugin install/update/uninstall` | `claude plugin install/update/uninstall` |
+| **Marketplace** | `.factory-plugin/marketplace.json` (added via `droid plugin marketplace add`) | `.claude-plugin/marketplace.json` (added via `claude plugin marketplace add`) |
+| **Skill discovery** | Plugin registry | Plugin registry |
+| **Plugin name format** | Bare (`plan`, `build`) | Prefixed (`optimus-plan`, `optimus-build`) |
 | **Command aliases** | Supported (`/sp`, `/bd`, etc.) | Not supported (platform limitation) |
 | **Invocation** | `/optimus-<name>` or alias | `/optimus-<name>` only |
 
-The sync script (`sync/scripts/sync-user-plugins.sh`) detects which platforms are available
-and syncs both in a single run. Platform detection:
+The sync script (`sync/scripts/sync-user-plugins.sh`) detects which platforms
+are available and syncs both in a single run via the platforms' native plugin APIs.
+
+Platform detection:
 - **Droid**: `command -v droid` succeeds
-- **Claude Code**: `~/.claude/` directory exists
+- **Claude Code**: `command -v claude` succeeds
 
-At least one platform must be available. The script uses a shared marketplace JSON
-as the source of truth for expected plugins, resolved through a 3-tier fallback:
+At least one platform must be available. The script uses the platform's
+marketplace cache as its source of truth for expected plugins.
 
-**Marketplace JSON resolution (3-tier fallback):**
-1. **Droid cache:** `~/.factory/marketplaces/optimus/.factory-plugin/marketplace.json` —
-   populated by `droid plugin marketplace add/update`.
-2. **Repo cache:** `~/.optimus/repo/.factory-plugin/marketplace.json` — populated by
-   the script when Claude Code is detected. Droid-only users do **not** get this
-   fallback automatically; they must run `droid plugin marketplace update optimus`
-   to populate Source 1.
-3. **Local repo:** when the script runs from inside a clone of the Optimus repo,
-   the `marketplace.json` next to the script is used.
+### Marketplace JSON resolution
+
+The script resolves the EXPECTED plugin list from one of three sources, in priority order:
+
+1. **Droid cache**: `~/.factory/marketplaces/optimus/.factory-plugin/marketplace.json`
+2. **Claude Code cache**: `~/.claude/plugins/marketplaces/optimus/.claude-plugin/marketplace.json`
+3. **In-repo**: when running from a clone of the Optimus repo, the local `.factory-plugin/marketplace.json` (preferred) or `.claude-plugin/marketplace.json`.
+
+Both schemas list the same set of plugins, but with different name conventions
+(see table above). The script normalizes to bare names internally.
 
 ### Claude Code specifics
-- Skills are installed at `~/.claude/skills/default/optimus-<name>/SKILL.md`
-- Only `optimus-*` prefixed directories are managed — other skills (e.g., `ring:*`) are never touched
-- Updates use `diff -q` to skip unchanged files (avoids unnecessary writes)
-- Repo cache lives at `~/.optimus/repo/` (configurable via `OPTIMUS_CACHE_DIR`)
 
-**`~/.optimus/repo/` is sync-managed.** The script runs `git fetch` +
-`git reset --hard origin/main` on every sync, discarding any local commits,
-branches, or uncommitted edits. Do not use this directory for hacking on plugins —
-work in your own clone of the repo and run the sync script from there.
+- Skills are installed via `claude plugin install <name>@optimus --scope user`
+- Plugin name format on Claude Code is `optimus-<plugin>` (e.g., `optimus-plan`)
+- Updates and uninstalls go through `claude plugin update/uninstall`
+- Claude Code manages its own plugin cache at `~/.claude/plugins/cache/optimus/`;
+  the script does not create or manage `~/.optimus/repo/` for Claude Code
 
-#### Environment variables
+### Environment variables
 
-The sync script honors the following environment variables (defaults sourced
-from the `readonly` declarations at the top of `sync/scripts/sync-user-plugins.sh`):
-
-| Env var | Default | Purpose |
-|---------|---------|---------|
-| `OPTIMUS_REPO_URL` | `https://github.com/alexgarzao/optimus` | Git URL cloned into the repo cache. Override at your own risk — the script trusts whatever this points to. |
-| `OPTIMUS_CACHE_DIR` | `~/.optimus/repo` | Path to the repo cache. |
-| `CLAUDE_SKILLS_DIR` | `~/.claude/skills/default` | Where Claude Code skills are installed. |
-| `OPTIMUS_MARKETPLACE_NAME` | `optimus` | Droid marketplace identifier. |
-| `OPTIMUS_DROID_TIMEOUT` | `60` | Per-call timeout for Droid plugin operations, in seconds. Must be a positive integer. |
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `OPTIMUS_REPO_URL` | `https://github.com/alexgarzao/optimus` | Repo URL (used for non-default forks; both platforms honor) |
+| `OPTIMUS_MARKETPLACE_NAME` | `optimus` | Droid marketplace identifier |
+| `OPTIMUS_DROID_TIMEOUT` | `60` | Per-call timeout for Droid plugin operations (seconds) |
+| `CLAUDE_MARKETPLACE_FILE` | `~/.claude/plugins/marketplaces/optimus/.claude-plugin/marketplace.json` | Override Source 2 location (mostly for tests) |
 
 ## Plugin Lifecycle
 
 ### Adding a new plugin
-1. Create directory: `<name>/skills/optimus-<name>/SKILL.md`
-2. Create manifest: `<name>/.factory-plugin/plugin.json`
-3. Add entry to `.factory-plugin/marketplace.json`
-4. Update README.md table
+1. Add directory to repo (e.g., `myplugin/skills/optimus-myplugin/SKILL.md`)
+2. Add entry to `.factory-plugin/marketplace.json` (bare name: `myplugin`)
+3. Add entry to `.claude-plugin/marketplace.json` (prefixed name: `optimus-myplugin`, source `./myplugin`)
+4. Update README plugin list if applicable
 5. Commit, push
-6. **Droid**: `droid plugin install <name>@optimus`
-7. **Claude Code**: Run `/optimus-sync` (auto-installs from repo cache)
+6. **Droid**: `droid plugin install myplugin@optimus`
+7. **Claude Code**: `claude plugin install optimus-myplugin@optimus`
+8. Or just run `/optimus-sync` after the marketplace caches are refreshed (`droid plugin marketplace update optimus` and `claude plugin marketplace update optimus`)
 
 ### Updating a plugin
 1. Edit the SKILL.md
 2. Commit, push
-3. Run `/optimus-sync` (or `make sync-plugins`) to update all plugins at once on both platforms
+3. Run `/optimus-sync` (or `make sync-plugins`) — script handles both platforms
 
 ### Removing a plugin
-1. Remove from marketplace.json
-2. Remove directory
-3. Update README.md
+1. Remove directory
+2. Remove from BOTH `.factory-plugin/marketplace.json` AND `.claude-plugin/marketplace.json`
+3. Update README if applicable
 4. Commit, push
-5. Run `/optimus-sync` to remove orphaned plugins and update the rest (both platforms)
+5. Run `/optimus-sync` to remove the orphan from both platforms
 
-**Note:** End users on Claude Code do not get automatic updates. They must run
-`/optimus-sync` to receive removals (the orphan-removal step). Until they sync,
-the obsolete plugin's `SKILL.md` lingers under `~/.claude/skills/default/optimus-<name>/`.
-Consider announcing breaking removals in release notes.
+**Note for end users:** Claude Code plugins do NOT auto-update. Users must run
+`/optimus-sync` to receive removed plugins (orphan removal) and updates. The
+`installed_plugins.json` cache in `~/.claude/plugins/` tracks installed state
+between sessions.
 
 ### Syncing all plugins (for end users)
 Run `/optimus-sync` or `make sync-plugins`. This command:
 - Detects available platforms (Droid, Claude Code, or both)
-- Updates the Optimus marketplace (Droid) / repo cache (Claude Code)
-- Installs new plugins that were added
-- Removes orphaned plugins that were removed
-- Updates all existing plugins (with automatic scope conflict resolution on Droid, diff-based skip on Claude Code)
+- Refreshes the marketplace cache on each available platform
+- Installs new plugins that were added to the marketplace
+- Removes orphaned plugins that were removed from the marketplace
+- Updates all existing plugins (with automatic scope conflict resolution on Droid)
 - Shows a per-platform summary
 
 This is the recommended way for end users to stay up to date.
