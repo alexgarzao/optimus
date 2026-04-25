@@ -399,7 +399,12 @@ The `<details>` block for a CodeRabbit special section has this exact nested str
    - Capture `LINE_RANGE`, `TYPE_LABEL`, `SEVERITY_EMOJI`, `SEVERITY_LABEL`.
    - Next bold line (`**...**`) is the `TITLE`.
    - Everything until the first nested `<details>` or end-of-slice is the `DESCRIPTION`.
-   - If a `<details><summary>🐛 Minimal fix</summary>` exists, capture its content as `FIX_DIFF`.
+   - **Fix suggestion (`FIX_LABEL` + `FIX_DIFF`):** if a `<details>` block exists whose summary matches one of CodeRabbit's known fix-suggestion labels, capture its body as `FIX_DIFF` and the label text as `FIX_LABEL`. Match summary against either:
+     - `🐛 Minimal fix`
+     - `🐛 Suggested refactor`
+
+     Implementation: regex `<details><summary>(🐛 Minimal fix|🐛 Suggested refactor)</summary>`. Body capture is non-greedy until the matching `</details>` at the same nesting depth — reuse the depth-walking approach from Step 4. The two labels are mutually exclusive within a finding (CodeRabbit picks one); if neither is present, leave both fields empty. **Do NOT match `🐛 Minimal fix` alone** — the legacy single-label match silently dropped findings labeled `Suggested refactor`, even though CodeRabbit had supplied a usable diff.
+   - **AI agent prompt (`AI_PROMPT`):** if a `<details><summary>🤖 Prompt for AI Agents</summary>` exists within the finding slice, capture its content as `AI_PROMPT`. **Important disambiguation:** this is the per-finding prompt block. Do NOT confuse it with the aggregate `🤖 Prompt for all review comments with AI agents` block at the end of the review body, which lives outside any per-finding slice and is consumed separately for cross-validation (see "Cross-validation fallback" below). Both blocks may coexist in the same review body — they are extracted independently. Leave `AI_PROMPT` empty if absent.
 
 6. **Severity mapping:**
    | Emoji | Label | Severity |
@@ -414,6 +419,7 @@ The `<details>` block for a CodeRabbit special section has this exact nested str
    - Per-file extracted count → must equal `K_COUNT` from that file's summary.
    - **On mismatch: STOP.** Print: `"Parser extracted X of N duplicate comments from review <id>. Aborting to prevent silent loss. Expected N=<N>, got X=<X>. File breakdown: {path: expected_K vs got_K}. Investigate the review body format."` Then ask the user via `AskUser` whether to proceed with the partial set or abort the entire skill run.
    - This validation is the PRIMARY guardrail against the historical bug where one of two duplicate comments was silently missed.
+   - **Scope of validation:** count parity guards against silent loss of FINDINGS, not of fix-suggestion sub-fields. A finding with empty `FIX_LABEL`/`FIX_DIFF`/`AI_PROMPT` is still a counted finding (CodeRabbit does not always supply those blocks).
 
 **Cross-validation fallback via "Prompt for all review comments" section:**
 
@@ -676,24 +682,26 @@ Existing PR Comments — evaluate ALL of these (validate or contest each one):
   [paste all DeepSource findings with file, line, shortcode, severity, category, title, message]
 
   CodeRabbit Comments (inline):
-  [paste all CodeRabbit inline review comments]
+  [paste all CodeRabbit inline review comments. For each comment, when the per-finding parse from Step 1.3.3 captured `FIX_LABEL`, `FIX_DIFF`, or `AI_PROMPT`, include those alongside the comment body so the agent has CodeRabbit's full framing — not just the prose description.]
 
   CodeRabbit Duplicate Comments (pre-parsed from review body — see Step 1.3.1.5 and 1.3.3):
   [render as a markdown table with EVERY finding from the <details> parse PLUS the "Prompt for all" parse UNION, one row each. Do NOT rely on the agent to reparse HTML.]
 
-  | ID | File | Lines | Severity | Title | Description | Fix diff (if any) | Source review ID |
-  |----|------|-------|----------|-------|-------------|-------------------|------------------|
-  | D1 | scripts/enforce_signed_commit.py | 146-169 | CRITICAL | env /usr/bin/command git commit bypass | Inside the env branch, ... | ```diff ... ``` | 4167400017 |
-  | D2 | scripts/enforce_signed_commit.py | 11-12 | CRITICAL | Treat background & as separator | tokenize_command() emits &, but split_segments() ... | ```diff -SHELL_SEPARATORS = {"&&"...} +SHELL_SEPARATORS = {"&&"...,"&"} ``` | 4167400017 |
+  | ID | File | Lines | Severity | Title | Description | Fix label | Fix diff | AI prompt (if any) | Source review ID |
+  |----|------|-------|----------|-------|-------------|-----------|----------|--------------------|------------------|
+  | D1 | scripts/enforce_signed_commit.py | 146-169 | CRITICAL | env /usr/bin/command git commit bypass | Inside the env branch, ... | Minimal fix | ```diff ... ``` | "Update the env-branch handling so the wrapped command no longer bypasses the signed-commit check..." | 4167400017 |
+  | D2 | scripts/enforce_signed_commit.py | 11-12 | CRITICAL | Treat background & as separator | tokenize_command() emits &, but split_segments() ... | Suggested refactor | ```diff -SHELL_SEPARATORS = {"&&"...} +SHELL_SEPARATORS = {"&&"...,"&"} ``` | (none) | 4167400017 |
+
+  Column semantics: `Fix label` is `Minimal fix` or `Suggested refactor` (or empty); `Fix diff` is the captured `<details>` body (or empty); `AI prompt (if any)` is the per-finding `🤖 Prompt for AI Agents` content (or `(none)`). All three may be empty for a single finding — CodeRabbit does not always supply them.
 
   **HARD BLOCK:** The count of rows in this table MUST equal the (N) in the review's "♻️ Duplicate comments (N)" summary. If the orchestrator could not produce a matching count, the run was aborted at Step 1.3.3 (count validation). If you see a mismatch here, STOP and report it.
 
   CodeRabbit Outside Diff Range Comments (pre-parsed from review body — see Step 1.3.1.5 and 1.3.3):
   [render as a markdown table using the same column schema as above; rows tagged OUTSIDE-DIFF]
 
-  | ID | File | Lines | Severity | Title | Description | Fix diff (if any) | Source review ID |
-  |----|------|-------|----------|-------|-------------|-------------------|------------------|
-  | O1 | ... | ... | ... | ... | ... | ... | ... |
+  | ID | File | Lines | Severity | Title | Description | Fix label | Fix diff | AI prompt (if any) | Source review ID |
+  |----|------|-------|----------|-------|-------------|-----------|----------|--------------------|------------------|
+  | O1 | ... | ... | ... | ... | ... | ... | ... | ... | ... |
 
   Human Reviewer Comments:
   [paste all human reviewer comments]
@@ -871,6 +879,20 @@ Execute deep research before presenting each finding — see AGENTS.md "Common P
 - For validated comments: show original comment and agent's validation
 - For contested comments: show both the original and agent's contestation
 
+**CodeRabbit's original suggestion (CodeRabbit-sourced findings only):**
+
+Render this block ONLY when the finding's source is CodeRabbit AND at least one of `FIX_LABEL`, `FIX_DIFF`, or `AI_PROMPT` is non-empty. Render only the sub-fields that are populated; omit absent sub-fields silently. If all three are empty, omit the entire block.
+
+- *Fix style:* `<FIX_LABEL>` *(e.g., `Minimal fix` or `Suggested refactor`)*
+- *Suggested change:*
+  ```diff
+  <FIX_DIFF>
+  ```
+- *CodeRabbit-curated AI agent prompt:*
+  > <AI_PROMPT>
+
+Rationale: this gives the user full visibility into what CodeRabbit proposed before they pick from `Proposed Solutions`. The agent-validated options below remain the primary recommendation; the CodeRabbit block is supplementary context.
+
 **Impact analysis (four lenses):**
 - **UX:** End-user impact — errors, data loss, broken workflows
 - **Task focus:** Within PR scope or tangential?
@@ -889,6 +911,7 @@ Example: `[topic] (8/12) F8-DeadCode`.
 Use `AskUser`. **BLOCKING** — do not advance until decided.
 **Every AskUser MUST include these options:**
 - One option per proposed solution (Option A, Option B, Option C, etc.)
+- **Apply CodeRabbit's suggested fix as-is** — *only* when the finding is CodeRabbit-sourced AND `FIX_DIFF` is non-empty. Selecting this option causes Phase 8 (Step 8.2) to apply `FIX_DIFF` verbatim, bypassing the agent-recommended options. Omit this option entirely when `FIX_DIFF` is empty (no CodeRabbit fix to apply) or when the finding is not CodeRabbit-sourced.
 - Skip — no action
 - Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
 
@@ -898,6 +921,7 @@ Use `AskUser`. **BLOCKING** — do not advance until decided.
 [topic] (X/N) F#-Category
 [option] Option A: recommended fix
 [option] Option B: alternative approach
+[option] Apply CodeRabbit's suggested fix as-is   ← include ONLY for CodeRabbit findings with non-empty FIX_DIFF
 [option] Skip
 [option] Tell me more
 ```
@@ -979,9 +1003,15 @@ For each approved fix, classify its complexity and apply accordingly — see AGE
 
 | Complexity | Criteria | Action |
 |------------|----------|--------|
+| **CodeRabbit-as-is** | User selected `Apply CodeRabbit's suggested fix as-is` in Phase 6, AND the finding has a non-empty `FIX_DIFF` | Apply `FIX_DIFF` verbatim with Edit tool, then run unit tests |
 | **Simple** | Review agent provided exact fix, single file, localized change, obvious resolution (typo, missing nil guard, import, rename, dead code removal) | Apply directly with Edit tool |
 | **Complex** | Multiple files, new logic, architectural impact, new test scenarios, security-sensitive, uncertain resolution | Dispatch ring droid with TDD cycle |
 | **Uncertain** | Cannot confidently classify | Treat as complex → dispatch ring droid |
+
+**CodeRabbit-as-is fix flow:**
+1. Apply `FIX_DIFF` verbatim using Edit/MultiEdit. Treat the diff as authoritative — do NOT re-derive from agent recommendation.
+2. Run unit tests to verify no regression.
+3. If tests fail → revert the diff and escalate to ring droid dispatch (Complex flow), informing the user that CodeRabbit's diff did not pass tests as-applied. Record the failure in the per-finding audit trail.
 
 **Simple fix flow:**
 1. Apply the fix directly using Edit/MultiEdit tools
