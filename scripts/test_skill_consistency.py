@@ -948,17 +948,47 @@ class TestTasksDirLocation:
 
 
 class TestDoneRedesign:
-    """done must use 3 hard gates and NOT run local lint/test."""
+    """done must use 4 hard gates (incl. PR review feedback) and NOT run local lint/test."""
 
-    def test_done_has_three_hard_gates(self):
-        """done SKILL.md must reference all 3 hard gates."""
+    def test_done_has_four_hard_gates(self):
+        """done SKILL.md must reference all 4 hard gates: uncommitted, unpushed,
+        PR review feedback, PR final state."""
         content = _read_skill("done")
         assert "uncommitted" in content.lower(), \
             "done missing 'uncommitted changes' gate"
         assert "unpushed" in content.lower(), \
             "done missing 'unpushed commits' gate"
+        assert "PR Review Feedback" in content or "review feedback" in content.lower(), \
+            "done missing 'PR review feedback' gate (Gate 3)"
         assert "PR" in content and ("MERGED" in content or "final state" in content.lower()), \
             "done missing 'PR in final state' gate"
+
+    def test_done_pr_review_gate_queries_review_decision(self):
+        """Gate 3 must query reviewDecision via gh pr list/view to detect
+        unresolved reviewer feedback before allowing the task to close."""
+        content = _read_skill("done")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "reviewDecision" in body, (
+            "done Gate 3 must query GitHub's reviewDecision field "
+            "(via `gh pr list ... --json ... reviewDecision`) to detect feedback"
+        )
+        assert "CHANGES_REQUESTED" in body, (
+            "done Gate 3 must handle the CHANGES_REQUESTED reviewDecision value"
+        )
+
+    def test_done_pr_review_gate_offers_pr_check(self):
+        """When reviewDecision is CHANGES_REQUESTED, Gate 3 must offer to invoke
+        /optimus-pr-check as the recommended path to resolve feedback."""
+        content = _read_skill("done")
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "optimus-pr-check" in body or "/optimus-pr-check" in body, (
+            "done Gate 3 must reference /optimus-pr-check as the suggested action"
+        )
+        # Must offer at least: Run pr-check, Override, Cancel — 3 distinct paths.
+        assert "Override" in body or "I have addressed" in body, (
+            "done Gate 3 must offer an override path for users who already "
+            "addressed feedback outside Optimus"
+        )
 
     def test_done_no_local_lint_test(self):
         """done SKILL.md must NOT contain make lint or make test as execution steps.
