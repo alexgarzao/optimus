@@ -425,8 +425,13 @@ class TestLogsDirGitignored:
         assert ".optimus/logs/" in section, (
             "Protocol: Initialize .optimus Directory must include .optimus/logs/ in gitignore block"
         )
-        assert "mkdir -p .optimus/sessions .optimus/reports .optimus/logs" in section, (
-            "Initialize protocol must mkdir .optimus/logs alongside sessions/reports"
+        # After the worktree-isolation fix, paths are prefixed with ${MAIN_WORKTREE}/
+        # to ensure linked worktrees write to the main worktree's .optimus/.
+        assert 'mkdir -p "${MAIN_WORKTREE}/.optimus/sessions"' in section \
+                and '"${MAIN_WORKTREE}/.optimus/reports"' in section \
+                and '"${MAIN_WORKTREE}/.optimus/logs"' in section, (
+            "Initialize protocol must mkdir .optimus/{sessions,reports,logs} "
+            "under ${MAIN_WORKTREE}/ to prevent worktree-isolation data loss"
         )
 
     def test_session_state_protocol_mkdir_includes_logs(self):
@@ -434,12 +439,15 @@ class TestLogsDirGitignored:
 
         Drift was previously possible because Session State had its own inline
         `mkdir -p .optimus/sessions .optimus/reports` that lagged behind the full
-        Initialize protocol. Now both must include `.optimus/logs`.
+        Initialize protocol. Now both must include `.optimus/logs`, and both
+        must use ${MAIN_WORKTREE}/ prefix (worktree-isolation fix).
         """
         section = _extract_protocol_section("Protocol: Session State")
-        assert "mkdir -p .optimus/sessions .optimus/reports .optimus/logs" in section, (
+        assert '"${MAIN_WORKTREE}/.optimus/sessions"' in section \
+                and '"${MAIN_WORKTREE}/.optimus/reports"' in section \
+                and '"${MAIN_WORKTREE}/.optimus/logs"' in section, (
             "Protocol: Session State mkdir must match Initialize .optimus Directory "
-            "(include .optimus/logs to prevent doc drift)"
+            "(include .optimus/logs and use ${MAIN_WORKTREE}/ prefix)"
         )
 
     def test_prune_logic_present_in_both_protocols(self):
@@ -456,8 +464,11 @@ class TestLogsDirGitignored:
         """
         for proto_title in ("Protocol: Initialize .optimus Directory", "Protocol: Session State"):
             section = _extract_protocol_section(proto_title)
-            assert "find .optimus/logs -type f -name '*.log' -mtime +30 -delete" in section, (
-                f"{proto_title} missing age-based prune (find -mtime +30 -delete)"
+            # Path uses ${MAIN_WORKTREE}/ prefix after the worktree-isolation fix.
+            assert 'find "${MAIN_WORKTREE}/.optimus/logs"' in section \
+                    and "-mtime +30 -delete" in section, (
+                f"{proto_title} missing age-based prune "
+                "(find ${MAIN_WORKTREE}/.optimus/logs -mtime +30 -delete)"
             )
             assert "tail -n +501" in section, (
                 f"{proto_title} missing count-cap prune (tail -n +501)"
