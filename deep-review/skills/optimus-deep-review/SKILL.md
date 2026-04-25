@@ -80,42 +80,35 @@ Ask the user what to review:
 
 ### Step 1.3: Auto-Discover Review Droids
 
-Instead of a fixed list, discover which Ring review droids are installed and select
-the ones relevant to this project.
+**1. Discover installed review droids:**
 
-**1. List installed Ring droids:**
-```bash
-ls ~/.factory/droids/ring-*.md 2>/dev/null
+Execute `Protocol: Discover Review Droids` — see AGENTS.md. Default `INCLUDE_NON_RING=false`.
+
+If the protocol returns `MIN_NOT_MET`, **STOP** and inform the user:
+
+```
+Required ring droids not installed. Install at minimum
+`ring-default-code-reviewer` and `ring-default-security-reviewer`,
+then re-run.
 ```
 
-**2. For each droid, read the `description` field from the YAML frontmatter.**
+**2. Opt-in question for non-ring agents:**
 
-**3. Classify each droid by relevance:**
+Let `M` be the count of non-ring agents available under `~/.factory/droids/` (i.e.,
+`*.md` files that do NOT match `ring-*.md`). If `M > 0`, ask the user via `AskUser`:
 
-| Classification | Selection rule | Examples |
-|----------------|---------------|----------|
-| **Core reviewer** | Description indicates code review, security, testing, or safety analysis | `code-reviewer`, `business-logic-reviewer`, `security-reviewer`, `test-reviewer`, `nil-safety-reviewer`, `consequences-reviewer`, `dead-code-reviewer` |
-| **QA analyst** | Description indicates QA, test strategy, or acceptance criteria | `qa-analyst`, `qa-analyst-frontend` |
-| **Stack specialist** | Description mentions a specific language/framework — include only if the project uses that stack | `backend-engineer-golang` (if `go.mod` exists), `backend-engineer-typescript` (if `package.json`), `frontend-engineer` (if frontend files in scope) |
-| **Domain specialist** | Description mentions a specific technology — include only if the project uses it | `lib-commons-reviewer` (if `go.mod` imports lib-commons), `multi-tenant-reviewer` (if project uses multi-tenancy), `performance-reviewer` (always relevant) |
-| **Non-reviewer (EXCLUDE)** | Description indicates implementation, design, ops, finance, planning, or infrastructure — NOT code review | See exclusion list below |
+```
+Include N non-ring agents (e.g., my-custom-reviewer, third-party-auditor)? [y/N]
+```
 
-**4. Permanent exclusion list** (never dispatch for code review):
+(List up to 3 example IDs.) Default answer is **N** (preserves current ring-only behavior).
 
-Droids whose purpose is implementation, design, operations, or non-code domains:
-- `ring-default-codebase-explorer` — exploration, not review
-- `ring-default-write-plan` — planning, not review
-- `ring-default-review-slicer` — internal classification, not code review
-- `ring-dev-team-devops-engineer` — DevOps implementation
-- `ring-dev-team-frontend-designer` — UX design
-- `ring-dev-team-helm-engineer` — Helm charts
-- `ring-dev-team-sre` — observability validation
-- `ring-dev-team-ui-engineer` — UI implementation
-- `ring-dev-team-frontend-bff-engineer-*` — BFF implementation
-- `ring-dev-team-prompt-quality-reviewer` — reviews AI prompts, not code
-- All `ring-finance-*`, `ring-finops-*`, `ring-ops-*`, `ring-pm-*`, `ring-pmm-*`, `ring-pmo-*`, `ring-tw-*` — non-code domains
+If the user picks **Y**, re-run `Protocol: Discover Review Droids` with
+`INCLUDE_NON_RING=true` and merge the additional non-ring entries into the roster.
 
-**5. Present the selected droids to the user for confirmation:**
+If `M = 0`, skip this question entirely.
+
+**3. Present the selected droids to the user for confirmation:**
 
 ```
 Discovered N review droids for this project (stack: Go):
