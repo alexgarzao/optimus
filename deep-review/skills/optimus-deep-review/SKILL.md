@@ -80,66 +80,69 @@ Ask the user what to review:
 
 ### Step 1.3: Auto-Discover Review Droids
 
-Instead of a fixed list, discover which Ring review droids are installed and select
-the ones relevant to this project.
+**1. Discover installed review droids:**
 
-**1. List installed Ring droids:**
-```bash
-ls ~/.factory/droids/ring-*.md 2>/dev/null
+Execute `Protocol: Discover Review Droids` — see AGENTS.md Protocol: Discover Review Droids. Default `INCLUDE_NON_RING=false`.
+
+If the protocol returns `MIN_NOT_MET`, **STOP** and inform the user:
+
+```
+Required ring droids not installed. Install at minimum
+`ring-default-code-reviewer` and `ring-default-security-reviewer`,
+then re-run.
 ```
 
-**2. For each droid, read the `description` field from the YAML frontmatter.**
+**2. Opt-in question for non-ring agents:**
 
-**3. Classify each droid by relevance:**
+Let `M` be the count of non-ring agents that PASS the protocol's filter (i.e.,
+would actually be added to the roster if the user opts in). Implementation
+hint: dry-run `Protocol: Discover Review Droids` with `INCLUDE_NON_RING=true`
+first, count the non-ring entries it returns AFTER applying the protocol's
+exclusion list and description filter — that count is `M`. Do NOT use the raw
+count of `*.md` files under `~/.factory/droids/`; many of those would be
+excluded by the protocol.
 
-| Classification | Selection rule | Examples |
-|----------------|---------------|----------|
-| **Core reviewer** | Description indicates code review, security, testing, or safety analysis | `code-reviewer`, `business-logic-reviewer`, `security-reviewer`, `test-reviewer`, `nil-safety-reviewer`, `consequences-reviewer`, `dead-code-reviewer` |
-| **QA analyst** | Description indicates QA, test strategy, or acceptance criteria | `qa-analyst`, `qa-analyst-frontend` |
-| **Stack specialist** | Description mentions a specific language/framework — include only if the project uses that stack | `backend-engineer-golang` (if `go.mod` exists), `backend-engineer-typescript` (if `package.json`), `frontend-engineer` (if frontend files in scope) |
-| **Domain specialist** | Description mentions a specific technology — include only if the project uses it | `lib-commons-reviewer` (if `go.mod` imports lib-commons), `multi-tenant-reviewer` (if project uses multi-tenancy), `performance-reviewer` (always relevant) |
-| **Non-reviewer (EXCLUDE)** | Description indicates implementation, design, ops, finance, planning, or infrastructure — NOT code review | See exclusion list below |
+If `M > 0`, ask the user via `AskUser`:
 
-**4. Permanent exclusion list** (never dispatch for code review):
+```
+Include M non-ring agents (e.g., my-custom-reviewer, third-party-auditor)? [y/N]
+```
 
-Droids whose purpose is implementation, design, operations, or non-code domains:
-- `ring-default-codebase-explorer` — exploration, not review
-- `ring-default-write-plan` — planning, not review
-- `ring-default-review-slicer` — internal classification, not code review
-- `ring-dev-team-devops-engineer` — DevOps implementation
-- `ring-dev-team-frontend-designer` — UX design
-- `ring-dev-team-helm-engineer` — Helm charts
-- `ring-dev-team-sre` — observability validation
-- `ring-dev-team-ui-engineer` — UI implementation
-- `ring-dev-team-frontend-bff-engineer-*` — BFF implementation
-- `ring-dev-team-prompt-quality-reviewer` — reviews AI prompts, not code
-- All `ring-finance-*`, `ring-finops-*`, `ring-ops-*`, `ring-pm-*`, `ring-pmm-*`, `ring-pmo-*`, `ring-tw-*` — non-code domains
+(List up to 3 example IDs.) Default answer is **N** (preserves current ring-only behavior).
 
-**5. Present the selected droids to the user for confirmation:**
+If the user picks **Y**, re-run the same protocol — see AGENTS.md Protocol: Discover Review Droids. Use
+`INCLUDE_NON_RING=true` and merge the additional non-ring entries into the roster.
+
+If `M = 0`, skip this question entirely.
+
+**3. Present the selected droids to the user for confirmation:**
+
+Render the roster as returned by `Protocol: Discover Review Droids`, grouped
+by `Ring Core / Ring Stack / Ring Domain / Non-Ring`. Each entry must show
+`id`, `focus` (one-line summary derived from the description), and `source`
+(`ring` or `non-ring`). The exact set of agents and groups depends on what
+the protocol returned for this project — do NOT hardcode a list here.
+
+Example shape (illustrative only; actual contents come from the protocol):
 
 ```
 Discovered N review droids for this project (stack: Go):
 
-  Core reviewers:
-    1. ring-default-code-reviewer — Code quality, SOLID, DRY...
-    2. ring-default-business-logic-reviewer — Domain correctness...
-    3. ring-default-security-reviewer — Vulnerabilities, OWASP...
-    4. ring-default-ring-test-reviewer — Test coverage, effectiveness...
-    5. ring-default-ring-nil-safety-reviewer — Nil pointer safety...
-    6. ring-default-ring-consequences-reviewer — Cross-file consistency...
-    7. ring-default-ring-dead-code-reviewer — Orphaned code...
+  Ring Core
+    - <id> — <focus>
+    - ...
 
-  QA:
-    8. ring-dev-team-qa-analyst — Test strategy, AC coverage...
+  Ring Stack
+    - <id> — <focus>
 
-  Stack specialists:
-    9. ring-dev-team-backend-engineer-golang — Go idiomaticity...
+  Ring Domain
+    - <id> — <focus>
+    - ...
 
-  Domain specialists:
-    10. ring-dev-team-performance-reviewer — Performance hotspots...
-    11. ring-dev-team-lib-commons-reviewer — lib-commons usage...
+  Non-Ring                       (only when INCLUDE_NON_RING=true)
+    - <id> — <focus>
 
-Proceed with all 11 droids?
+Confirm roster? [y/N]
 ```
 
 Options via `AskUser`:
@@ -807,6 +810,107 @@ Flag business-logic functions with 0% as HIGH, infrastructure/generated code wit
 0% as SKIP.
 
 Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage Measurement."
+
+
+### Protocol: Discover Review Droids
+
+**Referenced by:** deep-review, pr-check
+
+**Why:** Both review skills need a roster of installed review droids. Hardcoding the
+list traps users on a fixed slate; rolling each skill's own discovery duplicates the
+exclusion list and the description-based relevance filter. This protocol is the single
+source of truth: callers invoke it, get back a categorized roster (or `MIN_NOT_MET`),
+and render their own confirmation UX.
+
+**Inputs:**
+
+- `INCLUDE_NON_RING` (env var or caller flag, default `false`). When `false`, only
+  `ring-*.md` agents are considered. When `true`, every `*.md` agent under
+  `~/.factory/droids/` is considered, subject to the exclusion list and relevance
+  filter below.
+
+**Discovery glob:**
+
+```bash
+if [ "${INCLUDE_NON_RING:-false}" = "true" ]; then
+  ls ~/.factory/droids/*.md 2>/dev/null
+else
+  ls ~/.factory/droids/ring-*.md 2>/dev/null
+fi
+```
+
+For each candidate, read the `description` field from the YAML frontmatter — relevance
+classification depends on it.
+
+**Permanent exclusion list** (never dispatch for code review, regardless of
+`INCLUDE_NON_RING`):
+
+Droids whose purpose is implementation, design, operations, or non-code domains:
+
+- `ring-default-codebase-explorer` — exploration, not review
+- `ring-default-write-plan` — planning, not review
+- `ring-default-review-slicer` — internal classification, not code review
+- `ring-dev-team-devops-engineer` — DevOps implementation
+- `ring-dev-team-frontend-designer` — UX design
+- `ring-dev-team-helm-engineer` — Helm charts
+- `ring-dev-team-sre` — observability validation
+- `ring-dev-team-ui-engineer` — UI implementation
+- `ring-dev-team-frontend-bff-engineer-*` — BFF implementation
+- `ring-dev-team-prompt-quality-reviewer` — reviews AI prompts, not code
+- All `ring-finance-*`, `ring-finops-*`, `ring-ops-*`, `ring-pm-*`, `ring-pmm-*`, `ring-pmo-*`, `ring-tw-*` — non-code domains
+
+**Description-based relevance filter:**
+
+| Classification | Selection rule | Examples |
+|----------------|---------------|----------|
+| **Core reviewer** | Description matches `code review|security|testing|safety|reviewer|audit` | `code-reviewer`, `business-logic-reviewer`, `security-reviewer`, `test-reviewer`, `nil-safety-reviewer`, `consequences-reviewer`, `dead-code-reviewer` |
+| **QA analyst** | Description matches `test strategy|acceptance criteria` | `qa-analyst`, `qa-analyst-frontend` |
+| **Stack specialist** | Description mentions a specific language/framework — include only if the project uses that stack | `backend-engineer-golang` (if `go.mod` exists), `backend-engineer-typescript` (if `package.json`), `frontend-engineer` (if frontend files in scope) |
+| **Domain specialist** | Description mentions a specific technology — include only if the project uses it | `lib-commons-reviewer` (if `go.mod` imports `lib-commons`), `multi-tenant-reviewer` (if project uses multi-tenancy), `performance-reviewer` (always relevant) |
+| **Non-reviewer (EXCLUDE)** | Description indicates implementation, design, ops, finance, planning, or infrastructure — NOT code review | See exclusion list above |
+
+For non-ring entries (only present when `INCLUDE_NON_RING=true`), apply the same
+description filter. Non-ring agents that pass the filter are returned in the `Non-Ring`
+group regardless of stack/domain category — the caller decides whether to default-select
+them in its UX.
+
+**Output format:**
+
+The protocol returns a grouped roster. Each entry carries `id`, `focus` (one-line
+summary derived from the description), and `source` (`ring` or `non-ring`):
+
+```
+Ring Core
+  - ring-default-code-reviewer — Code quality, SOLID, DRY, maintainability
+  - ring-default-security-reviewer — Vulnerabilities, OWASP, input validation
+  - ...
+
+Ring Stack
+  - ring-dev-team-backend-engineer-golang — Go idiomaticity (project has go.mod)
+
+Ring Domain
+  - ring-dev-team-performance-reviewer — Performance hotspots
+  - ring-dev-team-lib-commons-reviewer — lib-commons usage (project imports it)
+
+Non-Ring                       (only when INCLUDE_NON_RING=true)
+  - my-custom-reviewer — User-installed reviewer
+```
+
+The caller renders this for user confirmation per its own UX (e.g., AskUser table
+with default-selected ring entries and default-deselected non-ring entries).
+
+**Minimum-roster contract:**
+
+The protocol MUST yield at least both:
+
+- `ring-default-code-reviewer` AND
+- `ring-default-security-reviewer`
+
+If either is missing from the discovered roster, the protocol returns `MIN_NOT_MET`
+instead of a roster. The caller is responsible for STOP semantics — typically a
+message instructing the user to install the missing droids and re-run.
+
+Skills reference this as: "Execute Protocol: Discover Review Droids — see AGENTS.md Protocol: Discover Review Droids."
 
 
 ### Protocol: Initialize .optimus Directory

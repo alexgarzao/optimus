@@ -453,7 +453,7 @@ Dispatching a single agent in rounds 2+ creates false convergence — the agent 
 
 ### Protocol: Ring Droid Requirement Check
 
-**Referenced by:** review, pr-check, deep-doc-review, coderabbit-review, plan, build
+**Referenced by:** review, deep-doc-review, coderabbit-review, plan, build
 
 Before dispatching ring droids, verify the required droids are available. If any required
 droid is not installed, **STOP** and list missing droids.

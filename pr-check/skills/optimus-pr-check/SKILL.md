@@ -581,6 +581,83 @@ gh pr diff <PR_NUMBER_OR_URL> --name-only
 
 Read the full content of each changed file for the review agents.
 
+### Step 1.8: Findings count gate + mode selection (HARD BLOCK)
+
+Compute the total findings count from the data already collected in Phase 1:
+
+```
+findings_total =
+    (review threads where isResolved=false, from Step 1.3.1's filtered set)
+  + (CodeRabbit duplicate findings, from Step 1.3.1.5)
+  + (CodeRabbit outside-diff findings, from Step 1.3.1.5)
+  + (failing CI checks, from Step 1.5)
+```
+
+Present the count to the user and let them choose what to do via `AskUser`. The
+options shown depend on whether any findings were collected. Store the user's
+choice as `REVIEW_MODE` for downstream phases; valid values are
+`findings` | `diff` | `none`.
+
+**If `findings_total == 0`:**
+
+Render this exact framing in the AskUser preamble:
+
+```
+No findings to evaluate on this PR.
+
+pr-check collected:
+  - 0 review threads (Codacy / DeepSource / CodeRabbit / human)
+  - 0 CodeRabbit duplicate / outside-diff findings
+  - 0 failing CI checks
+
+Choose how to proceed:
+```
+
+AskUser options (no default):
+- `Review entire PR diff` — fresh review of the changed files (Job 1 + Job 3
+  prompt; runs Phases 2-13 with `REVIEW_MODE=diff`). Use this when you want
+  agent-driven code review on the PR even though no bots/humans commented yet.
+- `Do nothing` — exit immediately without dispatching agents (`REVIEW_MODE=none`).
+
+If the user selects `Do nothing`, **STOP** — skip Phases 2-13 and render the
+Phase 14 summary with `findings_total: 0` and `mode: none`.
+
+**If `findings_total > 0`:**
+
+Render this exact framing in the AskUser preamble (substitute the actual breakdown):
+
+```
+Found N findings on this PR:
+  - X review threads (Codacy: a, DeepSource: b, CodeRabbit: c, human: d)
+  - Y CodeRabbit duplicate / outside-diff findings
+  - Z failing CI checks
+
+NEW (this release): pr-check now defaults to evaluating existing findings
+only. If you previously relied on automatic fresh review of the diff, choose
+"Review entire PR diff instead".
+
+Choose how to proceed:
+```
+
+AskUser options (default = first):
+- `Review N findings (recommended)` — current pr-check behaviour: agents evaluate
+  each finding (`REVIEW_MODE=findings`). This is the default because it preserves
+  pr-check's PR-aware value (reply + resolve threads in Phase 13).
+- `Review entire PR diff instead` — ignore the existing findings and do a fresh
+  agent review of the changed files (`REVIEW_MODE=diff`). Phase 13 reply/resolve
+  is SKIPPED; the existing findings remain unaddressed (a warning is rendered
+  in the Phase 14 final summary so the user can come back to them).
+- `Do nothing` — exit immediately (`REVIEW_MODE=none`). The N findings remain
+  unaddressed; user can re-run pr-check later.
+
+If the user selects `Do nothing`, **STOP** — skip Phases 2-13 and render the
+Phase 14 summary with the captured `findings_total` and `mode: none`.
+
+**Mode propagation:** Phase 3 dispatches agents with a prompt selected by
+`REVIEW_MODE` (see Step 3.3 below). Phase 13 (reply + resolve threads) runs
+ONLY when `REVIEW_MODE=findings`; otherwise it is skipped (the agents never
+produced AGREE/CONTEST verdicts to act on).
+
 ---
 
 ## Phase 2: Present PR Summary
@@ -673,7 +750,17 @@ IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
   - Discover test patterns, error handling conventions, and architectural styles
   - Explore related files not listed above when needed for context
 
-Existing PR Comments — evaluate ALL of these (validate or contest each one):
+[Render the header below based on `REVIEW_MODE` captured in Step 1.8. The data tables (Codacy / DeepSource / CodeRabbit / Human) that follow are IDENTICAL in both modes — only the framing changes. This avoids self-contradiction with the diff-mode appended block that says "DO NOT classify them".]
+
+  When `REVIEW_MODE=findings`, render this header:
+
+    Existing PR Comments — evaluate ALL of these (validate or contest each one):
+
+  When `REVIEW_MODE=diff`, render this header instead:
+
+    Existing PR Comments (informational context only — DO NOT classify):
+
+  Then render the SAME data tables under whichever header was selected:
 
   Codacy Issues:
   [paste all Codacy findings with file, line, severity, message]
@@ -705,18 +792,64 @@ Existing PR Comments — evaluate ALL of these (validate or contest each one):
 
   Human Reviewer Comments:
   [paste all human reviewer comments]
+```
 
-Review scope: Only the files changed in this PR.
+**The Review Scope and Job sections are CONDITIONAL on `REVIEW_MODE` (captured
+in Step 1.8).** Append exactly ONE of the two scope+job blocks below to the
+prompt above, based on the user's choice. Both modes share the common header
+just rendered (PR Context, project context, file list, existing comments).
+
+**Append this block when `REVIEW_MODE=findings` (default for `findings_total > 0`):**
+
+```
+Review scope: existing PR comments and CI failure findings ONLY. Do NOT
+review the changed code from scratch — fresh review is the job of
+/optimus-deep-review (or REVIEW_MODE=diff in this same skill).
 
 Your job:
-  1. Review the CODE for issues in your domain
-  2. EVALUATE each existing PR comment in your domain:
-     - AGREE: The comment is valid and should be addressed
-     - CONTEST: The comment is incorrect or unnecessary (explain why)
-     - ALREADY FIXED: The comment was addressed in a subsequent commit
-  3. Report NEW findings not covered by existing comments
+  EVALUATE each existing PR comment in your domain:
+    - AGREE: The comment is valid and should be addressed
+    - CONTEST: The comment is incorrect or unnecessary (explain why)
+    - ALREADY FIXED: The comment was addressed in a subsequent commit
+  Plus: investigate CI failures assigned to your domain (Step 1.6).
 
-For EACH finding (new or evaluated), provide:
+For EACH evaluated comment, provide:
+  - Severity: CRITICAL / HIGH / MEDIUM / LOW (echo from the original comment)
+  - File and line (echo from the original comment)
+  - Verdict: AGREE / CONTEST / ALREADY FIXED with justification
+  - Impact analysis (four lenses):
+    - UX: How does this affect end users?
+    - Task focus: Is this within PR scope?
+    - Project focus: MVP-critical or gold-plating?
+    - Engineering quality: Maintainability, testability, reliability impact
+  - Recommendation with tradeoffs
+
+Cross-cutting analysis — apply ONLY to existing comments (use these questions to
+decide AGREE / CONTEST / ALREADY FIXED, NOT to surface new findings):
+  1. What would break in production under load with this code?
+  2. What's MISSING that should be here? (not just what's wrong)
+  3. Does this code trace back to a spec requirement? Flag orphan code without spec backing
+  4. How would a new developer understand this code 6 months from now?
+  5. Search the codebase for how similar problems were solved — flag inconsistencies with existing patterns
+```
+
+**Append this block when `REVIEW_MODE=diff` (user explicitly chose fresh review
+in Step 1.8):**
+
+```
+Review scope: ALL files changed in this PR (fresh review of the diff).
+The existing PR comments listed in the prompt above are INFORMATIONAL context
+ONLY — DO NOT classify them as AGREE/CONTEST/ALREADY FIXED. The user
+explicitly chose to set existing comments aside and request a fresh agent
+review of the diff. (Phase 13 reply/resolve is SKIPPED this run; if the user
+wants the existing comments addressed, they re-run pr-check with
+REVIEW_MODE=findings.)
+
+Your job:
+  1. Review the CODE in your domain for issues across the changed files
+  2. Report NEW findings discovered in the diff
+
+For EACH new finding, provide:
   - Severity: CRITICAL / HIGH / MEDIUM / LOW
   - File and line
   - Problem description with code context
@@ -728,7 +861,7 @@ For EACH finding (new or evaluated), provide:
     - Engineering quality: Maintainability, testability, reliability impact
   - Recommendation with tradeoffs
 
-Cross-cutting analysis (MANDATORY for all agents):
+Cross-cutting analysis (MANDATORY for all agents in diff mode):
   1. What would break in production under load with this code?
   2. What's MISSING that should be here? (not just what's wrong)
   3. Does this code trace back to a spec requirement? Flag orphan code without spec backing
@@ -736,31 +869,64 @@ Cross-cutting analysis (MANDATORY for all agents):
   5. Search the codebase for how similar problems were solved — flag inconsistencies with existing patterns
 ```
 
-### Agents (always dispatch ALL)
+### Step 3.3 (continued): Discover and confirm roster
 
-| # | Agent | Focus | Ring Droid |
-|---|-------|-------|------------|
-| 1 | Code quality | Architecture, SOLID, DRY, maintainability, resilience, resource lifecycle, concurrency, performance, configuration, cognitive complexity, error handling, domain purity | `ring-default-code-reviewer` |
-| 2 | Business logic | Domain correctness, edge cases, spec traceability, data integrity, backward compatibility, API semantics | `ring-default-business-logic-reviewer` |
-| 3 | Security | Vulnerabilities, OWASP, input validation, data privacy, error response leakage, rate limiting, auth propagation | `ring-default-security-reviewer` |
-| 4 | Test quality | Coverage gaps, error scenarios, flaky patterns, test effectiveness, false positive risk, test coupling, spec traceability | `ring-default-ring-test-reviewer` |
-| 5 | Nil/null safety | Nil pointer risks, unsafe dereferences, resource cleanup nil checks, channel/map/slice safety | `ring-default-ring-nil-safety-reviewer` |
-| 6 | Ripple effects | Cross-file impacts, backward compatibility, configuration drift, migration paths, shared state, event contracts | `ring-default-ring-consequences-reviewer` |
-| 7 | Dead code | Orphaned code, zombie test infrastructure, stale feature flags, deprecated paths | `ring-default-ring-dead-code-reviewer` |
+Execute `Protocol: Discover Review Droids` — see AGENTS.md Protocol: Discover Review Droids.
 
-**Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. If the core review droids are not installed, **STOP** and inform the user:
+Default invocation: `INCLUDE_NON_RING=false` (privilege ring).
+
+If the user invokes pr-check with the `--include-non-ring` flag (or the
+slash-command alias surface accepts it), pass `INCLUDE_NON_RING=true`.
+
+If the protocol returns `MIN_NOT_MET`, **STOP** with:
+
 ```
-Required ring droids are not installed. Install them before running this skill:
-  - ring-default-code-reviewer
-  - ring-default-business-logic-reviewer
-  - ring-default-security-reviewer
-  - ring-default-ring-test-reviewer
-  - ring-default-ring-nil-safety-reviewer
-  - ring-default-ring-consequences-reviewer
-  - ring-default-ring-dead-code-reviewer
+Required ring droids not installed. Install at minimum
+`ring-default-code-reviewer` and `ring-default-security-reviewer`,
+then re-run.
 ```
 
-All agents MUST be dispatched in a SINGLE message with parallel Task calls.
+Present the discovered roster to the user via `AskUser` for confirmation before
+dispatch (mirrors deep-review's existing UX). Default-selected: all ring entries.
+Default-deselected: non-ring entries (only present if `INCLUDE_NON_RING=true`).
+
+### Step 3.3.1: Pre-route by finding severity (findings mode only)
+
+**Skip this step entirely when `REVIEW_MODE=diff`** — there are no existing
+comments being evaluated, so severity-based routing of comments-with-FIX_DIFF
+does not apply. All discovered ring agents are dispatched together for the
+fresh diff review.
+
+When `REVIEW_MODE=findings`, pre-route each comment based on its severity and
+whether it ships with a `FIX_DIFF` (the per-finding fields `FIX_LABEL`,
+`FIX_DIFF`, and `SEVERITY_LABEL` were captured at Step 1.3.3 — but ONLY for
+the Duplicate / Outside-diff blocks parsed there. **Inline CodeRabbit threads
+from Step 1.3.1 do NOT carry `FIX_LABEL` / `FIX_DIFF` / `SEVERITY_LABEL`** —
+they intentionally route to the "WITHOUT FIX_DIFF: full dispatch" branch
+below).
+
+For each comment that has a non-empty `FIX_DIFF`, classify dispatch:
+
+| Severity (CodeRabbit `SEVERITY_LABEL` / Codacy / DeepSource) | Dispatch |
+|---|---|
+| Critical (🔴) | ALL discovered ring agents |
+| High / Major (🟠) | ALL discovered ring agents |
+| Medium / Minor (🟡) | Single agent matching the finding's category (security finding → `ring-default-security-reviewer`; logic finding → `ring-default-business-logic-reviewer`; default → `ring-default-code-reviewer`) |
+| Low / Trivial / Nitpick (🔵 / 🧹) | NO agent dispatch — present `FIX_DIFF` directly to user in Phase 6 with `Apply CodeRabbit as-is / Skip / Tell me more` (the option set already added in PR #15) |
+| Unknown / missing severity | ALL discovered ring agents (safe fallback — never silently drop) |
+
+> Note: Medium-tier category routing matches the FIRST roster entry whose focus
+> aligns with the finding's category. Ring entries are preferred when both ring
+> and non-ring agents match the same category.
+
+For comments WITHOUT `FIX_DIFF`: full dispatch regardless of severity (current
+behavior — agents have no diff to validate, the prose comment alone needs
+interpretation).
+
+Record the dispatch decision per finding in the audit trail so Phase 4 consolidation
+can attribute correctly ("validated by N agents", "fast-tracked: nitpick with diff").
+
+All confirmed agents MUST be dispatched in a SINGLE message with parallel Task calls.
 
 ### Special Instructions per Agent
 
@@ -779,6 +945,9 @@ After ALL agents return:
 5. **Classify false positives** — for Codacy/DeepSource findings that agents contest as misconfigured rules (e.g., ES5 rules in modern project, framework-specific rules for wrong framework), separate into "False Positive — Misconfigured Rule" category
 6. **Sort** by severity: CRITICAL > HIGH > MEDIUM > LOW
 7. **Assign** sequential IDs (F1, F2, F3...)
+
+**Mode gate:** Steps 2 and 4 are SKIPPED when `REVIEW_MODE=diff` (no
+AGREE/CONTEST verdicts produced; nothing to merge or cross-reference).
 
 ### Source Attribution
 
@@ -815,6 +984,12 @@ Each finding MUST include its source(s):
 ### Genuine Findings (validated by agents)
 | # | Severity | File | Summary | Source | Agent(s) |
 |---|----------|------|---------|--------|----------|
+
+[Mode gate: the "Contested Comments" and "Agent Verdicts" tables below are
+rendered ONLY when `REVIEW_MODE=findings`. In `diff` mode, render only "False
+Positives", "Genuine Findings", and "Summary" sections — replace the "Agent
+Verdicts" line with a single line: "Agents performed fresh diff review
+(REVIEW_MODE=diff). No verdicts on existing comments."]
 
 ### Contested Comments
 | # | Original Source | Summary | Contesting Agent | Reason |
@@ -1166,7 +1341,7 @@ Execute the opt-in convergence loop — see AGENTS.md "Common Patterns > Protoco
   `HARD_LIMIT` / `DISPATCH_FAILED_ABORTED`) for the Final Summary in Phase 14.
 
 **Stage-specific scope for convergence rounds 2+:**
-Dispatch the **same agent roster** from Phase 3 (all 7 agents from Step 3.3). Each agent
+Dispatch the **same agent roster** from Phase 3 (the roster confirmed in Step 3.3). Each agent
 receives file paths, PR context (description, linked issues, base branch), and project
 rules (re-read fresh from disk). Do NOT include the findings ledger in agent prompts —
 the orchestrator handles dedup using strict matching (same file + same line range ±5 +
@@ -1226,9 +1401,16 @@ This triggers Codacy/DeepSource reanalysis automatically.
 
 ---
 
-## Phase 13: Respond to ALL PR Comments (MANDATORY)
+## Phase 13: Respond to ALL PR Comments (MANDATORY when `REVIEW_MODE=findings`)
 
-**HARD BLOCK:** This phase is MANDATORY regardless of whether any fixes were applied. Every existing PR comment thread MUST receive a reply.
+**Mode gate:** This phase runs ONLY when `REVIEW_MODE=findings`. When the user
+chose `REVIEW_MODE=diff` in Step 1.8, agents performed a fresh diff review and
+never produced AGREE/CONTEST/ALREADY-FIXED verdicts on existing comments —
+there is nothing to reply to. **Skip Phase 13 entirely in diff mode** and
+proceed directly to Phase 14, which renders a warning that existing PR
+comments remain unaddressed.
+
+**HARD BLOCK (findings mode):** This phase is MANDATORY regardless of whether any fixes were applied. Every existing PR comment thread MUST receive a reply.
 
 ### Step 13.1: Response Rules (uniform for ALL sources)
 
@@ -1462,6 +1644,44 @@ gh api graphql -f query='
 ---
 
 ## Phase 14: Final Summary
+
+**Always render the `REVIEW_MODE` selected in Step 1.8** (`findings` | `diff` | `none`)
+and a warning if findings remain unaddressed. Pick the template by mode:
+
+**Template — when `REVIEW_MODE=none` (user chose Do nothing in Step 1.8):**
+
+```markdown
+## PR Review Summary: #<number> — <title>
+
+**Mode:** none (user opted out)
+**findings_total:** <N>
+**Status:** Exited without dispatching agents. <N> findings remain
+unaddressed. Re-run `/optimus-pr-check` later to handle them.
+```
+
+**Template — when `REVIEW_MODE=diff` (user chose fresh diff review):**
+
+```markdown
+## PR Review Summary: #<number> — <title>
+
+**Mode:** diff (fresh review of changed files; existing comments NOT evaluated)
+**findings_total (existing, unaddressed):** <N>
+**New agent findings (this run):** <M>
+
+[render the next paragraph ONLY if findings_total > 0:]
+⚠️ **<N> existing PR comments / CI failures were NOT addressed in this run.**
+Phase 13 (reply + resolve) was skipped because diff mode does not produce
+AGREE/CONTEST verdicts on existing threads. To address them, re-run pr-check
+with `REVIEW_MODE=findings` (the default when findings_total > 0).
+
+[then render the standard tables for Fixed / Skipped / Deferred / CI Status /
+Verification / Configuration Changes — same schema as findings mode, but
+populated only with the new findings discovered in this run]
+```
+
+**Template — when `REVIEW_MODE=findings` (default path with findings_total > 0):**
+
+Render the standard summary below.
 
 ```markdown
 ## PR Review Summary: #<number> — <title>
@@ -1964,6 +2184,107 @@ Flag business-logic functions with 0% as HIGH, infrastructure/generated code wit
 0% as SKIP.
 
 Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage Measurement."
+
+
+### Protocol: Discover Review Droids
+
+**Referenced by:** deep-review, pr-check
+
+**Why:** Both review skills need a roster of installed review droids. Hardcoding the
+list traps users on a fixed slate; rolling each skill's own discovery duplicates the
+exclusion list and the description-based relevance filter. This protocol is the single
+source of truth: callers invoke it, get back a categorized roster (or `MIN_NOT_MET`),
+and render their own confirmation UX.
+
+**Inputs:**
+
+- `INCLUDE_NON_RING` (env var or caller flag, default `false`). When `false`, only
+  `ring-*.md` agents are considered. When `true`, every `*.md` agent under
+  `~/.factory/droids/` is considered, subject to the exclusion list and relevance
+  filter below.
+
+**Discovery glob:**
+
+```bash
+if [ "${INCLUDE_NON_RING:-false}" = "true" ]; then
+  ls ~/.factory/droids/*.md 2>/dev/null
+else
+  ls ~/.factory/droids/ring-*.md 2>/dev/null
+fi
+```
+
+For each candidate, read the `description` field from the YAML frontmatter — relevance
+classification depends on it.
+
+**Permanent exclusion list** (never dispatch for code review, regardless of
+`INCLUDE_NON_RING`):
+
+Droids whose purpose is implementation, design, operations, or non-code domains:
+
+- `ring-default-codebase-explorer` — exploration, not review
+- `ring-default-write-plan` — planning, not review
+- `ring-default-review-slicer` — internal classification, not code review
+- `ring-dev-team-devops-engineer` — DevOps implementation
+- `ring-dev-team-frontend-designer` — UX design
+- `ring-dev-team-helm-engineer` — Helm charts
+- `ring-dev-team-sre` — observability validation
+- `ring-dev-team-ui-engineer` — UI implementation
+- `ring-dev-team-frontend-bff-engineer-*` — BFF implementation
+- `ring-dev-team-prompt-quality-reviewer` — reviews AI prompts, not code
+- All `ring-finance-*`, `ring-finops-*`, `ring-ops-*`, `ring-pm-*`, `ring-pmm-*`, `ring-pmo-*`, `ring-tw-*` — non-code domains
+
+**Description-based relevance filter:**
+
+| Classification | Selection rule | Examples |
+|----------------|---------------|----------|
+| **Core reviewer** | Description matches `code review|security|testing|safety|reviewer|audit` | `code-reviewer`, `business-logic-reviewer`, `security-reviewer`, `test-reviewer`, `nil-safety-reviewer`, `consequences-reviewer`, `dead-code-reviewer` |
+| **QA analyst** | Description matches `test strategy|acceptance criteria` | `qa-analyst`, `qa-analyst-frontend` |
+| **Stack specialist** | Description mentions a specific language/framework — include only if the project uses that stack | `backend-engineer-golang` (if `go.mod` exists), `backend-engineer-typescript` (if `package.json`), `frontend-engineer` (if frontend files in scope) |
+| **Domain specialist** | Description mentions a specific technology — include only if the project uses it | `lib-commons-reviewer` (if `go.mod` imports `lib-commons`), `multi-tenant-reviewer` (if project uses multi-tenancy), `performance-reviewer` (always relevant) |
+| **Non-reviewer (EXCLUDE)** | Description indicates implementation, design, ops, finance, planning, or infrastructure — NOT code review | See exclusion list above |
+
+For non-ring entries (only present when `INCLUDE_NON_RING=true`), apply the same
+description filter. Non-ring agents that pass the filter are returned in the `Non-Ring`
+group regardless of stack/domain category — the caller decides whether to default-select
+them in its UX.
+
+**Output format:**
+
+The protocol returns a grouped roster. Each entry carries `id`, `focus` (one-line
+summary derived from the description), and `source` (`ring` or `non-ring`):
+
+```
+Ring Core
+  - ring-default-code-reviewer — Code quality, SOLID, DRY, maintainability
+  - ring-default-security-reviewer — Vulnerabilities, OWASP, input validation
+  - ...
+
+Ring Stack
+  - ring-dev-team-backend-engineer-golang — Go idiomaticity (project has go.mod)
+
+Ring Domain
+  - ring-dev-team-performance-reviewer — Performance hotspots
+  - ring-dev-team-lib-commons-reviewer — lib-commons usage (project imports it)
+
+Non-Ring                       (only when INCLUDE_NON_RING=true)
+  - my-custom-reviewer — User-installed reviewer
+```
+
+The caller renders this for user confirmation per its own UX (e.g., AskUser table
+with default-selected ring entries and default-deselected non-ring entries).
+
+**Minimum-roster contract:**
+
+The protocol MUST yield at least both:
+
+- `ring-default-code-reviewer` AND
+- `ring-default-security-reviewer`
+
+If either is missing from the discovered roster, the protocol returns `MIN_NOT_MET`
+instead of a roster. The caller is responsible for STOP semantics — typically a
+message instructing the user to install the missing droids and re-run.
+
+Skills reference this as: "Execute Protocol: Discover Review Droids — see AGENTS.md Protocol: Discover Review Droids."
 
 
 ### Protocol: GitHub CLI Check (HARD BLOCK)
@@ -2869,46 +3190,6 @@ Raw `git` on `$TASKS_FILE` breaks in separate-repo mode.
 project repo). `tasks_git push` pushes the tasks repo. The project repo is unaffected.
 
 Skills reference this as: "Resolve tasks git scope — see AGENTS.md Protocol: Resolve Tasks Git Scope."
-
-
-### Protocol: Ring Droid Requirement Check
-
-**Referenced by:** review, pr-check, deep-doc-review, coderabbit-review, plan, build
-
-Before dispatching ring droids, verify the required droids are available. If any required
-droid is not installed, **STOP** and list missing droids.
-
-**Core review droids** (required by review, pr-check, deep-review, coderabbit-review):
-- `ring-default-code-reviewer`
-- `ring-default-business-logic-reviewer`
-- `ring-default-security-reviewer`
-- `ring-default-ring-test-reviewer`
-
-**Extended review droids** (required by review, pr-check, deep-review, coderabbit-review):
-- `ring-default-ring-nil-safety-reviewer`
-- `ring-default-ring-consequences-reviewer`
-- `ring-default-ring-dead-code-reviewer`
-
-**QA droids** (required by review, deep-review, build):
-- `ring-dev-team-qa-analyst`
-
-**Documentation droids** (required by deep-doc-review):
-- `ring-tw-team-docs-reviewer`
-- `ring-default-business-logic-reviewer`
-- `ring-default-code-reviewer`
-
-**Implementation droids** (required by build):
-- `ring-dev-team-backend-engineer-golang` (Go)
-- `ring-dev-team-backend-engineer-typescript` (TypeScript)
-- `ring-dev-team-frontend-engineer` (React/Next.js)
-
-**Spec validation droids** (required by plan):
-- `ring-default-business-logic-reviewer`
-- `ring-default-security-reviewer`
-- `ring-dev-team-qa-analyst`
-- `ring-default-code-reviewer`
-
-Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check."
 
 
 <!-- INLINE-PROTOCOLS:END -->
