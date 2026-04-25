@@ -49,6 +49,8 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
 
 ## Install
 
+### Droid (Factory)
+
 ```bash
 droid plugin marketplace add https://github.com/alexgarzao/optimus
 droid plugin install help@optimus
@@ -56,10 +58,26 @@ droid plugin install help@optimus
 
 Then run `/optimus-sync` to install all plugins at once.
 
+### Claude Code
+
+One-liner bootstrap (resolves the chicken-and-egg problem):
+
+```bash
+git clone --depth 1 https://github.com/alexgarzao/optimus ~/.optimus/repo \
+  && mkdir -p ~/.claude/skills/default/optimus-sync \
+  && cp ~/.optimus/repo/sync/skills/optimus-sync/SKILL.md \
+        ~/.claude/skills/default/optimus-sync/SKILL.md
+```
+
+Then open Claude Code and run `/optimus-sync` — it will install all other plugins automatically.
+
+**Note:** Command aliases (`/sp`, `/bd`, etc.) are not supported on Claude Code.
+Use the full skill name (e.g., `/optimus-plan`, `/optimus-build`).
+
 ### Staying up to date
 
 Run `/optimus-sync` (or `make sync-plugins`) to sync all plugins — installs new,
-updates existing, removes orphaned. This is the recommended way to stay up to date.
+updates existing, removes orphaned. Works for both Droid and Claude Code simultaneously.
 
 ## Quick Start
 
