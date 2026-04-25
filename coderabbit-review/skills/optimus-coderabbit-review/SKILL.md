@@ -845,7 +845,7 @@ logic (30-day age cap + 500-file count cap). Running both per session is a
 harmless cheap operation.
 
 Everything inside `.optimus/` is gitignored. The planning tree is versioned
-separately at `<tasksDir>/tasks.md` (and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/`
+separately at `<tasksDir>/optimus-tasks.md` (and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/`
 for Ring specs) — see the File Location section above.
 
 **NOTE:** If a legacy project has `.optimus/config.json` tracked in git (from before

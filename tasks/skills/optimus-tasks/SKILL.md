@@ -1,6 +1,6 @@
 ---
 name: optimus-tasks
-description: "Administrative task management for tasks.md. Create, edit, remove, reorder, cancel, and reopen tasks. Manage versions (create, edit, remove, reorder) and move tasks between versions. Validates format, dependencies, and ID uniqueness. Runs on any branch -- this is an administrative skill, not an execution skill."
+description: "Administrative task management for optimus-tasks.md. Create, edit, remove, reorder, cancel, and reopen tasks. Manage versions (create, edit, remove, reorder) and move tasks between versions. Validates format, dependencies, and ID uniqueness. Runs on any branch -- this is an administrative skill, not an execution skill."
 trigger: >
   - When user wants to add a new task (e.g., "add task", "create task", "new task")
   - When user wants to edit a task (e.g., "change priority of T-003", "rename T-005")
@@ -11,20 +11,20 @@ trigger: >
   - When user wants to advance or demote a task status manually (e.g., "advance T-004", "demote T-004")
   - When user wants to manage versions (e.g., "create version", "add version v2", "edit version MVP")
   - When user wants to move tasks between versions (e.g., "move T-003 to v2")
-  - When user says "manage tasks" or "edit tasks.md"
+  - When user says "manage tasks" or "edit optimus-tasks.md"
 skip_when: >
   - User wants to execute a task (use plan instead)
   - User wants to change task status through the lifecycle (status is managed by stage agents -- except cancellation, which is handled here)
 prerequisite: >
-  - <tasksDir>/tasks.md exists in the project (default tasksDir: docs/pre-dev)
+  - <tasksDir>/optimus-tasks.md exists in the project (default tasksDir: docs/pre-dev)
 NOT_skip_when: >
-  - "I can edit tasks.md manually" -- This agent validates format, dependencies, and IDs automatically.
+  - "I can edit optimus-tasks.md manually" -- This agent validates format, dependencies, and IDs automatically.
   - "It's just a small change" -- Even small changes can break format or create circular dependencies.
 examples:
   - name: Add a new task
     invocation: "Add a task: implement password reset"
     expected_flow: >
-      1. Parse tasks.md
+      1. Parse optimus-tasks.md
       2. Generate next ID (T-NNN)
       3. Ask for details (priority, dependencies)
       4. Add row to table with TaskSpec column
@@ -32,14 +32,14 @@ examples:
   - name: Edit task priority
     invocation: "Change T-003 priority to Alta"
     expected_flow: >
-      1. Parse tasks.md
+      1. Parse optimus-tasks.md
       2. Find T-003 row
       3. Update Priority column
       4. Save
   - name: Remove a task
     invocation: "Remove T-004"
     expected_flow: >
-      1. Parse tasks.md
+      1. Parse optimus-tasks.md
       2. Check no other tasks depend on T-004
       3. Remove row from table
       4. Save
@@ -49,14 +49,14 @@ related:
     - optimus-report
 verification:
   manual:
-    - After any operation, verify tasks.md still has valid format marker
+    - After any operation, verify optimus-tasks.md still has valid format marker
     - Verify no duplicate IDs exist
     - Verify no broken dependency references
 ---
 
 # optimus-tasks
 
-Administrative CRUD operations for tasks in `tasks.md`.
+Administrative CRUD operations for tasks in `optimus-tasks.md`.
 
 **Classification:** Administrative skill — runs on any branch, never modifies code.
 
@@ -77,23 +77,24 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 
 For operations that do not use `gh` (create, edit, remove, reorder, version management), skip this check.
 
-### Step 1.0.1: Find and Validate tasks.md
+### Step 1.0.1: Find and Validate optimus-tasks.md
 
 1. **Resolve paths and git scope:** Execute AGENTS.md Protocol: Resolve Tasks Git Scope.
    This obtains `TASKS_DIR`, `TASKS_FILE`, `TASKS_GIT_SCOPE`, `TASKS_GIT_REL`, and the
    `tasks_git` helper.
 
 2. **Migration check:** Execute AGENTS.md Protocol: Migrate tasks.md to tasksDir.
-   If a legacy `.optimus/tasks.md` exists and `<TASKS_DIR>/tasks.md` does not, the
+   If a legacy `.optimus/tasks.md` exists and `<TASKS_DIR>/optimus-tasks.md` does not, the
    protocol offers migration before proceeding.
+   Also check tasks.md → optimus-tasks.md rename — see AGENTS.md Protocol: Rename tasks.md to optimus-tasks.md.
 
-3. **Find tasks.md:** Resolve the path using the AGENTS.md Protocol: tasks.md Validation.
-   The file is at `<TASKS_DIR>/tasks.md` (default: `docs/pre-dev/tasks.md`).
+3. **Find optimus-tasks.md:** Resolve the path using the AGENTS.md Protocol: optimus-tasks.md Validation.
+   The file is at `<TASKS_DIR>/optimus-tasks.md` (default: `docs/pre-dev/optimus-tasks.md`).
 
    If not found, ask the user via `AskUser`:
 
-   "No tasks.md found. What should I do?"
-   - **(a) Create at <TASKS_DIR>/tasks.md** (standard location)
+   "No optimus-tasks.md found. What should I do?"
+   - **(a) Create at <TASKS_DIR>/optimus-tasks.md** (standard location)
    - **(b) Run import** — use this if you already have task files in another format
 
    If the user chooses to create:
@@ -117,12 +118,12 @@ For operations that do not use `gh` (create, edit, remove, reorder, version mana
       ```bash
       tasks_git add "$TASKS_GIT_REL"
       COMMIT_MSG_FILE=$(mktemp)
-      printf '%s' "chore(tasks): initialize tasks.md" > "$COMMIT_MSG_FILE"
+      printf '%s' "chore(tasks): initialize optimus-tasks.md" > "$COMMIT_MSG_FILE"
       tasks_git commit -F "$COMMIT_MSG_FILE"
       rm -f "$COMMIT_MSG_FILE"
       ```
 
-4. **Validate format (HARD BLOCK):** See AGENTS.md Protocol: tasks.md Validation.
+4. **Validate format (HARD BLOCK):** See AGENTS.md Protocol: optimus-tasks.md Validation.
 
 ### Step 1.1: Determine Operation
 
@@ -235,11 +236,11 @@ If no similar tasks are found, proceed silently.
 ### Step 2.1.1: Validate Title Characters
 
 **HARD BLOCK:** The task title must not contain unescaped pipe characters (`|`) because
-tasks.md uses markdown tables where `|` is the column delimiter.
+optimus-tasks.md uses markdown tables where `|` is the column delimiter.
 
 If the title contains `|`:
 - Automatically replace `|` with `—` (em dash) or `\|` (escaped pipe)
-- Inform the user: "Title contained pipe characters which would break the tasks.md table format. Replaced with '—'."
+- Inform the user: "Title contained pipe characters which would break the optimus-tasks.md table format. Replaced with '—'."
 
 Also reject titles longer than 120 characters — longer titles break table formatting.
 If too long, ask the user to shorten it.
@@ -248,7 +249,7 @@ If too long, ask the user to shorten it.
 
 Collect IDs from ALL sources to avoid collisions with parallel branches:
 
-1. **Local:** Parse all existing task IDs from the current branch's tasks.md table
+1. **Local:** Parse all existing task IDs from the current branch's optimus-tasks.md table
 2. **Remote:** Fetch and parse IDs from the tasks repo's default branch on origin
    (uses `tasks_git` so it works in both same-repo and separate-repo scopes):
    ```bash
@@ -311,7 +312,7 @@ Options:
 **If "Link existing spec"**, search `<TASKS_DIR>/tasks/*.md` for task files, present
 matches based on keyword overlap with the task title, and let the user select one.
 
-### Step 2.4: Add to tasks.md
+### Step 2.4: Add to optimus-tasks.md
 
 1. Add a new row to the table:
    ```
@@ -337,7 +338,7 @@ Created task T-NNN: <title>
 
 1. Parse the task ID from the user's request
 2. Find the task row in the table
-3. If task not found → **STOP**: "Task T-XXX not found in tasks.md"
+3. If task not found → **STOP**: "Task T-XXX not found in optimus-tasks.md"
 
 Determine which field(s) to edit. Editable fields:
 
@@ -364,7 +365,7 @@ task, use "reopen T-XXX".
 
 ### Step 3.1: Apply Changes
 
-1. Update the relevant column(s) in the table row in tasks.md
+1. Update the relevant column(s) in the table row in optimus-tasks.md
 2. If Depends changed, validate all references exist and no circular dependencies
 3. Save the file
 
@@ -382,7 +383,7 @@ Updated T-XXX:
 
 1. Parse the task ID from the user's request
 2. Find the task row in the table
-3. If task not found → **STOP**: "Task T-XXX not found in tasks.md"
+3. If task not found → **STOP**: "Task T-XXX not found in optimus-tasks.md"
 
 ### Step 4.1: Validate Removal
 
@@ -409,9 +410,9 @@ may cause data loss. Are you sure?
 
 Use `AskUser` for confirmation.
 
-### Step 4.2: Remove from tasks.md
+### Step 4.2: Remove from optimus-tasks.md
 
-1. Remove the table row for T-XXX from tasks.md
+1. Remove the table row for T-XXX from optimus-tasks.md
 2. Save
 
 **NOTE:** Do NOT renumber remaining task IDs. IDs are permanent identifiers.
@@ -449,7 +450,7 @@ Show the new table order.
 
 1. Parse the task ID from the user's request
 2. Find the task row in the table
-3. If task not found → **STOP**: "Task T-XXX not found in tasks.md"
+3. If task not found → **STOP**: "Task T-XXX not found in optimus-tasks.md"
 
 ### Step 6.1: Validate Cancellation
 
@@ -570,7 +571,7 @@ To resolve, run `/optimus-tasks`:
 
 1. Parse the task ID from the user's request
 2. Find the task row in the table
-3. If task not found → **STOP**: "Task T-XXX not found in tasks.md"
+3. If task not found → **STOP**: "Task T-XXX not found in optimus-tasks.md"
 
 ### Step 7.1: Validate Reopen
 
@@ -656,7 +657,7 @@ code manually without using stage-2).
 
 1. Parse the task ID from the user's request
 2. Find the task row in the table
-3. If task not found → **STOP**: "Task T-XXX not found in tasks.md"
+3. If task not found → **STOP**: "Task T-XXX not found in optimus-tasks.md"
 4. Determine the target status. If the user specified one, use it. Otherwise, advance
    to the next status in the lifecycle:
 
@@ -728,7 +729,7 @@ that significant rework is needed and the task should go back to implementation)
 
 1. Parse the task ID from the user's request
 2. Find the task row in the table
-3. If task not found → **STOP**: "Task T-XXX not found in tasks.md"
+3. If task not found → **STOP**: "Task T-XXX not found in optimus-tasks.md"
 4. Determine the target status. If the user specified one, use it. Otherwise, demote
    to the previous status in the lifecycle:
 
@@ -782,7 +783,7 @@ If the user provides multiple tasks to create at once (e.g., a list of tasks), p
 
 1. Generate IDs for all tasks first (to allow cross-references in dependencies)
 2. Validate all dependencies
-3. Add all rows to tasks.md
+3. Add all rows to optimus-tasks.md
 4. Show summary of all created tasks
 
 ## Phase 11: Version Management
@@ -923,13 +924,13 @@ Confirm move?
 
 ## Rules
 
-1. **Status changes are restricted** — the Edit operation cannot change status (use Reopen, Advance, or Demote operations instead, which write to state.json). Status and Branch live in state.json, not in tasks.md.
+1. **Status changes are restricted** — the Edit operation cannot change status (use Reopen, Advance, or Demote operations instead, which write to state.json). Status and Branch live in state.json, not in optimus-tasks.md.
 2. **Always validate format** after any modification (re-check marker, columns, IDs, deps, versions)
 3. **IDs are permanent** — never renumber or reuse deleted IDs
 4. **Circular dependency detection is mandatory** — check before saving
 5. **Confirm destructive operations** (remove) with the user before executing
 6. **Preserve format marker** — first line must always be `<!-- optimus:tasks-v1 -->`
-7. **Commit changes** — after any structural modification to tasks.md, commit with message: `chore(tasks): <operation> T-XXX`. Status changes (state.json) are NOT committed — state.json is gitignored.
+7. **Commit changes** — after any structural modification to optimus-tasks.md, commit with message: `chore(tasks): <operation> T-XXX`. Status changes (state.json) are NOT committed — state.json is gitignored.
 8. **Version validation** — every task must reference a version that exists in the Versions table
 9. **Exactly one Ativa version** — when setting a version to `Ativa`, the current `Ativa` must be demoted (ask user)
 10. **At most one Próxima version** — when setting a version to `Próxima`, the current `Próxima` must be demoted to `Planejada` (ask user)
@@ -959,7 +960,7 @@ Optimus splits its files into two trees:
 
 ```
 <tasksDir>/              # default: docs/pre-dev/
-├── tasks.md             # versioned — structural task data (NO status, NO branch)
+├── optimus-tasks.md     # versioned — structural task data (NO status, NO branch)
 ├── tasks/               # versioned — Ring pre-dev task specs (task_001.md, ...)
 └── subtasks/            # versioned — Ring pre-dev subtask specs (T-001/, ...)
 ```
@@ -974,7 +975,7 @@ Optimus splits its files into two trees:
 ```
 
 - **`tasksDir`** (optional): Path to the Ring pre-dev artifacts root. Default:
-  `docs/pre-dev`. The import and stage agents look for `tasks.md`, `tasks/`, and
+  `docs/pre-dev`. The import and stage agents look for `optimus-tasks.md`, `tasks/`, and
   `subtasks/` inside this directory. Can point to a path inside the project repo
   (default case) OR to a path in a separate git repo (for teams that separate task
   tracking from code).
@@ -987,7 +988,7 @@ Optimus splits its files into two trees:
 Since `config.json` is gitignored, it exists ONLY when the user overrides a default.
 Projects using the defaults do not need a `config.json`.
 
-**Tasks file** is always at `<tasksDir>/tasks.md` (derived from `tasksDir`).
+**Tasks file** is always at `<tasksDir>/optimus-tasks.md` (derived from `tasksDir`).
 
 **Operational state** is stored in `.optimus/state.json` (gitignored):
 
@@ -1001,7 +1002,7 @@ Projects using the defaults do not need a `config.json`.
 - Each key is a task ID. A task with no entry is `Pendente` (implicit default).
 - `status`: current pipeline stage (see Valid Status Values).
 - `branch`: the derived branch name, stored for quick reference (always re-derivable).
-- Stage agents read and write this file — never tasks.md — for status changes.
+- Stage agents read and write this file — never optimus-tasks.md — for status changes.
 - If state.json is lost, status can be reconstructed: task with a worktree = in progress,
   without = Pendente. The agent asks the user to confirm before proceeding.
 
@@ -1023,10 +1024,10 @@ Projects using the defaults do not need a `config.json`.
 
 Agents resolve paths:
 1. **Read `.optimus/config.json`** for `tasksDir` if it exists. Fallback: `docs/pre-dev`.
-2. **Tasks file:** `${tasksDir}/tasks.md` (derived, not configurable separately).
-3. **If `<tasksDir>/tasks.md` not found:** **STOP** and suggest running `import` to create one.
+2. **Tasks file:** `${tasksDir}/optimus-tasks.md` (derived, not configurable separately).
+3. **If `<tasksDir>/optimus-tasks.md` not found:** **STOP** and suggest running `import` to create one.
 
-Everything inside `.optimus/` is gitignored. The planning tree (`<tasksDir>/tasks.md`,
+Everything inside `.optimus/` is gitignored. The planning tree (`<tasksDir>/optimus-tasks.md`,
 `<tasksDir>/tasks/`, `<tasksDir>/subtasks/`) is versioned (structural data shared with
 the team) — but the repo that versions it depends on `tasksDir`: if `tasksDir` is inside
 the project repo, it is committed alongside the code; if `tasksDir` is in a separate
@@ -1035,7 +1036,7 @@ repo, it is committed there.
 
 ### Valid Status Values (stored in state.json)
 
-Status lives in `.optimus/state.json`, NOT in tasks.md. A task with no entry in
+Status lives in `.optimus/state.json`, NOT in optimus-tasks.md. A task with no entry in
 state.json is implicitly `Pendente`.
 
 | Status | Set by | Meaning |
@@ -1058,7 +1059,7 @@ These operations require explicit user confirmation.
 
 ### Format Validation
 
-Every stage agent (1-4) MUST validate the tasks.md format before operating:
+Every stage agent (1-4) MUST validate the optimus-tasks.md format before operating:
 1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
 2. A `## Versions` section exists with a table containing columns: Version, Status, Description
 3. All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
@@ -1080,7 +1081,7 @@ running `/optimus-import` to fix the format. Do NOT attempt to interpret malform
 15. **Empty table handling:** If the tasks table exists but has zero data rows (only headers),
 format validation PASSES. Stage agents (1-4) MUST check for this condition immediately after
 format validation and before task identification. If zero data rows: **STOP** and inform the
-user: "No tasks found in tasks.md. Use `/optimus-tasks` to create a task or `/optimus-import`
+user: "No tasks found in optimus-tasks.md. Use `/optimus-tasks` to create a task or `/optimus-import`
 to import from Ring pre-dev." Do NOT proceed to task identification with an empty table.
 
 **NOTE:** For circular dependency detection (item 13), trace the full dependency chain for
@@ -1123,7 +1124,7 @@ logic (30-day age cap + 500-file count cap). Running both per session is a
 harmless cheap operation.
 
 Everything inside `.optimus/` is gitignored. The planning tree is versioned
-separately at `<tasksDir>/tasks.md` (and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/`
+separately at `<tasksDir>/optimus-tasks.md` (and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/`
 for Ring specs) — see the File Location section above.
 
 **NOTE:** If a legacy project has `.optimus/config.json` tracked in git (from before
@@ -1136,25 +1137,23 @@ Skills reference this as: "Initialize .optimus directory — see AGENTS.md Proto
 
 ### Protocol: Migrate tasks.md to tasksDir
 
-**Referenced by:** import, tasks, plan, build, review, done, resume, report, quick-report, batch
+**Referenced by:** import, tasks, plan, build, review, done, resume, report, quick-report, batch, resolve, pr-check
 
 Detects and migrates projects that have a legacy `.optimus/tasks.md` (versioned inside
-`.optimus/`) to the new location `<tasksDir>/tasks.md`.
+`.optimus/`) to the new location `<tasksDir>/optimus-tasks.md`.
 
-**Detection (run at the start of every skill that reads/writes tasks.md):**
+**Detection (run at the start of every skill that reads/writes the tasks tracking file):**
 
 ```bash
 # Requires Protocol: Resolve Tasks Git Scope to have been executed first
 # (TASKS_DIR, TASKS_FILE, TASKS_GIT_SCOPE, tasks_git available).
 LEGACY_FILE=".optimus/tasks.md"
-BOTH_EXIST=0
 if [ -f "$LEGACY_FILE" ] && [ -f "$TASKS_FILE" ]; then
   # Partial/failed migration OR manual copy. Use new location but WARN the user.
-  echo "WARNING: Both legacy ($LEGACY_FILE) and new ($TASKS_FILE) tasks.md exist." >&2
+  echo "WARNING: Both legacy ($LEGACY_FILE) and new ($TASKS_FILE) tracking files exist." >&2
   echo "         This indicates a partial prior migration or manual copy." >&2
   echo "         Using $TASKS_FILE. After confirming contents, remove the legacy file." >&2
   NEEDS_MIGRATION=0
-  BOTH_EXIST=1
 elif [ -f "$LEGACY_FILE" ] && [ ! -f "$TASKS_FILE" ]; then
   NEEDS_MIGRATION=1
 else
@@ -1191,7 +1190,7 @@ fi
 **If `NEEDS_MIGRATION=1`, ask the user via `AskUser`:**
 
 ```
-A legacy tasks.md was found at .optimus/tasks.md. The new location is ${TASKS_FILE}.
+A legacy tasks.md was found at .optimus/tasks.md. The new location is ${TASKS_FILE} (optimus-tasks.md).
 Migrate now? (Recommended — keeping the old location will break other skills.)
 ```
 
@@ -1202,22 +1201,22 @@ Options:
 
 **Migration flow (when user chooses "Migrate now"):**
 
+**Symlink safety (HARD BLOCK):** refuse to migrate if source or destination is a symlink
+(prevents arbitrary file-write via symlink target). Must run BEFORE the checkpoint write
+so we don't leave an orphan marker if a symlink is detected:
+```bash
+if [ -L "$LEGACY_FILE" ] || [ -L "$TASKS_FILE" ]; then
+  echo "ERROR: Source or destination is a symlink — refusing to migrate." >&2
+  exit 1
+fi
+```
+
 Checkpoint file: write `.optimus/.migration-in-progress` BEFORE starting. This marker
 lets subsequent invocations detect interrupted migrations:
 
 ```bash
 mkdir -p .optimus
 printf '%s\n' "$TASKS_FILE" > .optimus/.migration-in-progress
-```
-
-**Symlink safety (HARD BLOCK):** refuse to migrate if source or destination is a symlink
-(prevents arbitrary file-write via symlink target):
-```bash
-if [ -L "$LEGACY_FILE" ] || [ -L "$TASKS_FILE" ]; then
-  echo "ERROR: Source or destination is a symlink — refusing to migrate." >&2
-  rm -f .optimus/.migration-in-progress
-  exit 1
-fi
 ```
 
 **Scope-branched migration:** explicit `if` so the agent executes the correct branch:
@@ -1233,7 +1232,7 @@ if [ "$TASKS_GIT_SCOPE" = "same-repo" ]; then
   fi
   COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
   chmod 600 "$COMMIT_MSG_FILE"
-  printf '%s' "chore(tasks): move tasks.md to tasksDir" > "$COMMIT_MSG_FILE"
+  printf '%s' "chore(tasks): migrate legacy .optimus/tasks.md to ${TASKS_DIR}/optimus-tasks.md" > "$COMMIT_MSG_FILE"
   if ! git commit -F "$COMMIT_MSG_FILE"; then
     echo "ERROR: Commit failed. Reverting git mv..." >&2
     # Revert: restore legacy from HEAD, remove new from working tree
@@ -1261,7 +1260,7 @@ else
   fi
   COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
   chmod 600 "$COMMIT_MSG_FILE"
-  printf '%s' "chore(tasks): migrate tasks.md to tasksDir" > "$COMMIT_MSG_FILE"
+  printf '%s' "chore(tasks): migrate legacy .optimus/tasks.md to ${TASKS_DIR}/optimus-tasks.md" > "$COMMIT_MSG_FILE"
   if ! tasks_git commit -F "$COMMIT_MSG_FILE"; then
     echo "ERROR: tasks_git commit failed. Rolling back..." >&2
     tasks_git reset HEAD -- "$TASKS_GIT_REL" 2>/dev/null
@@ -1279,7 +1278,7 @@ else
   fi
   COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
   chmod 600 "$COMMIT_MSG_FILE"
-  printf '%s' "chore: move tasks.md to separate tasks repo (${TASKS_DIR})" > "$COMMIT_MSG_FILE"
+  printf '%s' "chore(tasks): remove legacy .optimus/tasks.md (moved to separate tasks repo at ${TASKS_DIR})" > "$COMMIT_MSG_FILE"
   if ! git commit -F "$COMMIT_MSG_FILE"; then
     echo "ERROR: Commit failed in project repo. Tasks repo already committed." >&2
     echo "Manual cleanup needed: git commit after resolving." >&2
@@ -1304,7 +1303,7 @@ if git ls-files --error-unmatch .optimus/config.json >/dev/null 2>&1; then
     git reset HEAD .optimus/config.json 2>/dev/null
     rm -f "$COMMIT_MSG_FILE"
     echo "ERROR: Failed to untrack config.json. Index restored." >&2
-    # Do not exit — migration of tasks.md already succeeded; user can retry untrack
+    # Do not exit — migration of optimus-tasks.md already succeeded; user can retry untrack
   else
     rm -f "$COMMIT_MSG_FILE"
   fi
@@ -1314,18 +1313,18 @@ fi
 **Ensure `.gitignore` includes the operational-files block:**
 Execute Protocol: Initialize .optimus Directory. Commit if `.gitignore` was modified.
 
-**Post-migration validation:** Verify the migrated tasks.md still passes Format
+**Post-migration validation:** Verify the migrated optimus-tasks.md still passes Format
 Validation (see AGENTS.md Format Validation section). If it fails (e.g., legacy
 file was manually edited and lacks a `## Versions` section), inform user and suggest
 running `/optimus-import` to rebuild:
 
 ```bash
 if ! grep -q '^<!-- optimus:tasks-v1 -->' "$TASKS_FILE"; then
-  echo "WARNING: Migrated tasks.md does not have the optimus format marker." >&2
+  echo "WARNING: Migrated optimus-tasks.md does not have the optimus format marker." >&2
   echo "         Run /optimus-import to rebuild in the correct format." >&2
 fi
 if ! grep -q '^## Versions' "$TASKS_FILE"; then
-  echo "WARNING: Migrated tasks.md has no ## Versions section." >&2
+  echo "WARNING: Migrated optimus-tasks.md has no ## Versions section." >&2
   echo "         Run /optimus-import to rebuild in the correct format." >&2
 fi
 ```
@@ -1341,7 +1340,7 @@ echo "  - Git scope:       $TASKS_GIT_SCOPE" >&2
 
 **Report success:**
 ```
-Migration complete. tasks.md is now at ${TASKS_FILE}.
+Migration complete. optimus-tasks.md is now at ${TASKS_FILE}.
 Remember to push both repos (project + tasks) when you're ready.
 ```
 
@@ -1361,17 +1360,200 @@ remainder of this execution.
 
 **If user chose "Abort":** **STOP** the current command.
 
-Skills reference this as: "Check tasks.md migration — see AGENTS.md Protocol: Migrate tasks.md to tasksDir."
+Skills reference this as: "Check legacy tasks.md migration — see AGENTS.md Protocol: Migrate tasks.md to tasksDir."
+
+
+### Protocol: Rename tasks.md to optimus-tasks.md
+
+**Referenced by:** import, tasks, plan, build, review, done, resume, report, quick-report, batch, resolve, pr-check
+
+Detects and renames projects whose Optimus tracking file is at `<tasksDir>/tasks.md`
+(the prior default name) to `<tasksDir>/optimus-tasks.md`. The format marker
+(`<!-- optimus:tasks-v1 -->`) is unchanged — this protocol only renames the file on disk.
+
+**Detection (run at the start of every skill that reads/writes the tasks tracking file,
+AFTER Protocol: Migrate tasks.md to tasksDir):**
+
+```bash
+# Requires Protocol: Resolve Tasks Git Scope to have been executed first
+# (TASKS_DIR, TASKS_FILE, TASKS_GIT_SCOPE, TASKS_GIT_REL, tasks_git available).
+# TASKS_FILE already points to <tasksDir>/optimus-tasks.md.
+OLD_TASKS_FILE="${TASKS_DIR}/tasks.md"
+NEEDS_RENAME=0
+
+# Symlink HARD BLOCK — refuse to inspect or operate on symlinked paths.
+# Must run BEFORE detection (head -n 1 follows symlinks).
+if [ -L "$OLD_TASKS_FILE" ] || [ -L "$TASKS_FILE" ]; then
+  echo "ERROR: $OLD_TASKS_FILE or $TASKS_FILE is a symlink — refusing to inspect or rename." >&2
+  exit 1
+fi
+
+if [ -f "$OLD_TASKS_FILE" ] && [ -f "$TASKS_FILE" ]; then
+  if ! head -n 1 "$OLD_TASKS_FILE" 2>/dev/null | grep -q '^<!-- optimus:tasks-v1 -->'; then
+    # OLD lacks the optimus marker — it is an unrelated file (Ring pre-dev's
+    # Gate 7 tasks.md, etc.). The actual Optimus file is already at TASKS_FILE.
+    NEEDS_RENAME=0
+  else
+    echo "ERROR: Both ${OLD_TASKS_FILE} and ${TASKS_FILE} exist and both appear to be Optimus tracking files." >&2
+    echo "       Confirm which is current, remove the stale one, and re-run the skill." >&2
+    exit 1
+  fi
+elif [ -f "$OLD_TASKS_FILE" ] && [ ! -f "$TASKS_FILE" ]; then
+  # Only proceed if the legacy file actually has the optimus format marker — otherwise
+  # it is some other unrelated tasks.md (e.g., Ring pre-dev's Gate 7 tasks.md) and
+  # MUST NOT be touched.
+  if head -n 1 "$OLD_TASKS_FILE" 2>/dev/null | grep -q '^<!-- optimus:tasks-v1 -->'; then
+    NEEDS_RENAME=1
+  fi
+fi
+```
+
+If `NEEDS_RENAME=0`, the protocol is a no-op (either the new name already exists, the
+legacy file is unrelated to optimus, or neither exists).
+
+**Dry-run mode:** If the skill is running in dry-run (per Dry-Run Mode section above),
+DO NOT execute the rename. Emit the plan and proceed:
+
+```
+[DRY-RUN] Rename would be offered for this task:
+[DRY-RUN]   Old name: $OLD_TASKS_FILE
+[DRY-RUN]   New name: $TASKS_FILE
+[DRY-RUN]   Scope:    $TASKS_GIT_SCOPE
+[DRY-RUN]   Would use: git mv (same-repo) OR tasks_git mv (separate-repo)
+```
+
+**If `NEEDS_RENAME=1`, ask the user via `AskUser`:**
+
+```
+The Optimus tracking file at $OLD_TASKS_FILE uses the previous default name.
+Rename to $TASKS_FILE now? (Recommended — Ring pre-dev also produces a tasks.md
+in this directory, so the previous name causes a collision.)
+```
+
+Options:
+- **Rename now** — perform the rename and commit
+- **Skip this time** — continue with the legacy name (emit warning; this will collide with Ring pre-dev)
+- **Abort** — stop the current command so you can rename manually
+
+**Rename flow (when user chooses "Rename now"):**
+
+Checkpoint file: write `.optimus/.rename-in-progress` BEFORE starting. This marker
+lets subsequent invocations detect interrupted renames:
+
+```bash
+mkdir -p .optimus
+printf '%s\n' "$TASKS_FILE" > .optimus/.rename-in-progress
+```
+
+**Scope-branched rename:** explicit `if` so the agent executes the correct branch:
+
+```bash
+if [ "$TASKS_GIT_SCOPE" = "same-repo" ]; then
+  # Same-repo: atomic git mv in a single commit (preserves history via rename-detect).
+  if ! git mv "$OLD_TASKS_FILE" "$TASKS_FILE"; then
+    echo "ERROR: git mv failed. Rename aborted — no changes made." >&2
+    rm -f .optimus/.rename-in-progress
+    exit 1
+  fi
+  COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
+  chmod 600 "$COMMIT_MSG_FILE"
+  printf '%s' "chore(tasks): rename tasks.md to optimus-tasks.md" > "$COMMIT_MSG_FILE"
+  if ! git commit -F "$COMMIT_MSG_FILE"; then
+    echo "ERROR: Commit failed. Reverting git mv..." >&2
+    # Revert: restore old name from HEAD, remove new name from working tree
+    git reset HEAD -- "$OLD_TASKS_FILE" "$TASKS_FILE" 2>/dev/null
+    git checkout HEAD -- "$OLD_TASKS_FILE" 2>/dev/null
+    rm -f "$TASKS_FILE"
+    rm -f "$COMMIT_MSG_FILE" .optimus/.rename-in-progress
+    exit 1
+  fi
+  rm -f "$COMMIT_MSG_FILE"
+else
+  # Separate-repo: rename via tasks_git mv, single commit in tasks repo.
+  OLD_TASKS_GIT_REL=$(python3 -c "import os,sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))" \
+    "$OLD_TASKS_FILE" "$TASKS_REPO_ROOT" 2>/dev/null)
+  if [ -z "$OLD_TASKS_GIT_REL" ]; then
+    echo "ERROR: Failed to compute path for legacy file relative to tasks repo." >&2
+    rm -f .optimus/.rename-in-progress
+    exit 1
+  fi
+  if ! tasks_git mv "$OLD_TASKS_GIT_REL" "$TASKS_GIT_REL"; then
+    echo "ERROR: tasks_git mv failed. Rename aborted — no changes made." >&2
+    rm -f .optimus/.rename-in-progress
+    exit 1
+  fi
+  COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
+  chmod 600 "$COMMIT_MSG_FILE"
+  printf '%s' "chore(tasks): rename tasks.md to optimus-tasks.md" > "$COMMIT_MSG_FILE"
+  if ! tasks_git commit -F "$COMMIT_MSG_FILE"; then
+    echo "ERROR: Commit failed in tasks repo. Manual cleanup needed:" >&2
+    echo "  cd $TASKS_DIR && git reset HEAD -- $OLD_TASKS_GIT_REL $TASKS_GIT_REL" >&2
+    echo "  git checkout HEAD -- $OLD_TASKS_GIT_REL && rm -f $TASKS_GIT_REL" >&2
+    rm -f "$COMMIT_MSG_FILE" .optimus/.rename-in-progress
+    exit 1
+  fi
+  rm -f "$COMMIT_MSG_FILE"
+fi
+```
+
+**Rename success: clear checkpoint marker and log.**
+```bash
+rm -f .optimus/.rename-in-progress
+echo "INFO: Rename completed successfully:" >&2
+echo "  - Old name:  $OLD_TASKS_FILE" >&2
+echo "  - New name:  $TASKS_FILE" >&2
+echo "  - Git scope: $TASKS_GIT_SCOPE" >&2
+```
+
+**Post-rename validation:** Verify the moved file still passes Format Validation (see
+AGENTS.md Format Validation section). If it fails (e.g., the legacy file was manually
+edited and lost the marker), inform user and suggest running `/optimus-import` to rebuild:
+
+```bash
+# Post-rename validation — verify the moved file still passes Format Validation.
+if ! grep -q '^<!-- optimus:tasks-v1 -->' "$TASKS_FILE"; then
+  echo "WARNING: Renamed optimus-tasks.md does not have the optimus format marker." >&2
+  echo "         Run /optimus-import to rebuild in the correct format." >&2
+fi
+if ! grep -q '^## Versions' "$TASKS_FILE"; then
+  echo "WARNING: Renamed optimus-tasks.md has no ## Versions section." >&2
+  echo "         Run /optimus-import to rebuild in the correct format." >&2
+fi
+```
+
+**Report success:**
+```
+Rename complete. The tracking file is now at ${TASKS_FILE}.
+Remember to push the tasks repo when you're ready.
+```
+
+**Interrupted rename recovery (on skill startup):**
+
+```bash
+if [ -f .optimus/.rename-in-progress ]; then
+  INTERRUPTED_FILE=$(cat .optimus/.rename-in-progress 2>/dev/null)
+  echo "WARNING: Previous rename was interrupted. Expected target: $INTERRUPTED_FILE" >&2
+  # AskUser: Retry rename / Clear marker / Abort
+fi
+```
+
+**If user chose "Skip this time":** Emit a warning and proceed using the legacy name
+for this invocation only. The skill MUST use `$OLD_TASKS_FILE` as `$TASKS_FILE` for the
+remainder of this execution.
+
+**If user chose "Abort":** **STOP** the current command.
+
+Skills reference this as: "Check optimus-tasks.md rename — see AGENTS.md Protocol: Rename tasks.md to optimus-tasks.md."
 
 
 ### Protocol: Resolve Tasks Git Scope
 
 **Referenced by:** all stage agents (1-4), tasks, batch, resolve, import, resume, report, quick-report
 
-Resolves `TASKS_DIR` (Ring pre-dev root) and `TASKS_FILE` (`<tasksDir>/tasks.md`), then
+Resolves `TASKS_DIR` (Ring pre-dev root) and `TASKS_FILE` (`<tasksDir>/optimus-tasks.md`), then
 detects whether `tasksDir` lives in the same git repo as the project code or in a
 **separate** git repo. Exposes a `tasks_git` helper function so skills can run git
-commands on tasks.md uniformly regardless of scope.
+commands on optimus-tasks.md uniformly regardless of scope.
 
 ```bash
 # Step 1: Resolve tasksDir from config.json (if present) or fall back to default.
@@ -1396,7 +1578,7 @@ case "$TASKS_DIR" in
 esac
 
 # Step 2: Derive TASKS_FILE.
-TASKS_FILE="${TASKS_DIR}/tasks.md"
+TASKS_FILE="${TASKS_DIR}/optimus-tasks.md"
 
 # Step 3: Detect git scope.
 PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
@@ -1423,7 +1605,7 @@ if [ -z "$TASKS_REPO_ROOT" ]; then
     exit 1
   fi
   # Fresh project: tasksDir does not exist yet — assume same-repo.
-  # Skills that create tasks.md will mkdir -p "$TASKS_DIR" first.
+  # Skills that create optimus-tasks.md will mkdir -p "$TASKS_DIR" first.
   TASKS_GIT_SCOPE="same-repo"
 elif [ "$TASKS_REPO_ROOT" = "$PROJECT_ROOT" ]; then
   TASKS_GIT_SCOPE="same-repo"
@@ -1436,9 +1618,9 @@ fi
 # In separate-repo, git runs with -C "$TASKS_DIR" so paths are relative to TASKS_DIR.
 if [ "$TASKS_GIT_SCOPE" = "separate-repo" ]; then
   # python3 is REQUIRED in separate-repo mode to compute the path from the tasks
-  # repo root. A naive "tasks.md" fallback would be wrong when TASKS_DIR is a
+  # repo root. A naive "optimus-tasks.md" fallback would be wrong when TASKS_DIR is a
   # subdir of the tasks repo (e.g., `tasks-repo/project-alfa/`), because
-  # `git show origin/main:tasks.md` resolves from repo root, not CWD.
+  # `git show origin/main:optimus-tasks.md` resolves from repo root, not CWD.
   if ! command -v python3 >/dev/null 2>&1; then
     echo "ERROR: python3 is required for separate-repo mode (path computation)." >&2
     echo "Install python3 or point tasksDir inside the project repo." >&2
@@ -1609,13 +1791,13 @@ fi
 
 ```bash
 STATE_FILE=".optimus/state.json"
-# TASKS_FILE is resolved via Protocol: Resolve Tasks Git Scope (<tasksDir>/tasks.md).
+# TASKS_FILE is resolved via Protocol: Resolve Tasks Git Scope (<tasksDir>/optimus-tasks.md).
 # Validate state.json if it exists
 if [ -f "$STATE_FILE" ] && ! jq empty "$STATE_FILE" 2>/dev/null; then
   echo "WARNING: state.json is corrupted. Treating all tasks as Pendente."
   rm -f "$STATE_FILE"
 fi
-# Get all task IDs from tasks.md
+# Get all task IDs from optimus-tasks.md
 TASK_IDS=$(grep -E '^\| T-[0-9]+ \|' "$TASKS_FILE" | awk -F'|' '{print $2}' | tr -d ' ')
 # For each task, read status from state.json (default: Pendente)
 for TASK_ID in $TASK_IDS; do
@@ -1646,25 +1828,25 @@ appearing as `Pendente` when they actually have active worktrees.
 Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: State Management."
 
 
-### Protocol: tasks.md Validation (HARD BLOCK)
+### Protocol: optimus-tasks.md Validation (HARD BLOCK)
 
 **Referenced by:** all stage agents (1-4), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
 
-Every stage agent MUST validate tasks.md before operating. The full validation rules are
+Every stage agent MUST validate optimus-tasks.md before operating. The full validation rules are
 defined in the "Format Validation" section above (items 1-15). This protocol is the
 executable version:
 
 1. **Resolve paths and git scope:** Execute Protocol: Resolve Tasks Git Scope (below) to
    resolve `TASKS_DIR`, `TASKS_FILE`, `TASKS_GIT_SCOPE`, and the `tasks_git` helper.
-2. **Find tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus-import`.
+2. **Find optimus-tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus-import`.
 3. **Validate format:** Execute all 15 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-import`.
 
-**All subsequent references to `tasks.md` in the skill use the resolved `TASKS_FILE` path.
+**All subsequent references to `optimus-tasks.md` in the skill use the resolved `TASKS_FILE` path.
 All references to Ring pre-dev artifacts use `TASKS_DIR` as the root** — never hardcoded paths.
-**All git operations on tasks.md use the `tasks_git` helper** (which handles both same-repo
+**All git operations on optimus-tasks.md use the `tasks_git` helper** (which handles both same-repo
 and separate-repo scopes).
 
-Skills reference this as: "Find and validate tasks.md (HARD BLOCK) — see AGENTS.md Protocol: tasks.md Validation."
+Skills reference this as: "Find and validate optimus-tasks.md (HARD BLOCK) — see AGENTS.md Protocol: optimus-tasks.md Validation."
 
 
 <!-- INLINE-PROTOCOLS:END -->

@@ -12,11 +12,11 @@ Skills are classified as **Administrative** (run anywhere) or **Execution** (req
 
 | Skill | Description | Command |
 |-------|-------------|---------|
-| `import` | Import Ring pre-dev artifacts into optimus format. Creates tasks.md with TaskSpec column. Re-runnable — only imports what's new | `/optimus-import` |
+| `import` | Import Ring pre-dev artifacts into optimus format. Creates optimus-tasks.md with TaskSpec column. Re-runnable — only imports what's new | `/optimus-import` |
 | `report` | Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only | `/optimus-report` |
 | `tasks` | Administrative: Create, edit, remove, reorder, cancel, and reopen tasks. Manage versions and move tasks between versions. Runs on any branch | `/optimus-tasks` |
 | `batch` | Pipeline orchestrator: chains stages 1-4 for one or more tasks with user checkpoints between stages | `/optimus-batch` |
-| `resolve` | Administrative: Resolves merge conflicts in tasks.md caused by parallel task execution across feature branches | `/optimus-resolve` |
+| `resolve` | Administrative: Resolves merge conflicts in optimus-tasks.md caused by parallel task execution across feature branches | `/optimus-resolve` |
 | `resume` | Administrative: Resume a task after closing the terminal. Locates/recreates the worktree for a given T-XXX, reports current status, and offers to invoke the next stage. Read-only on state.json except for a user-confirmed Reset-to-Pendente recovery. | `/optimus-resume` |
 | `quick-report` | Compact daily status dashboard. Shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Read-only | `/optimus-quick-report` |
 | `help` | Lists all available Optimus skills with descriptions, usage commands, and when to use each one | `/optimus-help` |
@@ -78,7 +78,7 @@ updates existing, removes orphaned. Works for both Droid and Claude Code simulta
 
 ## Quick Start
 
-1. **Import tasks:** `/optimus-import` — creates `tasks.md` from Ring pre-dev artifacts
+1. **Import tasks:** `/optimus-import` — creates `optimus-tasks.md` from Ring pre-dev artifacts
 2. **Check status:** `/optimus-report` — see the dashboard with dependencies and parallelization
 3. **Validate spec:** `/optimus-plan` — validates the first pending task and creates a workspace
 4. **Implement:** `/optimus-build` — implements the task with TDD and verification gates

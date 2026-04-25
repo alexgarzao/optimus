@@ -12,8 +12,8 @@ the threat model, trust boundaries, and mitigations in place.
 | AGENTS.md protocols | Trusted | Shipped by Optimus; reviewed in PRs |
 | SKILL.md files | Trusted | Same as AGENTS.md |
 | `.optimus/config.json` | **Partially untrusted** | Gitignored per-user; could be tampered by local attacker, received via Slack/email, or cloned from a malicious fork |
-| `tasks.md` content | **Partially untrusted** | Versioned — any contributor can add rows. Malicious values in `TaskSpec` column could attempt path traversal |
-| Ring pre-dev specs (`<tasksDir>/tasks/*.md`) | **Partially untrusted** | Same as tasks.md |
+| `optimus-tasks.md` content | **Partially untrusted** | Versioned — any contributor can add rows. Malicious values in `TaskSpec` column could attempt path traversal |
+| Ring pre-dev specs (`<tasksDir>/tasks/*.md`) | **Partially untrusted** | Same as optimus-tasks.md |
 | Environment variables | Trusted | User controls them |
 
 ## Attack Scenarios and Mitigations
@@ -43,7 +43,9 @@ are rejected outright to prevent TOCTOU attacks.
 Migration's `cp` would overwrite the sensitive target.
 
 **Mitigation:** `Protocol: Migrate tasks.md to tasksDir` rejects with `exit 1` if
-either source or destination is a symlink.
+either source or destination is a symlink. The newer `Protocol: Rename tasks.md to
+optimus-tasks.md` similarly refuses to operate on symlinked source or destination
+files.
 
 ### S4: Branch name injection in divergence checks
 

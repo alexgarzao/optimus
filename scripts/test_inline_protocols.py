@@ -74,9 +74,9 @@ class TestExtractRefsFromSkill:
         assert "Protocol: PR Title Validation" in refs
 
     def test_protocol_with_dots_in_name(self, tmp_path: Path):
-        p = self._write_skill(tmp_path, "see AGENTS.md Protocol: tasks.md Validation.")
+        p = self._write_skill(tmp_path, "see AGENTS.md Protocol: optimus-tasks.md Validation.")
         refs = ip.extract_refs_from_skill(p)
-        assert "Protocol: tasks.md Validation" in refs
+        assert "Protocol: optimus-tasks.md Validation" in refs
 
     def test_common_pattern_ref(self, tmp_path: Path):
         p = self._write_skill(tmp_path, 'AGENTS.md "Common Patterns > Convergence Loop"')
@@ -114,7 +114,7 @@ class TestExtractRefsFromSkill:
 
 class TestNormalizeKey:
     def test_strips_trailing_parens(self):
-        assert ip._normalize_key("tasks.md Validation (HARD BLOCK)") == "tasks.md validation"
+        assert ip._normalize_key("optimus-tasks.md Validation (HARD BLOCK)") == "optimus-tasks.md validation"
 
     def test_no_parens(self):
         assert ip._normalize_key("Push Commits") == "push commits"
@@ -128,7 +128,7 @@ class TestNormalizeKey:
 class TestMatchRefToSection:
     SECTIONS = {
         "Protocol: State Management": "...",
-        "Protocol: tasks.md Validation (HARD BLOCK)": "...",
+        "Protocol: optimus-tasks.md Validation (HARD BLOCK)": "...",
         "Protocol: TaskSpec Resolution": "...",
         "Protocol: Push Commits (optional)": "...",
         "Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)": "...",
@@ -139,7 +139,7 @@ class TestMatchRefToSection:
         assert ip.match_ref_to_section("Protocol: State Management", self.SECTIONS) == "Protocol: State Management"
 
     def test_match_ignores_parenthetical(self):
-        assert ip.match_ref_to_section("Protocol: tasks.md Validation", self.SECTIONS) == "Protocol: tasks.md Validation (HARD BLOCK)"
+        assert ip.match_ref_to_section("Protocol: optimus-tasks.md Validation", self.SECTIONS) == "Protocol: optimus-tasks.md Validation (HARD BLOCK)"
 
     def test_no_ambiguous_match(self):
         result = ip.match_ref_to_section("Protocol: TaskSpec Resolution", self.SECTIONS)
@@ -181,6 +181,88 @@ class TestMatchRefToSection:
             "Parser, heading, or match logic drifted."
         )
         assert "Convergence Loop" in result
+
+    def test_validation_protocol_token_matches_live_heading(self):
+        """Regression guard for VALIDATION_PROTOCOL_TOKEN constant.
+
+        The needs_format substring matcher in inline-protocols.py uses the
+        VALIDATION_PROTOCOL_TOKEN constant to detect the format-validation
+        protocol heading. If the heading is renamed in AGENTS.md, this test
+        flags the drift before propagation silently breaks foundational
+        injection (Migrate, Rename, Resolve Tasks Git Scope).
+        """
+        agents_md = Path(__file__).parent.parent / "AGENTS.md"
+        sections = _parse_real_agents_md(agents_md)
+        matching = [k for k in sections if ip.VALIDATION_PROTOCOL_TOKEN in k]
+        assert matching, (
+            f"VALIDATION_PROTOCOL_TOKEN ({ip.VALIDATION_PROTOCOL_TOKEN!r}) "
+            "matches no heading in live AGENTS.md. The token in "
+            "inline-protocols.py drifted from the actual heading text."
+        )
+
+    def test_migrate_and_rename_protocol_keys_match_live_headings(self):
+        """Regression guard for MIGRATE_PROTOCOL_KEY and RENAME_PROTOCOL_KEY.
+
+        Both keys are used by the pairing logic to inject the legacy migrate
+        protocol whenever the new rename is referenced and vice versa. If
+        either heading is renamed in AGENTS.md, the pairing silently breaks.
+        """
+        agents_md = Path(__file__).parent.parent / "AGENTS.md"
+        sections = _parse_real_agents_md(agents_md)
+        assert ip.MIGRATE_PROTOCOL_KEY in sections, (
+            f"MIGRATE_PROTOCOL_KEY ({ip.MIGRATE_PROTOCOL_KEY!r}) not found "
+            "as a heading in live AGENTS.md."
+        )
+        assert ip.RENAME_PROTOCOL_KEY in sections, (
+            f"RENAME_PROTOCOL_KEY ({ip.RENAME_PROTOCOL_KEY!r}) not found "
+            "as a heading in live AGENTS.md."
+        )
+
+    def test_pairing_injects_rename_when_only_migrate_referenced(self, tmp_path, monkeypatch):
+        """Pairing branch regression: a SKILL.md that references ONLY Migrate
+        (not optimus-tasks.md Validation) must still get Rename injected via
+        the pairing block in inline-protocols.py. This is the failure mode
+        that bit report/quick-report before the pairing block was added.
+        """
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text(
+            "## Protocol: Migrate tasks.md to tasksDir\nMigrate body content\n\n"
+            "## Protocol: Rename tasks.md to optimus-tasks.md\nRename body content\n"
+        )
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+        skill_dir = tmp_path / "x" / "skills" / "optimus-x"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_text("see AGENTS.md Protocol: Migrate tasks.md to tasksDir.\n")
+        ip.inline_protocols()
+        inlined = skill.read_text()
+        assert "Migrate body content" in inlined, "Migrate failed to inline"
+        assert "Rename body content" in inlined, (
+            "Pairing failed: Rename was not auto-injected when SKILL.md only "
+            "references Migrate (regression risk for read-only skills)."
+        )
+
+    def test_pairing_injects_migrate_when_only_rename_referenced(self, tmp_path, monkeypatch):
+        """Symmetric pairing branch regression: ONLY Rename referenced → Migrate auto-paired."""
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text(
+            "## Protocol: Migrate tasks.md to tasksDir\nMigrate body content\n\n"
+            "## Protocol: Rename tasks.md to optimus-tasks.md\nRename body content\n"
+        )
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+        skill_dir = tmp_path / "x" / "skills" / "optimus-x"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_text("see AGENTS.md Protocol: Rename tasks.md to optimus-tasks.md.\n")
+        ip.inline_protocols()
+        inlined = skill.read_text()
+        assert "Rename body content" in inlined
+        assert "Migrate body content" in inlined, (
+            "Symmetric pairing failed: Migrate was not auto-injected when "
+            "SKILL.md only references Rename."
+        )
 
 
 def _parse_real_agents_md(path):
@@ -408,10 +490,10 @@ class TestEdgeCases:
 
     def test_heading_with_special_chars(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         agents = tmp_path / "AGENTS.md"
-        agents.write_text("## Protocol: tasks.md Validation (HARD BLOCK)\nValidation content\n")
+        agents.write_text("## Protocol: optimus-tasks.md Validation (HARD BLOCK)\nValidation content\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
         sections = ip.parse_agents_md()
-        assert "Protocol: tasks.md Validation (HARD BLOCK)" in sections
+        assert "Protocol: optimus-tasks.md Validation (HARD BLOCK)" in sections
 
     def test_protocol_with_trailing_paren(self, tmp_path: Path):
         p = tmp_path / "SKILL.md"
