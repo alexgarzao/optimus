@@ -32,12 +32,35 @@ def _create_marketplace(tmp_path: Path, plugins: list[str], name: str = "optimus
     mp_file.write_text(f'{{"plugins": [{entries}]}}')
 
 
+DEFAULT_OPTIMUS_REPO_URL = "https://github.com/alexgarzao/optimus"
+
+
 def _create_repo_cache(tmp_path: Path, plugins: list[str],
-                       cache_dir: str | None = None) -> Path:
-    """Create a mock optimus repo cache with SKILL.md files."""
+                       cache_dir: str | None = None,
+                       origin_url: str = DEFAULT_OPTIMUS_REPO_URL,
+                       install_git_mock: bool = True) -> Path:
+    """Create a mock optimus repo cache with SKILL.md files.
+
+    Writes a minimal but functional .git/ dir (config + HEAD + objects/refs)
+    so real `git -C config --get remote.origin.url` returns the configured URL.
+    F26 (post bash refactor) verifies origin URL before using cache.
+
+    install_git_mock=True (default) installs a default mock `git` in tmp_path/bin
+    that handles config/fetch/reset as no-ops returning the right URL — preventing
+    real network calls. Set install_git_mock=False if a test wants to provide its
+    own git mock.
+    """
     repo_dir = Path(cache_dir) if cache_dir else tmp_path / "home" / ".optimus" / "repo"
-    # Create .git dir to mark it as a repo
-    (repo_dir / ".git").mkdir(parents=True, exist_ok=True)
+    git_dir = repo_dir / ".git"
+    git_dir.mkdir(parents=True, exist_ok=True)
+    # Minimum files for git to recognize this as a valid repo.
+    (git_dir / "config").write_text(
+        '[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n'
+        f'[remote "origin"]\n\turl = {origin_url}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n'
+    )
+    (git_dir / "HEAD").write_text("ref: refs/heads/main\n")
+    (git_dir / "objects").mkdir(exist_ok=True)
+    (git_dir / "refs" / "heads").mkdir(parents=True, exist_ok=True)
     # Create marketplace.json
     mp_dir = repo_dir / ".factory-plugin"
     mp_dir.mkdir(parents=True, exist_ok=True)
@@ -50,24 +73,38 @@ def _create_repo_cache(tmp_path: Path, plugins: list[str],
         (skill_dir / "SKILL.md").write_text(
             f"---\nname: optimus-{plugin}\n---\n# {plugin}\nContent for {plugin}.\n"
         )
+    # Install default git mock so the script's `git fetch` doesn't go to network,
+    # and `git config --get remote.origin.url` returns the configured origin.
+    # Skipped if the test already wrote one or explicitly opts out.
+    if install_git_mock:
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir(exist_ok=True)
+        git_mock = bin_dir / "git"
+        if not git_mock.exists():
+            # The script invokes git with `-C <path>` prefix for repo ops
+            # (e.g. `git -C $repo_dir config --get remote.origin.url`).
+            # Strip leading "-C <path>" so we can dispatch on the real subcommand.
+            git_mock.write_text(
+                "#!/usr/bin/env bash\n"
+                'if [ "$1" = "-C" ]; then shift 2; fi\n'
+                'case "$1" in\n'
+                f'  config) echo "{origin_url}"; exit 0 ;;\n'
+                "  fetch|reset|clone) exit 0 ;;\n"
+                "esac\n"
+                "exit 0\n"
+            )
+            git_mock.chmod(0o755)
     return repo_dir
 
 
-def _create_claude_skill(tmp_path: Path, name: str,
-                         content: str = "# placeholder") -> Path:
-    """Create a skill directory in the mock Claude Code skills dir."""
-    skills_dir = tmp_path / "home" / ".claude" / "skills" / "default"
-    skill_dir = skills_dir / f"optimus-{name}"
-    skill_dir.mkdir(parents=True, exist_ok=True)
-    (skill_dir / "SKILL.md").write_text(content)
-    return skill_dir
-
-
 def _ensure_claude_dir(tmp_path: Path) -> Path:
-    """Ensure ~/.claude/ directory exists in mock home."""
-    claude_dir = tmp_path / "home" / ".claude"
-    claude_dir.mkdir(parents=True, exist_ok=True)
-    return claude_dir
+    """Ensure ~/.claude/skills/ directory exists in mock home.
+
+    Per F49, Claude Code detection requires ~/.claude/skills/ (not just ~/.claude/).
+    """
+    claude_skills = tmp_path / "home" / ".claude" / "skills"
+    claude_skills.mkdir(parents=True, exist_ok=True)
+    return claude_skills.parent
 
 
 def _path_without_droid() -> str:
@@ -330,7 +367,7 @@ esac
         _create_marketplace(tmp_path, ["alpha"])
         result = _run_sync(tmp_path)
         assert result.returncode == 0
-        assert "Could not update marketplace" in result.stderr
+        assert "Could not update Droid marketplace" in result.stderr
         assert "Added: 1" in result.stdout
 
 
@@ -478,16 +515,19 @@ class TestClaudeCodeDetection:
         assert "── Droid (Factory) ──" not in result.stdout
 
     def test_skips_claude_code_when_no_dir(self, tmp_path: Path) -> None:
-        """When ~/.claude/ doesn't exist but droid is available, only Droid runs."""
+        """When ~/.claude/skills/ doesn't exist but droid is available, only Droid runs."""
         log = tmp_path / "droid.log"
         _create_mock_bin(tmp_path, "droid", _droid_script(log))
         _create_marketplace(tmp_path, ["alpha"])
-        # Don't create .claude dir
+        # Don't create .claude/skills/ dir (F49 detection requires it).
         result = _run_sync(tmp_path)
         assert result.returncode == 0
-        assert "Droid" in result.stdout
+        # F32: assert exact section header AND that Droid actually installed something.
+        assert "── Droid (Factory) ──" in result.stdout
         # Claude Code section should not appear
         assert "── Claude Code ──" not in result.stdout
+        log_content = log.read_text()
+        assert "install alpha@optimus" in log_content
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -518,6 +558,8 @@ class TestClaudeCodeSync:
         skill_dir = skills_dir / "optimus-alpha"
         skill_dir.mkdir(parents=True, exist_ok=True)
         (skill_dir / "SKILL.md").write_text("old content")
+        # F11: existing installs need the .optimus-managed marker so update path runs.
+        (skill_dir / ".optimus-managed").touch()
         result = _run_sync(tmp_path, env_extra={
             "OPTIMUS_CACHE_DIR": str(repo_dir),
             "CLAUDE_SKILLS_DIR": str(skills_dir),
@@ -527,7 +569,7 @@ class TestClaudeCodeSync:
         assert "alpha" in (skill_dir / "SKILL.md").read_text()
 
     def test_skips_unchanged_skills(self, tmp_path: Path) -> None:
-        """When source SKILL.md is identical, skip with 'unchanged'."""
+        """When source SKILL.md is identical, skip with 'unchanged' and don't touch the file."""
         _ensure_claude_dir(tmp_path)
         repo_dir = _create_repo_cache(tmp_path, ["alpha"])
         skills_dir = tmp_path / "home" / ".claude" / "skills" / "default"
@@ -535,7 +577,12 @@ class TestClaudeCodeSync:
         src_content = (repo_dir / "alpha" / "skills" / "optimus-alpha" / "SKILL.md").read_text()
         skill_dir = skills_dir / "optimus-alpha"
         skill_dir.mkdir(parents=True, exist_ok=True)
-        (skill_dir / "SKILL.md").write_text(src_content)
+        dest = skill_dir / "SKILL.md"
+        dest.write_text(src_content)
+        # F11: existing installs need the .optimus-managed marker.
+        (skill_dir / ".optimus-managed").touch()
+        # F14: capture mtime to verify the unchanged path doesn't rewrite the file.
+        mtime_before = dest.stat().st_mtime_ns
         result = _run_sync(tmp_path, env_extra={
             "OPTIMUS_CACHE_DIR": str(repo_dir),
             "CLAUDE_SKILLS_DIR": str(skills_dir),
@@ -543,16 +590,18 @@ class TestClaudeCodeSync:
         assert result.returncode == 0
         assert "unchanged" in result.stdout.lower()
         assert "Unchanged: 1" in result.stdout
+        assert dest.stat().st_mtime_ns == mtime_before
 
     def test_removes_orphaned_skills(self, tmp_path: Path) -> None:
-        """Skills in dir but not in marketplace get removed."""
+        """Skills in dir but not in marketplace get removed (when marker present)."""
         _ensure_claude_dir(tmp_path)
         repo_dir = _create_repo_cache(tmp_path, ["alpha"])
         skills_dir = tmp_path / "home" / ".claude" / "skills" / "default"
-        # Create orphaned skill
+        # Create orphaned skill with .optimus-managed marker (F11)
         orphan_dir = skills_dir / "optimus-orphan"
         orphan_dir.mkdir(parents=True, exist_ok=True)
         (orphan_dir / "SKILL.md").write_text("orphan")
+        (orphan_dir / ".optimus-managed").touch()
         result = _run_sync(tmp_path, env_extra={
             "OPTIMUS_CACHE_DIR": str(repo_dir),
             "CLAUDE_SKILLS_DIR": str(skills_dir),
@@ -560,6 +609,26 @@ class TestClaudeCodeSync:
         assert result.returncode == 0
         assert "Removed: 1" in result.stdout
         assert not orphan_dir.exists()
+
+    def test_skips_orphan_without_marker(self, tmp_path: Path) -> None:
+        """F11: orphan dirs lacking .optimus-managed are skipped (user-created safety)."""
+        _ensure_claude_dir(tmp_path)
+        repo_dir = _create_repo_cache(tmp_path, ["alpha"])
+        skills_dir = tmp_path / "home" / ".claude" / "skills" / "default"
+        # Orphan WITHOUT marker — should be left alone.
+        orphan_dir = skills_dir / "optimus-orphan"
+        orphan_dir.mkdir(parents=True, exist_ok=True)
+        (orphan_dir / "SKILL.md").write_text("user-created")
+        result = _run_sync(tmp_path, env_extra={
+            "OPTIMUS_CACHE_DIR": str(repo_dir),
+            "CLAUDE_SKILLS_DIR": str(skills_dir),
+        }, exclude_droid=True)
+        assert result.returncode == 0
+        assert "Removed: 0" in result.stdout
+        assert "skipped" in result.stdout.lower()
+        assert ".optimus-managed marker" in result.stdout
+        assert orphan_dir.exists()
+        assert (orphan_dir / "SKILL.md").read_text() == "user-created"
 
     def test_never_removes_non_optimus_skills(self, tmp_path: Path) -> None:
         """Skills without optimus- prefix must NEVER be touched."""
@@ -601,11 +670,11 @@ class TestClaudeCodeSync:
 
 class TestClaudeCodeRepoCache:
     def test_uses_existing_cache(self, tmp_path: Path) -> None:
-        """When cache dir exists with .git, uses it without cloning."""
+        """When cache dir exists with .git, uses it without cloning, and EXPECTED comes from it."""
         _ensure_claude_dir(tmp_path)
-        repo_dir = _create_repo_cache(tmp_path, ["alpha"])
-        # Mock git to avoid actual network calls
-        _create_mock_bin(tmp_path, "git", 'exit 0')
+        # Cache holds a single plugin "alpha-from-cache" — the expected list must come from here.
+        # Default git mock from _create_repo_cache handles config/fetch/reset as no-ops.
+        repo_dir = _create_repo_cache(tmp_path, ["alpha-from-cache"])
         skills_dir = tmp_path / "home" / ".claude" / "skills" / "default"
         result = _run_sync(tmp_path, env_extra={
             "OPTIMUS_CACHE_DIR": str(repo_dir),
@@ -613,20 +682,34 @@ class TestClaudeCodeRepoCache:
         }, exclude_droid=True)
         assert result.returncode == 0
         assert "Updating repo cache" in result.stdout
+        # F33: post-condition — EXPECTED was sourced from the cache.
+        assert (skills_dir / "optimus-alpha-from-cache" / "SKILL.md").exists()
+        assert "alpha-from-cache" in result.stdout
 
     def test_clones_when_no_cache(self, tmp_path: Path) -> None:
-        """When no cache exists, attempts to clone."""
+        """When no cache exists, attempts to clone with exact expected arguments."""
         _ensure_claude_dir(tmp_path)
         cache_dir = tmp_path / "home" / ".optimus" / "repo"
         skills_dir = tmp_path / "home" / ".claude" / "skills" / "default"
-        # Mock git clone to create the repo cache
+        git_log = tmp_path / "git.log"
+        # Mock git clone to create the repo cache.
+        # F57: use a heredoc so the SKILL.md actually contains literal newlines.
+        # F34: log every git invocation so we can assert exact clone args.
         git_script = f"""
+echo "$@" >> "{git_log}"
 if [ "$1" = "clone" ]; then
-  mkdir -p "{cache_dir}/.git"
-  mkdir -p "{cache_dir}/.factory-plugin"
-  echo '{{"plugins": [{{"name": "alpha"}}]}}' > "{cache_dir}/.factory-plugin/marketplace.json"
-  mkdir -p "{cache_dir}/alpha/skills/optimus-alpha"
-  echo "---\\nname: optimus-alpha\\n---\\n# alpha" > "{cache_dir}/alpha/skills/optimus-alpha/SKILL.md"
+  # Args: clone --depth 1 <url> <dest>
+  dest="${{!#}}"
+  mkdir -p "$dest/.git"
+  mkdir -p "$dest/.factory-plugin"
+  echo '{{"plugins": [{{"name": "alpha"}}]}}' > "$dest/.factory-plugin/marketplace.json"
+  mkdir -p "$dest/alpha/skills/optimus-alpha"
+  cat > "$dest/alpha/skills/optimus-alpha/SKILL.md" <<'EOF'
+---
+name: optimus-alpha
+---
+# alpha
+EOF
   exit 0
 fi
 exit 0
@@ -638,6 +721,12 @@ exit 0
         }, exclude_droid=True)
         assert result.returncode == 0
         assert "Cloning repo cache" in result.stdout
+        # F34: verify exact clone arguments.
+        log_content = git_log.read_text()
+        expected_clone = f"clone --depth 1 {DEFAULT_OPTIMUS_REPO_URL} {cache_dir}"
+        assert expected_clone in log_content, (
+            f"Expected '{expected_clone}' in git log, got:\n{log_content}"
+        )
 
     def test_warns_on_clone_failure(self, tmp_path: Path) -> None:
         """When clone fails, warn and skip Claude Code sync gracefully."""
@@ -650,8 +739,10 @@ exit 0
             "OPTIMUS_CACHE_DIR": str(cache_dir),
             "CLAUDE_SKILLS_DIR": str(skills_dir),
         }, exclude_droid=True)
-        # Should not crash — graceful skip
-        assert "Could not clone repo" in result.stderr or "skipped" in result.stdout.lower()
+        # F5: strict assertions — both the warning and the skip line must appear.
+        assert "Could not clone repo" in result.stderr
+        assert "(skipped)" in result.stdout
+        assert result.returncode in (0, 1)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -693,7 +784,7 @@ class TestDualPlatformSync:
         assert "── Claude Code ──" not in result.stdout
 
     def test_claude_only_when_no_droid(self, tmp_path: Path) -> None:
-        """Without droid CLI, only Claude Code sync runs."""
+        """Without droid CLI, only Claude Code sync runs and installs skills."""
         _ensure_claude_dir(tmp_path)
         repo_dir = _create_repo_cache(tmp_path, ["alpha"])
         skills_dir = tmp_path / "home" / ".claude" / "skills" / "default"
@@ -704,6 +795,8 @@ class TestDualPlatformSync:
         assert result.returncode == 0
         assert "── Droid (Factory) ──" not in result.stdout
         assert "── Claude Code ──" in result.stdout
+        # F35: confirm files were actually installed.
+        assert (skills_dir / "optimus-alpha" / "SKILL.md").exists()
 
     def test_droid_failure_doesnt_block_claude(self, tmp_path: Path) -> None:
         """If Droid sync fails, Claude Code sync still runs."""
@@ -723,3 +816,306 @@ class TestDualPlatformSync:
         assert "── Claude Code ──" in result.stdout
         # Claude Code skill should still be installed
         assert (skills_dir / "optimus-alpha" / "SKILL.md").exists()
+
+    def test_claude_failure_doesnt_block_droid(self, tmp_path: Path) -> None:
+        """F3: If Claude Code sync fails, Droid sync still completes installs.
+
+        Symmetric to test_droid_failure_doesnt_block_claude.
+        Claude Code is set up to fail at SKILL.md copy (source missing in cache),
+        so it reports FAIL — but Droid path must still run end-to-end.
+        """
+        log = tmp_path / "droid.log"
+        _create_mock_bin(tmp_path, "droid", _droid_script(log))
+        _create_marketplace(tmp_path, ["alpha"])
+        _ensure_claude_dir(tmp_path)
+        # Set up repo cache that has marketplace but is missing SKILL.md → Claude fails.
+        repo_dir = _create_repo_cache(tmp_path, ["alpha"])
+        (repo_dir / "alpha" / "skills" / "optimus-alpha" / "SKILL.md").unlink()
+        skills_dir = tmp_path / "home" / ".claude" / "skills" / "default"
+        result = _run_sync(tmp_path, env_extra={
+            "OPTIMUS_CACHE_DIR": str(repo_dir),
+            "CLAUDE_SKILLS_DIR": str(skills_dir),
+        })
+        # Aggregated failure expected (Claude failed)
+        assert result.returncode == 1
+        assert "── Droid (Factory) ──" in result.stdout
+        assert "── Claude Code ──" in result.stdout
+        # Droid must have completed its install.
+        log_content = log.read_text()
+        assert "install alpha@optimus" in log_content
+        # And Claude must have reported the source-not-found failure.
+        assert "source not found" in result.stdout.lower()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# README contract (F4)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestREADMEContract:
+    def test_bootstrap_oneliner_paths_exist(self) -> None:
+        """README bootstrap one-liner relies on these paths existing in the repo."""
+        repo_root = Path(__file__).resolve().parent.parent
+        skill_path = repo_root / "sync" / "skills" / "optimus-sync" / "SKILL.md"
+        assert skill_path.exists(), f"Missing: {skill_path}"
+        skill_md = skill_path.read_text()
+        assert "name: optimus-sync" in skill_md  # frontmatter sanity
+        # The bootstrap also relies on the sync script.
+        assert (repo_root / "sync" / "scripts" / "sync-user-plugins.sh").exists()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Plugin name validation (F6)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestPluginNameValidation:
+    def test_rejects_plugin_name_with_path_traversal(self, tmp_path: Path) -> None:
+        """Marketplace.json with a name containing '..' must error and not write any files."""
+        log = tmp_path / "droid.log"
+        _create_mock_bin(tmp_path, "droid", _droid_script(log))
+        # Hand-craft a marketplace.json with a malicious name.
+        mp_dir = tmp_path / "home" / ".factory" / "marketplaces" / "optimus" / ".factory-plugin"
+        mp_dir.mkdir(parents=True)
+        (mp_dir / "marketplace.json").write_text(
+            '{"plugins": [{"name": "../../../etc"}]}'
+        )
+        # Ensure target path doesn't exist before sync.
+        skills_dir = tmp_path / "home" / ".claude" / "skills" / "default"
+        result = _run_sync(tmp_path)
+        assert result.returncode == 1
+        assert "Invalid plugin name" in result.stderr
+        # No directory should have been created at the malicious location.
+        assert not (skills_dir / "optimus-../../../etc").exists()
+        assert not (tmp_path / "home" / ".claude" / "skills" / "etc").exists()
+
+    def test_rejects_plugin_name_with_uppercase(self, tmp_path: Path) -> None:
+        """Names like 'MyPlugin' should be rejected by the regex."""
+        log = tmp_path / "droid.log"
+        _create_mock_bin(tmp_path, "droid", _droid_script(log))
+        mp_dir = tmp_path / "home" / ".factory" / "marketplaces" / "optimus" / ".factory-plugin"
+        mp_dir.mkdir(parents=True)
+        (mp_dir / "marketplace.json").write_text(
+            '{"plugins": [{"name": "MyPlugin"}]}'
+        )
+        result = _run_sync(tmp_path)
+        assert result.returncode == 1
+        assert "Invalid plugin name" in result.stderr
+
+    def test_rejects_plugin_name_with_leading_dash(self, tmp_path: Path) -> None:
+        """Names starting with '-' should be rejected (must start with [a-z0-9])."""
+        log = tmp_path / "droid.log"
+        _create_mock_bin(tmp_path, "droid", _droid_script(log))
+        mp_dir = tmp_path / "home" / ".factory" / "marketplaces" / "optimus" / ".factory-plugin"
+        mp_dir.mkdir(parents=True)
+        (mp_dir / "marketplace.json").write_text(
+            '{"plugins": [{"name": "-evil"}]}'
+        )
+        result = _run_sync(tmp_path)
+        assert result.returncode == 1
+        assert "Invalid plugin name" in result.stderr
+
+    def test_accepts_valid_plugin_names(self, tmp_path: Path) -> None:
+        """Names matching ^[a-z0-9][a-z0-9_-]*$ are accepted."""
+        log = tmp_path / "droid.log"
+        _create_mock_bin(tmp_path, "droid", _droid_script(log))
+        # All valid: lowercase start, contain digits, underscores, hyphens.
+        valid_names = ["plan", "build-2", "optimus_helper", "abc", "x1"]
+        _create_marketplace(tmp_path, valid_names)
+        result = _run_sync(tmp_path)
+        assert result.returncode == 0
+        assert "Invalid plugin name" not in result.stderr
+        for name in valid_names:
+            assert f"+ {name} ... OK" in result.stdout
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Repo cache edge cases (F16)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestRepoCacheEdgeCases:
+    def test_repo_cache_corrupt_no_git(self, tmp_path: Path) -> None:
+        """F16: cache dir exists but lacks .git/ → script tries to clone, fails clearly.
+
+        `git clone` will not clone into a non-empty existing directory. Verify the
+        failure surfaces as a clear warning rather than a silent crash.
+        """
+        _ensure_claude_dir(tmp_path)
+        cache_dir = tmp_path / "home" / ".optimus" / "repo"
+        cache_dir.mkdir(parents=True)
+        # Populate without a .git/ directory — simulates a corrupted/manual cache.
+        (cache_dir / "stray.txt").write_text("not a git repo")
+        skills_dir = tmp_path / "home" / ".claude" / "skills" / "default"
+        # Mock git clone to fail (mimics real `git clone` into non-empty dir).
+        _create_mock_bin(tmp_path, "git", 'if [ "$1" = "clone" ]; then exit 128; fi; exit 0')
+        result = _run_sync(tmp_path, env_extra={
+            "OPTIMUS_CACHE_DIR": str(cache_dir),
+            "CLAUDE_SKILLS_DIR": str(skills_dir),
+        }, exclude_droid=True)
+        # Graceful: warns and skips Claude Code; exit code may be 0 (Claude skipped, no failures).
+        assert "Could not clone repo" in result.stderr
+        assert "Cloning repo cache" in result.stdout
+        assert "(skipped)" in result.stdout
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Source 3 marketplace resolution (F17 / F28)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestSourceResolution:
+    def test_resolve_expected_uses_source_3(self, tmp_path: Path) -> None:
+        """F17/F28: when Source 1 and Source 2 are absent, fall back to repo root.
+
+        Source 3 requires AGENTS.md AND sync/scripts/sync-user-plugins.sh at repo_root.
+        We simulate this by copying the script into a fake repo with stub AGENTS.md
+        and a marketplace.json at repo_root/.factory-plugin/marketplace.json.
+        """
+        log = tmp_path / "droid.log"
+        _create_mock_bin(tmp_path, "droid", _droid_script(log))
+        # Build a fake repo layout.
+        fake_repo = tmp_path / "fake_repo"
+        (fake_repo / "sync" / "scripts").mkdir(parents=True)
+        (fake_repo / ".factory-plugin").mkdir(parents=True)
+        shutil.copy2(SCRIPT, fake_repo / "sync" / "scripts" / "sync-user-plugins.sh")
+        (fake_repo / "AGENTS.md").write_text("# AGENTS")
+        (fake_repo / ".factory-plugin" / "marketplace.json").write_text(
+            '{"plugins": [{"name": "fromsrc3"}]}'
+        )
+        # Source 1: empty .factory cache (dir exists but no marketplace.json).
+        (tmp_path / "home" / ".factory").mkdir(parents=True)
+        # Source 2: nonexistent OPTIMUS_CACHE_DIR.
+        env = os.environ.copy()
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir(exist_ok=True)
+        env["PATH"] = f"{bin_dir}:{env.get('PATH', '/usr/bin')}"
+        env["HOME"] = str(tmp_path / "home")
+        env["OPTIMUS_CACHE_DIR"] = str(tmp_path / "nonexistent")
+        result = subprocess.run(
+            [BASH, str(fake_repo / "sync" / "scripts" / "sync-user-plugins.sh")],
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=30,
+        )
+        assert result.returncode == 0, f"stderr: {result.stderr}\nstdout: {result.stdout}"
+        assert "Added: 1" in result.stdout
+        log_content = log.read_text()
+        assert "install fromsrc3@optimus" in log_content
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Symlink safety on orphan removal (F18)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestSymlinkSafety:
+    def test_symlinked_orphan_removal_safe(self, tmp_path: Path) -> None:
+        """F18: a symlink in the skills dir must NEVER cause the script to delete the target.
+
+        The current bash `find -type d` does NOT follow symlinks, so symlinked entries
+        are not detected as "installed" and are not candidates for orphan removal.
+        That's the safety guarantee: the symlink target stays untouched regardless.
+        F7 (rm -f before cp) is the install-side defense; this asserts the orphan-side
+        property: even if a symlink with .optimus-managed is present, the target survives.
+        """
+        _ensure_claude_dir(tmp_path)
+        repo_dir = _create_repo_cache(tmp_path, ["alpha"])
+        skills_dir = tmp_path / "home" / ".claude" / "skills" / "default"
+        skills_dir.mkdir(parents=True, exist_ok=True)
+        # Create a sensitive directory elsewhere with content + the .optimus-managed
+        # marker (so even if the script were to follow the symlink, it would still
+        # see the marker and could choose to delete — we want to verify it doesn't).
+        sensitive = tmp_path / "sensitive_data"
+        sensitive.mkdir()
+        (sensitive / "secret.txt").write_text("must-survive")
+        (sensitive / ".optimus-managed").touch()
+        orphan_link = skills_dir / "optimus-foo"
+        orphan_link.symlink_to(sensitive)
+        result = _run_sync(tmp_path, env_extra={
+            "OPTIMUS_CACHE_DIR": str(repo_dir),
+            "CLAUDE_SKILLS_DIR": str(skills_dir),
+        }, exclude_droid=True)
+        assert result.returncode == 0
+        # The target directory and its contents must be intact (primary safety property).
+        assert sensitive.exists()
+        assert (sensitive / "secret.txt").exists()
+        assert (sensitive / "secret.txt").read_text() == "must-survive"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Update-path failure when source not found (F36)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestUpdatePathFailures:
+    def test_source_not_found_reports_fail_in_update(self, tmp_path: Path) -> None:
+        """F36: plugin already installed, but missing from cache → FAIL in update path."""
+        _ensure_claude_dir(tmp_path)
+        repo_dir = _create_repo_cache(tmp_path, ["alpha"])
+        skills_dir = tmp_path / "home" / ".claude" / "skills" / "default"
+        # Pre-install alpha locally with marker (simulates prior sync).
+        skill_dir = skills_dir / "optimus-alpha"
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        (skill_dir / "SKILL.md").write_text("previously installed")
+        (skill_dir / ".optimus-managed").touch()
+        # Now remove SKILL.md from cache → update path must report FAIL.
+        (repo_dir / "alpha" / "skills" / "optimus-alpha" / "SKILL.md").unlink()
+        result = _run_sync(tmp_path, env_extra={
+            "OPTIMUS_CACHE_DIR": str(repo_dir),
+            "CLAUDE_SKILLS_DIR": str(skills_dir),
+        }, exclude_droid=True)
+        assert result.returncode == 1
+        # The * marker indicates update path (not + which is install).
+        assert "* alpha ... FAIL (source not found)" in result.stdout
+        assert "Failed: 1" in result.stdout
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Stale cache via fetch failure (F37)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestStaleCache:
+    def test_warns_on_fetch_failure_existing_cache(self, tmp_path: Path) -> None:
+        """F37: existing valid cache + git fetch fails → cache marked stale, sync proceeds."""
+        _ensure_claude_dir(tmp_path)
+        # install_git_mock=False so we can install our own that fails on fetch.
+        repo_dir = _create_repo_cache(tmp_path, ["alpha"], install_git_mock=False)
+        skills_dir = tmp_path / "home" / ".claude" / "skills" / "default"
+        # Mock git: handle `-C path` prefix, emit origin URL on config, fail on fetch.
+        git_script = f"""
+if [ "$1" = "-C" ]; then shift 2; fi
+case "$1" in
+  config) echo "{DEFAULT_OPTIMUS_REPO_URL}"; exit 0 ;;
+  fetch) exit 1 ;;
+  reset) exit 0 ;;
+esac
+exit 0
+"""
+        _create_mock_bin(tmp_path, "git", git_script)
+        result = _run_sync(tmp_path, env_extra={
+            "OPTIMUS_CACHE_DIR": str(repo_dir),
+            "CLAUDE_SKILLS_DIR": str(skills_dir),
+        }, exclude_droid=True)
+        # Sync still proceeds using cached marketplace.
+        assert result.returncode == 0
+        assert "Could not fetch latest" in result.stderr
+        assert "(cache: stale)" in result.stdout
+        # Confirms cached EXPECTED was used.
+        assert (skills_dir / "optimus-alpha" / "SKILL.md").exists()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Empty marketplace via Source 2 (F38)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestEmptyMarketplaceSource2:
+    def test_fails_on_empty_marketplace_via_source_2(self, tmp_path: Path) -> None:
+        """F38: Source 1 missing, Source 2 (repo cache) empty → exit 1 with 'No plugins found'."""
+        _ensure_claude_dir(tmp_path)
+        # Source 2: repo cache with empty marketplace. Default git mock handles
+        # config/fetch/reset as no-ops returning the right URL.
+        repo_dir = _create_repo_cache(tmp_path, [])
+        skills_dir = tmp_path / "home" / ".claude" / "skills" / "default"
+        # isolated=True so Source 3 (running from inside repo) can't accidentally satisfy.
+        result = _run_sync(tmp_path, env_extra={
+            "OPTIMUS_CACHE_DIR": str(repo_dir),
+            "CLAUDE_SKILLS_DIR": str(skills_dir),
+        }, exclude_droid=True, isolated=True)
+        assert result.returncode == 1
+        assert "No plugins found" in result.stderr
