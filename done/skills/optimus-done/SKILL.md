@@ -1,6 +1,6 @@
 ---
 name: optimus-done
-description: "Stage 4 of the task lifecycle. Requires PR in final state (merged or closed) before marking task as done. Cleans up worktree and branch interactively."
+description: "Stage 4 of the task lifecycle. Validates the PR's review feedback (Gate 3) and final state (Gate 4) before marking task as done. If reviewers flagged unresolved comments, suggests /optimus-pr-check before proceeding. Cleans up worktree and branch interactively."
 trigger: >
   - After the PR has been merged or closed
   - When user requests closing a task (e.g., "close T-012", "mark T-012 as done")
@@ -39,7 +39,8 @@ related:
       - optimus-pr-check
 verification:
   manual:
-    - All 3 gates passed
+    - All 4 gates passed
+    - PR review feedback addressed (or explicitly skipped via override)
     - Task status updated to DONE in state.json
     - Worktree and branch cleaned up
 ---
@@ -241,7 +242,11 @@ git rev-parse --abbrev-ref @{u} 2>/dev/null
   - **PASS:** Output is empty → proceed to Gate 3
   - **FAIL → HARD BLOCK:** "N unpushed commits. Run `git push` first."
 
-### Gate 3: PR in Final State
+### Gate 3: PR Review Feedback
+
+Before validating final PR state (Gate 4), check whether reviewers (CodeRabbit,
+DeepSource, humans) flagged feedback that has not been addressed. The point is
+to make the user aware **before** the PR is merged and the task is closed.
 
 ```bash
 HEAD_BRANCH=$(git branch --show-current 2>/dev/null)
@@ -249,19 +254,69 @@ if [ -z "$HEAD_BRANCH" ]; then
   echo "ERROR: Cannot determine current branch. Checkout the task branch first."
   # STOP — HARD BLOCK
 fi
-PR_JSON=$(gh pr list --head "$HEAD_BRANCH" --json number,state --jq '.[0]')
+
+# Fetch PR metadata ONCE — shared by Gate 3 (review feedback) and Gate 4 (final state).
+PR_JSON=$(gh pr list --head "$HEAD_BRANCH" --json number,state,reviewDecision --jq '.[0]')
 if [ $? -ne 0 ]; then
   echo "ERROR: GitHub CLI failed. Check network and run 'gh auth status'."
   # STOP — HARD BLOCK (cannot verify PR state)
 fi
+
+PR_NUM=$(printf '%s' "$PR_JSON" | jq -r '.number // empty' 2>/dev/null)
+PR_STATE=$(printf '%s' "$PR_JSON" | jq -r '.state // empty' 2>/dev/null)
+PR_DECISION=$(printf '%s' "$PR_JSON" | jq -r '.reviewDecision // empty' 2>/dev/null)
 ```
 
 - **gh command failed (non-zero exit):** HARD BLOCK — cannot verify PR state
-- **No PR exists** (PR_JSON is empty or "null"): PASS → proceed (task went directly to default branch)
+- **No PR exists** (PR_NUM empty): PASS → proceed (task went directly to default branch)
+
+**`reviewDecision` values from GitHub:**
+| Value | Meaning |
+|---|---|
+| `APPROVED` | At least one approving review; no requested changes outstanding |
+| `CHANGES_REQUESTED` | At least one reviewer requested changes; not yet resolved |
+| `REVIEW_REQUIRED` | Required reviewers have not reviewed yet |
+| `null`/empty | No reviews yet, or reviews are advisory only |
+
+**Decision logic:**
+
+- **PR_DECISION is empty / null / `APPROVED`:** PASS → proceed to Gate 4
+- **PR_DECISION is `CHANGES_REQUESTED`:** Ask via `AskUser`:
+  ```
+  PR #${PR_NUM} has unresolved review feedback (reviewDecision=CHANGES_REQUESTED).
+  How would you like to proceed?
+  ```
+  Options:
+  - **Run `/optimus-pr-check` now** (Recommended) — invoke the pr-check skill to
+    fetch all comments and address them iteratively. After pr-check completes,
+    re-run `/optimus-done` to re-evaluate this gate.
+  - **Override (I have addressed all comments)** — proceed to Gate 4. Useful when
+    the user has already resolved everything via the GitHub UI but reviewers
+    haven't dismissed/re-approved. Logs a warning to `.optimus/logs/`.
+  - **Cancel** — STOP, do not change task status.
+- **PR_DECISION is `REVIEW_REQUIRED`:** soft warning + `AskUser`:
+  ```
+  PR #${PR_NUM} is awaiting required reviewers. Proceed anyway?
+  ```
+  Options:
+  - **Wait — cancel `done`** — STOP. Re-run when reviewers respond.
+  - **Proceed anyway** — continue to Gate 4 (typical when waiting on a long-tail
+    reviewer and the team agrees to merge async).
+
+If the user picks "Run `/optimus-pr-check` now", invoke the `optimus-pr-check`
+skill via the `Skill` tool. After it completes, re-fetch `PR_JSON` and re-evaluate
+Gate 3. Loop up to 3 times to avoid infinite back-and-forth; if still
+`CHANGES_REQUESTED` after 3 iterations, fall through to the override/cancel
+prompt.
+
+### Gate 4: PR in Final State
+
+Reuses `PR_STATE` from the metadata fetched in Gate 3.
+
 - **PR state is MERGED:** PASS → proceed
 - **PR state is CLOSED (not merged):** Ask via `AskUser`:
   ```
-  PR #N was closed without merging. How should this task be marked?
+  PR #${PR_NUM} was closed without merging. How should this task be marked?
   ```
   Options:
   - **Mark as DONE** — task is complete despite PR closure (e.g., changes landed another way)
@@ -269,7 +324,7 @@ fi
   - **Cancel** — stop, do not change status
 - **PR state is OPEN → HARD BLOCK:**
   ```
-  PR #N is still open. Merge or close the PR before running done.
+  PR #${PR_NUM} is still open. Merge or close the PR before running done.
   Lint, tests, and CI validation happen in the PR pipeline — not in done.
   ```
   **STOP** — do NOT proceed.
