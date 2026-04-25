@@ -116,6 +116,33 @@ rationalize these away.
 - Keep the install instructions and skill table up to date
 - Update when adding/removing plugins
 
+## Multi-Platform Support
+
+Optimus skills can be installed on two platforms simultaneously:
+
+| Aspect | Droid (Factory) | Claude Code |
+|--------|-----------------|-------------|
+| **Install mechanism** | `droid plugin install/update/uninstall` | Copy SKILL.md to `~/.claude/skills/default/optimus-<name>/` |
+| **Marketplace** | `~/.factory/marketplaces/optimus/` | `~/.optimus/repo/` (git clone cache) |
+| **Skill discovery** | Plugin registry | Filesystem auto-discovery |
+| **Command aliases** | Supported (`/sp`, `/bd`, etc.) | Not supported (platform limitation) |
+| **Invocation** | `/optimus-<name>` or alias | `/optimus-<name>` only |
+
+The sync script (`sync/scripts/sync-user-plugins.sh`) detects which platforms are available
+and syncs both in a single run. Platform detection:
+- **Droid**: `command -v droid` succeeds
+- **Claude Code**: `~/.claude/` directory exists
+
+At least one platform must be available. The script uses a shared marketplace JSON
+(resolved from Droid cache, repo cache, or local repo root) as the source of truth
+for expected plugins.
+
+### Claude Code specifics
+- Skills are installed at `~/.claude/skills/default/optimus-<name>/SKILL.md`
+- Only `optimus-*` prefixed directories are managed — other skills (e.g., `ring:*`) are never touched
+- Updates use `diff -q` to skip unchanged files (avoids unnecessary writes)
+- Repo cache lives at `~/.optimus/repo/` (configurable via `OPTIMUS_CACHE_DIR`)
+
 ## Plugin Lifecycle
 
 ### Adding a new plugin
@@ -123,26 +150,30 @@ rationalize these away.
 2. Create manifest: `<name>/.factory-plugin/plugin.json`
 3. Add entry to `.factory-plugin/marketplace.json`
 4. Update README.md table
-5. Commit, push, then `droid plugin install <name>@optimus`
+5. Commit, push
+6. **Droid**: `droid plugin install <name>@optimus`
+7. **Claude Code**: Run `/optimus-sync` (auto-installs from repo cache)
 
 ### Updating a plugin
 1. Edit the SKILL.md
 2. Commit, push
-3. Run `/optimus-sync` (or `make sync-plugins`) to update all plugins at once
+3. Run `/optimus-sync` (or `make sync-plugins`) to update all plugins at once on both platforms
 
 ### Removing a plugin
 1. Remove from marketplace.json
 2. Remove directory
 3. Update README.md
 4. Commit, push
-5. Run `/optimus-sync` to remove orphaned plugins and update the rest
+5. Run `/optimus-sync` to remove orphaned plugins and update the rest (both platforms)
 
 ### Syncing all plugins (for end users)
 Run `/optimus-sync` or `make sync-plugins`. This command:
-- Updates the Optimus marketplace
+- Detects available platforms (Droid, Claude Code, or both)
+- Updates the Optimus marketplace (Droid) / repo cache (Claude Code)
 - Installs new plugins that were added
 - Removes orphaned plugins that were removed
-- Updates all existing plugins (with automatic scope conflict resolution)
+- Updates all existing plugins (with automatic scope conflict resolution on Droid, diff-based skip on Claude Code)
+- Shows a per-platform summary
 
 This is the recommended way for end users to stay up to date.
 
