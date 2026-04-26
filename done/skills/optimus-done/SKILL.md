@@ -80,6 +80,15 @@ feature branch/worktree. Never offer a list of multiple tasks to close.
      ```
 3. Do NOT scan all `Validando Impl` tasks and do NOT present a multi-task chooser.
 
+### Step 1.0.2.1: Refuse Default Branch (HARD BLOCK)
+
+Refuse to run on default branch — see AGENTS.md Protocol: Default Branch Refusal.
+
+Defense-in-depth: even though Step 1.0.2 already STOPs on the default branch when no
+task ID is given, this guard catches the explicit-task-ID path as well — closing a
+task while sitting on the default branch is never correct, regardless of how the
+skill was invoked.
+
 ### Step 1.0.3: Identify Task to Close
 
 **If the user specified a task ID** (e.g., "close T-012"):
@@ -838,6 +847,40 @@ to the `Ativa` version. If not, present options before proceeding.
 6. **If "Cancel":** **STOP** — do not proceed with the stage
 
 Skills reference this as: "Check active version guard — see AGENTS.md Protocol: Active Version Guard."
+
+
+### Protocol: Default Branch Refusal (HARD BLOCK)
+
+**Referenced by:** build, review, done
+
+**Why:** Workspace Auto-Navigation is the primary safeguard, but it can be bypassed
+in edge cases (user cancels the AskUser prompt, silent failure, future skill that
+forgets to invoke the protocol). A second, unconditional refusal at the start of any
+mutating stage prevents accidental commits, worktree removals, or status writes on
+the default branch.
+
+```bash
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+if [ -z "$DEFAULT_BRANCH" ]; then
+  if git show-ref --verify refs/remotes/origin/main >/dev/null 2>&1; then
+    DEFAULT_BRANCH="main"
+  elif git show-ref --verify refs/remotes/origin/master >/dev/null 2>&1; then
+    DEFAULT_BRANCH="master"
+  fi
+fi
+CURRENT=$(git branch --show-current 2>/dev/null)
+if [ -n "$DEFAULT_BRANCH" ] && [ "$CURRENT" = "$DEFAULT_BRANCH" ]; then
+  echo "ERROR: refusing to run /optimus-<stage> on default branch '$CURRENT'." >&2
+  echo "       Switch to the task's feature branch (Workspace Auto-Navigation should have handled this)." >&2
+  exit 1
+fi
+```
+
+**Where to invoke:** immediately after Workspace Auto-Navigation completes, before
+the skill performs any state.json write, git commit, git worktree mutation, or
+status transition.
+
+Skills reference this as: "Refuse to run on default branch (HARD BLOCK) — see AGENTS.md Protocol: Default Branch Refusal."
 
 
 ### Protocol: Divergence Warning

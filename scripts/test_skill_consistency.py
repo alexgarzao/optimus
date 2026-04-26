@@ -1819,3 +1819,117 @@ class TestDualPlatformParity:
             "Command alias files that don't redirect to their plugin's main "
             "slash command:\n  - " + "\n  - ".join(broken_redirects)
         )
+
+
+class TestWorkspaceValidationHardening:
+    """Defense-in-depth checks for branch/worktree validation across stage skills.
+
+    Covers three independent guarantees layered on top of Workspace Auto-Navigation:
+
+    1. Mutating stages (build, review, done) reference Protocol: Default Branch
+       Refusal so a bypass of Workspace Auto-Navigation cannot silently mutate the
+       default branch.
+    2. pr-check cross-checks the PR's headRefName against the user's current branch
+       and surfaces a confirmation when the user passed an explicit PR number that
+       belongs to a different branch.
+    3. Protocol: Workspace Auto-Navigation documents the stage-specific override that
+       `done` applies (no multi-task chooser, no auto-navigation across tasks).
+    """
+
+    def test_default_branch_hard_block_in_stage_skills(self):
+        """build, review, done must reference Protocol: Default Branch Refusal.
+
+        Workspace Auto-Navigation is the primary safeguard, but it can be bypassed
+        (user cancels AskUser, silent failure, future skill that forgets to invoke
+        the protocol). Each mutating stage MUST invoke Default Branch Refusal as a
+        second, unconditional guard before any state mutation.
+        """
+        missing = []
+        for skill in WORKSPACE_SKILLS:
+            content = _read_skill(skill)
+            if "Protocol: Default Branch Refusal" not in content:
+                missing.append(skill)
+        assert missing == [], (
+            "Stage skills missing Protocol: Default Branch Refusal reference "
+            "(defense-in-depth against commits/mutations on the default branch):\n"
+            + "\n".join(f"  - {v}" for v in missing)
+        )
+
+    def test_default_branch_refusal_protocol_defined_in_agents_md(self):
+        """AGENTS.md must define the Protocol: Default Branch Refusal sub-protocol
+        that the stage skills reference.
+        """
+        content = AGENTS_MD.read_text()
+        assert "### Protocol: Default Branch Refusal" in content, (
+            "AGENTS.md is missing the `### Protocol: Default Branch Refusal` "
+            "section that build/review/done reference."
+        )
+        # Body must contain the actual guard logic — keyword sanity check so a
+        # future edit that empties the section still trips the test.
+        section_start = content.index("### Protocol: Default Branch Refusal")
+        # Slice to next top-level `### Protocol` heading
+        next_heading = content.find("### Protocol:", section_start + 1)
+        section = content[section_start:next_heading] if next_heading != -1 else content[section_start:]
+        assert "DEFAULT_BRANCH" in section and "git branch --show-current" in section, (
+            "Protocol: Default Branch Refusal must contain the DEFAULT_BRANCH "
+            "resolution and current-branch comparison shell snippet."
+        )
+        assert "refusing to run" in section.lower(), (
+            "Protocol: Default Branch Refusal must include the refusal error "
+            "message ('refusing to run ... on default branch')."
+        )
+
+    def test_pr_check_validates_task_branch_consistency(self):
+        """pr-check must cross-check the PR's headRefName with the current branch
+        when the user passed an explicit PR number, and AskUser on mismatch.
+
+        Without this guard, `/optimus-pr-check 30` from branch `feat/t-007` silently
+        operates on PR #30 (which may belong to a different branch) — the user's
+        mental model becomes misaligned with what pr-check is actually reviewing.
+        """
+        content = _read_skill("pr-check")
+        # The cross-check step must exist as a discrete step (any sub-step number
+        # under Phase 1 is acceptable so we don't pin to 1.2.2 specifically).
+        assert "headRefName" in content and "git branch --show-current" in content, (
+            "pr-check must compare the PR's `headRefName` with the user's current "
+            "branch (`git branch --show-current`) and AskUser on mismatch. The "
+            "cross-check belongs to Phase 1 after Step 1.2 (Fetch PR Metadata)."
+        )
+        # The mismatch warning must be presented via AskUser (BLOCKING), not as a
+        # silent log line.
+        assert re.search(
+            r"PR #.*is for branch.*but you are on", content, re.DOTALL
+        ), (
+            "pr-check must surface the PR-vs-current-branch mismatch via an "
+            "AskUser prompt (warning text 'PR #<num> is for branch ... but you "
+            "are on ...')."
+        )
+
+    def test_workspace_auto_navigation_documents_done_override(self):
+        """Protocol: Workspace Auto-Navigation must document that `done` applies a
+        stricter form of resolution (no multi-task chooser, no auto-navigation
+        across tasks).
+
+        Without this note in the canonical protocol, contributors reading
+        AGENTS.md assume `done` follows the same logic as build/review and may
+        introduce drift. The note tells them where to look for the strict-mode
+        rule (done/SKILL.md Step 1.0.2).
+        """
+        content = AGENTS_MD.read_text()
+        protocol_start = content.index("### Protocol: Workspace Auto-Navigation")
+        next_heading = content.find("### Protocol:", protocol_start + 1)
+        section = content[protocol_start:next_heading] if next_heading != -1 else content[protocol_start:]
+
+        assert "Stage-specific overrides" in section, (
+            "Protocol: Workspace Auto-Navigation must include a 'Stage-specific "
+            "overrides' subsection documenting `done`'s stricter rule."
+        )
+        assert "/optimus-done" in section, (
+            "Stage-specific overrides must reference `/optimus-done` explicitly."
+        )
+        # Must point readers at the concrete location of the strict-mode rule so
+        # they don't have to grep blindly.
+        assert "Step 1.0.2" in section, (
+            "Stage-specific overrides must point at done/SKILL.md Step 1.0.2 for "
+            "the full strict-mode rule."
+        )
