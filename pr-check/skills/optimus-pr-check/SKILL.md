@@ -198,6 +198,40 @@ PR title validation follows AGENTS.md Protocol: PR Title Validation, with the ad
 
 **If validation passes:** no action needed, proceed.
 
+### Step 1.2.2: Cross-Check PR Branch Against Current Branch
+
+**Why:** When the user invokes `/optimus-pr-check <num>` with an explicit PR number,
+the PR may belong to a different branch than the one the user is currently on. The
+review still works (pr-check operates on the PR's diff, not the current worktree),
+but the user may have meant a different PR. A silent mismatch is a recipe for
+confusion — fixes get committed to the right branch (because Step 1.4 checks out
+the PR), but the user's mental model can be misaligned.
+
+This guard surfaces the mismatch BEFORE proceeding, but only when the PR was given
+explicitly. If pr-check inferred the PR from the current branch (Step 1.1), the
+branches always match by construction — skip this check.
+
+**Procedure:**
+
+1. If the user did NOT pass an explicit PR number/URL (Step 1.1 inferred it from the
+   current branch), SKIP this check.
+2. Otherwise, compare `headRefName` (from Step 1.2) with the current branch:
+   ```bash
+   CURRENT=$(git branch --show-current 2>/dev/null)
+   ```
+3. If `CURRENT` is non-empty and differs from `headRefName`, present an `AskUser`
+   warning:
+   ```
+   PR #<num> is for branch '<headRefName>' but you are on branch '<CURRENT>'.
+   Continue reviewing PR #<num>?
+   ```
+   Options:
+   - **Continue** — proceed with PR #<num> (Step 1.4 will check out the PR's branch)
+   - **Switch and continue** — explicitly checkout the PR's branch first, then proceed
+   - **Cancel** — stop the review
+
+**BLOCKING:** Do NOT proceed past this step until the user responds.
+
 ### Step 1.3: Collect ALL Existing PR Comments and Threads
 
 **IMPORTANT:** Static analysis tools post comments in TWO different ways:

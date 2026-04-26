@@ -1519,7 +1519,53 @@ fi
      ```
      Then change working directory to the new worktree.
 
+**Stage-specific overrides:**
+
+- **Stage 4 (`/optimus-done`)** applies a STRICTER form of resolution: it does NOT
+  present a multi-task chooser and does NOT auto-navigate across tasks. If invoked
+  without an explicit `T-XXX` argument, `done` closes ONLY the task corresponding to
+  the current feature branch/worktree. If the user is on the default branch with no
+  task argument, `done` STOPS with an error rather than choosing a task. See
+  `done/skills/optimus-done/SKILL.md` Step 1.0.2 for the full strict-mode rule.
+
+**Defense-in-depth — refusal on default branch:** even after this protocol runs,
+mutating stages MUST reject execution if the current branch is still the default
+branch. See **Protocol: Default Branch Refusal** below.
+
 Skills reference this as: "Resolve workspace (HARD BLOCK) — see AGENTS.md Protocol: Workspace Auto-Navigation."
+
+### Protocol: Default Branch Refusal (HARD BLOCK)
+
+**Referenced by:** build, review, done
+
+**Why:** Workspace Auto-Navigation is the primary safeguard, but it can be bypassed
+in edge cases (user cancels the AskUser prompt, silent failure, future skill that
+forgets to invoke the protocol). A second, unconditional refusal at the start of any
+mutating stage prevents accidental commits, worktree removals, or status writes on
+the default branch.
+
+```bash
+DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
+if [ -z "$DEFAULT_BRANCH" ]; then
+  if git show-ref --verify refs/remotes/origin/main >/dev/null 2>&1; then
+    DEFAULT_BRANCH="main"
+  elif git show-ref --verify refs/remotes/origin/master >/dev/null 2>&1; then
+    DEFAULT_BRANCH="master"
+  fi
+fi
+CURRENT=$(git branch --show-current 2>/dev/null)
+if [ -n "$DEFAULT_BRANCH" ] && [ "$CURRENT" = "$DEFAULT_BRANCH" ]; then
+  echo "ERROR: refusing to run /optimus-<stage> on default branch '$CURRENT'." >&2
+  echo "       Switch to the task's feature branch (Workspace Auto-Navigation should have handled this)." >&2
+  exit 1
+fi
+```
+
+**Where to invoke:** immediately after Workspace Auto-Navigation completes, before
+the skill performs any state.json write, git commit, git worktree mutation, or
+status transition.
+
+Skills reference this as: "Refuse to run on default branch (HARD BLOCK) — see AGENTS.md Protocol: Default Branch Refusal."
 
 ### Protocol: Discover Review Droids
 
