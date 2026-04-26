@@ -28,7 +28,6 @@ MAX_FILE_SIZE = 5 * 1024 * 1024
 # exactly one place. A regression test parses live AGENTS.md and asserts that
 # at least one heading contains this token.
 VALIDATION_PROTOCOL_TOKEN = "optimus-tasks.md Validation"
-RENAME_PROTOCOL_KEY = "Protocol: Rename tasks.md to optimus-tasks.md"
 MAIN_WORKTREE_PROTOCOL_KEY = "Protocol: Resolve Main Worktree Path"
 
 # Module-level compiled patterns.
@@ -179,7 +178,6 @@ def inline_protocols() -> None:
     for key in ["File Location", "Valid Status Values (stored in state.json)",
                  "Task Spec Resolution", "Format Validation",
                  "Protocol: Resolve Tasks Git Scope",
-                 RENAME_PROTOCOL_KEY,
                  MAIN_WORKTREE_PROTOCOL_KEY]:
         if key in sections:
             foundational[key] = sections[key]
@@ -241,7 +239,6 @@ def inline_protocols() -> None:
             or any("Increment Stage Stats" in k for k in sections_to_inline)
             or any("Initialize .optimus Directory" in k for k in sections_to_inline)
             or any("Divergence Warning" in k for k in sections_to_inline)
-            or RENAME_PROTOCOL_KEY in sections_to_inline
         )
 
         extra: dict[str, str] = {}
@@ -255,24 +252,17 @@ def inline_protocols() -> None:
             extra["Format Validation"] = foundational["Format Validation"]
 
         # optimus-tasks.md Validation depends on Resolve Tasks Git Scope (which
-        # defines TASKS_DIR/TASKS_FILE/TASKS_GIT_SCOPE/tasks_git). After M1
-        # (Migrate) was removed in issue #20, this is the SOLE auto-injection
-        # path for the Rename protocol when a skill references only Validation.
-        # Removing this block silently breaks under-referencing skills —
-        # verified by `test_needs_format_injects_scope` and
-        # `test_needs_format_injects_rename_protocol`.
+        # defines TASKS_DIR/TASKS_FILE/TASKS_GIT_SCOPE/tasks_git). Auto-inject
+        # the scope protocol when a skill references only Validation.
         if needs_format:
             if "Protocol: Resolve Tasks Git Scope" in foundational and \
                "Protocol: Resolve Tasks Git Scope" not in sections_to_inline:
                 extra["Protocol: Resolve Tasks Git Scope"] = foundational["Protocol: Resolve Tasks Git Scope"]
-            if RENAME_PROTOCOL_KEY in foundational and \
-               RENAME_PROTOCOL_KEY not in sections_to_inline:
-                extra[RENAME_PROTOCOL_KEY] = foundational[RENAME_PROTOCOL_KEY]
 
         # Auto-inject Resolve Main Worktree Path into any skill that touches
         # .optimus/ operational files. The bug it fixes (worktree isolation)
-        # affects every skill that reads/writes state.json, stats.json, sessions,
-        # reports, or rename checkpoint markers (.rename-in-progress).
+        # affects every skill that reads/writes state.json, stats.json,
+        # sessions, or reports.
         if needs_main_worktree and MAIN_WORKTREE_PROTOCOL_KEY in foundational \
                 and MAIN_WORKTREE_PROTOCOL_KEY not in sections_to_inline:
             extra[MAIN_WORKTREE_PROTOCOL_KEY] = foundational[MAIN_WORKTREE_PROTOCOL_KEY]

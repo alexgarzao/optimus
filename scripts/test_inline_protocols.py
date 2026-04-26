@@ -200,20 +200,6 @@ class TestMatchRefToSection:
             "inline-protocols.py drifted from the actual heading text."
         )
 
-    def test_rename_protocol_key_matches_live_heading(self):
-        """Regression guard for RENAME_PROTOCOL_KEY.
-
-        The constant is used to detect the rename protocol heading and
-        auto-inject it into the foundational set. If the heading is renamed
-        in AGENTS.md, the inlining silently breaks.
-        """
-        agents_md = Path(__file__).parent.parent / "AGENTS.md"
-        sections = _parse_real_agents_md(agents_md)
-        assert ip.RENAME_PROTOCOL_KEY in sections, (
-            f"RENAME_PROTOCOL_KEY ({ip.RENAME_PROTOCOL_KEY!r}) not found "
-            "as a heading in live AGENTS.md."
-        )
-
 
 def _parse_real_agents_md(path):
     """Minimal section parser used by the live regression test."""

@@ -841,19 +841,6 @@ class TestTasksDirLocation:
         assert '"separate-repo"' in content, \
             "AGENTS.md missing separate-repo scope case"
 
-    def test_agents_md_has_rename_protocol(self):
-        """AGENTS.md must define Protocol: Rename tasks.md to optimus-tasks.md.
-
-        This protocol handles the rename `<tasksDir>/tasks.md` →
-        `<tasksDir>/optimus-tasks.md` for projects upgrading from the
-        pre-rename default filename.
-        """
-        content = AGENTS_MD.read_text()
-        assert "### Protocol: Rename tasks.md to optimus-tasks.md" in content, \
-            "AGENTS.md missing Protocol: Rename tasks.md to optimus-tasks.md"
-        assert 'OLD_TASKS_FILE="${TASKS_DIR}/tasks.md"' in content, \
-            "AGENTS.md rename protocol missing OLD_TASKS_FILE"
-
     def test_agents_md_has_no_migrate_protocol(self):
         """Negation guard: M1 was removed in issue #20 and must not return.
 
@@ -868,6 +855,21 @@ class TestTasksDirLocation:
             "AGENTS.md re-introduces `Protocol: Migrate tasks.md to tasksDir` "
             "(removed in issue #20). This protocol is dead and must stay gone — "
             "see PR #24 for context."
+        )
+
+    def test_agents_md_has_no_rename_protocol(self):
+        """Negation guard: M2 was removed in issue #20 and must not return.
+
+        Catches accidental re-introduction of `Protocol: Rename tasks.md to
+        optimus-tasks.md`. Same rationale as the M1 guard above — the protocol
+        is dead, hot-path startup cost is gone, and we don't want it to come
+        back via stale branches.
+        """
+        content = AGENTS_MD.read_text()
+        assert "### Protocol: Rename tasks.md to optimus-tasks.md" not in content, (
+            "AGENTS.md re-introduces `Protocol: Rename tasks.md to "
+            "optimus-tasks.md` (removed in issue #20). This protocol is dead "
+            "and must stay gone — see PR for context."
         )
 
     def test_inline_protocols_has_no_migrate_constant(self):
@@ -887,6 +889,24 @@ class TestTasksDirLocation:
             "scripts/inline-protocols.py re-introduces MIGRATE_PROTOCOL_KEY "
             "(removed in issue #20). The legacy Migrate protocol is gone — "
             "see PR #24 for context."
+        )
+
+    def test_inline_protocols_has_no_rename_constant(self):
+        """Negation guard: `RENAME_PROTOCOL_KEY` was removed alongside M2.
+
+        Symmetric to the migrate guard above. Rename was removed because no
+        project needs the rename anymore — the constant must stay gone.
+        """
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "inline_protocols", REPO_ROOT / "scripts" / "inline-protocols.py",
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        assert not hasattr(mod, "RENAME_PROTOCOL_KEY"), (
+            "scripts/inline-protocols.py re-introduces RENAME_PROTOCOL_KEY "
+            "(removed in issue #20). The legacy Rename protocol is gone — "
+            "see PR for context."
         )
 
     def test_config_json_is_gitignored(self):
@@ -1565,7 +1585,6 @@ class TestInlineProtocolsFoundational:
         agents.write_text(
             "## Protocol: optimus-tasks.md Validation (HARD BLOCK)\nValidation content\n"
             "## Protocol: Resolve Tasks Git Scope\nScope resolution content\n"
-            "## Protocol: Rename tasks.md to optimus-tasks.md\nRename content\n"
         )
         skill_dir = tmp_path / "myplugin" / "skills" / "optimus-myplugin"
         skill_dir.mkdir(parents=True)
@@ -1586,48 +1605,6 @@ class TestInlineProtocolsFoundational:
         inlined = skill.read_text()
         assert "Scope resolution content" in inlined, \
             "Resolve Tasks Git Scope was not auto-injected"
-        assert "Validation content" in inlined
-
-    def test_needs_format_injects_rename_protocol(self, tmp_path: Path):
-        """When a skill references Protocol: optimus-tasks.md Validation, the inlined block
-        MUST also contain Protocol: Rename tasks.md to optimus-tasks.md.
-
-        Regression coverage for the rename protocol that handles
-        `<tasksDir>/tasks.md` → `<tasksDir>/optimus-tasks.md` on disk. After M1
-        was removed in #20, this is the SOLE auto-injection path for Rename
-        when only Validation is referenced — making the assertion load-bearing."""
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "inline_protocols", REPO_ROOT / "scripts" / "inline-protocols.py",
-        )
-        ip = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(ip)
-
-        agents = tmp_path / "AGENTS.md"
-        agents.write_text(
-            "## Protocol: optimus-tasks.md Validation (HARD BLOCK)\nValidation content\n"
-            "## Protocol: Resolve Tasks Git Scope\nScope resolution content\n"
-            "## Protocol: Rename tasks.md to optimus-tasks.md\nRename content\n"
-        )
-        skill_dir = tmp_path / "myplugin" / "skills" / "optimus-myplugin"
-        skill_dir.mkdir(parents=True)
-        skill = skill_dir / "SKILL.md"
-        skill.write_text("Body: see AGENTS.md Protocol: optimus-tasks.md Validation.\n")
-
-        # Monkey-patch paths
-        original_agents = ip.AGENTS_MD
-        original_root = ip.REPO_ROOT
-        try:
-            ip.AGENTS_MD = agents
-            ip.REPO_ROOT = tmp_path
-            ip.inline_protocols()
-        finally:
-            ip.AGENTS_MD = original_agents
-            ip.REPO_ROOT = original_root
-
-        inlined = skill.read_text()
-        assert "Rename content" in inlined, \
-            "Rename tasks.md to optimus-tasks.md was not auto-injected"
         assert "Validation content" in inlined
 
     def test_discover_review_droids_inlined_in_consumers(self):
