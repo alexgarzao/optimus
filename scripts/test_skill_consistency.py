@@ -1355,6 +1355,79 @@ class TestResumeAdmin:
             "resume must HARD BLOCK when `cd` after worktree creation fails"
         )
 
+
+class TestWorktreeLocationConvention:
+    """Issue #21: worktrees live at ${MAIN_WORKTREE}/.worktrees/<branch>.
+
+    These tests assert the canonical path pattern is consistent across the
+    three creator sites: AGENTS.md (Workspace Auto-Navigation), plan/SKILL.md
+    (initial creation), resume/SKILL.md (recovery).
+    """
+
+    def test_agents_md_has_worktree_location_section(self):
+        """AGENTS.md must document the .worktrees/ convention."""
+        content = AGENTS_MD.read_text()
+        assert "## Worktree Location Convention" in content, (
+            "AGENTS.md missing 'Worktree Location Convention' section"
+        )
+        assert "${MAIN_WORKTREE}/.worktrees/" in content, (
+            "AGENTS.md must document the canonical path pattern"
+        )
+
+    def test_workspace_auto_navigation_uses_worktrees_dir(self):
+        """Protocol: Workspace Auto-Navigation creates worktrees under
+        ${MAIN_WORKTREE}/.worktrees/, not the legacy sibling pattern."""
+        content = AGENTS_MD.read_text()
+        # Find the Workspace Auto-Navigation section
+        m = re.search(
+            r"### Protocol: Workspace Auto-Navigation.*?(?=^### |^## |\Z)",
+            content, re.DOTALL | re.MULTILINE,
+        )
+        assert m, "Protocol: Workspace Auto-Navigation not found"
+        section = m.group(0)
+        # Must use the new pattern
+        assert '${MAIN_WORKTREE}/.worktrees/' in section, (
+            "Workspace Auto-Navigation must derive WORKTREE_DIR from "
+            "${MAIN_WORKTREE}/.worktrees/<branch-name>"
+        )
+        # Must NOT use the legacy sibling pattern as the canonical example
+        assert '"../${REPO_NAME}-' not in section, (
+            "Workspace Auto-Navigation still references the legacy sibling "
+            "path '../${REPO_NAME}-...' — should be ${MAIN_WORKTREE}/.worktrees/"
+        )
+
+    def test_plan_creates_worktree_under_worktrees_dir(self):
+        """plan/SKILL.md Step 1.0.5 must create worktrees under
+        ${MAIN_WORKTREE}/.worktrees/."""
+        body = _read_skill("plan").split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert '${MAIN_WORKTREE}/.worktrees/' in body, (
+            "plan/SKILL.md body must derive WORKTREE_DIR from "
+            "${MAIN_WORKTREE}/.worktrees/<branch-name>"
+        )
+        assert '"../${REPO_NAME}-' not in body, (
+            "plan/SKILL.md still uses the legacy sibling pattern"
+        )
+
+    def test_resume_recovery_uses_worktrees_dir(self):
+        """resume/SKILL.md Step 3.3 (worktree-missing recovery) must place
+        the recovered worktree under ${MAIN_WORKTREE}/.worktrees/."""
+        body = _read_skill("resume").split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert '${MAIN_WORKTREE}/.worktrees/' in body, (
+            "resume/SKILL.md recovery must derive WORKTREE_DIR from "
+            "${MAIN_WORKTREE}/.worktrees/<branch-name>"
+        )
+        assert '"../${REPO_NAME}-' not in body, (
+            "resume/SKILL.md still uses the legacy sibling pattern"
+        )
+
+    def test_gitignore_contains_worktrees(self):
+        """Project .gitignore must include .worktrees/ to prevent accidental
+        commits of operational worktree directories."""
+        gitignore = (REPO_ROOT / ".gitignore").read_text()
+        assert ".worktrees/" in gitignore, (
+            "Project .gitignore missing `.worktrees/` entry"
+        )
+
     def test_resume_three_state_pr(self):
         """PR_STATE must distinguish NONE / concrete state / UNKNOWN. (R9)"""
         content = _read_skill("resume")

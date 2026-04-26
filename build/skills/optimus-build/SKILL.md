@@ -2093,10 +2093,13 @@ fi
        #   Options: Create branch from HEAD / Re-run /optimus-plan"
      fi
      ```
-     If the branch exists, create the worktree automatically:
+     If the branch exists, create the worktree automatically. Worktrees live
+     under `${MAIN_WORKTREE}/.worktrees/<branch-name>` (gitignored, project-rooted —
+     see Worktree Location Convention below).
      ```bash
-     REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
-     WORKTREE_DIR="../${REPO_NAME}-$(echo <task-id> | tr '[:upper:]' '[:lower:]')-<keywords>"
+     # Resolve main worktree first — see Protocol: Resolve Main Worktree Path.
+     MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+     WORKTREE_DIR="${MAIN_WORKTREE}/.worktrees/<branch-name>"
      git worktree add "$WORKTREE_DIR" "<branch-name>"
      ```
      Then change working directory to the new worktree.

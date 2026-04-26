@@ -327,6 +327,33 @@ the team) — but the repo that versions it depends on `tasksDir`: if `tasksDir`
 the project repo, it is committed alongside the code; if `tasksDir` is in a separate
 repo, it is committed there.
 
+## Worktree Location Convention
+
+Optimus creates linked git worktrees during the task lifecycle:
+
+- `/optimus-plan` creates a worktree when a task starts (Step 1.0.5).
+- `/optimus-resume` creates a worktree on recovery if branch exists but worktree is missing (Step 3.3).
+- `Protocol: Workspace Auto-Navigation` creates a worktree as a fallback when an Optimus skill is invoked from the default branch and the task's worktree is missing.
+
+**Canonical path:** `${MAIN_WORKTREE}/.worktrees/<branch-name>` — gitignored (see project `.gitignore`), project-rooted, and resolved against the main worktree (so the path is correct even when invoked from a linked worktree).
+
+**Why nested under the project repo:**
+
+| Concern | Resolution |
+|---|---|
+| Discoverability | All worktrees for a project are listed by `ls <repo>/.worktrees/` |
+| Cleanup lifecycle | Removing the project directory also removes all worktrees |
+| `.optimus/` companion | Both `.optimus/` (operational state) and `.worktrees/` (operational worktrees) live inside the repo, gitignored — same pattern |
+| Cross-repo safety | Worktrees always belong to the **project repo**, never the tasks repo (separate-repo `tasksDir` config does not affect worktree location) |
+| Main-worktree resolution | `git worktree list --porcelain` correctly identifies main as the first entry regardless of nested linked worktrees — Protocol: Resolve Main Worktree Path is unaffected |
+
+**IDE exclusion (recommended):** add `.worktrees/` to your editor's search/index exclusions to prevent double-indexing the same files in main and linked worktrees. Examples:
+
+- VS Code (`.vscode/settings.json`): `"search.exclude": { "**/.worktrees": true }, "files.watcherExclude": { "**/.worktrees/**": true }`
+- IntelliJ: mark `.worktrees/` as Excluded in Project Structure.
+
+**Backwards compatibility:** existing worktrees in older locations (e.g., sibling `../<repo>-<task>`) continue to work — `git worktree list` finds them regardless of path. New worktrees created by `/optimus-plan` and resume's recovery land in `.worktrees/`. There is no forced migration; users may relocate manually with `git worktree move <old-path> <repo>/.worktrees/<branch-name>` when convenient.
+
 ### Protocol: Resolve Main Worktree Path
 
 **Referenced by:** all skills that read or write `.optimus/` operational files (state.json, stats.json, sessions, reports, logs, and checkpoint markers).
@@ -1511,10 +1538,13 @@ fi
        #   Options: Create branch from HEAD / Re-run /optimus-plan"
      fi
      ```
-     If the branch exists, create the worktree automatically:
+     If the branch exists, create the worktree automatically. Worktrees live
+     under `${MAIN_WORKTREE}/.worktrees/<branch-name>` (gitignored, project-rooted —
+     see Worktree Location Convention below).
      ```bash
-     REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
-     WORKTREE_DIR="../${REPO_NAME}-$(echo <task-id> | tr '[:upper:]' '[:lower:]')-<keywords>"
+     # Resolve main worktree first — see Protocol: Resolve Main Worktree Path.
+     MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+     WORKTREE_DIR="${MAIN_WORKTREE}/.worktrees/<branch-name>"
      git worktree add "$WORKTREE_DIR" "<branch-name>"
      ```
      Then change working directory to the new worktree.
