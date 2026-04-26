@@ -1,7 +1,7 @@
 {
   "name": "plan",
   "description": "Stage 1: Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes. Creates workspace (branch/worktree).",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": {
     "name": "Alex Garzao"
   }

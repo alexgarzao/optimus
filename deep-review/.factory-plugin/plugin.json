@@ -1,7 +1,7 @@
 {
   "name": "deep-review",
   "description": "Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Auto-discovers installed Ring review droids. Flexible scope: entire project, git diff, or specific directory.",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": {
     "name": "Alex Garzao"
   }

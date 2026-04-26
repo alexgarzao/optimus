@@ -1,7 +1,7 @@
 {
   "name": "help",
   "description": "Lists all available Optimus skills with descriptions, usage commands, and when to use each one.",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": {
     "name": "Alex Garzao"
   }

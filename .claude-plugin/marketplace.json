@@ -11,7 +11,7 @@
     {
       "name": "optimus-import",
       "source": "./import",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Import Ring pre-dev artifacts into optimus format. Creates optimus-tasks.md with TaskSpec column. Re-runnable — only imports what's new.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -20,7 +20,7 @@
     {
       "name": "optimus-report",
       "source": "./report",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -29,7 +29,7 @@
     {
       "name": "optimus-tasks",
       "source": "./tasks",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Administrative: Create, edit, remove, reorder, cancel, and reopen tasks. Manage versions and move tasks between versions. Runs on any branch.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -38,7 +38,7 @@
     {
       "name": "optimus-plan",
       "source": "./plan",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Stage 1: Validates task specifications against project docs before implementation. Catches gaps, contradictions, and test coverage holes. Creates workspace (branch/worktree).",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -47,7 +47,7 @@
     {
       "name": "optimus-build",
       "source": "./build",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Stage 2: End-to-end task implementation with verification gates, code review, and commit approval.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -56,7 +56,7 @@
     {
       "name": "optimus-review",
       "source": "./review",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Stage 3: Validates completed task implementation against spec, coding standards, and best practices using parallel specialist agents.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -65,7 +65,7 @@
     {
       "name": "optimus-pr-check",
       "source": "./pr-check",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Standalone PR review orchestrator. Collects PR metadata and existing comments (Codacy, DeepSource, CodeRabbit, human), dispatches agents, applies fixes, resolves threads. Does not change task status.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -74,7 +74,7 @@
     {
       "name": "optimus-done",
       "source": "./done",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Stage 4: Requires PR in final state (merged or closed) before marking task done. Cleans up worktree and branch interactively.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -83,7 +83,7 @@
     {
       "name": "optimus-batch",
       "source": "./batch",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Pipeline orchestrator: chains stages 1-4 for one or more tasks with user checkpoints between stages.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -92,7 +92,7 @@
     {
       "name": "optimus-resolve",
       "source": "./resolve",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Administrative: Resolves merge conflicts in optimus-tasks.md caused by parallel task execution across feature branches.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -101,7 +101,7 @@
     {
       "name": "optimus-deep-doc-review",
       "source": "./deep-doc-review",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Deep review of project documentation. Finds errors, inconsistencies, gaps, and improvements with interactive one-by-one resolution.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -110,7 +110,7 @@
     {
       "name": "optimus-deep-review",
       "source": "./deep-review",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Parallel code review with consolidation, deduplication, and interactive finding-by-finding resolution. Auto-discovers installed Ring review droids. Flexible scope: entire project, git diff, or specific directory.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -119,7 +119,7 @@
     {
       "name": "optimus-coderabbit-review",
       "source": "./coderabbit-review",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "CodeRabbit-driven code review with TDD fix cycle, secondary validation via review agents, and interactive finding resolution. Requires CodeRabbit CLI.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -128,7 +128,7 @@
     {
       "name": "optimus-help",
       "source": "./help",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Lists all available Optimus skills with descriptions, usage commands, and when to use each one.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -137,7 +137,7 @@
     {
       "name": "optimus-sync",
       "source": "./sync",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Sync all Optimus plugins — install new, update existing, remove orphaned. Recommended after new releases.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -146,7 +146,7 @@
     {
       "name": "optimus-quick-report",
       "source": "./quick-report",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Compact daily status dashboard. Shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Read-only.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",
@@ -155,7 +155,7 @@
     {
       "name": "optimus-resume",
       "source": "./resume",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "description": "Administrative: Resume a task after closing the terminal. Locates/recreates the worktree for a given T-XXX, reports current status, and offers to invoke the next stage. Read-only on state.json except for a user-confirmed Reset-to-Pendente recovery.",
       "homepage": "https://github.com/alexgarzao/optimus",
       "repository": "https://github.com/alexgarzao/optimus",

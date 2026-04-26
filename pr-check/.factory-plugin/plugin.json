@@ -1,7 +1,7 @@
 {
   "name": "pr-check",
   "description": "Standalone PR review orchestrator. Collects PR metadata and existing comments (Codacy, DeepSource, CodeRabbit, human), dispatches agents, applies fixes, resolves threads. Does not change task status.",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": {
     "name": "Alex Garzao"
   }
