@@ -586,7 +586,7 @@ mkdir -p .optimus/sessions .optimus/reports .optimus/logs
 **What does NOT need this protocol:**
 
 - `<tasksDir>/optimus-tasks.md` and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/` — versioned content, propagated by git across worktrees automatically.
-- `.optimus/config.json` — when **versioned** (legacy projects), it propagates via git; when **gitignored** (current default after Migrate protocol untracks it), it suffers the same isolation as state.json. **Treat `.optimus/config.json` as gitignored and resolve via `$MAIN_WORKTREE` for safety in current projects** — the cost is a single `git worktree list` call.
+- `.optimus/config.json` — when **versioned** (legacy projects), it propagates via git; when **gitignored** (current default), it suffers the same isolation as state.json. **Treat `.optimus/config.json` as gitignored and resolve via `$MAIN_WORKTREE` for safety in current projects** — the cost is a single `git worktree list` call.
 - `.gitignore` itself — versioned, propagated via git.
 
 **Idempotency:** the resolution is read-only against git metadata; safe to call multiple times in the same skill execution. Cache `MAIN_WORKTREE` in a local variable rather than re-running `git worktree list` for each path.
@@ -953,11 +953,6 @@ harmless cheap operation.
 Everything inside `.optimus/` is gitignored. The planning tree is versioned
 separately at `<tasksDir>/optimus-tasks.md` (and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/`
 for Ring specs) — see the File Location section above.
-
-**NOTE:** If a legacy project has `.optimus/config.json` tracked in git (from before
-this change), skills running the migration helper (see Protocol: Migrate tasks.md to
-tasksDir) will offer to run `git rm --cached .optimus/config.json` so the local file
-is preserved but untracked.
 
 Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
 

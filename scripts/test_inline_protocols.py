@@ -189,7 +189,7 @@ class TestMatchRefToSection:
         VALIDATION_PROTOCOL_TOKEN constant to detect the format-validation
         protocol heading. If the heading is renamed in AGENTS.md, this test
         flags the drift before propagation silently breaks foundational
-        injection (Migrate, Rename, Resolve Tasks Git Scope).
+        injection (Rename, Resolve Tasks Git Scope).
         """
         agents_md = Path(__file__).parent.parent / "AGENTS.md"
         sections = _parse_real_agents_md(agents_md)
@@ -200,68 +200,18 @@ class TestMatchRefToSection:
             "inline-protocols.py drifted from the actual heading text."
         )
 
-    def test_migrate_and_rename_protocol_keys_match_live_headings(self):
-        """Regression guard for MIGRATE_PROTOCOL_KEY and RENAME_PROTOCOL_KEY.
+    def test_rename_protocol_key_matches_live_heading(self):
+        """Regression guard for RENAME_PROTOCOL_KEY.
 
-        Both keys are used by the pairing logic to inject the legacy migrate
-        protocol whenever the new rename is referenced and vice versa. If
-        either heading is renamed in AGENTS.md, the pairing silently breaks.
+        The constant is used to detect the rename protocol heading and
+        auto-inject it into the foundational set. If the heading is renamed
+        in AGENTS.md, the inlining silently breaks.
         """
         agents_md = Path(__file__).parent.parent / "AGENTS.md"
         sections = _parse_real_agents_md(agents_md)
-        assert ip.MIGRATE_PROTOCOL_KEY in sections, (
-            f"MIGRATE_PROTOCOL_KEY ({ip.MIGRATE_PROTOCOL_KEY!r}) not found "
-            "as a heading in live AGENTS.md."
-        )
         assert ip.RENAME_PROTOCOL_KEY in sections, (
             f"RENAME_PROTOCOL_KEY ({ip.RENAME_PROTOCOL_KEY!r}) not found "
             "as a heading in live AGENTS.md."
-        )
-
-    def test_pairing_injects_rename_when_only_migrate_referenced(self, tmp_path, monkeypatch):
-        """Pairing branch regression: a SKILL.md that references ONLY Migrate
-        (not optimus-tasks.md Validation) must still get Rename injected via
-        the pairing block in inline-protocols.py. This is the failure mode
-        that bit report/quick-report before the pairing block was added.
-        """
-        agents = tmp_path / "AGENTS.md"
-        agents.write_text(
-            "## Protocol: Migrate tasks.md to tasksDir\nMigrate body content\n\n"
-            "## Protocol: Rename tasks.md to optimus-tasks.md\nRename body content\n"
-        )
-        monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
-        skill_dir = tmp_path / "x" / "skills" / "optimus-x"
-        skill_dir.mkdir(parents=True)
-        skill = skill_dir / "SKILL.md"
-        skill.write_text("see AGENTS.md Protocol: Migrate tasks.md to tasksDir.\n")
-        ip.inline_protocols()
-        inlined = skill.read_text()
-        assert "Migrate body content" in inlined, "Migrate failed to inline"
-        assert "Rename body content" in inlined, (
-            "Pairing failed: Rename was not auto-injected when SKILL.md only "
-            "references Migrate (regression risk for read-only skills)."
-        )
-
-    def test_pairing_injects_migrate_when_only_rename_referenced(self, tmp_path, monkeypatch):
-        """Symmetric pairing branch regression: ONLY Rename referenced → Migrate auto-paired."""
-        agents = tmp_path / "AGENTS.md"
-        agents.write_text(
-            "## Protocol: Migrate tasks.md to tasksDir\nMigrate body content\n\n"
-            "## Protocol: Rename tasks.md to optimus-tasks.md\nRename body content\n"
-        )
-        monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
-        skill_dir = tmp_path / "x" / "skills" / "optimus-x"
-        skill_dir.mkdir(parents=True)
-        skill = skill_dir / "SKILL.md"
-        skill.write_text("see AGENTS.md Protocol: Rename tasks.md to optimus-tasks.md.\n")
-        ip.inline_protocols()
-        inlined = skill.read_text()
-        assert "Rename body content" in inlined
-        assert "Migrate body content" in inlined, (
-            "Symmetric pairing failed: Migrate was not auto-injected when "
-            "SKILL.md only references Rename."
         )
 
 

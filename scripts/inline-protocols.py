@@ -28,7 +28,6 @@ MAX_FILE_SIZE = 5 * 1024 * 1024
 # exactly one place. A regression test parses live AGENTS.md and asserts that
 # at least one heading contains this token.
 VALIDATION_PROTOCOL_TOKEN = "optimus-tasks.md Validation"
-MIGRATE_PROTOCOL_KEY = "Protocol: Migrate tasks.md to tasksDir"
 RENAME_PROTOCOL_KEY = "Protocol: Rename tasks.md to optimus-tasks.md"
 MAIN_WORKTREE_PROTOCOL_KEY = "Protocol: Resolve Main Worktree Path"
 
@@ -180,7 +179,6 @@ def inline_protocols() -> None:
     for key in ["File Location", "Valid Status Values (stored in state.json)",
                  "Task Spec Resolution", "Format Validation",
                  "Protocol: Resolve Tasks Git Scope",
-                 MIGRATE_PROTOCOL_KEY,
                  RENAME_PROTOCOL_KEY,
                  MAIN_WORKTREE_PROTOCOL_KEY]:
         if key in sections:
@@ -228,16 +226,6 @@ def inline_protocols() -> None:
             if key not in sections_to_inline:
                 sections_to_inline[key] = sections[key]
 
-        # Pair sibling startup protocols: any skill that inlines the legacy
-        # Migrate also needs Rename (and vice versa). Both run on skill startup
-        # to detect/repair filename and location drift.
-        if MIGRATE_PROTOCOL_KEY in sections_to_inline and RENAME_PROTOCOL_KEY in sections \
-                and RENAME_PROTOCOL_KEY not in sections_to_inline:
-            sections_to_inline[RENAME_PROTOCOL_KEY] = sections[RENAME_PROTOCOL_KEY]
-        if RENAME_PROTOCOL_KEY in sections_to_inline and MIGRATE_PROTOCOL_KEY in sections \
-                and MIGRATE_PROTOCOL_KEY not in sections_to_inline:
-            sections_to_inline[MIGRATE_PROTOCOL_KEY] = sections[MIGRATE_PROTOCOL_KEY]
-
         # Also check if State Management is referenced -> include foundational state.json docs
         needs_state = any("State Management" in k for k in sections_to_inline)
         needs_taskspec = any("TaskSpec" in k for k in sections_to_inline)
@@ -253,7 +241,6 @@ def inline_protocols() -> None:
             or any("Increment Stage Stats" in k for k in sections_to_inline)
             or any("Initialize .optimus Directory" in k for k in sections_to_inline)
             or any("Divergence Warning" in k for k in sections_to_inline)
-            or MIGRATE_PROTOCOL_KEY in sections_to_inline
             or RENAME_PROTOCOL_KEY in sections_to_inline
         )
 
@@ -267,19 +254,17 @@ def inline_protocols() -> None:
         if needs_format and "Format Validation" in foundational:
             extra["Format Validation"] = foundational["Format Validation"]
 
-        # optimus-tasks.md Validation depends on Resolve Tasks Git Scope (which defines
-        # TASKS_DIR/TASKS_FILE/TASKS_GIT_SCOPE/tasks_git). Defensive scaffold:
-        # the pairing block above already injects Migrate+Rename when either is
-        # explicitly referenced; this block adds them when ONLY Validation is
-        # referenced (currently unreachable from real skills, but kept as a
-        # safety net for future skills that might under-reference).
+        # optimus-tasks.md Validation depends on Resolve Tasks Git Scope (which
+        # defines TASKS_DIR/TASKS_FILE/TASKS_GIT_SCOPE/tasks_git). After M1
+        # (Migrate) was removed in issue #20, this is the SOLE auto-injection
+        # path for the Rename protocol when a skill references only Validation.
+        # Removing this block silently breaks under-referencing skills —
+        # verified by `test_needs_format_injects_scope` and
+        # `test_needs_format_injects_rename_protocol`.
         if needs_format:
             if "Protocol: Resolve Tasks Git Scope" in foundational and \
                "Protocol: Resolve Tasks Git Scope" not in sections_to_inline:
                 extra["Protocol: Resolve Tasks Git Scope"] = foundational["Protocol: Resolve Tasks Git Scope"]
-            if MIGRATE_PROTOCOL_KEY in foundational and \
-               MIGRATE_PROTOCOL_KEY not in sections_to_inline:
-                extra[MIGRATE_PROTOCOL_KEY] = foundational[MIGRATE_PROTOCOL_KEY]
             if RENAME_PROTOCOL_KEY in foundational and \
                RENAME_PROTOCOL_KEY not in sections_to_inline:
                 extra[RENAME_PROTOCOL_KEY] = foundational[RENAME_PROTOCOL_KEY]
@@ -287,7 +272,7 @@ def inline_protocols() -> None:
         # Auto-inject Resolve Main Worktree Path into any skill that touches
         # .optimus/ operational files. The bug it fixes (worktree isolation)
         # affects every skill that reads/writes state.json, stats.json, sessions,
-        # reports, or migration/rename checkpoint markers.
+        # reports, or rename checkpoint markers (.rename-in-progress).
         if needs_main_worktree and MAIN_WORKTREE_PROTOCOL_KEY in foundational \
                 and MAIN_WORKTREE_PROTOCOL_KEY not in sections_to_inline:
             extra[MAIN_WORKTREE_PROTOCOL_KEY] = foundational[MAIN_WORKTREE_PROTOCOL_KEY]
