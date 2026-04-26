@@ -1430,13 +1430,14 @@ class TestWorktreeLocationConvention:
 
     def test_initialize_optimus_directory_appends_worktrees_to_gitignore(self):
         """Protocol: Initialize .optimus Directory must auto-append
-        `.worktrees/` to the project's `.gitignore` so user projects don't
-        end up with the worktree directory tracked by accident.
+        `.worktrees/` to the project's `.gitignore` idempotently (so user
+        projects don't end up with the worktree directory tracked by
+        accident, and re-running the protocol doesn't duplicate the entry).
 
-        Uses a separate marker (`optimus-operational-worktrees`) from the
-        existing `optimus-operational-files` block so legacy projects whose
-        `.gitignore` already carries the operational-files block still get
-        the worktree exclusion idempotently appended on next init.
+        This test asserts the OBSERVABLE BEHAVIOR (.worktrees/ ends up in
+        .gitignore exactly once) rather than the specific marker name used
+        for idempotency — a future refactor that consolidates markers or
+        switches mechanisms is fine as long as the property holds.
         """
         content = AGENTS_MD.read_text()
         m = re.search(
@@ -1445,14 +1446,22 @@ class TestWorktreeLocationConvention:
         )
         assert m, "Protocol: Initialize .optimus Directory section not found"
         section = m.group(1)
-        assert "optimus-operational-worktrees" in section, (
-            "Initialize .optimus Directory must declare a separate "
-            "'optimus-operational-worktrees' marker so the .worktrees/ "
-            "gitignore entry is added idempotently on legacy projects."
-        )
+        # Property 1: the protocol declares `.worktrees/` is gitignored.
         assert ".worktrees/" in section, (
             "Initialize .optimus Directory must append .worktrees/ to "
             "the project .gitignore"
+        )
+        # Property 2: the append is wrapped in an idempotency guard
+        # (some `grep -q ... .gitignore` check) so repeated runs don't
+        # duplicate the entry. The specific marker text is intentionally
+        # not asserted — only the presence of the guard.
+        assert re.search(
+            r"grep -q\s+'[^']+'\s+\.gitignore.*\.worktrees/",
+            section, re.DOTALL,
+        ), (
+            "Initialize .optimus Directory must guard the .worktrees/ "
+            "gitignore append with a `grep -q ... .gitignore` idempotency "
+            "check so re-running the protocol does not duplicate the entry."
         )
 
     def test_resume_three_state_pr(self):

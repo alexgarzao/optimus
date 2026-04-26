@@ -397,6 +397,11 @@ fi
      echo "ERROR: TASK_ID or TASK_BRANCH empty before 'git worktree add'. Refusing."
      # STOP
    fi
+   # Path-traversal guard (defense in depth): TASK_BRANCH comes from state.json,
+   # which is gitignored and could be tampered with. Reject `..` and absolute paths.
+   case "$TASK_BRANCH" in
+     *..*|/*) echo "ERROR: refusing unsafe TASK_BRANCH '$TASK_BRANCH'." >&2 ; exit 1 ;;
+   esac
 
    WORKTREE_DIR="${MAIN_WORKTREE}/.worktrees/${TASK_BRANCH}"
 

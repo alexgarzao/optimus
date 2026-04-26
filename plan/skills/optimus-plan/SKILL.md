@@ -269,13 +269,21 @@ Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelin
      exit 1
    fi
    BRANCH_NAME="<tipo-prefix>/<task-id>-<keywords>"
+   # Path-traversal guard (defense in depth).
+   case "$BRANCH_NAME" in
+     *..*|/*) echo "ERROR: refusing unsafe branch '$BRANCH_NAME'." >&2; exit 1 ;;
+   esac
    WORKTREE_DIR="${MAIN_WORKTREE}/.worktrees/${BRANCH_NAME}"
    ```
    **Pre-check:** If `WORKTREE_DIR` already exists but is not a git worktree, ask via
    `AskUser`: "Directory `<path>` already exists but is not a git worktree."
    Options: Remove and create worktree / Rename existing directory / Cancel.
    ```bash
-   git worktree add "$WORKTREE_DIR" -b "${BRANCH_NAME}"
+   if ! git worktree add "$WORKTREE_DIR" -b "${BRANCH_NAME}"; then
+     echo "ERROR: 'git worktree add $WORKTREE_DIR' failed (branch already checked out, dir collision, or filesystem error)." >&2
+     # Rollback: state.json reservation is removed in Step 5 below.
+     exit 1
+   fi
    ```
    Then change working directory to the new worktree path for all subsequent steps.
 
@@ -2031,6 +2039,11 @@ fi
 # (see Worktree Location Convention). Add the gitignore entry idempotently
 # on a separate marker so existing projects whose `.gitignore` already
 # carries the operational-files block still get the worktree exclusion.
+# Refuse symlinked .gitignore (defense against link-following file-write).
+if [ -L .gitignore ]; then
+  echo "ERROR: .gitignore is a symlink — refusing to append (potential symlink attack)." >&2
+  exit 1
+fi
 if ! grep -q '^# optimus-operational-worktrees' .gitignore 2>/dev/null; then
   printf '\n# optimus-operational-worktrees\n.worktrees/\n' >> .gitignore
 fi

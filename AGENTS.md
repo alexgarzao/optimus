@@ -337,6 +337,8 @@ Optimus creates linked git worktrees during the task lifecycle:
 
 **Canonical path:** `${MAIN_WORKTREE}/.worktrees/<branch-name>` — gitignored (see project `.gitignore`), project-rooted, and resolved against the main worktree (so the path is correct even when invoked from a linked worktree).
 
+**Note on branch names with `/`:** branch names follow the convention `<tipo-prefix>/<task-id>-<keywords>` (e.g., `feat/t-007-user-auth`). When used as the directory under `.worktrees/`, the `/` creates intermediate subdirectories — `<repo>/.worktrees/feat/t-007-user-auth/`. `git worktree add` creates these automatically. `ls .worktrees/` shows the tipo-prefix subdirs (`feat/`, `fix/`, `chore/`); `find .worktrees/ -mindepth 2 -maxdepth 2 -type d` lists each worktree leaf.
+
 **Why nested under the project repo:**
 
 | Concern | Resolution |
@@ -1008,6 +1010,11 @@ fi
 # (see Worktree Location Convention). Add the gitignore entry idempotently
 # on a separate marker so existing projects whose `.gitignore` already
 # carries the operational-files block still get the worktree exclusion.
+# Refuse symlinked .gitignore (defense against link-following file-write).
+if [ -L .gitignore ]; then
+  echo "ERROR: .gitignore is a symlink — refusing to append (potential symlink attack)." >&2
+  exit 1
+fi
 if ! grep -q '^# optimus-operational-worktrees' .gitignore 2>/dev/null; then
   printf '\n# optimus-operational-worktrees\n.worktrees/\n' >> .gitignore
 fi
@@ -1353,6 +1360,11 @@ fi
 # (see Worktree Location Convention). Add the gitignore entry idempotently
 # on a separate marker so existing projects whose `.gitignore` already
 # carries the operational-files block still get the worktree exclusion.
+# Refuse symlinked .gitignore (defense against link-following file-write).
+if [ -L .gitignore ]; then
+  echo "ERROR: .gitignore is a symlink — refusing to append (potential symlink attack)." >&2
+  exit 1
+fi
 if ! grep -q '^# optimus-operational-worktrees' .gitignore 2>/dev/null; then
   printf '\n# optimus-operational-worktrees\n.worktrees/\n' >> .gitignore
 fi
@@ -1533,8 +1545,8 @@ fi
    - **If N eligible tasks** → list all with worktree paths via `AskUser`:
      ```
      Multiple tasks available:
-       T-001 — User auth (Em Andamento) → /projeto-t-001-.../
-       T-002 — Login page (Em Andamento) → /projeto-t-002-.../
+       T-001 — User auth (Em Andamento) → <repo>/.worktrees/feat/t-001-user-auth/
+       T-002 — Login page (Em Andamento) → <repo>/.worktrees/feat/t-002-login-page/
      Which task should I continue?
      ```
    - After task is identified, locate the worktree by task ID:
@@ -1558,8 +1570,20 @@ fi
      ```bash
      # Resolve main worktree first — see Protocol: Resolve Main Worktree Path.
      MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+     if [ -z "$MAIN_WORKTREE" ]; then
+       echo "ERROR: Cannot determine main worktree — not in a git repository." >&2
+       exit 1
+     fi
+     # Path-traversal guard (defense in depth): branch name comes from state.json
+     # in some flows, so reject `..` and absolute-style segments before path build.
+     case "<branch-name>" in
+       *..*|/*) echo "ERROR: refusing unsafe branch name." >&2; exit 1 ;;
+     esac
      WORKTREE_DIR="${MAIN_WORKTREE}/.worktrees/<branch-name>"
-     git worktree add "$WORKTREE_DIR" "<branch-name>"
+     if ! git worktree add "$WORKTREE_DIR" "<branch-name>"; then
+       echo "ERROR: 'git worktree add $WORKTREE_DIR' failed." >&2
+       exit 1
+     fi
      ```
      Then change working directory to the new worktree.
 

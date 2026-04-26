@@ -123,8 +123,8 @@ tracks the working directory for each task and switches context between tasks.
 **Working directory tracking:**
 ```json
 {
-  "T-003": {"worktree": "../repo-t-003-user-auth", "branch": "feat/t-003-user-auth"},
-  "T-004": {"worktree": "../repo-t-004-login-page", "branch": "feat/t-004-login-page"}
+  "T-003": {"worktree": "<repo>/.worktrees/feat/t-003-user-auth", "branch": "feat/t-003-user-auth"},
+  "T-004": {"worktree": "<repo>/.worktrees/feat/t-004-login-page", "branch": "feat/t-004-login-page"}
 }
 ```
 
@@ -274,7 +274,7 @@ After all tasks are processed (or the user stops), restore the terminal title vi
      - **Stop batch entirely** — pause everything
 - If the user stops the batch, write progress to `.optimus/sessions/session-batch.json`:
   ```json
-  {"tasks": ["T-003", "T-004", "T-005"], "completed": ["T-003"], "current": "T-004", "current_stage": 3, "worktrees": {"T-003": "../repo-t-003", "T-004": "../repo-t-004"}}
+  {"tasks": ["T-003", "T-004", "T-005"], "completed": ["T-003"], "current": "T-004", "current_stage": 3, "worktrees": {"T-003": "<repo>/.worktrees/feat/t-003", "T-004": "<repo>/.worktrees/feat/t-004"}}
   ```
   On next invocation, if this file exists:
   1. **Check staleness:** If `updated_at` (or file modification time) is older than 24h, delete the file and proceed fresh — project state may have changed significantly.

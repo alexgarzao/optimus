@@ -982,6 +982,11 @@ fi
 # (see Worktree Location Convention). Add the gitignore entry idempotently
 # on a separate marker so existing projects whose `.gitignore` already
 # carries the operational-files block still get the worktree exclusion.
+# Refuse symlinked .gitignore (defense against link-following file-write).
+if [ -L .gitignore ]; then
+  echo "ERROR: .gitignore is a symlink — refusing to append (potential symlink attack)." >&2
+  exit 1
+fi
 if ! grep -q '^# optimus-operational-worktrees' .gitignore 2>/dev/null; then
   printf '\n# optimus-operational-worktrees\n.worktrees/\n' >> .gitignore
 fi
