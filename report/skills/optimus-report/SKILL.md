@@ -65,12 +65,7 @@ any other project file.
 Execute AGENTS.md Protocol: Resolve Tasks Git Scope. This obtains `TASKS_DIR`,
 `TASKS_FILE`, `TASKS_GIT_SCOPE`, `TASKS_GIT_REL`, and the `tasks_git` helper.
 
-Execute AGENTS.md Protocol: Migrate tasks.md to tasksDir.
-Informational only in read-only skills — emit a warning if a legacy
-`.optimus/tasks.md` exists without a new location; do NOT auto-migrate from a
-read-only skill.
-
-Also check tasks.md → optimus-tasks.md rename — see AGENTS.md Protocol: Rename tasks.md to optimus-tasks.md.
+Check tasks.md → optimus-tasks.md rename — see AGENTS.md Protocol: Rename tasks.md to optimus-tasks.md.
 Informational only in read-only skills — emit a warning if `<TASKS_DIR>/tasks.md`
 exists with the optimus format marker but `<TASKS_DIR>/optimus-tasks.md` does not;
 do NOT auto-rename from a read-only skill.
@@ -882,7 +877,7 @@ mkdir -p .optimus/sessions .optimus/reports .optimus/logs
 **What does NOT need this protocol:**
 
 - `<tasksDir>/optimus-tasks.md` and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/` — versioned content, propagated by git across worktrees automatically.
-- `.optimus/config.json` — when **versioned** (legacy projects), it propagates via git; when **gitignored** (current default after Migrate protocol untracks it), it suffers the same isolation as state.json. **Treat `.optimus/config.json` as gitignored and resolve via `$MAIN_WORKTREE` for safety in current projects** — the cost is a single `git worktree list` call.
+- `.optimus/config.json` — when **versioned** (legacy projects), it propagates via git; when **gitignored** (current default), it suffers the same isolation as state.json. **Treat `.optimus/config.json` as gitignored and resolve via `$MAIN_WORKTREE` for safety in current projects** — the cost is a single `git worktree list` call.
 - `.gitignore` itself — versioned, propagated via git.
 
 **Idempotency:** the resolution is read-only against git metadata; safe to call multiple times in the same skill execution. Cache `MAIN_WORKTREE` in a local variable rather than re-running `git worktree list` for each path.
@@ -1014,246 +1009,7 @@ Everything inside `.optimus/` is gitignored. The planning tree is versioned
 separately at `<tasksDir>/optimus-tasks.md` (and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/`
 for Ring specs) — see the File Location section above.
 
-**NOTE:** If a legacy project has `.optimus/config.json` tracked in git (from before
-this change), skills running the migration helper (see Protocol: Migrate tasks.md to
-tasksDir) will offer to run `git rm --cached .optimus/config.json` so the local file
-is preserved but untracked.
-
 Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
-
-
-### Protocol: Migrate tasks.md to tasksDir
-
-**Referenced by:** import, tasks, plan, build, review, done, resume, report, quick-report, batch, resolve, pr-check
-
-Detects and migrates projects that have a legacy `.optimus/tasks.md` (versioned inside
-`.optimus/`) to the new location `<tasksDir>/optimus-tasks.md`.
-
-**Detection (run at the start of every skill that reads/writes the tasks tracking file):**
-
-```bash
-# Requires Protocol: Resolve Tasks Git Scope to have been executed first
-# (TASKS_DIR, TASKS_FILE, TASKS_GIT_SCOPE, tasks_git available).
-LEGACY_FILE=".optimus/tasks.md"
-if [ -f "$LEGACY_FILE" ] && [ -f "$TASKS_FILE" ]; then
-  # Partial/failed migration OR manual copy. Use new location but WARN the user.
-  echo "WARNING: Both legacy ($LEGACY_FILE) and new ($TASKS_FILE) tracking files exist." >&2
-  echo "         This indicates a partial prior migration or manual copy." >&2
-  echo "         Using $TASKS_FILE. After confirming contents, remove the legacy file." >&2
-  NEEDS_MIGRATION=0
-elif [ -f "$LEGACY_FILE" ] && [ ! -f "$TASKS_FILE" ]; then
-  NEEDS_MIGRATION=1
-else
-  NEEDS_MIGRATION=0
-fi
-```
-
-**Dry-run mode:** If the skill is running in dry-run (per Dry-Run Mode section above),
-DO NOT offer migration and DO NOT execute any migration step. Emit the plan and proceed:
-
-```
-[DRY-RUN] Migration would be offered for this task:
-[DRY-RUN]   Legacy: $LEGACY_FILE
-[DRY-RUN]   New:    $TASKS_FILE
-[DRY-RUN]   Scope:  $TASKS_GIT_SCOPE
-[DRY-RUN]   Would use: git mv (same-repo) OR cp + two commits (separate-repo)
-```
-
-**Config.json team-shared values warning:** If `.optimus/config.json` is currently tracked
-in git and contains values (e.g., `defaultScope`), migration will untrack it. The values
-are preserved locally but no longer shared via git. Warn user BEFORE untracking:
-
-```bash
-if git ls-files --error-unmatch .optimus/config.json >/dev/null 2>&1; then
-  if [ -f .optimus/config.json ]; then
-    CONFIG_KEYS=$(jq -r 'keys | join(", ")' .optimus/config.json 2>/dev/null || echo "unknown")
-    echo "WARNING: .optimus/config.json is currently tracked with values: $CONFIG_KEYS" >&2
-    echo "         Untracking will make these per-user. Team members need to re-apply locally." >&2
-    # AskUser: Proceed with untrack? / Keep tracked (deviates from Optimus convention)
-  fi
-fi
-```
-
-**If `NEEDS_MIGRATION=1`, ask the user via `AskUser`:**
-
-```
-A legacy tasks.md was found at .optimus/tasks.md. The new location is ${TASKS_FILE} (optimus-tasks.md).
-Migrate now? (Recommended — keeping the old location will break other skills.)
-```
-
-Options:
-- **Migrate now** — copy → add in target repo → remove from project repo
-- **Skip this time** — continue with the legacy file (emit warning; this will break)
-- **Abort** — stop the current command so you can migrate manually
-
-**Migration flow (when user chooses "Migrate now"):**
-
-**Symlink safety (HARD BLOCK):** refuse to migrate if source or destination is a symlink
-(prevents arbitrary file-write via symlink target). Must run BEFORE the checkpoint write
-so we don't leave an orphan marker if a symlink is detected:
-```bash
-if [ -L "$LEGACY_FILE" ] || [ -L "$TASKS_FILE" ]; then
-  echo "ERROR: Source or destination is a symlink — refusing to migrate." >&2
-  exit 1
-fi
-```
-
-Checkpoint file: write `${MAIN_WORKTREE}/.optimus/.migration-in-progress` BEFORE starting.
-This marker lets subsequent invocations detect interrupted migrations:
-
-```bash
-# Requires Protocol: Resolve Main Worktree Path to have run first
-# (or resolve inline; see that protocol).
-MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
-mkdir -p "${MAIN_WORKTREE}/.optimus"
-printf '%s\n' "$TASKS_FILE" > "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
-```
-
-**Scope-branched migration:** explicit `if` so the agent executes the correct branch:
-
-```bash
-if [ "$TASKS_GIT_SCOPE" = "same-repo" ]; then
-  # Same-repo: atomic git mv in a single commit (preserves history via rename-detect).
-  mkdir -p "$TASKS_DIR"
-  if ! git mv "$LEGACY_FILE" "$TASKS_FILE"; then
-    echo "ERROR: git mv failed. Migration aborted — no changes made." >&2
-    rm -f "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
-    exit 1
-  fi
-  COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
-  chmod 600 "$COMMIT_MSG_FILE"
-  printf '%s' "chore(tasks): migrate legacy .optimus/tasks.md to ${TASKS_DIR}/optimus-tasks.md" > "$COMMIT_MSG_FILE"
-  if ! git commit -F "$COMMIT_MSG_FILE"; then
-    echo "ERROR: Commit failed. Reverting git mv..." >&2
-    # Revert: restore legacy from HEAD, remove new from working tree
-    git reset HEAD -- "$LEGACY_FILE" "$TASKS_FILE" 2>/dev/null
-    git checkout HEAD -- "$LEGACY_FILE" 2>/dev/null
-    rm -f "$TASKS_FILE"
-    rm -f "$COMMIT_MSG_FILE" "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
-    exit 1
-  fi
-  rm -f "$COMMIT_MSG_FILE"
-else
-  # Separate-repo: two commits in two repos. Rollback is per-repo on failure.
-  mkdir -p "$TASKS_DIR"
-  if ! cp "$LEGACY_FILE" "$TASKS_FILE"; then
-    echo "ERROR: cp failed. Migration aborted." >&2
-    rm -f "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
-    exit 1
-  fi
-  # Commit #1: in tasks repo
-  if ! tasks_git add "$TASKS_GIT_REL"; then
-    echo "ERROR: tasks_git add failed. Rolling back..." >&2
-    rm -f "$TASKS_FILE"
-    rm -f "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
-    exit 1
-  fi
-  COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
-  chmod 600 "$COMMIT_MSG_FILE"
-  printf '%s' "chore(tasks): migrate legacy .optimus/tasks.md to ${TASKS_DIR}/optimus-tasks.md" > "$COMMIT_MSG_FILE"
-  if ! tasks_git commit -F "$COMMIT_MSG_FILE"; then
-    echo "ERROR: tasks_git commit failed. Rolling back..." >&2
-    tasks_git reset HEAD -- "$TASKS_GIT_REL" 2>/dev/null
-    rm -f "$TASKS_FILE"
-    rm -f "$COMMIT_MSG_FILE" "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
-    exit 1
-  fi
-  rm -f "$COMMIT_MSG_FILE"
-  # Commit #2: in project repo
-  if ! git rm "$LEGACY_FILE"; then
-    echo "ERROR: git rm failed in project repo. Tasks repo already committed." >&2
-    echo "Manual cleanup needed: rm $LEGACY_FILE && git add -A && git commit" >&2
-    rm -f "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
-    exit 1
-  fi
-  COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
-  chmod 600 "$COMMIT_MSG_FILE"
-  printf '%s' "chore(tasks): remove legacy .optimus/tasks.md (moved to separate tasks repo at ${TASKS_DIR})" > "$COMMIT_MSG_FILE"
-  if ! git commit -F "$COMMIT_MSG_FILE"; then
-    echo "ERROR: Commit failed in project repo. Tasks repo already committed." >&2
-    echo "Manual cleanup needed: git commit after resolving." >&2
-    rm -f "$COMMIT_MSG_FILE" "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
-    exit 1
-  fi
-  rm -f "$COMMIT_MSG_FILE"
-fi
-```
-
-**Untrack `.optimus/config.json` if previously versioned** (legacy projects). Check
-commit exit code; restore index on failure:
-
-```bash
-if git ls-files --error-unmatch .optimus/config.json >/dev/null 2>&1; then
-  git rm --cached .optimus/config.json
-  COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
-  chmod 600 "$COMMIT_MSG_FILE"
-  printf '%s' "chore: untrack .optimus/config.json (now gitignored)" > "$COMMIT_MSG_FILE"
-  if ! git commit -F "$COMMIT_MSG_FILE"; then
-    # Restore to index so user can retry
-    git reset HEAD .optimus/config.json 2>/dev/null
-    rm -f "$COMMIT_MSG_FILE"
-    echo "ERROR: Failed to untrack config.json. Index restored." >&2
-    # Do not exit — migration of optimus-tasks.md already succeeded; user can retry untrack
-  else
-    rm -f "$COMMIT_MSG_FILE"
-  fi
-fi
-```
-
-**Ensure `.gitignore` includes the operational-files block:**
-Execute Protocol: Initialize .optimus Directory. Commit if `.gitignore` was modified.
-
-**Post-migration validation:** Verify the migrated optimus-tasks.md still passes Format
-Validation (see AGENTS.md Format Validation section). If it fails (e.g., legacy
-file was manually edited and lacks a `## Versions` section), inform user and suggest
-running `/optimus-import` to rebuild:
-
-```bash
-if ! grep -q '^<!-- optimus:tasks-v1 -->' "$TASKS_FILE"; then
-  echo "WARNING: Migrated optimus-tasks.md does not have the optimus format marker." >&2
-  echo "         Run /optimus-import to rebuild in the correct format." >&2
-fi
-if ! grep -q '^## Versions' "$TASKS_FILE"; then
-  echo "WARNING: Migrated optimus-tasks.md has no ## Versions section." >&2
-  echo "         Run /optimus-import to rebuild in the correct format." >&2
-fi
-```
-
-**Migration success: clear checkpoint marker and log each step.**
-```bash
-rm -f "${MAIN_WORKTREE}/.optimus/.migration-in-progress"
-echo "INFO: Migration completed successfully:" >&2
-echo "  - Legacy location: $LEGACY_FILE" >&2
-echo "  - New location:    $TASKS_FILE" >&2
-echo "  - Git scope:       $TASKS_GIT_SCOPE" >&2
-```
-
-**Report success:**
-```
-Migration complete. optimus-tasks.md is now at ${TASKS_FILE}.
-Remember to push both repos (project + tasks) when you're ready.
-```
-
-**Interrupted migration recovery (on skill startup):**
-
-```bash
-# Requires Protocol: Resolve Main Worktree Path to have run first
-# (or resolve inline; see that protocol).
-MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
-if [ -f "${MAIN_WORKTREE}/.optimus/.migration-in-progress" ]; then
-  INTERRUPTED_FILE=$(cat "${MAIN_WORKTREE}/.optimus/.migration-in-progress" 2>/dev/null)
-  echo "WARNING: Previous migration was interrupted. Expected target: $INTERRUPTED_FILE" >&2
-  # AskUser: Retry migration / Clear marker / Abort
-fi
-```
-
-**If user chose "Skip this time":** Emit a warning and proceed using the legacy location
-for this invocation only. The skill MUST use `$LEGACY_FILE` as `$TASKS_FILE` for the
-remainder of this execution.
-
-**If user chose "Abort":** **STOP** the current command.
-
-Skills reference this as: "Check legacy tasks.md migration — see AGENTS.md Protocol: Migrate tasks.md to tasksDir."
 
 
 ### Protocol: Rename tasks.md to optimus-tasks.md
@@ -1264,8 +1020,8 @@ Detects and renames projects whose Optimus tracking file is at `<tasksDir>/tasks
 (the prior default name) to `<tasksDir>/optimus-tasks.md`. The format marker
 (`<!-- optimus:tasks-v1 -->`) is unchanged — this protocol only renames the file on disk.
 
-**Detection (run at the start of every skill that reads/writes the tasks tracking file,
-AFTER Protocol: Migrate tasks.md to tasksDir):**
+**Detection (run at the start of every skill that reads/writes the tasks tracking file
+to detect and offer rename of `<tasksDir>/tasks.md` to `<tasksDir>/optimus-tasks.md`):**
 
 ```bash
 # Requires Protocol: Resolve Tasks Git Scope to have been executed first

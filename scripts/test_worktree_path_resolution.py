@@ -384,14 +384,13 @@ class TestInlineProtocolsInjectsMainWorktree:
 
     def test_state_touching_skills_have_main_worktree_inlined(self):
         """Skills that inline State Management / Session State / Stats /
-        Initialize .optimus / Migrate / Rename must also inline the main
-        worktree resolver."""
+        Initialize .optimus / Rename / Divergence Warning must also inline
+        the main worktree resolver."""
         triggers = (
             "### Protocol: State Management",
             "### Protocol: Session State",
             "### Protocol: Increment Stage Stats",
             "### Protocol: Initialize .optimus Directory",
-            "### Protocol: Migrate tasks.md to tasksDir",
             "### Protocol: Rename tasks.md to optimus-tasks.md",
             "### Protocol: Divergence Warning",
         )

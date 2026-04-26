@@ -777,33 +777,21 @@ class TestTasksDirLocation:
     """
 
     def test_agents_md_no_legacy_hardcoded_tasks_file(self):
-        """AGENTS.md must not reference `.optimus/tasks.md` as the live location.
-        The only allowed references are inside Protocol: Migrate tasks.md to tasksDir
-        (where LEGACY_FILE=".optimus/tasks.md" is the source to migrate from).
+        """AGENTS.md must not reference `.optimus/tasks.md` as a live path.
 
-        Uses explicit protocol-end marker ("Skills reference this as: ...") to track
-        section boundaries rather than the fragile line-prefix heuristic.
+        After M1 (Protocol: Migrate tasks.md to tasksDir) was removed in
+        issue #20, NO legitimate reference to `.optimus/tasks.md` remains —
+        the legacy migration that touched it is gone. Any reappearance is a
+        bug.
         """
         content = AGENTS_MD.read_text()
         violations = []
-        in_migration_section = False
         for i, line in enumerate(content.splitlines(), 1):
-            if line.startswith("### Protocol: Migrate tasks.md to tasksDir"):
-                in_migration_section = True
-                continue
-            # Explicit end marker: every protocol closes with
-            # 'Skills reference this as: "... AGENTS.md Protocol: X."'
-            if in_migration_section and line.startswith("Skills reference this as:"):
-                in_migration_section = False
-                continue
-            # Also close on next top-level heading
-            if line.startswith("## ") or (line.startswith("### ") and "Migrate tasks.md to tasksDir" not in line):
-                if in_migration_section:
-                    in_migration_section = False
-            if LEGACY_TASKS_PATH_RE.search(line) and not in_migration_section:
+            if LEGACY_TASKS_PATH_RE.search(line):
                 violations.append(f"AGENTS.md:{i}: {line.strip()}")
         assert violations == [], (
-            "AGENTS.md still references `.optimus/tasks.md` outside migration section:\n"
+            "AGENTS.md references `.optimus/tasks.md` (legacy path); the M1 "
+            "migration that justified those references was removed:\n"
             + "\n".join(f"  - {v}" for v in violations)
         )
 
@@ -851,20 +839,12 @@ class TestTasksDirLocation:
         assert '"separate-repo"' in content, \
             "AGENTS.md missing separate-repo scope case"
 
-    def test_agents_md_has_migration_protocol(self):
-        """AGENTS.md must define Protocol: Migrate tasks.md to tasksDir."""
-        content = AGENTS_MD.read_text()
-        assert "### Protocol: Migrate tasks.md to tasksDir" in content, \
-            "AGENTS.md missing Protocol: Migrate tasks.md to tasksDir"
-        assert "LEGACY_FILE=\".optimus/tasks.md\"" in content, \
-            "AGENTS.md migration protocol missing LEGACY_FILE"
-
     def test_agents_md_has_rename_protocol(self):
         """AGENTS.md must define Protocol: Rename tasks.md to optimus-tasks.md.
 
-        This protocol handles the secondary rename `<tasksDir>/tasks.md` →
-        `<tasksDir>/optimus-tasks.md` (distinct from the legacy `.optimus/tasks.md`
-        relocation handled by Protocol: Migrate tasks.md to tasksDir).
+        This protocol handles the rename `<tasksDir>/tasks.md` →
+        `<tasksDir>/optimus-tasks.md` for projects upgrading from the
+        pre-rename default filename.
         """
         content = AGENTS_MD.read_text()
         assert "### Protocol: Rename tasks.md to optimus-tasks.md" in content, \
@@ -1520,50 +1500,6 @@ esac
         rc, out, err = _run(["bash", "-c", probe], cwd=tmp_path)
         assert "BLOCKED" in out, f"Path traversal was not blocked: {out}"
 
-    def test_migration_detects_legacy_file(self, tmp_path: Path):
-        """Migration detection: given legacy file, NEEDS_MIGRATION=1."""
-        _init_repo(tmp_path)
-        (tmp_path / ".optimus").mkdir()
-        legacy = tmp_path / ".optimus" / "tasks.md"
-        legacy.write_text("<!-- optimus:tasks-v1 -->\n# Tasks\n")
-        probe = '''
-TASKS_FILE="docs/pre-dev/optimus-tasks.md"
-LEGACY_FILE=".optimus/tasks.md"
-if [ -f "$LEGACY_FILE" ] && [ -f "$TASKS_FILE" ]; then
-  echo "NEEDS_MIGRATION=0 both exist"
-elif [ -f "$LEGACY_FILE" ] && [ ! -f "$TASKS_FILE" ]; then
-  echo "NEEDS_MIGRATION=1"
-else
-  echo "NEEDS_MIGRATION=0"
-fi
-'''
-        rc, out, err = _run(["bash", "-c", probe], cwd=tmp_path)
-        assert rc == 0
-        assert "NEEDS_MIGRATION=1" in out
-
-    def test_migration_detects_both_files(self, tmp_path: Path):
-        """Migration detection: given both files exist, should warn and NOT migrate."""
-        _init_repo(tmp_path)
-        (tmp_path / ".optimus").mkdir()
-        (tmp_path / "docs" / "pre-dev").mkdir(parents=True)
-        (tmp_path / ".optimus" / "tasks.md").write_text("legacy\n")
-        (tmp_path / "docs" / "pre-dev" / "optimus-tasks.md").write_text("new\n")
-        probe = '''
-TASKS_FILE="docs/pre-dev/optimus-tasks.md"
-LEGACY_FILE=".optimus/tasks.md"
-if [ -f "$LEGACY_FILE" ] && [ -f "$TASKS_FILE" ]; then
-  echo "NEEDS_MIGRATION=0 both exist"
-elif [ -f "$LEGACY_FILE" ] && [ ! -f "$TASKS_FILE" ]; then
-  echo "NEEDS_MIGRATION=1"
-else
-  echo "NEEDS_MIGRATION=0"
-fi
-'''
-        rc, out, err = _run(["bash", "-c", probe], cwd=tmp_path)
-        assert rc == 0
-        assert "both exist" in out, f"Did not detect both-files case: {out}"
-
-
 # --- F19: Test that inline-protocols.py auto-injects scope+migration when optimus-tasks.md Validation is referenced ---
 
 
@@ -1573,9 +1509,9 @@ class TestInlineProtocolsFoundational:
     This is the `needs_format` branch added in commit ad0d8d7 — previously untested.
     """
 
-    def test_needs_format_injects_scope_and_migration(self, tmp_path: Path):
+    def test_needs_format_injects_scope(self, tmp_path: Path):
         """When a skill references Protocol: optimus-tasks.md Validation, the inlined block
-        MUST contain both Protocol: Resolve Tasks Git Scope AND Protocol: Migrate tasks.md to tasksDir."""
+        MUST contain Protocol: Resolve Tasks Git Scope (validation depends on it)."""
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             "inline_protocols", REPO_ROOT / "scripts" / "inline-protocols.py",
@@ -1587,7 +1523,6 @@ class TestInlineProtocolsFoundational:
         agents.write_text(
             "## Protocol: optimus-tasks.md Validation (HARD BLOCK)\nValidation content\n"
             "## Protocol: Resolve Tasks Git Scope\nScope resolution content\n"
-            "## Protocol: Migrate tasks.md to tasksDir\nMigration content\n"
             "## Protocol: Rename tasks.md to optimus-tasks.md\nRename content\n"
         )
         skill_dir = tmp_path / "myplugin" / "skills" / "optimus-myplugin"
@@ -1609,8 +1544,6 @@ class TestInlineProtocolsFoundational:
         inlined = skill.read_text()
         assert "Scope resolution content" in inlined, \
             "Resolve Tasks Git Scope was not auto-injected"
-        assert "Migration content" in inlined, \
-            "Migrate tasks.md to tasksDir was not auto-injected"
         assert "Validation content" in inlined
 
     def test_needs_format_injects_rename_protocol(self, tmp_path: Path):
@@ -1633,7 +1566,6 @@ class TestInlineProtocolsFoundational:
         agents.write_text(
             "## Protocol: optimus-tasks.md Validation (HARD BLOCK)\nValidation content\n"
             "## Protocol: Resolve Tasks Git Scope\nScope resolution content\n"
-            "## Protocol: Migrate tasks.md to tasksDir\nMigration content\n"
             "## Protocol: Rename tasks.md to optimus-tasks.md\nRename content\n"
         )
         skill_dir = tmp_path / "myplugin" / "skills" / "optimus-myplugin"
