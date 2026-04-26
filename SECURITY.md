@@ -37,16 +37,6 @@ files outside the Ring pre-dev tree.
 `realpath`/`os.path.realpath` and verifies it starts with `$TASKS_DIR_ABS`. Symlinks
 are rejected outright to prevent TOCTOU attacks.
 
-### S3: Symlink attack during rename
-
-**Attack:** Attacker creates `<tasksDir>/tasks.md` (or its rename target
-`<tasksDir>/optimus-tasks.md`) as a symlink to a sensitive file. The rename would
-move/overwrite the sensitive target via the symlinked path.
-
-**Mitigation:** `Protocol: Rename tasks.md to optimus-tasks.md` rejects with `exit 1`
-if either source or destination is a symlink, refusing to inspect or rename symlinked
-paths.
-
 ### S4: Branch name injection in divergence checks
 
 **Attack:** A malicious ref name with shell metacharacters
