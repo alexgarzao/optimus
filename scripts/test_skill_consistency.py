@@ -420,16 +420,21 @@ class TestPipelineFourStages:
         )
 
     def test_valid_status_values_in_agents_md(self):
-        """AGENTS.md must define exactly 6 statuses; Revisando PR only in migration code."""
+        """AGENTS.md must define the valid statuses and must NOT reference
+        the legacy `Revisando PR` status anywhere.
+
+        The Revisando PR → Validando Impl migration was removed in issue #16
+        (closed by PR #20 step 3). Any reappearance of `Revisando PR` is a
+        regression.
+        """
         content = AGENTS_MD.read_text()
         for status in VALID_STATUSES:
             assert status in content, f"AGENTS.md missing status '{status}'"
         for i, line in enumerate(content.splitlines(), 1):
-            if "Revisando PR" in line:
-                assert "migration" in line.lower() or "migrat" in line.lower() \
-                    or "jq" in line or "select(" in line or "echo" in line, (
-                    f"AGENTS.md:{i}: 'Revisando PR' outside migration code: {line.strip()}"
-                )
+            assert "Revisando PR" not in line, (
+                f"AGENTS.md:{i}: 'Revisando PR' is a removed legacy status "
+                "and must not reappear (issue #16): {line.strip()}"
+            )
 
 
 # --- Plugin completeness: marketplace matches directory structure ---
