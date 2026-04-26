@@ -76,11 +76,10 @@ which requires an explicit `AskUser` confirmation before running `jq 'del(.[$id]
 is clearly disclosed to the user.
 
 **Override vs inlined protocol:** The inlined Protocol: State Management (auto-generated
-below the shared-protocols block at the end of this file) contains destructive fallbacks —
-`rm -f "$STATE_FILE"` on corruption and a one-time `Revisando PR → Validando Impl`
-migration. **Resume explicitly DOES NOT apply those fallbacks**: on corruption it STOPs
-with guidance (Step 2.2a), and it NEVER runs the migration. Treat the inlined block as
-foundational context only; the rules in this body override it.
+below the shared-protocols block at the end of this file) contains a destructive fallback
+— `rm -f "$STATE_FILE"` on corruption. **Resume explicitly DOES NOT apply that fallback**:
+on corruption it STOPs with guidance (Step 2.2a). Treat the inlined block as foundational
+context only; the rules in this body override it.
 
 ---
 
