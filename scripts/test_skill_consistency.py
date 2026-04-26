@@ -1428,6 +1428,33 @@ class TestWorktreeLocationConvention:
             "Project .gitignore missing `.worktrees/` entry"
         )
 
+    def test_initialize_optimus_directory_appends_worktrees_to_gitignore(self):
+        """Protocol: Initialize .optimus Directory must auto-append
+        `.worktrees/` to the project's `.gitignore` so user projects don't
+        end up with the worktree directory tracked by accident.
+
+        Uses a separate marker (`optimus-operational-worktrees`) from the
+        existing `optimus-operational-files` block so legacy projects whose
+        `.gitignore` already carries the operational-files block still get
+        the worktree exclusion idempotently appended on next init.
+        """
+        content = AGENTS_MD.read_text()
+        m = re.search(
+            r"### Protocol: Initialize \.optimus Directory(.*?)(?=^### |^## |\Z)",
+            content, re.DOTALL | re.MULTILINE,
+        )
+        assert m, "Protocol: Initialize .optimus Directory section not found"
+        section = m.group(1)
+        assert "optimus-operational-worktrees" in section, (
+            "Initialize .optimus Directory must declare a separate "
+            "'optimus-operational-worktrees' marker so the .worktrees/ "
+            "gitignore entry is added idempotently on legacy projects."
+        )
+        assert ".worktrees/" in section, (
+            "Initialize .optimus Directory must append .worktrees/ to "
+            "the project .gitignore"
+        )
+
     def test_resume_three_state_pr(self):
         """PR_STATE must distinguish NONE / concrete state / UNKNOWN. (R9)"""
         content = _read_skill("resume")

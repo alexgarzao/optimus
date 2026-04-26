@@ -1004,6 +1004,13 @@ mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports
 if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
   printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> .gitignore
 fi
+# Linked worktrees managed by Optimus live at ${MAIN_WORKTREE}/.worktrees/
+# (see Worktree Location Convention). Add the gitignore entry idempotently
+# on a separate marker so existing projects whose `.gitignore` already
+# carries the operational-files block still get the worktree exclusion.
+if ! grep -q '^# optimus-operational-worktrees' .gitignore 2>/dev/null; then
+  printf '\n# optimus-operational-worktrees\n.worktrees/\n' >> .gitignore
+fi
 # Log retention (idempotent — fires once per init): age-based + count-cap prune.
 # Also duplicated in Protocol: Session State so stage agents (which call Session
 # State but not Initialize Directory) get pruning at every phase transition.
@@ -1341,6 +1348,13 @@ MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {
 mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports" "${MAIN_WORKTREE}/.optimus/logs"
 if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
   printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> .gitignore
+fi
+# Linked worktrees managed by Optimus live at ${MAIN_WORKTREE}/.worktrees/
+# (see Worktree Location Convention). Add the gitignore entry idempotently
+# on a separate marker so existing projects whose `.gitignore` already
+# carries the operational-files block still get the worktree exclusion.
+if ! grep -q '^# optimus-operational-worktrees' .gitignore 2>/dev/null; then
+  printf '\n# optimus-operational-worktrees\n.worktrees/\n' >> .gitignore
 fi
 # Log retention (idempotent — runs every phase transition): age-based + count-cap
 # prune. Stage agents are the heaviest log producers, so placing prune here
