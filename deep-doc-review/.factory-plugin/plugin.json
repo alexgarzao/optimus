@@ -1,7 +1,7 @@
 {
   "name": "deep-doc-review",
   "description": "Deep review of project documentation. Finds errors, inconsistencies, gaps, and improvements with interactive one-by-one resolution.",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": {
     "name": "Alex Garzao"
   }

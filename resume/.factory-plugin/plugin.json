@@ -1,7 +1,7 @@
 {
   "name": "resume",
   "description": "Administrative: Resume a task after closing the terminal. Locates/recreates the worktree for a given T-XXX, reports current status, and offers to invoke the next stage. Read-only on state.json except for a user-confirmed Reset-to-Pendente recovery.",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": {
     "name": "Alex Garzao"
   }
