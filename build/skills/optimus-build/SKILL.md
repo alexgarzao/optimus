@@ -1803,6 +1803,18 @@ mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports
 if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
   printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> .gitignore
 fi
+# Linked worktrees managed by Optimus live at ${MAIN_WORKTREE}/.worktrees/
+# (see Worktree Location Convention). Add the gitignore entry idempotently
+# on a separate marker so existing projects whose `.gitignore` already
+# carries the operational-files block still get the worktree exclusion.
+# Refuse symlinked .gitignore (defense against link-following file-write).
+if [ -L .gitignore ]; then
+  echo "ERROR: .gitignore is a symlink — refusing to append (potential symlink attack)." >&2
+  exit 1
+fi
+if ! grep -q '^# optimus-operational-worktrees' .gitignore 2>/dev/null; then
+  printf '\n# optimus-operational-worktrees\n.worktrees/\n' >> .gitignore
+fi
 # Log retention (idempotent — runs every phase transition): age-based + count-cap
 # prune. Stage agents are the heaviest log producers, so placing prune here
 # ensures it fires for build/review/plan/done (which call Session State but not
@@ -2074,8 +2086,8 @@ fi
    - **If N eligible tasks** → list all with worktree paths via `AskUser`:
      ```
      Multiple tasks available:
-       T-001 — User auth (Em Andamento) → /projeto-t-001-.../
-       T-002 — Login page (Em Andamento) → /projeto-t-002-.../
+       T-001 — User auth (Em Andamento) → <repo>/.worktrees/feat/t-001-user-auth/
+       T-002 — Login page (Em Andamento) → <repo>/.worktrees/feat/t-002-login-page/
      Which task should I continue?
      ```
    - After task is identified, locate the worktree by task ID:
@@ -2093,11 +2105,26 @@ fi
        #   Options: Create branch from HEAD / Re-run /optimus-plan"
      fi
      ```
-     If the branch exists, create the worktree automatically:
+     If the branch exists, create the worktree automatically. Worktrees live
+     under `${MAIN_WORKTREE}/.worktrees/<branch-name>` (gitignored, project-rooted —
+     see Worktree Location Convention below).
      ```bash
-     REPO_NAME=$(basename "$(git rev-parse --show-toplevel)")
-     WORKTREE_DIR="../${REPO_NAME}-$(echo <task-id> | tr '[:upper:]' '[:lower:]')-<keywords>"
-     git worktree add "$WORKTREE_DIR" "<branch-name>"
+     # Resolve main worktree first — see Protocol: Resolve Main Worktree Path.
+     MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+     if [ -z "$MAIN_WORKTREE" ]; then
+       echo "ERROR: Cannot determine main worktree — not in a git repository." >&2
+       exit 1
+     fi
+     # Path-traversal guard (defense in depth): branch name comes from state.json
+     # in some flows, so reject `..` and absolute-style segments before path build.
+     case "<branch-name>" in
+       *..*|/*) echo "ERROR: refusing unsafe branch name." >&2; exit 1 ;;
+     esac
+     WORKTREE_DIR="${MAIN_WORKTREE}/.worktrees/<branch-name>"
+     if ! git worktree add "$WORKTREE_DIR" "<branch-name>"; then
+       echo "ERROR: 'git worktree add $WORKTREE_DIR' failed." >&2
+       exit 1
+     fi
      ```
      Then change working directory to the new worktree.
 

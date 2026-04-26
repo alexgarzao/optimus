@@ -928,6 +928,18 @@ mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports
 if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
   printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> .gitignore
 fi
+# Linked worktrees managed by Optimus live at ${MAIN_WORKTREE}/.worktrees/
+# (see Worktree Location Convention). Add the gitignore entry idempotently
+# on a separate marker so existing projects whose `.gitignore` already
+# carries the operational-files block still get the worktree exclusion.
+# Refuse symlinked .gitignore (defense against link-following file-write).
+if [ -L .gitignore ]; then
+  echo "ERROR: .gitignore is a symlink — refusing to append (potential symlink attack)." >&2
+  exit 1
+fi
+if ! grep -q '^# optimus-operational-worktrees' .gitignore 2>/dev/null; then
+  printf '\n# optimus-operational-worktrees\n.worktrees/\n' >> .gitignore
+fi
 # Log retention (idempotent — fires once per init): age-based + count-cap prune.
 # Also duplicated in Protocol: Session State so stage agents (which call Session
 # State but not Initialize Directory) get pruning at every phase transition.

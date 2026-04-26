@@ -16,3 +16,9 @@ htmlcov/
 .optimus/sessions/
 .optimus/reports/
 .optimus/logs/
+
+# optimus-operational-worktrees
+# Linked worktrees created by /optimus-plan, /optimus-resume, and the
+# Workspace Auto-Navigation recovery flow live here. Gitignored because
+# they are per-task ephemeral checkouts, not source code.
+.worktrees/
