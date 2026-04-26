@@ -170,6 +170,28 @@ Both schemas list the same set of plugins, but with different name conventions
 
 ## Plugin Lifecycle
 
+### Dual-platform parity (Claude Code ↔ Droid) — ENFORCED
+
+Every Optimus plugin MUST ship surfaces for both platforms. This is enforced
+by the `TestDualPlatformParity` class in `scripts/test_skill_consistency.py`,
+which asserts three invariants:
+
+1. **Marketplace parity** — every plugin in `.claude-plugin/marketplace.json`
+   must also be in `.factory-plugin/marketplace.json` (Claude uses
+   `optimus-<name>`, Droid uses bare `<name>`; the test normalizes the prefix).
+2. **Surface parity** — every plugin must ship both `<plugin>/skills/optimus-<plugin>/SKILL.md`
+   (Claude Code) and `<plugin>/.factory-plugin/plugin.json` (Droid).
+3. **Command alias integrity** — every `<plugin>/commands/<alias>.md` must
+   correspond to a real plugin in the marketplace AND its body must redirect
+   to `/optimus-<plugin>`. (Aliases are Claude Code only — Droid does not
+   support slash-command aliases.)
+
+A plugin that only ships one platform's surface will fail tests and CI. Without
+these guards, a contributor could add a plugin to one marketplace and forget
+the other; the sync script reads ONE marketplace and applies it to both
+platforms, so the missing-side plugin would silently disappear from the
+discovered set on `/optimus-sync`.
+
 ### Adding a new plugin
 1. Add directory to repo (e.g., `myplugin/skills/optimus-myplugin/SKILL.md`)
 2. Add entry to `.factory-plugin/marketplace.json` (bare name: `myplugin`)

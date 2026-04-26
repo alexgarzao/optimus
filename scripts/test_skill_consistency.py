@@ -1699,3 +1699,123 @@ class TestInlineProtocolsFoundational:
             "idempotency check (skip reply if it already exists) matches this "
             "string verbatim to handle re-runs after a crash."
         )
+
+
+class TestDualPlatformParity:
+    """Optimus ships to BOTH Claude Code and Droid (Factory). Every plugin must
+    have surfaces on both sides. These tests catch divergence at commit time —
+    without them, a contributor can add a plugin to one platform's marketplace,
+    forget the other, and the gap ships silently (the sync script reads ONE
+    marketplace and applies the same list to both platforms, so a missing
+    plugin on the other side just disappears from the discovered set).
+
+    See AGENTS.md "Dual-platform parity (Claude Code ↔ Droid)" for the
+    contributor workflow these tests enforce.
+    """
+
+    def test_marketplaces_have_identical_plugin_sets(self):
+        """Both marketplace.json files must list the SAME set of plugins.
+        Claude Code uses ``optimus-<name>`` while Droid uses bare ``<name>``;
+        the test normalizes the prefix before comparing.
+        """
+        claude_path = REPO_ROOT / ".claude-plugin" / "marketplace.json"
+        factory_path = REPO_ROOT / ".factory-plugin" / "marketplace.json"
+        claude_data = json.loads(claude_path.read_text())
+        factory_data = json.loads(factory_path.read_text())
+
+        claude_names = {
+            p["name"].removeprefix("optimus-")
+            for p in claude_data["plugins"]
+        }
+        factory_names = {p["name"] for p in factory_data["plugins"]}
+
+        only_in_claude = sorted(claude_names - factory_names)
+        only_in_factory = sorted(factory_names - claude_names)
+
+        assert not only_in_claude and not only_in_factory, (
+            f"Marketplace divergence between .claude-plugin and .factory-plugin: "
+            f"only in .claude-plugin: {only_in_claude}; only in .factory-plugin: "
+            f"{only_in_factory}. Both marketplaces MUST list the same plugins. "
+            f"To add a plugin: edit BOTH .claude-plugin/marketplace.json AND "
+            f".factory-plugin/marketplace.json (Claude uses optimus-<name>, "
+            f"Droid uses bare <name>)."
+        )
+
+    def test_every_plugin_has_both_platform_surfaces(self):
+        """Every plugin in the marketplace must ship BOTH platform surfaces:
+        a SKILL.md (Claude Code, also used by Droid) and a .factory-plugin/
+        plugin.json (Droid). Missing one means the plugin will fail to install
+        on that platform.
+        """
+        factory_path = REPO_ROOT / ".factory-plugin" / "marketplace.json"
+        factory_data = json.loads(factory_path.read_text())
+
+        missing_claude = []
+        missing_droid = []
+        for plugin in factory_data["plugins"]:
+            name = plugin["name"]
+            plugin_dir = REPO_ROOT / name
+            skill_md = plugin_dir / "skills" / f"optimus-{name}" / "SKILL.md"
+            droid_config = plugin_dir / ".factory-plugin" / "plugin.json"
+            if not skill_md.exists():
+                missing_claude.append(
+                    f"{name} (expected {skill_md.relative_to(REPO_ROOT)})"
+                )
+            if not droid_config.exists():
+                missing_droid.append(
+                    f"{name} (expected {droid_config.relative_to(REPO_ROOT)})"
+                )
+
+        assert not missing_claude, (
+            f"Plugins missing Claude Code surface "
+            f"(skills/optimus-<name>/SKILL.md): {missing_claude}. The sync "
+            f"would install these on Droid only — Claude Code users would "
+            f"not see them."
+        )
+        assert not missing_droid, (
+            f"Plugins missing Droid surface (.factory-plugin/plugin.json): "
+            f"{missing_droid}. The sync would install these on Claude Code "
+            f"only — Droid users would not see them."
+        )
+
+    def test_command_aliases_correspond_to_real_plugins(self):
+        """Every ``<plugin>/commands/<alias>.md`` slash-command alias file
+        must be inside a directory that corresponds to a real plugin listed
+        in the marketplace, and the alias body must redirect to the matching
+        ``/optimus-<plugin>`` slash command. Catches orphan command files
+        and aliases that point to non-existent skills.
+
+        Note: command aliases are Claude Code only — Droid does not support
+        slash-command aliases (platform limitation, documented in AGENTS.md).
+        """
+        factory_path = REPO_ROOT / ".factory-plugin" / "marketplace.json"
+        factory_data = json.loads(factory_path.read_text())
+        plugin_names = {p["name"] for p in factory_data["plugins"]}
+
+        orphans = []
+        broken_redirects = []
+        for cmd_file in sorted(REPO_ROOT.glob("*/commands/*.md")):
+            plugin_name = cmd_file.parent.parent.name
+            if plugin_name not in plugin_names:
+                orphans.append(
+                    f"{cmd_file.relative_to(REPO_ROOT)} (plugin '{plugin_name}' "
+                    f"not in marketplace)"
+                )
+                continue
+            body = cmd_file.read_text()
+            expected_redirect = f"/optimus-{plugin_name}"
+            if expected_redirect not in body:
+                broken_redirects.append(
+                    f"{cmd_file.relative_to(REPO_ROOT)} does not redirect to "
+                    f"{expected_redirect} (alias should forward to the main "
+                    f"slash command)"
+                )
+
+        assert not orphans, (
+            "Orphan command alias files (alias exists but plugin is not in "
+            "the marketplace):\n  - " + "\n  - ".join(orphans)
+        )
+        assert not broken_redirects, (
+            "Command alias files that don't redirect to their plugin's main "
+            "slash command:\n  - " + "\n  - ".join(broken_redirects)
+        )
