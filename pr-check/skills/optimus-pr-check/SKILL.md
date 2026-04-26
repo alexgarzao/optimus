@@ -282,6 +282,7 @@ Store each thread as:
   source: "deepsource" | "codacy" | "coderabbit" | "copilot" | "human",
   reply_method: "graphql" | "rest",
   is_resolved: true | false,
+  is_outdated: true | false,
   path: "<file>",
   line: <number>,
   body: "<first comment body>"
@@ -351,7 +352,7 @@ Extract: shortcode, severity, category, analyzer, title, explanation, file, line
 
 **CodeRabbit comments** (author: `coderabbitai[bot]`):
 - Inline review comments with suggestions (from thread fetch, Step 1.3.1)
-- **Duplicated Comments section** (from review body fetch, Step 1.3.1.5): `<details>` block titled `♻️ Duplicate comments (N)` in the review body listing findings already reported in previous reviews but still unresolved. These are the findings whose inline threads typically became `isOutdated: true` (and were filtered out by Step 1.3.1) — the review body is the ONLY remaining source. Parse per algorithm below and tag with `origin: duplicate`.
+- **Duplicated Comments section** (from review body fetch, Step 1.3.1.5): `<details>` block titled `♻️ Duplicate comments (N)` in the review body listing findings already reported in previous reviews but still unresolved. These are the findings whose inline threads typically became `isOutdated: true` (now collected into `outdated_threads` and auto-resolved hygienically by Step 13.0; the original finding text is not re-evaluated, so the Duplicate Comments review body remains the source of record for this finding's content). Parse per algorithm below and tag with `origin: duplicate`.
 - **Outside diff range section** (from review body fetch, Step 1.3.1.5): `<details>` block titled `⚠️ Outside diff range comments (N)` with suggestions about code OUTSIDE the PR diff. Parse per same algorithm and tag with `origin: outside-diff`.
 
 **Deterministic parsing algorithm (MANDATORY for both sections):**
@@ -482,8 +483,8 @@ PR Threads:
   - CodeRabbit: X threads — A unresolved
   - Human reviewers: X threads from [usernames] — A unresolved
   - Other bots: X threads — A unresolved
-  - Outdated (filtered): X threads
-  Total: X threads, Y unresolved (Z outdated filtered)
+  - Outdated (auto-resolved in Step 13.0): X threads
+  Total: X threads, Y unresolved (Z outdated → auto-resolved in Phase 13)
 ```
 
 ### Step 1.4: Checkout PR Branch
@@ -597,7 +598,7 @@ Compute the total findings count from the data already collected in Phase 1:
 
 ```
 findings_total =
-    (review threads where isResolved=false, from Step 1.3.1's filtered set)
+    (unresolved threads in active_threads, from Step 1.3.1; outdated_threads are excluded — they go through Step 13.0 hygiene, not the verdict path)
   + (CodeRabbit duplicate findings, from Step 1.3.1.5)
   + (CodeRabbit outside-diff findings, from Step 1.3.1.5)
   + (failing CI checks, from Step 1.5)
@@ -1447,7 +1448,7 @@ For EACH thread in `outdated_threads` collected at Step 1.3.1 where `is_resolved
 
 After processing all outdated threads, log: `"Auto-resolved M outdated threads in Step 13.0."`
 
-**HARD BLOCK (findings mode):** This phase is MANDATORY regardless of whether any fixes were applied. Every active PR comment thread MUST receive a reply.
+**HARD BLOCK (Steps 13.1-13.6, findings mode only):** When REVIEW_MODE=findings, every active PR comment thread MUST receive a verdict-driven reply via the steps below — regardless of whether any fixes were applied. Step 13.0 above runs independently of this gate.
 
 ### Step 13.1: Response Rules (uniform for ALL sources)
 
@@ -1704,6 +1705,8 @@ and a warning if findings remain unaddressed. Pick the template by mode:
 
 **Mode:** none (user opted out)
 **findings_total:** <N>
+[render the next line ONLY if M > 0:]
+**Outdated threads observed (NOT cleaned, blocking CodeRabbit approval):** M — re-run pr-check with mode=findings or mode=diff to auto-resolve them via Step 13.0. None mode respects user opt-out from all PR mutation, so these were left untouched.
 **Status:** Exited without dispatching agents. <N> findings remain
 unaddressed. Re-run `/optimus-pr-check` later to handle them.
 ```
@@ -1716,12 +1719,14 @@ unaddressed. Re-run `/optimus-pr-check` later to handle them.
 **Mode:** diff (fresh review of changed files; existing comments NOT evaluated)
 **findings_total (existing, unaddressed):** <N>
 **New agent findings (this run):** <M>
+**Outdated threads auto-resolved (Step 13.0): M** — pure hygiene; required for CodeRabbit / approval-gate compliance
 
 [render the next paragraph ONLY if findings_total > 0:]
 ⚠️ **<N> existing PR comments / CI failures were NOT addressed in this run.**
-Phase 13 (reply + resolve) was skipped because diff mode does not produce
-AGREE/CONTEST verdicts on existing threads. To address them, re-run pr-check
-with `REVIEW_MODE=findings` (the default when findings_total > 0).
+Phase 13 verdict-driven replies (Steps 13.1-13.6) were skipped because diff
+mode does not produce AGREE/CONTEST verdicts on existing threads. (Step 13.0
+outdated thread cleanup ran normally — see count below.) To address them,
+re-run pr-check with `REVIEW_MODE=findings` (the default when findings_total > 0).
 
 [then render the standard tables for Fixed / Skipped / Deferred / CI Status /
 Verification / Configuration Changes — same schema as findings mode, but
@@ -1743,6 +1748,8 @@ Render the standard summary below.
 - Human reviewers: X comments (Y validated, Z contested)
 - New agent findings: X
 - **Outdated threads auto-resolved (Step 13.0): M** — pure hygiene; required for CodeRabbit / approval-gate compliance
+  [render this aside ONLY when M is non-trivially large, e.g. M >= 10:]
+  (NOTE: on the first pr-check run after this skill was upgraded, M may be unexpectedly large because previously-discarded outdated threads from prior runs accumulate on the PR. Subsequent runs will see steady-state values.)
 
 ### Convergence
 - Rounds dispatched (round 1 + convergence rounds): X
