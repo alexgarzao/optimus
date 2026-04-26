@@ -243,13 +243,26 @@ gh api graphql -f query='
 
 If `pageInfo.hasNextPage` is `true`, re-run with `-f cursor="<endCursor>"` until all pages are fetched. Merge all nodes into a single list.
 
-**Filter outdated threads:** Remove all threads where `isOutdated` is `true`. These
-threads reference code that was modified in subsequent commits — the comments are
-no longer relevant to the current diff. Do NOT include them as findings, do NOT
-dispatch agents to evaluate them, and do NOT attempt to reply/resolve them.
-Log the count for the summary: "Filtered N outdated threads (code was modified after comment)."
+**Partition by `isOutdated`:** Split threads into TWO lists, do NOT discard.
 
-For each remaining thread, classify by the **first comment's author**:
+- **`active_threads`** — threads where `isOutdated` is `false`. These reference current
+  code and are evaluated by agents in Phase 3 + replied/resolved per verdict in
+  Phase 13.
+- **`outdated_threads`** — threads where `isOutdated` is `true`. These reference code
+  modified in subsequent commits, so agents have nothing to evaluate. **However, they
+  are still OPEN on the PR and must be auto-resolved hygienically** (otherwise
+  CodeRabbit and other approval gates withhold approval as long as ANY thread —
+  active or outdated — remains unresolved). Phase 13 runs a dedicated cleanup step
+  (Step 13.0) that posts a brief auto-reply ("outdated — code changed in subsequent
+  commits") and resolves each one via GraphQL.
+
+Both lists use the same storage shape (see below). Outdated threads are NOT included
+in `findings_total` (Step 1.8) and are NOT dispatched to agents — they are pure
+hygiene targets.
+
+Log both counts for the summary: `"Active: N threads, Outdated: M threads (auto-resolved in Phase 13)"`.
+
+For EACH thread (both `active_threads` and `outdated_threads` use the same storage shape; outdated threads still need source classification to choose the right reply API in Step 13.0), classify by the **first comment's author**:
 
 | Author login | Source | Reply method |
 |-------------|--------|-------------|
@@ -269,6 +282,7 @@ Store each thread as:
   source: "deepsource" | "codacy" | "coderabbit" | "copilot" | "human",
   reply_method: "graphql" | "rest",
   is_resolved: true | false,
+  is_outdated: true | false,
   path: "<file>",
   line: <number>,
   body: "<first comment body>"
@@ -338,7 +352,7 @@ Extract: shortcode, severity, category, analyzer, title, explanation, file, line
 
 **CodeRabbit comments** (author: `coderabbitai[bot]`):
 - Inline review comments with suggestions (from thread fetch, Step 1.3.1)
-- **Duplicated Comments section** (from review body fetch, Step 1.3.1.5): `<details>` block titled `♻️ Duplicate comments (N)` in the review body listing findings already reported in previous reviews but still unresolved. These are the findings whose inline threads typically became `isOutdated: true` (and were filtered out by Step 1.3.1) — the review body is the ONLY remaining source. Parse per algorithm below and tag with `origin: duplicate`.
+- **Duplicated Comments section** (from review body fetch, Step 1.3.1.5): `<details>` block titled `♻️ Duplicate comments (N)` in the review body listing findings already reported in previous reviews but still unresolved. These are the findings whose inline threads typically became `isOutdated: true` (now collected into `outdated_threads` and auto-resolved hygienically by Step 13.0; the original finding text is not re-evaluated, so the Duplicate Comments review body remains the source of record for this finding's content). Parse per algorithm below and tag with `origin: duplicate`.
 - **Outside diff range section** (from review body fetch, Step 1.3.1.5): `<details>` block titled `⚠️ Outside diff range comments (N)` with suggestions about code OUTSIDE the PR diff. Parse per same algorithm and tag with `origin: outside-diff`.
 
 **Deterministic parsing algorithm (MANDATORY for both sections):**
@@ -469,8 +483,8 @@ PR Threads:
   - CodeRabbit: X threads — A unresolved
   - Human reviewers: X threads from [usernames] — A unresolved
   - Other bots: X threads — A unresolved
-  - Outdated (filtered): X threads
-  Total: X threads, Y unresolved (Z outdated filtered)
+  - Outdated (auto-resolved in Step 13.0): X threads
+  Total: X threads, Y unresolved (Z outdated → auto-resolved in Phase 13)
 ```
 
 ### Step 1.4: Checkout PR Branch
@@ -584,7 +598,7 @@ Compute the total findings count from the data already collected in Phase 1:
 
 ```
 findings_total =
-    (review threads where isResolved=false, from Step 1.3.1's filtered set)
+    (unresolved threads in active_threads, from Step 1.3.1; outdated_threads are excluded — they go through Step 13.0 hygiene, not the verdict path)
   + (CodeRabbit duplicate findings, from Step 1.3.1.5)
   + (CodeRabbit outside-diff findings, from Step 1.3.1.5)
   + (failing CI checks, from Step 1.5)
@@ -1398,16 +1412,43 @@ This triggers Codacy/DeepSource reanalysis automatically.
 
 ---
 
-## Phase 13: Respond to ALL PR Comments (MANDATORY when `REVIEW_MODE=findings`)
+## Phase 13: Respond to ALL PR Comments
 
-**Mode gate:** This phase runs ONLY when `REVIEW_MODE=findings`. When the user
-chose `REVIEW_MODE=diff` in Step 1.8, agents performed a fresh diff review and
-never produced AGREE/CONTEST/ALREADY-FIXED verdicts on existing comments —
-there is nothing to reply to. **Skip Phase 13 entirely in diff mode** and
-proceed directly to Phase 14, which renders a warning that existing PR
-comments remain unaddressed.
+This phase has TWO sub-flows with independent mode gates:
 
-**HARD BLOCK (findings mode):** This phase is MANDATORY regardless of whether any fixes were applied. Every existing PR comment thread MUST receive a reply.
+| Sub-flow | Runs when | Purpose |
+|---|---|---|
+| **Step 13.0 — Outdated thread cleanup** | `REVIEW_MODE` ∈ {`findings`, `diff`} | Auto-reply + resolve every thread in `outdated_threads` (collected at Step 1.3.1). Pure hygiene — independent of agent verdicts. Required for CodeRabbit / approval-gate compliance, which withhold approval while ANY thread (including outdated ones) is unresolved. |
+| **Steps 13.1-13.6 — Verdict-driven replies** | `REVIEW_MODE = findings` only | Reply per agent verdict (AGREE / CONTEST / ALREADY-FIXED) on `active_threads`, then resolve. Skipped in diff mode because agents performed a fresh review and never produced verdicts on existing comments. |
+
+**Mode behavior at a glance:**
+- `findings` → Step 13.0 runs THEN Steps 13.1-13.6 run.
+- `diff` → Step 13.0 runs (outdated cleanup); Steps 13.1-13.6 are SKIPPED. Phase 14 renders a warning that existing active comments remain unaddressed.
+- `none` → user already exited at Step 1.8; Phase 13 is unreachable.
+
+**HARD BLOCK (when running):** Every thread in scope MUST receive a reply AND be resolved. Phase 14 verifies zero unresolved threads remain.
+
+### Step 13.0: Auto-resolve outdated threads (runs in `findings` and `diff` modes)
+
+For EACH thread in `outdated_threads` collected at Step 1.3.1 where `is_resolved` is `false` (skip already-resolved ones):
+
+1. **Reply** with this exact body (use the source's reply method from the thread's `reply_method` field; see Cases A and B below for the API choice):
+
+   ```
+   Outdated — this thread references code that was modified in subsequent commits and is no longer relevant to the current diff. Auto-resolved by /optimus-pr-check.
+   ```
+
+2. **Resolve** via GraphQL `resolveReviewThread` mutation (always GraphQL for resolve, regardless of source).
+
+3. **Confirm** `isResolved: true` in the response.
+
+4. **Deduplication note:** if the same finding re-surfaces in CodeRabbit's `♻️ Duplicate comments` section (Step 1.3.1.5), that re-surfaced finding is a SEPARATE entity in `active_threads` and goes through the normal verdict flow in Steps 13.1-13.6. The outdated thread auto-reply does NOT conflict — they're different surfaces of the related finding (one stale, one re-asserted).
+
+5. **Idempotency:** before posting, check whether the agent already replied with the "Outdated — this thread references code that was modified..." string in this thread. If yes, skip the reply and proceed directly to resolve (handles re-runs after a crash between reply and resolve).
+
+After processing all outdated threads, log: `"Auto-resolved M outdated threads in Step 13.0."`
+
+**HARD BLOCK (Steps 13.1-13.6, findings mode only):** When REVIEW_MODE=findings, every active PR comment thread MUST receive a verdict-driven reply via the steps below — regardless of whether any fixes were applied. Step 13.0 above runs independently of this gate.
 
 ### Step 13.1: Response Rules (uniform for ALL sources)
 
@@ -1607,7 +1648,9 @@ These don't have threads and cannot be resolved.
 
 ### Step 13.4: Verify Zero Unresolved Remain
 
-After all threads are processed, re-run the query from Step 13.2 and confirm ALL threads have `isResolved: true`. If any remain unresolved, reply and resolve them now. Do NOT proceed until zero unresolved threads remain.
+After all threads are processed (BOTH the active threads from Steps 13.1-13.3 AND the outdated threads from Step 13.0), re-run the query from Step 13.2 and confirm ALL threads — including outdated ones — have `isResolved: true`. If any remain unresolved, reply and resolve them now. Do NOT proceed until zero unresolved threads remain.
+
+**Why this includes outdated threads:** CodeRabbit and other approval gates inspect EVERY review thread on the PR, not just the ones agents acted on. Leaving outdated threads with `isResolved: false` blocks PR approval even though the underlying code was already fixed in subsequent commits. Step 13.0's auto-resolve hygiene is the entire reason this gate now passes.
 
 ### Step 13.5: Hide Fully-Resolved Reviews
 
@@ -1625,10 +1668,14 @@ gh api graphql -f query='
 
 ### Step 13.6: Reply Summary
 
-**HARD BLOCK:** The Status column MUST show "Resolved" for every row. If any row shows "Replied" instead of "Resolved", go back and resolve it.
+**HARD BLOCK:** The Status column MUST show "Resolved" for every row (including outdated-cleanup rows). If any row shows "Replied" instead of "Resolved", go back and resolve it.
+
+Render TWO tables. The "Active threads" table is omitted entirely in `diff` mode (no verdicts produced); the "Outdated threads" table is rendered in both `findings` and `diff` modes.
 
 ```markdown
 ### PR Comment Replies Posted
+
+#### Active threads (verdict-driven — `findings` mode only)
 | # | Thread | Source | Reply | Commit | Status |
 |---|--------|--------|-------|--------|--------|
 | 1 | file.go:42 | Codacy | Fixed | abc1234 | Resolved |
@@ -1636,6 +1683,12 @@ gh api graphql -f query='
 | 3 | file.go:15 | CodeRabbit | Fixed | ghi9012 | Resolved |
 | 4 | file.go:22 | @reviewer | Won't fix: out of scope | — | Resolved |
 | 5 | general | @reviewer | [answer] | — | Resolved |
+
+#### Outdated threads (Step 13.0 hygiene — runs in `findings` and `diff` modes)
+| # | Thread | Source | Reply | Status |
+|---|--------|--------|-------|--------|
+| 1 | file.go:120 | CodeRabbit | Outdated — code changed in subsequent commits | Resolved |
+| 2 | file.go:88 | Codacy | Outdated — code changed in subsequent commits | Resolved |
 ```
 
 ---
@@ -1652,6 +1705,8 @@ and a warning if findings remain unaddressed. Pick the template by mode:
 
 **Mode:** none (user opted out)
 **findings_total:** <N>
+[render the next line ONLY if M > 0:]
+**Outdated threads observed (NOT cleaned, blocking CodeRabbit approval):** M — re-run pr-check with mode=findings or mode=diff to auto-resolve them via Step 13.0. None mode respects user opt-out from all PR mutation, so these were left untouched.
 **Status:** Exited without dispatching agents. <N> findings remain
 unaddressed. Re-run `/optimus-pr-check` later to handle them.
 ```
@@ -1664,12 +1719,14 @@ unaddressed. Re-run `/optimus-pr-check` later to handle them.
 **Mode:** diff (fresh review of changed files; existing comments NOT evaluated)
 **findings_total (existing, unaddressed):** <N>
 **New agent findings (this run):** <M>
+**Outdated threads auto-resolved (Step 13.0): M** — pure hygiene; required for CodeRabbit / approval-gate compliance
 
 [render the next paragraph ONLY if findings_total > 0:]
 ⚠️ **<N> existing PR comments / CI failures were NOT addressed in this run.**
-Phase 13 (reply + resolve) was skipped because diff mode does not produce
-AGREE/CONTEST verdicts on existing threads. To address them, re-run pr-check
-with `REVIEW_MODE=findings` (the default when findings_total > 0).
+Phase 13 verdict-driven replies (Steps 13.1-13.6) were skipped because diff
+mode does not produce AGREE/CONTEST verdicts on existing threads. (Step 13.0
+outdated thread cleanup ran normally — see count below.) To address them,
+re-run pr-check with `REVIEW_MODE=findings` (the default when findings_total > 0).
 
 [then render the standard tables for Fixed / Skipped / Deferred / CI Status /
 Verification / Configuration Changes — same schema as findings mode, but
@@ -1690,6 +1747,9 @@ Render the standard summary below.
 - CodeRabbit: X comments (Y validated, Z contested)
 - Human reviewers: X comments (Y validated, Z contested)
 - New agent findings: X
+- **Outdated threads auto-resolved (Step 13.0): M** — pure hygiene; required for CodeRabbit / approval-gate compliance
+  [render this aside ONLY when M is non-trivially large, e.g. M >= 10:]
+  (NOTE: on the first pr-check run after this skill was upgraded, M may be unexpectedly large because previously-discarded outdated threads from prior runs accumulate on the PR. Subsequent runs will see steady-state values.)
 
 ### Convergence
 - Rounds dispatched (round 1 + convergence rounds): X

@@ -1647,3 +1647,55 @@ class TestInlineProtocolsFoundational:
             f"Likely cause: scripts/inline-protocols.py regex did not match the "
             f"reference syntax. Re-run the syncer and inspect."
         )
+
+    def test_pr_check_has_outdated_thread_cleanup(self):
+        """pr-check MUST collect outdated threads into a separate `outdated_threads`
+        list (NOT discard them) and auto-resolve them in Step 13.0. Without this,
+        outdated threads remain open on the PR — CodeRabbit and similar approval
+        gates withhold approval as long as ANY thread (active or outdated) is
+        unresolved.
+        """
+        path = REPO_ROOT / "pr-check/skills/optimus-pr-check/SKILL.md"
+        content = path.read_text()
+
+        # Stale "filter/filtered" prose check — the partition refactor must sweep ALL
+        # references to the old discard-only model. These assertions catch regressions
+        # where future edits accidentally re-introduce filter terminology.
+        stale_phrases = [
+            "Outdated (filtered)",         # Step 1.3.4 summary template (F2)
+            "outdated filtered",            # Step 1.3.4 totals line (F2)
+            "filtered set",                  # Step 1.8 findings_total formula (F1)
+            "filtered out by Step 1.3.1",   # Step 1.3.3 narrative (F3)
+        ]
+        remaining = [p for p in stale_phrases if p in content]
+        assert not remaining, (
+            f"Stale 'filter/filtered' prose found in pr-check after the partition "
+            f"refactor at Step 1.3.1. The partition model replaced the old discard "
+            f"semantics; these phrases are vestigial and contradict the new flow: "
+            f"{remaining}. See Step 13.0 for the hygiene path."
+        )
+
+        # Step 1.3.1 must partition into active + outdated lists, not discard.
+        assert "outdated_threads" in content, (
+            "pr-check Step 1.3.1 must collect outdated threads into an "
+            "`outdated_threads` list (not discard via filter). Without the list, "
+            "Step 13.0 has no input to clean up."
+        )
+        # Old discard-only language must be gone.
+        assert "Filter outdated threads:** Remove all threads" not in content, (
+            "pr-check Step 1.3.1 still uses the old discard-only language for "
+            "outdated threads. Replace with the partition-into-two-lists pattern."
+        )
+        # Step 13.0 must exist and target outdated threads.
+        assert "Step 13.0:" in content, (
+            "pr-check is missing Step 13.0 (auto-resolve outdated threads). "
+            "Outdated threads block CodeRabbit approval and must be hygienically "
+            "auto-resolved regardless of REVIEW_MODE."
+        )
+        # The auto-reply text must be present so runtime LLMs use a stable phrase
+        # (Step 13.0's idempotency check matches against this exact string).
+        assert "Outdated — this thread references code that was modified" in content, (
+            "pr-check Step 13.0 must specify the exact auto-reply text. The "
+            "idempotency check (skip reply if it already exists) matches this "
+            "string verbatim to handle re-runs after a crash."
+        )
