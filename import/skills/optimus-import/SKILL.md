@@ -145,7 +145,6 @@ I found N task files in this project:
 | # | Path | Optimus format? | Tasks |
 |---|------|-----------------|-------|
 | 1 | docs/pre-dev/optimus-tasks.md | Yes | 42 tasks (27 done, 15 pending) |
-| 2 | .optimus/tasks.md | Yes | Legacy location — will migrate |
 
 How should I proceed?
 ```
@@ -364,8 +363,8 @@ if [ -n "$EXISTING_FILE" ] && [ "$EXISTING_FILE" != "$TASKS_FILE" ]; then
     echo "Keeping old file as reference until all specs are generated."
   else
     EXISTING_TASKS_DIR="$(dirname "$EXISTING_FILE")/tasks"
-    # Remove the existing file using the correct repo (project-repo for legacy
-    # .optimus/tasks.md, tasks-repo for existing files inside tasksDir).
+    # Remove the existing file using the correct repo: tasks-repo when the
+    # file lives inside tasksDir, project-repo otherwise.
     PROJECT_ROOT=$(git rev-parse --show-toplevel)
     TASKS_REPO_ROOT=""
     if [ "$TASKS_GIT_SCOPE" = "separate-repo" ]; then

@@ -797,9 +797,10 @@ class TestTasksDirLocation:
 
     def test_skills_no_legacy_tasks_file_as_live_path(self):
         """SKILL.md bodies must not assume `.optimus/tasks.md` as the current location.
-        Mentions are allowed only as legacy/migration context (e.g., 'if a legacy
-        .optimus/tasks.md exists'). Uses a 3-line context window to detect legacy
-        keywords split across lines."""
+        After M1 removal (#20), mentions are allowed ONLY as explicit historical
+        / legacy context (e.g., 'if a legacy .optimus/tasks.md exists'). The
+        previous tolerance for 'migrate'/'migration' keywords was dropped —
+        with M1 gone there is no legitimate reason to use those terms inline."""
         violations = []
         for skill in SKILLS_THAT_TOUCH_TASKS:
             paths = list(REPO_ROOT.glob(f"{skill}/skills/*/SKILL.md"))
@@ -811,17 +812,18 @@ class TestTasksDirLocation:
             for i, line in enumerate(lines, 1):
                 if not LEGACY_TASKS_PATH_RE.search(line):
                     continue
-                # Check a 3-line context window (±1 line) for legacy/migration keywords
+                # Check a 3-line context window (±1 line) for the "legacy"
+                # marker. Only "legacy" remains a valid exemption keyword
+                # post-M1; any other context is a regression.
                 start = max(0, i - 2)
                 end = min(len(lines), i + 1)
                 context = " ".join(lines[start:end]).lower()
-                is_legacy_context = any(k in context for k in [
-                    "legacy", "migrate", "migration", "will migrate", "migrat"
-                ])
+                is_legacy_context = "legacy" in context
                 if not is_legacy_context:
                     violations.append(f"{skill}/SKILL.md:{i}: {line.strip()}")
         assert violations == [], (
-            "SKILL bodies use `.optimus/tasks.md` outside legacy/migration context:\n"
+            "SKILL bodies use `.optimus/tasks.md` outside an explicit legacy "
+            "context (the only valid reason after M1 removal in #20):\n"
             + "\n".join(f"  - {v}" for v in violations)
         )
 
@@ -851,6 +853,41 @@ class TestTasksDirLocation:
             "AGENTS.md missing Protocol: Rename tasks.md to optimus-tasks.md"
         assert 'OLD_TASKS_FILE="${TASKS_DIR}/tasks.md"' in content, \
             "AGENTS.md rename protocol missing OLD_TASKS_FILE"
+
+    def test_agents_md_has_no_migrate_protocol(self):
+        """Negation guard: M1 was removed in issue #20 and must not return.
+
+        Catches accidental re-introduction of `Protocol: Migrate tasks.md to
+        tasksDir` (e.g., via a stale rebase, copy-paste, or merge from a long-
+        lived branch). The protocol's hot-path startup cost is the reason it
+        was removed; a silent regression would re-add it without alerting CI
+        unless this assertion exists.
+        """
+        content = AGENTS_MD.read_text()
+        assert "### Protocol: Migrate tasks.md to tasksDir" not in content, (
+            "AGENTS.md re-introduces `Protocol: Migrate tasks.md to tasksDir` "
+            "(removed in issue #20). This protocol is dead and must stay gone — "
+            "see PR #24 for context."
+        )
+
+    def test_inline_protocols_has_no_migrate_constant(self):
+        """Negation guard: `MIGRATE_PROTOCOL_KEY` was removed alongside M1.
+
+        Re-defining the constant in `inline-protocols.py` is the most likely
+        regression path back into the deleted Migrate logic. This test imports
+        the script and asserts the attribute is absent.
+        """
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "inline_protocols", REPO_ROOT / "scripts" / "inline-protocols.py",
+        )
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        assert not hasattr(mod, "MIGRATE_PROTOCOL_KEY"), (
+            "scripts/inline-protocols.py re-introduces MIGRATE_PROTOCOL_KEY "
+            "(removed in issue #20). The legacy Migrate protocol is gone — "
+            "see PR #24 for context."
+        )
 
     def test_config_json_is_gitignored(self):
         """Protocol: Initialize .optimus Directory must include config.json in the
@@ -1411,11 +1448,15 @@ def _extract_protocol_bash(section_title: str) -> str:
 
 
 @pytest.mark.skipif(not _has_git(), reason="git not available")
-class TestMigrationAndScopeIntegration:
-    """Integration tests for the optimus-tasks.md relocation + separate-repo support.
+class TestScopeIntegration:
+    """Integration tests for `Protocol: Resolve Tasks Git Scope` and TaskSpec
+    resolution. After M1 (Migrate) was removed in issue #20, this class no
+    longer covers migration — it focuses on scope detection, dash-prefix
+    rejection, non-git rejection, and path-traversal protection.
 
-    These tests execute the bash blocks from AGENTS.md against real tmp git repos
-    to verify the protocols actually work — not just that their documentation exists.
+    These tests execute the bash blocks from AGENTS.md against real tmp git
+    repos to verify the protocols actually work — not just that their
+    documentation exists.
     """
 
     def test_scope_resolution_same_repo(self, tmp_path: Path):
@@ -1500,7 +1541,8 @@ esac
         rc, out, err = _run(["bash", "-c", probe], cwd=tmp_path)
         assert "BLOCKED" in out, f"Path traversal was not blocked: {out}"
 
-# --- F19: Test that inline-protocols.py auto-injects scope+migration when optimus-tasks.md Validation is referenced ---
+# --- Test that inline-protocols.py auto-injects foundational protocols when
+#     Protocol: optimus-tasks.md Validation is referenced ---
 
 
 class TestInlineProtocolsFoundational:
@@ -1550,11 +1592,10 @@ class TestInlineProtocolsFoundational:
         """When a skill references Protocol: optimus-tasks.md Validation, the inlined block
         MUST also contain Protocol: Rename tasks.md to optimus-tasks.md.
 
-        Regression coverage for the secondary rename protocol that handles
-        `<tasksDir>/tasks.md` → `<tasksDir>/optimus-tasks.md` on disk. Mirrors the
-        Migrate protocol regression test above; the Rename protocol must be auto-
-        injected into the same set of skills (those that reference the format
-        validation protocol)."""
+        Regression coverage for the rename protocol that handles
+        `<tasksDir>/tasks.md` → `<tasksDir>/optimus-tasks.md` on disk. After M1
+        was removed in #20, this is the SOLE auto-injection path for Rename
+        when only Validation is referenced — making the assertion load-bearing."""
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             "inline_protocols", REPO_ROOT / "scripts" / "inline-protocols.py",

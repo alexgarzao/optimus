@@ -254,11 +254,13 @@ def inline_protocols() -> None:
         if needs_format and "Format Validation" in foundational:
             extra["Format Validation"] = foundational["Format Validation"]
 
-        # optimus-tasks.md Validation depends on Resolve Tasks Git Scope (which defines
-        # TASKS_DIR/TASKS_FILE/TASKS_GIT_SCOPE/tasks_git). Defensive scaffold:
-        # adds these when ONLY Validation is referenced (currently unreachable
-        # from real skills, but kept as a safety net for future skills that
-        # might under-reference).
+        # optimus-tasks.md Validation depends on Resolve Tasks Git Scope (which
+        # defines TASKS_DIR/TASKS_FILE/TASKS_GIT_SCOPE/tasks_git). After M1
+        # (Migrate) was removed in issue #20, this is the SOLE auto-injection
+        # path for the Rename protocol when a skill references only Validation.
+        # Removing this block silently breaks under-referencing skills —
+        # verified by `test_needs_format_injects_scope` and
+        # `test_needs_format_injects_rename_protocol`.
         if needs_format:
             if "Protocol: Resolve Tasks Git Scope" in foundational and \
                "Protocol: Resolve Tasks Git Scope" not in sections_to_inline:
@@ -270,7 +272,7 @@ def inline_protocols() -> None:
         # Auto-inject Resolve Main Worktree Path into any skill that touches
         # .optimus/ operational files. The bug it fixes (worktree isolation)
         # affects every skill that reads/writes state.json, stats.json, sessions,
-        # reports, or migration/rename checkpoint markers.
+        # reports, or rename checkpoint markers (.rename-in-progress).
         if needs_main_worktree and MAIN_WORKTREE_PROTOCOL_KEY in foundational \
                 and MAIN_WORKTREE_PROTOCOL_KEY not in sections_to_inline:
             extra[MAIN_WORKTREE_PROTOCOL_KEY] = foundational[MAIN_WORKTREE_PROTOCOL_KEY]

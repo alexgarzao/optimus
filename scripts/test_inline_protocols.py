@@ -189,7 +189,7 @@ class TestMatchRefToSection:
         VALIDATION_PROTOCOL_TOKEN constant to detect the format-validation
         protocol heading. If the heading is renamed in AGENTS.md, this test
         flags the drift before propagation silently breaks foundational
-        injection (Migrate, Rename, Resolve Tasks Git Scope).
+        injection (Rename, Resolve Tasks Git Scope).
         """
         agents_md = Path(__file__).parent.parent / "AGENTS.md"
         sections = _parse_real_agents_md(agents_md)
