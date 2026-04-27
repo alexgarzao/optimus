@@ -423,11 +423,29 @@ Show the new table order.
    **IMPORTANT:** Worktree must be removed BEFORE attempting branch deletion (step 5b).
    Git refuses to delete a branch that is checked out in a worktree.
 
+   Resolve the worktree by branch (source-of-truth from state.json) with a
+   kebab-anchored fallback. Never `grep -iF "T-XXX"` directly — that would
+   match `T-1` against `T-10`/`T-100`:
+
    ```bash
-   git worktree list | grep -iF "T-XXX"
+   # Source-of-truth: branch from state.json.
+   TASK_BRANCH=$(jq -r --arg id "$TASK_ID" '.[$id].branch // ""' \
+     "${MAIN_WORKTREE}/.optimus/state.json" 2>/dev/null)
+   WORKTREE_PATH=""
+   if [ -n "$TASK_BRANCH" ]; then
+     WORKTREE_PATH=$(git worktree list --porcelain 2>/dev/null | awk -v br="refs/heads/$TASK_BRANCH" '
+       /^worktree / { path=$2 }
+       /^branch /   { if ($2 == br) { print path; exit } }
+     ')
+   fi
+   if [ -z "$WORKTREE_PATH" ]; then
+     TASK_KEBAB="-$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')-"
+     WORKTREE_PATH=$(git worktree list --porcelain 2>/dev/null \
+       | awk -v anchor="$TASK_KEBAB" '/^worktree / { path=$2; if (index(tolower(path), anchor) > 0) { print path; exit } }')
+   fi
    ```
 
-   If a worktree is found, ask via `AskUser`:
+   If a worktree is found (`WORKTREE_PATH` non-empty), ask via `AskUser`:
    ```
    Task T-XXX has a worktree at '<path>'. What should I do with it?
    ```

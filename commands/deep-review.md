@@ -832,10 +832,29 @@ Droids whose purpose is implementation, design, operations, or non-code domains:
 | **Domain specialist** | Description mentions a specific technology — include only if the project uses it | `lib-commons-reviewer` (if `go.mod` imports `lib-commons`), `multi-tenant-reviewer` (if project uses multi-tenancy), `performance-reviewer` (always relevant) |
 | **Non-reviewer (EXCLUDE)** | Description indicates implementation, design, ops, finance, planning, or infrastructure — NOT code review | See exclusion list above |
 
+**Deny-list filter (applied AFTER inclusion regex, BEFORE final selection):**
+
+If the description matches `architecture|design|planning|process|workflow|strategy`,
+EXCLUDE the agent regardless of inclusion-regex match. These words indicate the
+agent is meta-level (not code review) and should not be dispatched to review code.
+This guards against future agents whose descriptions accidentally match the
+inclusion regex's broader words (e.g., `architecture-reviewer`,
+`design-reviewer`, `process-reviewer`) — they would otherwise be dispatched
+against actual code, which is not their job.
+
+The combined logic: `(matches inclusion regex) AND NOT (matches deny regex) → include`.
+
+**Positive allow-list** (overrides deny-list for known good agents that may have
+"design" or another deny term in their descriptions accidentally): listed in the
+protocol's roster JSON (empty by default; add specific droid IDs as needed).
+Allow-list entries are matched by full droid ID (not regex) so a single
+accidental wording match cannot reopen the deny-list for an entire family of
+droids.
+
 For non-ring entries (only present when `INCLUDE_NON_RING=true`), apply the same
-description filter. Non-ring agents that pass the filter are returned in the `Non-Ring`
-group regardless of stack/domain category — the caller decides whether to default-select
-them in its UX.
+description filter AND the deny-list. Non-ring agents that pass both filters are
+returned in the `Non-Ring` group regardless of stack/domain category — the caller
+decides whether to default-select them in its UX.
 
 **Output format:**
 

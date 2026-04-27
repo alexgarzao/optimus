@@ -78,44 +78,36 @@ message. It never offers to redo `plan`, `build`, or `review`.
 
 ### Step 1.0.3.2: Set Terminal Title
 
-**CRITICAL:** Set the terminal title so the user can identify this terminal at a glance. Execute this command NOW:
+**CRITICAL:** Set the terminal title so the user can identify this terminal at a glance.
+
+**First, parse `TASK_TITLE` from optimus-tasks.md** — the title is interpolated
+into the terminal title below, and parsing it lazily (after the title is set)
+results in `optimus: DONE T-XXX — ` with an empty trailing dash:
 
 ```bash
-_optimus_set_title() {
-  local title="$1"
-  local pid="$PPID" tty=""
-  for _ in 1 2 3 4; do
-    [ -z "$pid" ] || [ "$pid" = "1" ] && break
-    tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
-    case "$tty" in
-      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') ;;
-      *) break ;;
-    esac
-  done
-  if { [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; } \
-     && command -v osascript >/dev/null 2>&1 && [ -n "$tty" ] \
-     && [ "$tty" != "?" ] && [ "$tty" != "??" ]; then
-    osascript \
-      -e 'on run argv' \
-      -e '  set targetTty to "/dev/" & item 1 of argv' \
-      -e '  set newName to item 2 of argv' \
-      -e '  tell application "iTerm2"' \
-      -e '    repeat with w in windows' \
-      -e '      repeat with t in tabs of w' \
-      -e '        repeat with s in sessions of t' \
-      -e '          if (tty of s as string) is targetTty then' \
-      -e '            try' \
-      -e '              set name of s to newName' \
-      -e '            end try' \
-      -e '          end if' \
-      -e '        end repeat' \
-      -e '      end repeat' \
-      -e '    end repeat' \
-      -e '  end tell' \
-      -e 'end run' \
-      -- "$tty" "$title" >/dev/null 2>&1 || true
-  fi
-}
+# optimus-tasks.md columns by pipe index:
+# | 1=<blank> | 2=ID | 3=Title | 4=Tipo | 5=Depends | 6=Priority | 7=Version | 8=Estimate | 9=TaskSpec | 10=<blank> |
+# Use the same parser pattern as resume/SKILL.md Step 2.3 (Read Task Metadata).
+TASK_TITLE=$(awk -F'|' -v id="$TASK_ID" '
+  { gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2) }
+  $2 == id {
+    title=$3
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", title)
+    print title
+    exit
+  }
+' "$TASKS_FILE")
+
+if [ -z "$TASK_TITLE" ]; then
+  # Non-fatal: the terminal title is informational. Fall back to a stub so the
+  # later interpolation does not produce a trailing-dash artifact.
+  TASK_TITLE="(title unavailable)"
+fi
+```
+
+Then execute the title-setter NOW. Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage label `DONE`:
+
+```bash
 _optimus_set_title "optimus: DONE $TASK_ID — $TASK_TITLE"
 ```
 
@@ -314,11 +306,37 @@ This phase runs ONLY after the task has been marked as `DONE` (or `Cancelado`).
 
 **IMPORTANT:** Worktree must be removed BEFORE attempting branch deletion.
 
+Resolve the worktree from the source-of-truth: read the task's branch from
+state.json (set by Workspace Auto-Navigation in earlier stages), then match it
+against `git worktree list --porcelain`. This avoids substring false positives
+on short task IDs (e.g., `T-1` matching `T-10`, `T-100`).
+
 ```bash
-git worktree list | grep -iF "T-XXX"
+# Resolve main worktree — see AGENTS.md Protocol: Resolve Main Worktree Path.
+MAIN_WORKTREE="${MAIN_WORKTREE:-$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')}"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
+TASK_BRANCH=$(jq -r --arg id "$TASK_ID" '.[$id].branch // ""' "${MAIN_WORKTREE}/.optimus/state.json" 2>/dev/null)
+
+WORKTREE_PATH=""
+if [ -n "$TASK_BRANCH" ]; then
+  # Match by branch (exact, deterministic) — porcelain output has one
+  # `worktree <path>` line followed by `branch refs/heads/<name>` per entry.
+  WORKTREE_PATH=$(git worktree list --porcelain 2>/dev/null | awk -v br="refs/heads/$TASK_BRANCH" '
+    /^worktree / { path=$2 }
+    /^branch /   { if ($2 == br) { print path; exit } }
+  ')
+fi
+
+if [ -z "$WORKTREE_PATH" ]; then
+  # Fallback: anchored kebab-cased path-segment match — never `grep -iF "$TASK_ID"`,
+  # which would match T-1 against T-10/T-100.
+  TASK_KEBAB="-$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')-"
+  WORKTREE_PATH=$(git worktree list --porcelain 2>/dev/null \
+    | awk -v anchor="$TASK_KEBAB" '/^worktree / { path=$2; if (index(tolower(path), anchor) > 0) { print path; exit } }')
+fi
 ```
 
-If a worktree is found, ask via `AskUser`:
+If a worktree is found (`WORKTREE_PATH` non-empty), ask via `AskUser`:
 ```
 Task T-XXX is done. A worktree still exists at '<path>'. What should I do?
 ```
@@ -360,22 +378,87 @@ Options:
 or "Delete local only", present a final confirmation via `AskUser`:
 "This will permanently delete branch `<branch>`. Are you sure?" Options: Yes, delete / Cancel.
 
-**Before deleting:** switch to the default branch first:
+**Before deleting:** switch to the default branch first. Use the canonical
+deterministic recipe — see AGENTS.md Protocol: Default Branch Resolution.
+
 ```bash
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-if [ -z "$DEFAULT_BRANCH" ]; then
-  DEFAULT_BRANCH=$(git branch --list main master 2>/dev/null | head -1 | tr -d ' *')
+# Resolve DEFAULT_BRANCH deterministically — see AGENTS.md Protocol: Default Branch Resolution.
+DEFAULT_BRANCH=""
+if symref=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null); then
+  DEFAULT_BRANCH="${symref#origin/}"
+elif git show-ref --verify --quiet refs/heads/main; then
+  DEFAULT_BRANCH="main"
+elif git show-ref --verify --quiet refs/heads/master; then
+  DEFAULT_BRANCH="master"
 fi
 if [ -z "$DEFAULT_BRANCH" ]; then
-  echo "ERROR: Cannot determine default branch. Set it with: git remote set-head origin <branch>"
+  echo "ERROR: Could not determine default branch (no origin/HEAD, no main, no master)." >&2
+  echo "       Set it with: git remote set-head origin <branch>" >&2
   # STOP — do not proceed with branch deletion
 fi
 git checkout "$DEFAULT_BRANCH"
 git pull
-git branch -d "$TASK_BRANCH" 2>/dev/null || git branch -D "$TASK_BRANCH"
-# If also deleting remote:
-git push origin --delete "$TASK_BRANCH"
+
+# Local delete first; -d (safe) preferred over -D
+if ! git branch -d "$TASK_BRANCH" 2>/dev/null; then
+  if ! LOCAL_DELETE_OUTPUT=$(git branch -D "$TASK_BRANCH" 2>&1); then
+    echo "ERROR: Could not delete local branch $TASK_BRANCH: $LOCAL_DELETE_OUTPUT" >&2
+    # AskUser:
+    #   "Local branch delete failed. How should I proceed?"
+    #   - **Continue cleanup anyway** — proceed (e.g., the user will clean up manually)
+    #   - **Abort cleanup** — STOP without attempting remote deletion
+  fi
+fi
+
+# Remote delete with explicit failure-cause classification.
+# `DELETE_REMOTE` is "yes" only when the user picked "Delete local and remote".
+if [ "$DELETE_REMOTE" = "yes" ]; then
+  if ! PUSH_OUTPUT=$(git push origin --delete "$TASK_BRANCH" 2>&1); then
+    PUSH_RC=$?
+    # Classify the failure so the user gets actionable diagnostics.
+    case "$PUSH_OUTPUT" in
+      *"remote ref does not exist"*|*"deleted reference"*)
+        echo "ℹ Remote branch already deleted upstream (rc=$PUSH_RC) — local cleanup complete." >&2
+        REMOTE_DELETE_RESULT="already-deleted"
+        ;;
+      *"protected branch"*|*"protection"*)
+        echo "✗ Remote branch is protected — cannot delete (rc=$PUSH_RC)." >&2
+        echo "  Local branch deleted; remote branch will need manual cleanup or branch-protection adjustment." >&2
+        REMOTE_DELETE_RESULT="protected"
+        ;;
+      *"could not read"*|*"unable to access"*|*"connection"*|*"timed out"*|*"timeout"*|*"Network"*)
+        echo "✗ Network error pushing branch deletion (rc=$PUSH_RC):" >&2
+        echo "  $PUSH_OUTPUT" >&2
+        echo "  Local branch deleted; retry or run \`git push origin --delete $TASK_BRANCH\` manually after restoring connectivity." >&2
+        REMOTE_DELETE_RESULT="network-error"
+        ;;
+      *)
+        echo "✗ Remote branch delete failed (rc=$PUSH_RC): $PUSH_OUTPUT" >&2
+        REMOTE_DELETE_RESULT="other-error"
+        ;;
+    esac
+
+    # AskUser (integrate the classification message above into the body):
+    #   "Remote branch deletion failed (<classification>). What should I do?"
+    #   - **Ignore and continue** — leave the remote branch as is (logged with `pending-remote-delete`)
+    #   - **Retry now** — re-run `git push origin --delete "$TASK_BRANCH"` once
+    #   - **Abort cleanup** — STOP; user will resolve manually
+    #
+    # Notify the user via Hooks if available (event=`pending-remote-delete`).
+    # Tag the task in state.json with `pending_remote_delete: true` so a future
+    # operation (e.g., a follow-up `done`, or a maintenance script) can retry.
+  else
+    REMOTE_DELETE_RESULT="ok"
+  fi
+fi
 ```
+
+**Partial-state contract on failure:** if remote deletion fails after local
+deletion succeeds, the task is `DONE` and the local branch is gone, but the
+remote branch may persist. The task is flagged with `pending_remote_delete`
+in state.json so it can be retried later. The Cleanup Summary (Step 4.3) MUST
+reflect this partial state — do NOT report "Deleted" for the remote when the
+push failed.
 
 ### Step 4.3: Cleanup Summary
 
@@ -838,6 +921,64 @@ status transition.
 Skills reference this as: "Refuse to run on default branch (HARD BLOCK) — see AGENTS.md Protocol: Default Branch Refusal."
 
 
+### Protocol: Default Branch Resolution
+
+**Referenced by:** done (cleanup), Workspace Auto-Navigation, Default Branch Refusal,
+Resolve Tasks Git Scope, Push Commits.
+
+**Why:** Several skills need to resolve the project repo's default branch (the
+branch to checkout before deleting a feature branch, the branch the workspace
+auto-navigation refuses to mutate, etc.). Non-deterministic resolutions like
+`git branch --list main master | head -1` return whichever entry git happens to
+list first — which depends on collation and on whether both branches exist
+locally. The recipe below is fully deterministic.
+
+**Recipe:**
+
+```bash
+# Deterministic default-branch resolution: prefer remote symbolic-ref
+# (origin/HEAD), then verify against `main` first, then `master`, then bail.
+DEFAULT_BRANCH=""
+if symref=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null); then
+  DEFAULT_BRANCH="${symref#origin/}"
+elif git show-ref --verify --quiet refs/heads/main; then
+  DEFAULT_BRANCH="main"
+elif git show-ref --verify --quiet refs/heads/master; then
+  DEFAULT_BRANCH="master"
+fi
+
+if [ -z "$DEFAULT_BRANCH" ]; then
+  echo "ERROR: Could not determine default branch (no origin/HEAD, no main, no master)" >&2
+  exit 1
+fi
+```
+
+**Resolution order (deterministic):**
+
+1. `origin/HEAD` symbolic-ref — the canonical answer when `gh repo clone`/
+   `git clone` has set it. Fastest and works even when neither `main` nor
+   `master` exists locally.
+2. Local `refs/heads/main` — second-best signal: if the user has `main`
+   checked out at all, it is overwhelmingly the default.
+3. Local `refs/heads/master` — fall-back for legacy repos.
+4. None of the above → hard error. The user must run
+   `git remote set-head origin <branch>` (or fetch from origin) before any
+   skill that needs the default branch can proceed.
+
+**Why prefer `main` before `master` in the fallback chain:** when
+`origin/HEAD` is absent (e.g., shallow clone, fresh repo, broken remote),
+both `main` and `master` may exist locally as orphans. Probing `main` first
+biases toward the modern default rather than the historical one.
+
+**`git branch --list main master | head -1` is forbidden:** it returns
+whichever name sorts first alphabetically (`main` always wins), which only
+*happens* to look correct — but it also returns `main` when only `master`
+actually exists locally (because `head -1` on empty stdout is empty). Any
+skill that needs the default branch MUST use the recipe above.
+
+Skills reference this as: "Resolve default branch — see AGENTS.md Protocol: Default Branch Resolution."
+
+
 ### Protocol: Divergence Warning
 
 **Referenced by:** all stage agents (1-4)
@@ -1169,6 +1310,101 @@ and offer to run reconciliation before proceeding. This prevents tasks from sile
 appearing as `Pendente` when they actually have active worktrees.
 
 Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: State Management."
+
+
+### Protocol: Terminal Identification
+
+**Referenced by:** all stage agents (1-4), batch
+
+After the task ID is identified and confirmed, set the terminal title to show the
+current stage and task. This allows users running multiple agents in parallel terminals
+to identify each terminal at a glance.
+
+**Set title (after task ID is known):**
+
+```bash
+_optimus_set_title() {
+  # iTerm2 AppleScript title updater. Empirical testing showed that Optimus
+  # tasks always run in "divorced" iTerm2 sessions where the profile's
+  # autoNameFormat is locked to a literal — OSC 0/1/2 and OSC 1337
+  # SetUserVar are both ineffective in that state, so AppleScript's
+  # `set name of s` is the only channel that actually mutates session.name.
+  # The Execute tool runs bash without a controlling TTY, so /dev/tty fails
+  # with ENODEV; we resolve the parent process's TTY via ps instead. Walk
+  # up to 4 ancestors in case of nested shells. First run triggers a macOS
+  # TCC prompt ("droid wants to control iTerm"); approving enables this
+  # permanently. Silent no-op outside macOS/iTerm2 or when osascript is
+  # unavailable — non-iTerm2 / non-macOS users get no title update.
+  local title="$1"
+  local pid="$PPID" tty=""
+  for _ in 1 2 3 4; do
+    [ -z "$pid" ] || [ "$pid" = "1" ] && break
+    tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
+    case "$tty" in
+      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') ;;
+      *) break ;;
+    esac
+  done
+  if { [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; } \
+     && command -v osascript >/dev/null 2>&1 && [ -n "$tty" ] \
+     && [ "$tty" != "?" ] && [ "$tty" != "??" ]; then
+    osascript \
+      -e 'on run argv' \
+      -e '  set targetTty to "/dev/" & item 1 of argv' \
+      -e '  set newName to item 2 of argv' \
+      -e '  tell application "iTerm2"' \
+      -e '    repeat with w in windows' \
+      -e '      repeat with t in tabs of w' \
+      -e '        repeat with s in sessions of t' \
+      -e '          if (tty of s as string) is targetTty then' \
+      -e '            try' \
+      -e '              set name of s to newName' \
+      -e '            end try' \
+      -e '          end if' \
+      -e '        end repeat' \
+      -e '      end repeat' \
+      -e '    end repeat' \
+      -e '  end tell' \
+      -e 'end run' \
+      -- "$tty" "$title" >/dev/null 2>&1 || true
+  fi
+}
+_optimus_set_title "optimus: <STAGE> $TASK_ID — $TASK_TITLE"
+```
+
+Example output in terminal tab: `optimus: REVIEW T-003 — User Auth JWT`
+
+**Why the parent-process TTY:** The Execute tool runs `bash -c` without a controlling
+terminal, so `/dev/tty` returns `ENODEV` ("Device not configured"). The resolver above
+asks `ps` for the parent's controlling TTY device path and matches it against iTerm2's
+session list via AppleScript — that device is connected to the user's real iTerm2
+session. If no ancestor has a TTY (Docker/CI) or osascript is unavailable, the
+function silently no-ops.
+
+**Restore title (at stage completion or exit):**
+
+```bash
+_optimus_set_title ""
+```
+
+**NOTE:** This helper is iTerm2-on-macOS only. Optimus tasks always run in
+"divorced" iTerm2 sessions, where AppleScript's `set name of s` is the only
+channel that reliably mutates `session.name`. Non-iTerm2 / non-macOS users
+will not see a title update.
+
+**Troubleshooting iTerm2 (if the title still doesn't update):**
+
+1. **Window > Edit Tab Title** must be empty. A manually-set tab title is
+   sticky on the tab label and overrides the session name visually, even
+   when `session.name` is updated correctly underneath.
+2. The first run on macOS triggers a TCC prompt ("`droid` wants to control
+   `iTerm`"). Approve it to enable the helper. Denying makes the helper a
+   silent no-op.
+3. The helper requires the parent process to have a controlling TTY. Inside
+   Docker/CI without a TTY, no ancestor will resolve and the helper will
+   silently no-op.
+
+Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Terminal Identification."
 
 
 ### Protocol: optimus-tasks.md Validation (HARD BLOCK)

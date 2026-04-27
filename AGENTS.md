@@ -1587,11 +1587,30 @@ fi
        T-002 — Login page (Em Andamento) → /projeto-t-002-.../
      Which task should I continue?
      ```
-   - After task is identified, locate the worktree by task ID:
+   - After task is identified, locate the worktree. Prefer the source-of-truth
+     (state.json `branch` field) and match the porcelain output by exact
+     branch ref. Fall back to a kebab-anchored path match — never an
+     unanchored substring grep on the bare task ID, which produces false
+     positives for short IDs (e.g., `T-1` matching `T-10`, `T-100`):
      ```bash
-     git worktree list | grep -iF "<task-id>"
+     # Source-of-truth: branch from state.json (set by stage 1).
+     TASK_BRANCH=$(jq -r --arg id "$TASK_ID" '.[$id].branch // ""' \
+       "${MAIN_WORKTREE}/.optimus/state.json" 2>/dev/null)
+     WORKTREE_PATH=""
+     if [ -n "$TASK_BRANCH" ]; then
+       WORKTREE_PATH=$(git worktree list --porcelain 2>/dev/null | awk -v br="refs/heads/$TASK_BRANCH" '
+         /^worktree / { path=$2 }
+         /^branch /   { if ($2 == br) { print path; exit } }
+       ')
+     fi
+     if [ -z "$WORKTREE_PATH" ]; then
+       # Fallback: anchored kebab-cased path-segment match (avoids T-1 vs T-10 substring collision).
+       TASK_KEBAB="-$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')-"
+       WORKTREE_PATH=$(git worktree list --porcelain 2>/dev/null \
+         | awk -v anchor="$TASK_KEBAB" '/^worktree / { path=$2; if (index(tolower(path), anchor) > 0) { print path; exit } }')
+     fi
      ```
-   - **If worktree found** → change working directory to the worktree path.
+   - **If `WORKTREE_PATH` is non-empty** → change working directory to it.
    - **If worktree NOT found** → derive the branch name (Protocol: Branch Name Derivation)
      and verify it exists:
      ```bash
@@ -1659,6 +1678,63 @@ status transition.
 
 Skills reference this as: "Refuse to run on default branch (HARD BLOCK) — see AGENTS.md Protocol: Default Branch Refusal."
 
+### Protocol: Default Branch Resolution
+
+**Referenced by:** done (cleanup), Workspace Auto-Navigation, Default Branch Refusal,
+Resolve Tasks Git Scope, Push Commits.
+
+**Why:** Several skills need to resolve the project repo's default branch (the
+branch to checkout before deleting a feature branch, the branch the workspace
+auto-navigation refuses to mutate, etc.). Non-deterministic resolutions like
+`git branch --list main master | head -1` return whichever entry git happens to
+list first — which depends on collation and on whether both branches exist
+locally. The recipe below is fully deterministic.
+
+**Recipe:**
+
+```bash
+# Deterministic default-branch resolution: prefer remote symbolic-ref
+# (origin/HEAD), then verify against `main` first, then `master`, then bail.
+DEFAULT_BRANCH=""
+if symref=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null); then
+  DEFAULT_BRANCH="${symref#origin/}"
+elif git show-ref --verify --quiet refs/heads/main; then
+  DEFAULT_BRANCH="main"
+elif git show-ref --verify --quiet refs/heads/master; then
+  DEFAULT_BRANCH="master"
+fi
+
+if [ -z "$DEFAULT_BRANCH" ]; then
+  echo "ERROR: Could not determine default branch (no origin/HEAD, no main, no master)" >&2
+  exit 1
+fi
+```
+
+**Resolution order (deterministic):**
+
+1. `origin/HEAD` symbolic-ref — the canonical answer when `gh repo clone`/
+   `git clone` has set it. Fastest and works even when neither `main` nor
+   `master` exists locally.
+2. Local `refs/heads/main` — second-best signal: if the user has `main`
+   checked out at all, it is overwhelmingly the default.
+3. Local `refs/heads/master` — fall-back for legacy repos.
+4. None of the above → hard error. The user must run
+   `git remote set-head origin <branch>` (or fetch from origin) before any
+   skill that needs the default branch can proceed.
+
+**Why prefer `main` before `master` in the fallback chain:** when
+`origin/HEAD` is absent (e.g., shallow clone, fresh repo, broken remote),
+both `main` and `master` may exist locally as orphans. Probing `main` first
+biases toward the modern default rather than the historical one.
+
+**`git branch --list main master | head -1` is forbidden:** it returns
+whichever name sorts first alphabetically (`main` always wins), which only
+*happens* to look correct — but it also returns `main` when only `master`
+actually exists locally (because `head -1` on empty stdout is empty). Any
+skill that needs the default branch MUST use the recipe above.
+
+Skills reference this as: "Resolve default branch — see AGENTS.md Protocol: Default Branch Resolution."
+
 ### Protocol: Discover Review Droids
 
 **Referenced by:** deep-review, pr-check
@@ -1716,10 +1792,29 @@ Droids whose purpose is implementation, design, operations, or non-code domains:
 | **Domain specialist** | Description mentions a specific technology — include only if the project uses it | `lib-commons-reviewer` (if `go.mod` imports `lib-commons`), `multi-tenant-reviewer` (if project uses multi-tenancy), `performance-reviewer` (always relevant) |
 | **Non-reviewer (EXCLUDE)** | Description indicates implementation, design, ops, finance, planning, or infrastructure — NOT code review | See exclusion list above |
 
+**Deny-list filter (applied AFTER inclusion regex, BEFORE final selection):**
+
+If the description matches `architecture|design|planning|process|workflow|strategy`,
+EXCLUDE the agent regardless of inclusion-regex match. These words indicate the
+agent is meta-level (not code review) and should not be dispatched to review code.
+This guards against future agents whose descriptions accidentally match the
+inclusion regex's broader words (e.g., `architecture-reviewer`,
+`design-reviewer`, `process-reviewer`) — they would otherwise be dispatched
+against actual code, which is not their job.
+
+The combined logic: `(matches inclusion regex) AND NOT (matches deny regex) → include`.
+
+**Positive allow-list** (overrides deny-list for known good agents that may have
+"design" or another deny term in their descriptions accidentally): listed in the
+protocol's roster JSON (empty by default; add specific droid IDs as needed).
+Allow-list entries are matched by full droid ID (not regex) so a single
+accidental wording match cannot reopen the deny-list for an entire family of
+droids.
+
 For non-ring entries (only present when `INCLUDE_NON_RING=true`), apply the same
-description filter. Non-ring agents that pass the filter are returned in the `Non-Ring`
-group regardless of stack/domain category — the caller decides whether to default-select
-them in its UX.
+description filter AND the deny-list. Non-ring agents that pass both filters are
+returned in the `Non-Ring` group regardless of stack/domain category — the caller
+decides whether to default-select them in its UX.
 
 **Output format:**
 
@@ -1758,6 +1853,139 @@ instead of a roster. The caller is responsible for STOP semantics — typically 
 message instructing the user to install the missing droids and re-run.
 
 Skills reference this as: "Execute Protocol: Discover Review Droids — see AGENTS.md Protocol: Discover Review Droids."
+
+### Protocol: Parse CodeRabbit Review Body
+
+**Referenced by:** pr-check, coderabbit-review
+
+Deterministic algorithm for extracting actionable findings from a CodeRabbit
+review-body GraphQL response. Both pr-check and coderabbit-review consume the
+same source format; this protocol is the single source of truth so the two
+skills cannot drift in their parsing rules. Drift is exactly how CodeRabbit
+findings get silently dropped — see the historical "duplicate comments missed"
+incident that motivated the count-parity guard below.
+
+**Source data — GraphQL fields fetched:**
+
+The CodeRabbit review body is obtained via the GitHub GraphQL API:
+
+```graphql
+pullRequest(number: $pr) {
+  reviews(first: 100) {
+    nodes {
+      author { login }      # filter to coderabbitai[bot]
+      body                  # markdown body containing the <details> blocks below
+      submittedAt
+    }
+    pageInfo { hasNextPage endCursor }
+  }
+}
+```
+
+Take the **latest** review whose author is `coderabbitai[bot]`. Pagination via
+`pageInfo` is mandatory when `hasNextPage` is true.
+
+**Parsing algorithm — top-level sections:**
+
+The latest CodeRabbit review body contains zero or more of these top-level
+`<details>` blocks (each parsed via the per-section algorithm below):
+
+| Top-level summary regex | Origin tag | Description |
+|------------------------|------------|-------------|
+| `♻️ Duplicate comments \((\d+)\)` | `duplicate` | Findings repeated from previous reviews, still unresolved |
+| `⚠️ Outside diff range comments \((\d+)\)` | `outside-diff` | Findings about code outside the PR diff |
+| `🤖 Prompt for all review comments with AI agents` | `aggregate` (cross-validation only, NOT a per-finding source) | Aggregate flat-list block used to cross-check the per-finding parse |
+
+Inline (in-diff) findings come from the per-thread GraphQL fetch (review
+threads), not from the review body — they are tagged `origin: inline` by the
+caller. The review body parser handles only the duplicate/outside-diff
+sections plus the aggregate cross-validation block.
+
+**Per-section algorithm (applied to each top-level `<details>` block):**
+
+1. **Locate the outer `<details>`** by matching the summary regex (case-sensitive).
+   Capture `N_TOTAL`. If no match: section absent (N=0) — skip.
+
+2. **Extract the outer blockquote body**, tracking nesting: every inner
+   `<details>` opens a level; every matching `</details>` closes one. Stop
+   when the outer level closes.
+
+3. **Iterate inner per-file `<details>` blocks**:
+   `<summary>(.+?) \((\d+)\)</summary>` — capture `FILE_PATH` and `K_COUNT`.
+
+4. **Within each per-file blockquote, split by `---` separators at the top
+   level** (depth == 0). Walk line-by-line, increment depth on `<details>`,
+   decrement on `</details>`; a line `^\s*---\s*$` is a separator only when
+   depth == 0.
+
+5. **Each slice = ONE finding.** Parse:
+   - First non-empty line: `` `(\d+(?:-\d+)?)`: _(⚠️ Potential issue|🛠️ Refactor suggestion|🧹 Nitpick|...)_ \| _(🔴|🟠|🟡|🔵) (Critical|Major|Minor|Trivial)_ `` — capture `LINE_RANGE`, `TYPE_LABEL`, `SEVERITY_EMOJI`, `SEVERITY_LABEL`.
+   - Next bold line `**...**` is the `TITLE`.
+   - Body until first nested `<details>` or end-of-slice is the `DESCRIPTION`.
+
+6. **Per-finding fix-block extraction.** Within each finding's slice:
+   - `FIX_LABEL` + `FIX_DIFF` — match `<details><summary>(🐛 Minimal fix|🐛 Suggested refactor)</summary>` (the two labels are mutually exclusive within one finding; if neither is present, leave both empty). **Critical:** match BOTH labels — matching only `🐛 Minimal fix` silently drops findings labeled `Suggested refactor` even when the diff is supplied.
+   - `AI_PROMPT` — match `<details><summary>🤖 Prompt for AI Agents</summary>` and capture body. **Disambiguation:** this is the per-finding prompt block, NOT the aggregate `🤖 Prompt for all review comments with AI agents` block. Both can coexist; extract independently.
+
+7. **Severity mapping:**
+
+   | Emoji | Label | Severity |
+   |-------|-------|----------|
+   | 🔴 | Critical | CRITICAL |
+   | 🟠 | Major | HIGH |
+   | 🟡 | Minor | MEDIUM |
+   | 🔵 | Trivial | LOW |
+
+**Count parity validation (HARD BLOCK on mismatch):**
+
+After parsing each section:
+- Sum per-file extracted findings → must equal `N_TOTAL`.
+- Per-file extracted count → must equal `K_COUNT` for every file.
+
+**On mismatch: STOP immediately.** Print: parsed N, expected M, file
+breakdown, missing/extra IDs. **Do NOT offer an opt-out** — a silent
+partial-set continuation is exactly the failure mode this gate prevents. The
+user must investigate the parser or CodeRabbit output before the skill can
+proceed.
+
+**Cross-validation via aggregate prompt block:**
+
+CodeRabbit emits a `<details><summary>🤖 Prompt for all review comments with AI agents</summary>` block listing findings as a flat bullet list grouped by section. Parse it independently and take the **UNION** with the per-section parse, matched by `(file, line_range)`:
+- In both → merge (per-section block is primary; aggregate description is fallback).
+- Only in one → keep, log which source surfaced it.
+- **Never take the intersection** — single-source absence is a parsing bug, not ground truth.
+
+**Outdated-thread partitioning:**
+
+Inline review threads with `isOutdated: true` are partitioned out of the
+active findings set. The original finding text is preserved in the duplicate
+comments section of the review body (CodeRabbit re-emits unresolved findings
+across reviews), so the duplicate-section parse remains the source of record
+for content. Outdated threads are typically auto-resolved by the consuming
+skill's hygiene step — see pr-check Step 13.0.
+
+**Origin tagging rules** (when presenting findings to the user, ALWAYS include
+the origin tag in the finding header):
+
+| Source | Tag |
+|--------|-----|
+| Per-thread inline review comment (in-diff) | `[CodeRabbit]` |
+| Duplicate-comments section | `[CodeRabbit — DUPLICATE]` |
+| Outside-diff-range section | `[CodeRabbit — OUTSIDE PR DIFF]` |
+| Non-CodeRabbit (Codacy/DeepSource/CI/human) | their own origin tag — NOT this protocol |
+
+**Distinguishing CodeRabbit from CI bot, duplicate, human:**
+
+This protocol handles CodeRabbit only. The caller separately identifies:
+- **CI bots** (`github-actions[bot]`, `codacy-production[bot]`, `deepsource-io[bot]`, etc.) — handled by their own per-bot parsers.
+- **Duplicate findings** (CodeRabbit's own duplicate section) — origin-tagged here, not de-duplicated against earlier reviews.
+- **Human reviewers** — every author whose login is not in the known-bot list.
+
+**Caller-specific application** (NOT part of this protocol):
+- pr-check applies CodeRabbit-as-is (`[Minimal fix]` / `[Suggested refactor]` direct application path) for nitpick-level findings — see pr-check Step 1.3.3 surrounding prose.
+- coderabbit-review always applies findings via TDD — see coderabbit-review Phase 4. The relationship between the two skills is documented in coderabbit-review/SKILL.md ("Relationship to pr-check").
+
+Skills reference this as: "Parse CodeRabbit review body — see AGENTS.md Protocol: Parse CodeRabbit Review Body."
 
 ### Protocol: Divergence Warning
 
@@ -2141,6 +2369,20 @@ whether to suggest advancement or offer a re-run. This protocol replaces the sta
    - After the re-run completes, apply this protocol again (evaluate findings count)
    - There is no limit on re-runs — the user controls when to stop
 
+   **Re-run reset semantics (MANDATORY):** When the user chooses "Re-run with clean
+   context", the orchestrator MUST:
+
+   1. Reset `convergence_status` to `null` in the session file (was set to `"CONVERGED"`
+      or another terminal state at the previous run's end).
+   2. Reset `phase` to the entry of the re-executed flow (typically the first phase
+      that performs work, NOT the load-only phases).
+   3. Overwrite `started_at` with the new run's timestamp; preserve `created_at`.
+   4. Preserve `task_id`, `task_branch`, and any other identity fields.
+   5. After reset, normal `Protocol: Session State` updates resume.
+
+   WITHOUT this reset, a previous run's `convergence_status: "CONVERGED"` would
+   short-circuit the re-run's loop, producing a phantom "no findings" result.
+
 5. **If "Advance to next stage":** Proceed to push commits and present the next step suggestion.
 
 **NOTE:** "0 findings" means the analysis produced zero findings — not that all findings
@@ -2406,9 +2648,16 @@ Where:
 - T-015 "User Auth: JWT/OAuth2 Support" (Feature) → `feat/t-015-user-auth-jwt-oauth2-support`
 
 **Resolution order when looking for a task's branch:**
-1. Read `branch` from state.json (fastest)
-2. Search by task ID: `git branch --list "*<task-id>*"` or `git worktree list | grep -iF "<task-id>"`
-3. Derive from Tipo + ID + Title (always works)
+1. Read `branch` from state.json (fastest, source-of-truth).
+2. Search by task ID using the kebab-anchored fallback (NEVER an unanchored
+   `grep -iF "$TASK_ID"`, which matches `T-1` against `T-10`/`T-100`):
+   ```bash
+   TASK_KEBAB="-$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')-"
+   git branch --list "*${TASK_KEBAB#-}*" 2>/dev/null
+   git worktree list --porcelain 2>/dev/null \
+     | awk -v anchor="$TASK_KEBAB" '/^worktree / { path=$2; if (index(tolower(path), anchor) > 0) print path }'
+   ```
+3. Derive from Tipo + ID + Title (always works).
 
 Skills reference this as: "Derive branch name — see AGENTS.md Protocol: Branch Name Derivation."
 

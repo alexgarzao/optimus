@@ -120,11 +120,20 @@ the same interactive resolution flow from Phase 3 onward.
 
 ### Step 2.1: Parse Findings
 
-Parse the CodeRabbit output. The output may contain three types of findings:
+**Parse CodeRabbit review body — see AGENTS.md Protocol: Parse CodeRabbit Review Body.**
 
-1. **Regular findings** — inline suggestions about code within the diff. Tag as `origin: inline`.
-2. **Duplicate comments** — findings CodeRabbit already reported in previous reviews that remain unresolved. Look for a `<details>` block titled "Duplicate comments" in the output. Parse each entry and tag as `origin: duplicate`.
-3. **Outside diff range comments** — suggestions about code OUTSIDE the reviewed diff. Look for a `<details>` block titled `⚠️ Outside diff range comments` in the output. Parse each entry (file path, line, suggestion) and tag as `origin: outside-diff`.
+The shared protocol is the single source of truth for the deterministic
+parsing algorithm consumed by both `coderabbit-review` and `pr-check`. It
+covers: per-section parse (regular inline / duplicate / outside-diff),
+per-finding fix-block extraction (`Minimal fix` / `Suggested refactor`), AI
+prompt capture, severity mapping, count-parity HARD BLOCK, aggregate
+cross-validation, and origin tagging.
+
+The three origin tags surfaced by the protocol:
+
+1. **Regular findings** — inline suggestions about code within the diff. `origin: inline`.
+2. **Duplicate comments** — findings CodeRabbit already reported in previous reviews that remain unresolved. `origin: duplicate`.
+3. **Outside diff range comments** — suggestions about code OUTSIDE the reviewed diff. `origin: outside-diff`.
 
 Categorize ALL findings (regardless of origin) by severity:
 
@@ -276,6 +285,16 @@ Record the decision internally. Do NOT apply any fix yet — all fixes are appli
 ## Phase 4: Apply All Approved Fixes with TDD + Agent Validation
 
 **IMPORTANT:** This phase runs ONCE, after ALL findings have been presented and ALL decisions collected in Phase 3. No fix is applied during Phase 3.
+
+**Relationship to pr-check:** `pr-check` allows direct application of CodeRabbit's
+`[Minimal fix]` or `[Suggested refactor]` blocks (path: `CodeRabbit-as-is`) for
+nitpick-level findings without requiring TDD. `coderabbit-review` always uses TDD
+for ALL findings — by design, this skill is for the case where the user wants to
+deeply understand and re-implement each suggestion, not just merge cosmetic patches.
+
+If you want as-is application of CodeRabbit's exact suggestions, use `pr-check`
+instead. If you want TDD-driven re-implementation with full author understanding,
+use `coderabbit-review`.
 
 Apply ALL approved fixes in a single pass (skipped for ignored findings). Group fixes by file
 to minimize I/O. The steps below apply to each fix within the batch — NOT sequentially
@@ -916,6 +935,140 @@ separately at `<tasksDir>/optimus-tasks.md` (and `<tasksDir>/tasks/`, `<tasksDir
 for Ring specs) — see the File Location section above.
 
 Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
+
+
+### Protocol: Parse CodeRabbit Review Body
+
+**Referenced by:** pr-check, coderabbit-review
+
+Deterministic algorithm for extracting actionable findings from a CodeRabbit
+review-body GraphQL response. Both pr-check and coderabbit-review consume the
+same source format; this protocol is the single source of truth so the two
+skills cannot drift in their parsing rules. Drift is exactly how CodeRabbit
+findings get silently dropped — see the historical "duplicate comments missed"
+incident that motivated the count-parity guard below.
+
+**Source data — GraphQL fields fetched:**
+
+The CodeRabbit review body is obtained via the GitHub GraphQL API:
+
+```graphql
+pullRequest(number: $pr) {
+  reviews(first: 100) {
+    nodes {
+      author { login }      # filter to coderabbitai[bot]
+      body                  # markdown body containing the <details> blocks below
+      submittedAt
+    }
+    pageInfo { hasNextPage endCursor }
+  }
+}
+```
+
+Take the **latest** review whose author is `coderabbitai[bot]`. Pagination via
+`pageInfo` is mandatory when `hasNextPage` is true.
+
+**Parsing algorithm — top-level sections:**
+
+The latest CodeRabbit review body contains zero or more of these top-level
+`<details>` blocks (each parsed via the per-section algorithm below):
+
+| Top-level summary regex | Origin tag | Description |
+|------------------------|------------|-------------|
+| `♻️ Duplicate comments \((\d+)\)` | `duplicate` | Findings repeated from previous reviews, still unresolved |
+| `⚠️ Outside diff range comments \((\d+)\)` | `outside-diff` | Findings about code outside the PR diff |
+| `🤖 Prompt for all review comments with AI agents` | `aggregate` (cross-validation only, NOT a per-finding source) | Aggregate flat-list block used to cross-check the per-finding parse |
+
+Inline (in-diff) findings come from the per-thread GraphQL fetch (review
+threads), not from the review body — they are tagged `origin: inline` by the
+caller. The review body parser handles only the duplicate/outside-diff
+sections plus the aggregate cross-validation block.
+
+**Per-section algorithm (applied to each top-level `<details>` block):**
+
+1. **Locate the outer `<details>`** by matching the summary regex (case-sensitive).
+   Capture `N_TOTAL`. If no match: section absent (N=0) — skip.
+
+2. **Extract the outer blockquote body**, tracking nesting: every inner
+   `<details>` opens a level; every matching `</details>` closes one. Stop
+   when the outer level closes.
+
+3. **Iterate inner per-file `<details>` blocks**:
+   `<summary>(.+?) \((\d+)\)</summary>` — capture `FILE_PATH` and `K_COUNT`.
+
+4. **Within each per-file blockquote, split by `---` separators at the top
+   level** (depth == 0). Walk line-by-line, increment depth on `<details>`,
+   decrement on `</details>`; a line `^\s*---\s*$` is a separator only when
+   depth == 0.
+
+5. **Each slice = ONE finding.** Parse:
+   - First non-empty line: `` `(\d+(?:-\d+)?)`: _(⚠️ Potential issue|🛠️ Refactor suggestion|🧹 Nitpick|...)_ \| _(🔴|🟠|🟡|🔵) (Critical|Major|Minor|Trivial)_ `` — capture `LINE_RANGE`, `TYPE_LABEL`, `SEVERITY_EMOJI`, `SEVERITY_LABEL`.
+   - Next bold line `**...**` is the `TITLE`.
+   - Body until first nested `<details>` or end-of-slice is the `DESCRIPTION`.
+
+6. **Per-finding fix-block extraction.** Within each finding's slice:
+   - `FIX_LABEL` + `FIX_DIFF` — match `<details><summary>(🐛 Minimal fix|🐛 Suggested refactor)</summary>` (the two labels are mutually exclusive within one finding; if neither is present, leave both empty). **Critical:** match BOTH labels — matching only `🐛 Minimal fix` silently drops findings labeled `Suggested refactor` even when the diff is supplied.
+   - `AI_PROMPT` — match `<details><summary>🤖 Prompt for AI Agents</summary>` and capture body. **Disambiguation:** this is the per-finding prompt block, NOT the aggregate `🤖 Prompt for all review comments with AI agents` block. Both can coexist; extract independently.
+
+7. **Severity mapping:**
+
+   | Emoji | Label | Severity |
+   |-------|-------|----------|
+   | 🔴 | Critical | CRITICAL |
+   | 🟠 | Major | HIGH |
+   | 🟡 | Minor | MEDIUM |
+   | 🔵 | Trivial | LOW |
+
+**Count parity validation (HARD BLOCK on mismatch):**
+
+After parsing each section:
+- Sum per-file extracted findings → must equal `N_TOTAL`.
+- Per-file extracted count → must equal `K_COUNT` for every file.
+
+**On mismatch: STOP immediately.** Print: parsed N, expected M, file
+breakdown, missing/extra IDs. **Do NOT offer an opt-out** — a silent
+partial-set continuation is exactly the failure mode this gate prevents. The
+user must investigate the parser or CodeRabbit output before the skill can
+proceed.
+
+**Cross-validation via aggregate prompt block:**
+
+CodeRabbit emits a `<details><summary>🤖 Prompt for all review comments with AI agents</summary>` block listing findings as a flat bullet list grouped by section. Parse it independently and take the **UNION** with the per-section parse, matched by `(file, line_range)`:
+- In both → merge (per-section block is primary; aggregate description is fallback).
+- Only in one → keep, log which source surfaced it.
+- **Never take the intersection** — single-source absence is a parsing bug, not ground truth.
+
+**Outdated-thread partitioning:**
+
+Inline review threads with `isOutdated: true` are partitioned out of the
+active findings set. The original finding text is preserved in the duplicate
+comments section of the review body (CodeRabbit re-emits unresolved findings
+across reviews), so the duplicate-section parse remains the source of record
+for content. Outdated threads are typically auto-resolved by the consuming
+skill's hygiene step — see pr-check Step 13.0.
+
+**Origin tagging rules** (when presenting findings to the user, ALWAYS include
+the origin tag in the finding header):
+
+| Source | Tag |
+|--------|-----|
+| Per-thread inline review comment (in-diff) | `[CodeRabbit]` |
+| Duplicate-comments section | `[CodeRabbit — DUPLICATE]` |
+| Outside-diff-range section | `[CodeRabbit — OUTSIDE PR DIFF]` |
+| Non-CodeRabbit (Codacy/DeepSource/CI/human) | their own origin tag — NOT this protocol |
+
+**Distinguishing CodeRabbit from CI bot, duplicate, human:**
+
+This protocol handles CodeRabbit only. The caller separately identifies:
+- **CI bots** (`github-actions[bot]`, `codacy-production[bot]`, `deepsource-io[bot]`, etc.) — handled by their own per-bot parsers.
+- **Duplicate findings** (CodeRabbit's own duplicate section) — origin-tagged here, not de-duplicated against earlier reviews.
+- **Human reviewers** — every author whose login is not in the known-bot list.
+
+**Caller-specific application** (NOT part of this protocol):
+- pr-check applies CodeRabbit-as-is (`[Minimal fix]` / `[Suggested refactor]` direct application path) for nitpick-level findings — see pr-check Step 1.3.3 surrounding prose.
+- coderabbit-review always applies findings via TDD — see coderabbit-review Phase 4. The relationship between the two skills is documented in coderabbit-review/SKILL.md ("Relationship to pr-check").
+
+Skills reference this as: "Parse CodeRabbit review body — see AGENTS.md Protocol: Parse CodeRabbit Review Body."
 
 
 ### Protocol: Per-Droid Quality Checklists

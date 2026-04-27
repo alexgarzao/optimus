@@ -385,125 +385,22 @@ Extract: severity (HIGH/MEDIUM/LOW), annotation_level, message, file, line.
 Extract: shortcode, severity, category, analyzer, title, explanation, file, line.
 
 **CodeRabbit comments** (author: `coderabbitai[bot]`):
-- Inline review comments with suggestions (from thread fetch, Step 1.3.1)
-- **Duplicated Comments section** (from review body fetch, Step 1.3.1.5): `<details>` block titled `♻️ Duplicate comments (N)` in the review body listing findings already reported in previous reviews but still unresolved. These are the findings whose inline threads typically became `isOutdated: true` (now collected into `outdated_threads` and auto-resolved hygienically by Step 13.0; the original finding text is not re-evaluated, so the Duplicate Comments review body remains the source of record for this finding's content). Parse per algorithm below and tag with `origin: duplicate`.
-- **Outside diff range section** (from review body fetch, Step 1.3.1.5): `<details>` block titled `⚠️ Outside diff range comments (N)` with suggestions about code OUTSIDE the PR diff. Parse per same algorithm and tag with `origin: outside-diff`.
 
-**Deterministic parsing algorithm (MANDATORY for both sections):**
+**Parse CodeRabbit review body — see AGENTS.md Protocol: Parse CodeRabbit Review Body.**
 
-The `<details>` block for a CodeRabbit special section has this exact nested structure:
+The shared protocol covers: GraphQL fetch, per-section deterministic algorithm
+(duplicate / outside-diff sections), per-finding fix-block extraction (Minimal
+fix / Suggested refactor), AI prompt capture, severity mapping, count parity
+HARD BLOCK, aggregate cross-validation, outdated-thread partitioning, and
+origin tagging rules (`[CodeRabbit]` / `[CodeRabbit — DUPLICATE]` /
+`[CodeRabbit — OUTSIDE PR DIFF]`).
 
-```
-<details>
-<summary>♻️ Duplicate comments (N)</summary><blockquote>
-<details>
-<summary>path/to/fileA.py (K1)</summary><blockquote>
-
-`LINE_RANGE`: _⚠️ Potential issue_ | _<EMOJI> <LABEL>_
-
-**<Finding title.>**
-
-<body paragraph(s)>
-
-<details><summary>🐛 Minimal fix</summary>...diff...</details>
-<details><summary>🤖 Prompt for AI Agents</summary>...prompt...</details>
-
----
-
-`LINE_RANGE`: _⚠️ Potential issue_ | _<EMOJI> <LABEL>_
-
-**<Second finding title.>**
-
-... (same structure) ...
-
-</blockquote></details>
-
-<details>
-<summary>path/to/fileB.go (K2)</summary><blockquote>
-... (K2 findings) ...
-</blockquote></details>
-
-</blockquote></details>
-```
-
-**Steps (apply to the latest CodeRabbit review body from Step 1.3.1.5):**
-
-1. **Locate the outer `<details>` block.** Match the opening summary line with case-sensitive regex:
-   - For duplicates: `<summary>♻️ Duplicate comments \((\d+)\)</summary>` → capture `N_TOTAL`.
-   - For outside-diff: `<summary>⚠️ Outside diff range comments \((\d+)\)</summary>` → capture `N_TOTAL`.
-   - If no match → no findings in this section (N=0); skip parsing.
-
-2. **Extract the outer blockquote body** — everything between the `<blockquote>` right after the summary and its matching `</blockquote></details>`. Track nesting: every inner `<details>` opens a level; every matching `</details>` closes one. Stop when the outer level closes.
-
-3. **Iterate inner per-file `<details>` blocks.** Match: `<summary>(.+?) \((\d+)\)</summary>` where the filename pattern allows `/`, `.`, `_`, `-`. Capture `FILE_PATH` and `K_COUNT` per block.
-
-4. **Within each per-file blockquote, split by `---` separator at the top level.** A `---` counts as a finding separator only if it is at the same nesting level as the finding headers — NOT inside any nested `<details>`. Implementation: walk line-by-line, maintain an integer `depth` (increment on `<details>`, decrement on `</details>`); a line matching `^\s*---\s*$` is a separator **only when `depth == 0`**.
-
-5. **Each resulting slice is ONE finding.** Parse its header:
-   - First non-empty line: `` `(\d+(?:-\d+)?)`: _(⚠️ Potential issue|🛠️ Refactor suggestion|🧹 Nitpick|...)_ \| _(🔴|🟠|🟡|🔵) (Critical|Major|Minor|Trivial)_ ``
-   - Capture `LINE_RANGE`, `TYPE_LABEL`, `SEVERITY_EMOJI`, `SEVERITY_LABEL`.
-   - Next bold line (`**...**`) is the `TITLE`.
-   - Everything until the first nested `<details>` or end-of-slice is the `DESCRIPTION`.
-   - **Fix suggestion (`FIX_LABEL` + `FIX_DIFF`):** if a `<details>` block exists whose summary matches one of CodeRabbit's known fix-suggestion labels, capture its body as `FIX_DIFF` and the label text as `FIX_LABEL`. Match summary against either:
-     - `🐛 Minimal fix`
-     - `🐛 Suggested refactor`
-
-     Implementation: regex `<details><summary>(🐛 Minimal fix|🐛 Suggested refactor)</summary>`. Body capture is non-greedy until the matching `</details>` at the same nesting depth — reuse the depth-walking approach from Step 4. The two labels are mutually exclusive within a finding (CodeRabbit picks one); if neither is present, leave both fields empty. **Do NOT match `🐛 Minimal fix` alone** — the legacy single-label match silently dropped findings labeled `Suggested refactor`, even though CodeRabbit had supplied a usable diff.
-   - **AI agent prompt (`AI_PROMPT`):** if a `<details><summary>🤖 Prompt for AI Agents</summary>` exists within the finding slice, capture its content as `AI_PROMPT`. **Important disambiguation:** this is the per-finding prompt block. Do NOT confuse it with the aggregate `🤖 Prompt for all review comments with AI agents` block at the end of the review body, which lives outside any per-finding slice and is consumed separately for cross-validation (see "Cross-validation fallback" below). Both blocks may coexist in the same review body — they are extracted independently. Leave `AI_PROMPT` empty if absent.
-
-6. **Severity mapping:**
-   | Emoji | Label | Severity |
-   |-------|-------|----------|
-   | 🔴 | Critical | CRITICAL |
-   | 🟠 | Major | HIGH |
-   | 🟡 | Minor | MEDIUM |
-   | 🔵 | Trivial | LOW |
-
-7. **Count validation (HARD BLOCK):** After parsing:
-   - Sum per-file extracted findings → must equal `N_TOTAL` from the outer summary.
-   - Per-file extracted count → must equal `K_COUNT` from that file's summary.
-   - **On mismatch: STOP.** Print: `"Parser extracted X of N duplicate comments from review <id>. Aborting to prevent silent loss. Expected N=<N>, got X=<X>. File breakdown: {path: expected_K vs got_K}. Investigate the review body format."` Then ask the user via `AskUser` whether to proceed with the partial set or abort the entire skill run.
-   - This validation is the PRIMARY guardrail against the historical bug where one of two duplicate comments was silently missed.
-   - **Scope of validation:** count parity guards against silent loss of FINDINGS, not of fix-suggestion sub-fields. A finding with empty `FIX_LABEL`/`FIX_DIFF`/`AI_PROMPT` is still a counted finding (CodeRabbit does not always supply those blocks).
-
-**Cross-validation fallback via "Prompt for all review comments" section:**
-
-CodeRabbit additionally emits a `<details>` block titled `🤖 Prompt for all review comments with AI agents` near the end of the review body. Inside its code fence, findings appear as a flat bullet list grouped by section and file:
-
-```
-Inline comments:
-In `@path/to/file.py`:
-- Around line 361-376: <description>
-- Around line 257-266: <description>
-
-Duplicate comments:
-In `@path/to/file.py`:
-- Around line 146-169: <description>
-- Around line 11-12: <description>
-
-Outside diff range comments:
-In `@path/to/other.go`:
-- Around line 42: <description>
-```
-
-**Parse this block IN ADDITION TO the `<details>` parsing:**
-1. Match: `<details>\s*<summary>🤖 Prompt for all review comments with AI agents</summary>`.
-2. Extract the code fence content.
-3. For each section header (`Inline comments:`, `Duplicate comments:`, `Outside diff range comments:`), extract bullets matching: `^- Around line ([\d\-]+):\s+(.+)$` under each `In \`@(.+?)\`:` header.
-4. Map section → origin tag (`inline`, `duplicate`, `outside-diff`).
-
-**Reconciliation (MANDATORY):** Take the **UNION** of findings from both sources (the `<details>` parse AND the "Prompt for all" parse). Match by `(file, line_range)` tuple.
-- Findings present in both → merge (use `<details>` block's richer metadata as primary, use "Prompt for all" description as fallback if `<details>` description was empty).
-- Findings only in one source → keep as-is, log which source surfaced it (for debugging).
-- **Never take the intersection** — one source missing a finding is a parsing bug, not ground truth.
-
-**CodeRabbit origin tagging rules:**
-When presenting findings from CodeRabbit, ALWAYS include the origin tag in the finding header:
-- `[CodeRabbit — DUPLICATE]` for findings from the "Duplicate comments" section. These are repeat findings from previous reviews that remain unaddressed.
-- `[CodeRabbit — OUTSIDE PR DIFF]` for findings from the "Outside diff range" section. These affect code not changed in this PR.
-- `[CodeRabbit]` for regular inline findings (no special tag needed).
-
-This tagging helps the user understand whether the finding is about code they changed in this PR, code outside their changes, or a recurring issue from a previous review.
+**pr-check-specific application:** the parsed findings feed into Step 1.3.4
+(by-source summary) and downstream the CodeRabbit-as-is path that allows
+direct application of `[Minimal fix]` / `[Suggested refactor]` blocks for
+nitpick-level findings without TDD. This as-is path is intentional for
+pr-check — coderabbit-review takes the TDD path for the same sources. See
+the relationship note in coderabbit-review/SKILL.md Phase 4.
 
 **Human reviewer comments:** All threads where the first comment author is not a known bot.
 
@@ -1232,6 +1129,16 @@ For each approved fix, classify its complexity and apply accordingly — see AGE
 1. Apply `FIX_DIFF` verbatim using Edit/MultiEdit. Treat the diff as authoritative — do NOT re-derive from agent recommendation.
 2. Run unit tests to verify no regression.
 3. If tests fail → revert the diff and escalate to ring droid dispatch (Complex flow), informing the user that CodeRabbit's diff did not pass tests as-applied. Record the failure in the per-finding audit trail.
+
+**Relationship to coderabbit-review (intentional divergence):** This as-is path
+is unique to `pr-check` and intentionally absent from `coderabbit-review`.
+`coderabbit-review` always applies CodeRabbit findings via TDD (RED-GREEN-REFACTOR)
+because that skill is for the case where the user wants to deeply understand
+and re-implement each suggestion. `pr-check` accepts the trade-off of merging
+CodeRabbit's exact patches (even nitpicks) because the goal here is unblocking
+PR review, not author understanding. If you want as-is application, stay on
+`pr-check`; if you want TDD-driven re-implementation, switch to
+`coderabbit-review`. See coderabbit-review/SKILL.md Phase 4 for the mirror note.
 
 **Simple fix flow:**
 1. Apply the fix directly using Edit/MultiEdit tools
@@ -2349,10 +2256,29 @@ Droids whose purpose is implementation, design, operations, or non-code domains:
 | **Domain specialist** | Description mentions a specific technology — include only if the project uses it | `lib-commons-reviewer` (if `go.mod` imports `lib-commons`), `multi-tenant-reviewer` (if project uses multi-tenancy), `performance-reviewer` (always relevant) |
 | **Non-reviewer (EXCLUDE)** | Description indicates implementation, design, ops, finance, planning, or infrastructure — NOT code review | See exclusion list above |
 
+**Deny-list filter (applied AFTER inclusion regex, BEFORE final selection):**
+
+If the description matches `architecture|design|planning|process|workflow|strategy`,
+EXCLUDE the agent regardless of inclusion-regex match. These words indicate the
+agent is meta-level (not code review) and should not be dispatched to review code.
+This guards against future agents whose descriptions accidentally match the
+inclusion regex's broader words (e.g., `architecture-reviewer`,
+`design-reviewer`, `process-reviewer`) — they would otherwise be dispatched
+against actual code, which is not their job.
+
+The combined logic: `(matches inclusion regex) AND NOT (matches deny regex) → include`.
+
+**Positive allow-list** (overrides deny-list for known good agents that may have
+"design" or another deny term in their descriptions accidentally): listed in the
+protocol's roster JSON (empty by default; add specific droid IDs as needed).
+Allow-list entries are matched by full droid ID (not regex) so a single
+accidental wording match cannot reopen the deny-list for an entire family of
+droids.
+
 For non-ring entries (only present when `INCLUDE_NON_RING=true`), apply the same
-description filter. Non-ring agents that pass the filter are returned in the `Non-Ring`
-group regardless of stack/domain category — the caller decides whether to default-select
-them in its UX.
+description filter AND the deny-list. Non-ring agents that pass both filters are
+returned in the `Non-Ring` group regardless of stack/domain category — the caller
+decides whether to default-select them in its UX.
 
 **Output format:**
 
@@ -2469,6 +2395,140 @@ If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
 - If no PR exists, skip.
 
 Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Title Validation."
+
+
+### Protocol: Parse CodeRabbit Review Body
+
+**Referenced by:** pr-check, coderabbit-review
+
+Deterministic algorithm for extracting actionable findings from a CodeRabbit
+review-body GraphQL response. Both pr-check and coderabbit-review consume the
+same source format; this protocol is the single source of truth so the two
+skills cannot drift in their parsing rules. Drift is exactly how CodeRabbit
+findings get silently dropped — see the historical "duplicate comments missed"
+incident that motivated the count-parity guard below.
+
+**Source data — GraphQL fields fetched:**
+
+The CodeRabbit review body is obtained via the GitHub GraphQL API:
+
+```graphql
+pullRequest(number: $pr) {
+  reviews(first: 100) {
+    nodes {
+      author { login }      # filter to coderabbitai[bot]
+      body                  # markdown body containing the <details> blocks below
+      submittedAt
+    }
+    pageInfo { hasNextPage endCursor }
+  }
+}
+```
+
+Take the **latest** review whose author is `coderabbitai[bot]`. Pagination via
+`pageInfo` is mandatory when `hasNextPage` is true.
+
+**Parsing algorithm — top-level sections:**
+
+The latest CodeRabbit review body contains zero or more of these top-level
+`<details>` blocks (each parsed via the per-section algorithm below):
+
+| Top-level summary regex | Origin tag | Description |
+|------------------------|------------|-------------|
+| `♻️ Duplicate comments \((\d+)\)` | `duplicate` | Findings repeated from previous reviews, still unresolved |
+| `⚠️ Outside diff range comments \((\d+)\)` | `outside-diff` | Findings about code outside the PR diff |
+| `🤖 Prompt for all review comments with AI agents` | `aggregate` (cross-validation only, NOT a per-finding source) | Aggregate flat-list block used to cross-check the per-finding parse |
+
+Inline (in-diff) findings come from the per-thread GraphQL fetch (review
+threads), not from the review body — they are tagged `origin: inline` by the
+caller. The review body parser handles only the duplicate/outside-diff
+sections plus the aggregate cross-validation block.
+
+**Per-section algorithm (applied to each top-level `<details>` block):**
+
+1. **Locate the outer `<details>`** by matching the summary regex (case-sensitive).
+   Capture `N_TOTAL`. If no match: section absent (N=0) — skip.
+
+2. **Extract the outer blockquote body**, tracking nesting: every inner
+   `<details>` opens a level; every matching `</details>` closes one. Stop
+   when the outer level closes.
+
+3. **Iterate inner per-file `<details>` blocks**:
+   `<summary>(.+?) \((\d+)\)</summary>` — capture `FILE_PATH` and `K_COUNT`.
+
+4. **Within each per-file blockquote, split by `---` separators at the top
+   level** (depth == 0). Walk line-by-line, increment depth on `<details>`,
+   decrement on `</details>`; a line `^\s*---\s*$` is a separator only when
+   depth == 0.
+
+5. **Each slice = ONE finding.** Parse:
+   - First non-empty line: `` `(\d+(?:-\d+)?)`: _(⚠️ Potential issue|🛠️ Refactor suggestion|🧹 Nitpick|...)_ \| _(🔴|🟠|🟡|🔵) (Critical|Major|Minor|Trivial)_ `` — capture `LINE_RANGE`, `TYPE_LABEL`, `SEVERITY_EMOJI`, `SEVERITY_LABEL`.
+   - Next bold line `**...**` is the `TITLE`.
+   - Body until first nested `<details>` or end-of-slice is the `DESCRIPTION`.
+
+6. **Per-finding fix-block extraction.** Within each finding's slice:
+   - `FIX_LABEL` + `FIX_DIFF` — match `<details><summary>(🐛 Minimal fix|🐛 Suggested refactor)</summary>` (the two labels are mutually exclusive within one finding; if neither is present, leave both empty). **Critical:** match BOTH labels — matching only `🐛 Minimal fix` silently drops findings labeled `Suggested refactor` even when the diff is supplied.
+   - `AI_PROMPT` — match `<details><summary>🤖 Prompt for AI Agents</summary>` and capture body. **Disambiguation:** this is the per-finding prompt block, NOT the aggregate `🤖 Prompt for all review comments with AI agents` block. Both can coexist; extract independently.
+
+7. **Severity mapping:**
+
+   | Emoji | Label | Severity |
+   |-------|-------|----------|
+   | 🔴 | Critical | CRITICAL |
+   | 🟠 | Major | HIGH |
+   | 🟡 | Minor | MEDIUM |
+   | 🔵 | Trivial | LOW |
+
+**Count parity validation (HARD BLOCK on mismatch):**
+
+After parsing each section:
+- Sum per-file extracted findings → must equal `N_TOTAL`.
+- Per-file extracted count → must equal `K_COUNT` for every file.
+
+**On mismatch: STOP immediately.** Print: parsed N, expected M, file
+breakdown, missing/extra IDs. **Do NOT offer an opt-out** — a silent
+partial-set continuation is exactly the failure mode this gate prevents. The
+user must investigate the parser or CodeRabbit output before the skill can
+proceed.
+
+**Cross-validation via aggregate prompt block:**
+
+CodeRabbit emits a `<details><summary>🤖 Prompt for all review comments with AI agents</summary>` block listing findings as a flat bullet list grouped by section. Parse it independently and take the **UNION** with the per-section parse, matched by `(file, line_range)`:
+- In both → merge (per-section block is primary; aggregate description is fallback).
+- Only in one → keep, log which source surfaced it.
+- **Never take the intersection** — single-source absence is a parsing bug, not ground truth.
+
+**Outdated-thread partitioning:**
+
+Inline review threads with `isOutdated: true` are partitioned out of the
+active findings set. The original finding text is preserved in the duplicate
+comments section of the review body (CodeRabbit re-emits unresolved findings
+across reviews), so the duplicate-section parse remains the source of record
+for content. Outdated threads are typically auto-resolved by the consuming
+skill's hygiene step — see pr-check Step 13.0.
+
+**Origin tagging rules** (when presenting findings to the user, ALWAYS include
+the origin tag in the finding header):
+
+| Source | Tag |
+|--------|-----|
+| Per-thread inline review comment (in-diff) | `[CodeRabbit]` |
+| Duplicate-comments section | `[CodeRabbit — DUPLICATE]` |
+| Outside-diff-range section | `[CodeRabbit — OUTSIDE PR DIFF]` |
+| Non-CodeRabbit (Codacy/DeepSource/CI/human) | their own origin tag — NOT this protocol |
+
+**Distinguishing CodeRabbit from CI bot, duplicate, human:**
+
+This protocol handles CodeRabbit only. The caller separately identifies:
+- **CI bots** (`github-actions[bot]`, `codacy-production[bot]`, `deepsource-io[bot]`, etc.) — handled by their own per-bot parsers.
+- **Duplicate findings** (CodeRabbit's own duplicate section) — origin-tagged here, not de-duplicated against earlier reviews.
+- **Human reviewers** — every author whose login is not in the known-bot list.
+
+**Caller-specific application** (NOT part of this protocol):
+- pr-check applies CodeRabbit-as-is (`[Minimal fix]` / `[Suggested refactor]` direct application path) for nitpick-level findings — see pr-check Step 1.3.3 surrounding prose.
+- coderabbit-review always applies findings via TDD — see coderabbit-review Phase 4. The relationship between the two skills is documented in coderabbit-review/SKILL.md ("Relationship to pr-check").
+
+Skills reference this as: "Parse CodeRabbit review body — see AGENTS.md Protocol: Parse CodeRabbit Review Body."
 
 
 ### Protocol: Per-Droid Quality Checklists

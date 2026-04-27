@@ -43,44 +43,36 @@ Execute session state protocol — see AGENTS.md Protocol: Session State. Use st
 
 ### Step 1.2.2: Set Terminal Title
 
-**CRITICAL:** Set the terminal title so the user can identify this terminal at a glance. Execute this command NOW:
+**CRITICAL:** Set the terminal title so the user can identify this terminal at a glance.
+
+**First, parse `TASK_TITLE` from optimus-tasks.md** — the title is interpolated
+into the terminal title below, and parsing it lazily (after the title is set)
+results in `optimus: BUILD T-XXX — ` with an empty trailing dash:
 
 ```bash
-_optimus_set_title() {
-  local title="$1"
-  local pid="$PPID" tty=""
-  for _ in 1 2 3 4; do
-    [ -z "$pid" ] || [ "$pid" = "1" ] && break
-    tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
-    case "$tty" in
-      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') ;;
-      *) break ;;
-    esac
-  done
-  if { [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; } \
-     && command -v osascript >/dev/null 2>&1 && [ -n "$tty" ] \
-     && [ "$tty" != "?" ] && [ "$tty" != "??" ]; then
-    osascript \
-      -e 'on run argv' \
-      -e '  set targetTty to "/dev/" & item 1 of argv' \
-      -e '  set newName to item 2 of argv' \
-      -e '  tell application "iTerm2"' \
-      -e '    repeat with w in windows' \
-      -e '      repeat with t in tabs of w' \
-      -e '        repeat with s in sessions of t' \
-      -e '          if (tty of s as string) is targetTty then' \
-      -e '            try' \
-      -e '              set name of s to newName' \
-      -e '            end try' \
-      -e '          end if' \
-      -e '        end repeat' \
-      -e '      end repeat' \
-      -e '    end repeat' \
-      -e '  end tell' \
-      -e 'end run' \
-      -- "$tty" "$title" >/dev/null 2>&1 || true
-  fi
-}
+# optimus-tasks.md columns by pipe index:
+# | 1=<blank> | 2=ID | 3=Title | 4=Tipo | 5=Depends | 6=Priority | 7=Version | 8=Estimate | 9=TaskSpec | 10=<blank> |
+# Use the same parser pattern as resume/SKILL.md Step 2.3 (Read Task Metadata).
+TASK_TITLE=$(awk -F'|' -v id="$TASK_ID" '
+  { gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2) }
+  $2 == id {
+    title=$3
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", title)
+    print title
+    exit
+  }
+' "$TASKS_FILE")
+
+if [ -z "$TASK_TITLE" ]; then
+  # Non-fatal: the terminal title is informational. Fall back to a stub so the
+  # later interpolation does not produce a trailing-dash artifact.
+  TASK_TITLE="(title unavailable)"
+fi
+```
+
+Then execute the title-setter NOW. Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage label `BUILD`:
+
+```bash
 _optimus_set_title "optimus: BUILD $TASK_ID — $TASK_TITLE"
 ```
 
@@ -266,6 +258,36 @@ results — never to write production code.
 
 For EACH subtask (sequentially, unless PARALLEL-PLAN.md allows parallel):
 
+**0. Gather prior-subtask summaries (F12a — required before dispatch):**
+
+Before dispatching `subtask_NNN`, collect short summaries of subtasks
+`001..NNN-1` so the droid has full continuity context. Without this, the droid
+for `subtask_002` does not know what `subtask_001` produced (file paths,
+exported symbols, contract decisions) and can re-derive or contradict prior
+work. Two complementary sources:
+
+- **Session/state file:** if a post-subtask state file exists in
+  `.optimus/sessions/` with a `completed_subtasks[]` array (filename + 1-line
+  summary + key files/symbols), read it.
+- **Git history (always available):** since the task started (find the
+  branch's first commit on `$TASK_BRANCH`), enumerate subtask commits:
+  ```bash
+  git log --oneline --grep='subtask_' "$(git merge-base HEAD origin/main)"..HEAD
+  ```
+  For each commit, derive the subtask number from the message and a 1-line
+  summary of files touched (`git show --stat --format= <sha>`).
+
+Compose a list of entries shaped like:
+
+```
+- subtask_001.md — Added `internal/auth/jwt.go` (SignToken, VerifyToken); updated config schema with `jwt.secret`.
+- subtask_002.md — Added `internal/auth/middleware.go` (RequireAuth); updated router to apply it on /api/*.
+```
+
+Pass this list as the **Previously completed subtasks** context block in the
+dispatch prompt below. For `subtask_001` the list is empty (and the prompt
+section says "(none — this is the first subtask)").
+
 **1. Dispatch the stack-appropriate ring droid** via `Task` tool:
 
 | Stack | Ring Droid |
@@ -282,6 +304,12 @@ For EACH subtask (sequentially, unless PARALLEL-PLAN.md allows parallel):
 - Codebase patterns discovered in Step 1.8
 - File paths for the droid to navigate (Read/Grep/Glob enabled)
 - Answers to questions from Step 1.9
+- **Previously completed subtasks:** populated by the orchestrator from prior
+  subtask state (Step 0 above). For each completed subtask: `subtask_NNN.md`
+  filename + 1-line summary of files created/modified + relevant exported
+  symbols/contracts. For `subtask_001`, this section reads `(none — this is
+  the first subtask)`. The droid uses this to avoid re-creating files,
+  re-exporting symbols, or contradicting earlier contract decisions.
 - Instruction: "Implement this subtask following TDD (RED-GREEN-REFACTOR).
   Write failing test first, then minimal implementation, then refactor."
 
@@ -2081,6 +2109,101 @@ Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
 Skills reference this as: "Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution."
 
 
+### Protocol: Terminal Identification
+
+**Referenced by:** all stage agents (1-4), batch
+
+After the task ID is identified and confirmed, set the terminal title to show the
+current stage and task. This allows users running multiple agents in parallel terminals
+to identify each terminal at a glance.
+
+**Set title (after task ID is known):**
+
+```bash
+_optimus_set_title() {
+  # iTerm2 AppleScript title updater. Empirical testing showed that Optimus
+  # tasks always run in "divorced" iTerm2 sessions where the profile's
+  # autoNameFormat is locked to a literal — OSC 0/1/2 and OSC 1337
+  # SetUserVar are both ineffective in that state, so AppleScript's
+  # `set name of s` is the only channel that actually mutates session.name.
+  # The Execute tool runs bash without a controlling TTY, so /dev/tty fails
+  # with ENODEV; we resolve the parent process's TTY via ps instead. Walk
+  # up to 4 ancestors in case of nested shells. First run triggers a macOS
+  # TCC prompt ("droid wants to control iTerm"); approving enables this
+  # permanently. Silent no-op outside macOS/iTerm2 or when osascript is
+  # unavailable — non-iTerm2 / non-macOS users get no title update.
+  local title="$1"
+  local pid="$PPID" tty=""
+  for _ in 1 2 3 4; do
+    [ -z "$pid" ] || [ "$pid" = "1" ] && break
+    tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
+    case "$tty" in
+      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') ;;
+      *) break ;;
+    esac
+  done
+  if { [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; } \
+     && command -v osascript >/dev/null 2>&1 && [ -n "$tty" ] \
+     && [ "$tty" != "?" ] && [ "$tty" != "??" ]; then
+    osascript \
+      -e 'on run argv' \
+      -e '  set targetTty to "/dev/" & item 1 of argv' \
+      -e '  set newName to item 2 of argv' \
+      -e '  tell application "iTerm2"' \
+      -e '    repeat with w in windows' \
+      -e '      repeat with t in tabs of w' \
+      -e '        repeat with s in sessions of t' \
+      -e '          if (tty of s as string) is targetTty then' \
+      -e '            try' \
+      -e '              set name of s to newName' \
+      -e '            end try' \
+      -e '          end if' \
+      -e '        end repeat' \
+      -e '      end repeat' \
+      -e '    end repeat' \
+      -e '  end tell' \
+      -e 'end run' \
+      -- "$tty" "$title" >/dev/null 2>&1 || true
+  fi
+}
+_optimus_set_title "optimus: <STAGE> $TASK_ID — $TASK_TITLE"
+```
+
+Example output in terminal tab: `optimus: REVIEW T-003 — User Auth JWT`
+
+**Why the parent-process TTY:** The Execute tool runs `bash -c` without a controlling
+terminal, so `/dev/tty` returns `ENODEV` ("Device not configured"). The resolver above
+asks `ps` for the parent's controlling TTY device path and matches it against iTerm2's
+session list via AppleScript — that device is connected to the user's real iTerm2
+session. If no ancestor has a TTY (Docker/CI) or osascript is unavailable, the
+function silently no-ops.
+
+**Restore title (at stage completion or exit):**
+
+```bash
+_optimus_set_title ""
+```
+
+**NOTE:** This helper is iTerm2-on-macOS only. Optimus tasks always run in
+"divorced" iTerm2 sessions, where AppleScript's `set name of s` is the only
+channel that reliably mutates `session.name`. Non-iTerm2 / non-macOS users
+will not see a title update.
+
+**Troubleshooting iTerm2 (if the title still doesn't update):**
+
+1. **Window > Edit Tab Title** must be empty. A manually-set tab title is
+   sticky on the tab label and overrides the session name visually, even
+   when `session.name` is updated correctly underneath.
+2. The first run on macOS triggers a TCC prompt ("`droid` wants to control
+   `iTerm`"). Approve it to enable the helper. Denying makes the helper a
+   silent no-op.
+3. The helper requires the parent process to have a controlling TTY. Inside
+   Docker/CI without a TTY, no ancestor will resolve and the helper will
+   silently no-op.
+
+Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Terminal Identification."
+
+
 ### Protocol: Workspace Auto-Navigation (HARD BLOCK)
 
 **Referenced by:** stages 2-4
@@ -2134,11 +2257,30 @@ fi
        T-002 — Login page (Em Andamento) → /projeto-t-002-.../
      Which task should I continue?
      ```
-   - After task is identified, locate the worktree by task ID:
+   - After task is identified, locate the worktree. Prefer the source-of-truth
+     (state.json `branch` field) and match the porcelain output by exact
+     branch ref. Fall back to a kebab-anchored path match — never an
+     unanchored substring grep on the bare task ID, which produces false
+     positives for short IDs (e.g., `T-1` matching `T-10`, `T-100`):
      ```bash
-     git worktree list | grep -iF "<task-id>"
+     # Source-of-truth: branch from state.json (set by stage 1).
+     TASK_BRANCH=$(jq -r --arg id "$TASK_ID" '.[$id].branch // ""' \
+       "${MAIN_WORKTREE}/.optimus/state.json" 2>/dev/null)
+     WORKTREE_PATH=""
+     if [ -n "$TASK_BRANCH" ]; then
+       WORKTREE_PATH=$(git worktree list --porcelain 2>/dev/null | awk -v br="refs/heads/$TASK_BRANCH" '
+         /^worktree / { path=$2 }
+         /^branch /   { if ($2 == br) { print path; exit } }
+       ')
+     fi
+     if [ -z "$WORKTREE_PATH" ]; then
+       # Fallback: anchored kebab-cased path-segment match (avoids T-1 vs T-10 substring collision).
+       TASK_KEBAB="-$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')-"
+       WORKTREE_PATH=$(git worktree list --porcelain 2>/dev/null \
+         | awk -v anchor="$TASK_KEBAB" '/^worktree / { path=$2; if (index(tolower(path), anchor) > 0) { print path; exit } }')
+     fi
      ```
-   - **If worktree found** → change working directory to the worktree path.
+   - **If `WORKTREE_PATH` is non-empty** → change working directory to it.
    - **If worktree NOT found** → derive the branch name (Protocol: Branch Name Derivation)
      and verify it exists:
      ```bash
