@@ -12,10 +12,17 @@ set -euo pipefail
 # - Updates all existing plugins (with uninstall+reinstall fallback for Droid scope conflicts)
 #
 # Plugin name conventions:
-#   - Droid:        bare names (e.g. `plan`, `build`, `sync`) — matches `.factory-plugin/marketplace.json`
-#   - Claude Code:  prefixed names (e.g. `optimus-plan`) — matches `.claude-plugin/marketplace.json`
-#   - The EXPECTED list returned by `_resolve_expected_plugins` is in BARE form (legacy contract).
-#     `_sync_claude_code` adds the `optimus-` prefix when building Claude Code commands.
+#   - Droid:        17 bare-name plugins (`plan`, `build`, `sync`, ...) — listed
+#                   in `.factory-plugin/marketplace.json`. Each is installed
+#                   individually via `droid plugin install <name>@optimus`.
+#   - Claude Code:  ONE plugin (`optimus`) — listed in `.claude-plugin/marketplace.json`.
+#                   The 17 commands surface as `/optimus:<command>` via the
+#                   top-level `commands/` directory inside the single plugin.
+#                   Installed once via `claude plugin install optimus@optimus`.
+#                   Legacy per-plugin `optimus-<name>@optimus` installs from the
+#                   pre-2.0 layout are detected and uninstalled silently.
+#   - The EXPECTED list returned by `_resolve_expected_plugins` is in BARE form
+#     (legacy contract used by the Droid branch).
 
 _error() { echo "ERROR: $*" >&2; }
 _warn() { echo "WARNING: $*" >&2; }
@@ -382,66 +389,76 @@ _sync_droid() {
 # We filter by marketplace via `select(.id | endswith("@<marketplace>"))`.
 
 _sync_claude_code() {
-  local expected="$1"  # bare plugin names, one per line, sorted
+  # The first arg (the bare-plugin EXPECTED list) is consumed by the Droid
+  # branch only — Claude installs a SINGLE plugin (`optimus`) regardless of
+  # how many bare plugins the marketplace lists. We accept and ignore it so
+  # the call sites stay symmetric.
+  local _expected_unused="${1:-}"
   local marketplace="${2:-$MARKETPLACE_NAME}"
+  : "$_expected_unused"  # avoid SC2034
 
   echo "── Claude Code ──"
   echo ""
 
-  # Get currently installed optimus plugins (bare names, sorted)
-  local installed=""
-  installed=$(claude plugin list --json 2>/dev/null \
-    | jq -r --arg mp "@${marketplace}" '.[] | select(.id | endswith($mp)) | .id | sub("@.*$"; "") | sub("^optimus-"; "")' \
+  # Get currently installed optimus-marketplace plugins. Two cohorts can
+  # coexist:
+  #   - The single `optimus@optimus` plugin (the new layout).
+  #   - Legacy `optimus-<name>@optimus` installs from the pre-2.0 layout.
+  # We sync the new plugin first, then sweep any legacy entries.
+  local installed_ids=""
+  installed_ids=$(claude plugin list --json 2>/dev/null \
+    | jq -r --arg mp "@${marketplace}" '.[] | select(.id | endswith($mp)) | .id' \
     | sort) || true
 
-  # Calculate diffs
-  _compute_diffs "$expected" "$installed"
-  local new_plugins="$NEW_PLUGINS"
-  local orphaned_plugins="$ORPHANED_PLUGINS"
-  local existing_plugins="$EXISTING_PLUGINS"
+  local single_installed=false
+  local legacy_plugins=""
+  if [ -n "$installed_ids" ]; then
+    while IFS= read -r id; do
+      [ -z "$id" ] && continue
+      local bare="${id%@"${marketplace}"}"
+      if [ "$bare" = "optimus" ]; then
+        single_installed=true
+      else
+        legacy_plugins="${legacy_plugins}${bare}
+"
+      fi
+    done <<< "$installed_ids"
+  fi
 
   local added=0 updated=0 removed=0 failed=0
 
-  # Install new plugins
-  if [ -n "$new_plugins" ]; then
-    while IFS= read -r plugin; do
-      [ -z "$plugin" ] && continue
-      if claude plugin install "optimus-${plugin}@${marketplace}" --scope user >/dev/null 2>&1; then
-        echo "  + $plugin ... OK"
-        added=$((added + 1))
-      else
-        echo "  + $plugin ... FAIL"
-        failed=$((failed + 1))
-      fi
-    done <<< "$new_plugins"
+  # Install or update the single `optimus` plugin.
+  if [ "$single_installed" = false ]; then
+    if claude plugin install "optimus@${marketplace}" --scope user >/dev/null 2>&1; then
+      echo "  + optimus ... OK"
+      added=$((added + 1))
+    else
+      echo "  + optimus ... FAIL"
+      failed=$((failed + 1))
+    fi
+  else
+    if claude plugin update "optimus@${marketplace}" >/dev/null 2>&1; then
+      echo "  * optimus ... OK"
+      updated=$((updated + 1))
+    else
+      echo "  * optimus ... FAIL"
+      failed=$((failed + 1))
+    fi
   fi
 
-  # Update existing plugins
-  if [ -n "$existing_plugins" ]; then
+  # Sweep legacy per-plugin installs. They no longer back any active
+  # marketplace entry, so unconditional removal is correct.
+  if [ -n "$legacy_plugins" ]; then
     while IFS= read -r plugin; do
       [ -z "$plugin" ] && continue
-      if claude plugin update "optimus-${plugin}@${marketplace}" >/dev/null 2>&1; then
-        echo "  * $plugin ... OK"
-        updated=$((updated + 1))
-      else
-        echo "  * $plugin ... FAIL"
-        failed=$((failed + 1))
-      fi
-    done <<< "$existing_plugins"
-  fi
-
-  # Remove orphaned plugins
-  if [ -n "$orphaned_plugins" ]; then
-    while IFS= read -r plugin; do
-      [ -z "$plugin" ] && continue
-      if claude plugin uninstall "optimus-${plugin}@${marketplace}" >/dev/null 2>&1; then
-        echo "  - $plugin ... OK"
+      if claude plugin uninstall "${plugin}@${marketplace}" >/dev/null 2>&1; then
+        echo "  - $plugin (legacy) ... OK"
         removed=$((removed + 1))
       else
-        echo "  - $plugin ... FAIL"
+        echo "  - $plugin (legacy) ... FAIL"
         failed=$((failed + 1))
       fi
-    done <<< "$orphaned_plugins"
+    done <<< "$legacy_plugins"
   fi
 
   echo ""

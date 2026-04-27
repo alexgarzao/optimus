@@ -1,0 +1,8 @@
+{
+  "name": "optimus",
+  "description": "Optimus task lifecycle plugin: planning, building, reviewing, and shipping tasks. Includes 17 commands accessible via /optimus:<command>.",
+  "version": "2.0.0",
+  "author": {
+    "name": "Alex Garzão"
+  }
+}

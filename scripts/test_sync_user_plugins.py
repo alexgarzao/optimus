@@ -588,6 +588,12 @@ class TestMalformedMarketplace:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 class TestClaudeCodeSync:
+    """Claude Code now installs a SINGLE `optimus@optimus` plugin regardless of
+    how many bare-name skills the Droid marketplace lists. Pre-2.0 per-skill
+    installs (`optimus-<name>@optimus`) are detected and uninstalled silently
+    as legacy entries.
+    """
+
     def _claude_only_env(self, tmp_path: Path) -> dict[str, str]:
         return {
             "CLAUDE_MARKETPLACE_FILE": str(
@@ -595,24 +601,30 @@ class TestClaudeCodeSync:
                 / "optimus" / ".claude-plugin" / "marketplace.json"),
         }
 
-    def test_installs_new_plugins_via_claude_install(self, tmp_path: Path) -> None:
-        """`claude plugin install <name>@optimus --scope user` is called for every
-        plugin from the marketplace when none are installed yet."""
+    def test_installs_single_optimus_plugin_when_none_installed(self, tmp_path: Path) -> None:
+        """`claude plugin install optimus@optimus --scope user` runs ONCE — no
+        per-skill installs — when nothing is installed yet, regardless of how
+        many bare names the marketplace contains.
+        """
         log = _install_claude_mock(tmp_path, installed_plugins=[])
         _create_claude_marketplace_cache(tmp_path, ["alpha", "beta"])
         result = _run_sync(tmp_path, exclude_droid=True,
                            env_extra=self._claude_only_env(tmp_path))
         assert result.returncode == 0
         assert "── Claude Code ──" in result.stdout
-        assert "Added: 2" in result.stdout
+        assert "Added: 1" in result.stdout
+        assert "+ optimus ... OK" in result.stdout
         log_content = log.read_text()
-        assert "plugin install optimus-alpha@optimus --scope user" in log_content
-        assert "plugin install optimus-beta@optimus --scope user" in log_content
+        assert "plugin install optimus@optimus --scope user" in log_content
+        # No per-skill installs.
+        assert "plugin install optimus-alpha@optimus" not in log_content
+        assert "plugin install optimus-beta@optimus" not in log_content
 
-    def test_updates_existing_plugins_via_claude_update(self, tmp_path: Path) -> None:
-        """When a plugin is already installed, the script issues `plugin update`."""
+    def test_updates_existing_optimus_plugin(self, tmp_path: Path) -> None:
+        """When `optimus@optimus` is already installed, the script issues
+        `plugin update` instead of `plugin install`."""
         installed = [
-            {"id": "optimus-alpha@optimus", "version": "1.0.0", "scope": "user",
+            {"id": "optimus@optimus", "version": "2.0.0", "scope": "user",
              "enabled": True},
         ]
         log = _install_claude_mock(tmp_path, installed_plugins=installed)
@@ -621,16 +633,18 @@ class TestClaudeCodeSync:
                            env_extra=self._claude_only_env(tmp_path))
         assert result.returncode == 0
         assert "Updated: 1" in result.stdout
+        assert "* optimus ... OK" in result.stdout
         log_content = log.read_text()
-        assert "plugin update optimus-alpha@optimus" in log_content
-        assert "plugin install optimus-alpha@optimus" not in log_content
+        assert "plugin update optimus@optimus" in log_content
+        assert "plugin install optimus@optimus" not in log_content
 
-    def test_removes_orphans_via_claude_uninstall(self, tmp_path: Path) -> None:
-        """Plugins installed but not in the marketplace are uninstalled."""
+    def test_uninstalls_legacy_per_skill_plugins(self, tmp_path: Path) -> None:
+        """Pre-2.0 `optimus-<name>@optimus` installs are pruned as legacy.
+        The single `optimus@optimus` plugin is installed in the same run."""
         installed = [
             {"id": "optimus-alpha@optimus", "version": "1.0.0", "scope": "user",
              "enabled": True},
-            {"id": "optimus-orphan@optimus", "version": "1.0.0", "scope": "user",
+            {"id": "optimus-beta@optimus", "version": "1.0.0", "scope": "user",
              "enabled": True},
         ]
         log = _install_claude_mock(tmp_path, installed_plugins=installed)
@@ -638,12 +652,21 @@ class TestClaudeCodeSync:
         result = _run_sync(tmp_path, exclude_droid=True,
                            env_extra=self._claude_only_env(tmp_path))
         assert result.returncode == 0
-        assert "Removed: 1" in result.stdout
+        assert "Added: 1" in result.stdout, (
+            "single optimus@optimus install should bump Added to 1"
+        )
+        assert "Removed: 2" in result.stdout
+        assert "- optimus-alpha (legacy) ... OK" in result.stdout
+        assert "- optimus-beta (legacy) ... OK" in result.stdout
         log_content = log.read_text()
-        assert "plugin uninstall optimus-orphan@optimus" in log_content
+        assert "plugin uninstall optimus-alpha@optimus" in log_content
+        assert "plugin uninstall optimus-beta@optimus" in log_content
+        assert "plugin install optimus@optimus --scope user" in log_content
 
     def test_install_failure_increments_failed_count(self, tmp_path: Path) -> None:
-        """When `claude plugin install` exits non-zero, summary shows Failed > 0."""
+        """When `claude plugin install optimus@optimus` exits non-zero,
+        summary shows Failed > 0 and the failing line has the `+ optimus ...
+        FAIL` form."""
         log = _install_claude_mock(tmp_path, installed_plugins=[], install_exit=1)
         _create_claude_marketplace_cache(tmp_path, ["alpha"])
         result = _run_sync(tmp_path, exclude_droid=True,
@@ -651,14 +674,14 @@ class TestClaudeCodeSync:
         assert result.returncode == 1
         assert "Claude Code — Added: 0" in result.stdout
         assert "Failed: 1" in result.stdout
-        assert "+ alpha ... FAIL" in result.stdout
+        assert "+ optimus ... FAIL" in result.stdout
         # Install was still attempted (logged) before failing.
-        assert "plugin install optimus-alpha@optimus" in log.read_text()
+        assert "plugin install optimus@optimus" in log.read_text()
 
     def test_update_failure_increments_failed_count(self, tmp_path: Path) -> None:
-        """A failing `claude plugin update` is reported as FAIL."""
+        """A failing `claude plugin update optimus@optimus` is reported as FAIL."""
         installed = [
-            {"id": "optimus-alpha@optimus", "version": "1.0.0", "scope": "user",
+            {"id": "optimus@optimus", "version": "2.0.0", "scope": "user",
              "enabled": True},
         ]
         _install_claude_mock(tmp_path, installed_plugins=installed, update_exit=1)
@@ -667,11 +690,13 @@ class TestClaudeCodeSync:
                            env_extra=self._claude_only_env(tmp_path))
         assert result.returncode == 1
         assert "Failed: 1" in result.stdout
-        assert "* alpha ... FAIL" in result.stdout
+        assert "* optimus ... FAIL" in result.stdout
 
     def test_uninstall_failure_increments_failed_count(self, tmp_path: Path) -> None:
-        """A failing `claude plugin uninstall` is reported as FAIL."""
+        """A failing `claude plugin uninstall <legacy>@optimus` is reported as FAIL."""
         installed = [
+            {"id": "optimus@optimus", "version": "2.0.0", "scope": "user",
+             "enabled": True},
             {"id": "optimus-orphan@optimus", "version": "1.0.0", "scope": "user",
              "enabled": True},
         ]
@@ -679,11 +704,11 @@ class TestClaudeCodeSync:
         _create_claude_marketplace_cache(tmp_path, ["alpha"])
         result = _run_sync(tmp_path, exclude_droid=True,
                            env_extra=self._claude_only_env(tmp_path))
-        # alpha installs OK, orphan uninstall FAILs → exit 1.
+        # optimus updates OK, legacy orphan uninstall FAILs → exit 1.
         assert result.returncode == 1
-        assert "Added: 1" in result.stdout
+        assert "Updated: 1" in result.stdout
         assert "Failed: 1" in result.stdout
-        assert "- orphan ... FAIL" in result.stdout
+        assert "- optimus-orphan (legacy) ... FAIL" in result.stdout
 
     def test_marketplace_update_failure_warns_but_continues(self, tmp_path: Path) -> None:
         """If `claude plugin marketplace update` fails, the script warns and continues
@@ -697,14 +722,14 @@ class TestClaudeCodeSync:
         assert "Could not update Claude Code marketplace" in result.stderr
         assert "Added: 1" in result.stdout
         # Install was still attempted using the cached marketplace.
-        assert "plugin install optimus-alpha@optimus" in log.read_text()
+        assert "plugin install optimus@optimus" in log.read_text()
 
     def test_summary_uses_added_updated_removed_failed_format(self, tmp_path: Path) -> None:
         """Claude Code summary line matches Droid's format (no `Unchanged` field)."""
         installed = [
-            {"id": "optimus-alpha@optimus", "version": "1.0.0", "scope": "user",
+            {"id": "optimus@optimus", "version": "2.0.0", "scope": "user",
              "enabled": True},
-            {"id": "optimus-orphan@optimus", "version": "1.0.0", "scope": "user",
+            {"id": "optimus-legacy@optimus", "version": "1.0.0", "scope": "user",
              "enabled": True},
         ]
         _install_claude_mock(tmp_path, installed_plugins=installed)
@@ -712,13 +737,15 @@ class TestClaudeCodeSync:
         result = _run_sync(tmp_path, exclude_droid=True,
                            env_extra=self._claude_only_env(tmp_path))
         assert result.returncode == 0
-        assert "Claude Code — Added: 1 | Updated: 1 | Removed: 1 | Failed: 0" in result.stdout
+        # optimus@optimus already installed -> Updated 1; one legacy entry pruned.
+        assert "Claude Code — Added: 0 | Updated: 1 | Removed: 1 | Failed: 0" in result.stdout
         assert "Unchanged" not in result.stdout
 
     def test_filters_non_optimus_marketplace_plugins(self, tmp_path: Path) -> None:
-        """Plugins from other marketplaces (not @optimus) are ignored."""
+        """Plugins from other marketplaces (not @optimus) are ignored even when
+        installed alongside the optimus plugin."""
         installed = [
-            {"id": "optimus-alpha@optimus", "version": "1.0.0", "scope": "user"},
+            {"id": "optimus@optimus", "version": "2.0.0", "scope": "user"},
             {"id": "ring:reviewer@ring", "version": "2.0.0", "scope": "user"},
             {"id": "vendor-tool@other", "version": "1.0.0", "scope": "user"},
         ]
@@ -727,8 +754,7 @@ class TestClaudeCodeSync:
         result = _run_sync(tmp_path, exclude_droid=True,
                            env_extra=self._claude_only_env(tmp_path))
         assert result.returncode == 0
-        # alpha is updated (already installed under @optimus), no orphan removal,
-        # other-marketplace plugins are NOT touched.
+        # optimus@optimus already present -> Updated; other marketplaces untouched.
         assert "Updated: 1" in result.stdout
         assert "Removed: 0" in result.stdout
         log_content = log.read_text()
@@ -760,10 +786,11 @@ class TestDualPlatformSync:
         # Droid installed both via the Source 1 (droid) marketplace.
         assert "install alpha@optimus" in droid_log.read_text()
         assert "install beta@optimus" in droid_log.read_text()
-        # Claude installed both via the same EXPECTED list (bare names → prefixed).
+        # Claude installed the SINGLE optimus plugin (not per-skill).
         claude_content = claude_log.read_text()
-        assert "plugin install optimus-alpha@optimus --scope user" in claude_content
-        assert "plugin install optimus-beta@optimus --scope user" in claude_content
+        assert "plugin install optimus@optimus --scope user" in claude_content
+        assert "plugin install optimus-alpha@optimus" not in claude_content
+        assert "plugin install optimus-beta@optimus" not in claude_content
 
     def test_droid_only_when_no_claude_binary(self, tmp_path: Path) -> None:
         log = tmp_path / "droid.log"
@@ -782,7 +809,7 @@ class TestDualPlatformSync:
         assert result.returncode == 0
         assert "── Droid (Factory) ──" not in result.stdout
         assert "── Claude Code ──" in result.stdout
-        assert "plugin install optimus-alpha@optimus --scope user" in log.read_text()
+        assert "plugin install optimus@optimus --scope user" in log.read_text()
 
     def test_droid_failure_doesnt_block_claude(self, tmp_path: Path) -> None:
         """If Droid sync fails, Claude Code sync still runs to completion."""
@@ -795,8 +822,8 @@ class TestDualPlatformSync:
         assert result.returncode == 1
         assert "── Droid (Factory) ──" in result.stdout
         assert "── Claude Code ──" in result.stdout
-        # Claude install was attempted.
-        assert "plugin install optimus-alpha@optimus --scope user" in claude_log.read_text()
+        # Claude install of the single plugin was attempted.
+        assert "plugin install optimus@optimus --scope user" in claude_log.read_text()
         # Claude's added count must be 1 (not blocked by droid failure).
         assert "Claude Code — Added: 1" in result.stdout
 
@@ -846,10 +873,11 @@ class TestSourceResolution:
         assert "install fromsrc1@optimus" in log.read_text()
 
     def test_resolves_from_claude_marketplace_cache_source_2(self, tmp_path: Path) -> None:
-        """Source 2 (CLAUDE_MARKETPLACE_FILE) is used when Source 1 is absent.
-
-        Names from this source are PREFIXED (`optimus-foo`) — the script must
-        strip the prefix before exposing them as the EXPECTED bare list.
+        """Source 2 (CLAUDE_MARKETPLACE_FILE) is used when Source 1 is absent
+        and the resolver is exercised. The EXPECTED list is consumed by the
+        Droid branch only, so the visible effect on a Claude-only run is the
+        single `optimus@optimus` install — but the resolver still has to
+        succeed (otherwise the script aborts before reaching the Claude branch).
         """
         _install_claude_mock(tmp_path, installed_plugins=[])
         # No droid binary, no Source 1.
@@ -858,8 +886,9 @@ class TestSourceResolution:
         result = _run_sync(tmp_path, exclude_droid=True, isolated=True,
                            env_extra={"CLAUDE_MARKETPLACE_FILE": str(mp_path)})
         assert result.returncode == 0
-        # Bare name reaches Claude Code with the optimus- prefix re-attached.
-        assert "+ fromsrc2 ... OK" in result.stdout
+        # Single optimus plugin installed (proves the Source-2 resolver
+        # succeeded — without it the script would abort with an error).
+        assert "+ optimus ... OK" in result.stdout
 
     def test_resolves_from_repo_factory_plugin_source_3(self, tmp_path: Path) -> None:
         """Source 3 (in-repo .factory-plugin/marketplace.json) is the fallback when
@@ -894,21 +923,24 @@ class TestSourceResolution:
         assert "install fromsrc3@optimus" in log.read_text()
 
     def test_resolves_from_repo_claude_plugin_fallback(self, tmp_path: Path) -> None:
-        """Source 3 fallback: in-repo `.claude-plugin/marketplace.json` is consulted
-        when `.factory-plugin/marketplace.json` is absent. Names use the prefixed
-        form and must be stripped to bare."""
+        """Source 3 fallback: in-repo `.claude-plugin/marketplace.json` is
+        consulted when `.factory-plugin/marketplace.json` is absent. The
+        EXPECTED list is consumed by the Droid branch only — for a Claude-
+        only run the visible effect is just the single `optimus@optimus`
+        install, but the resolver must still succeed."""
         _install_claude_mock(tmp_path, installed_plugins=[])
         fake_repo = tmp_path / "fake_repo"
         (fake_repo / "sync" / "scripts").mkdir(parents=True)
         (fake_repo / ".claude-plugin").mkdir(parents=True)
         shutil.copy2(SCRIPT, fake_repo / "sync" / "scripts" / "sync-user-plugins.sh")
         (fake_repo / "AGENTS.md").write_text("# AGENTS")
+        # The new Claude marketplace has a single `optimus` entry (no prefix).
         (fake_repo / ".claude-plugin" / "marketplace.json").write_text(json.dumps({
             "name": "optimus",
             "owner": {"name": "T", "email": "t@e"},
             "metadata": {"description": "x"},
-            "plugins": [{"name": "optimus-fallback", "source": "./fallback",
-                         "version": "1.0.0", "description": "x"}],
+            "plugins": [{"name": "optimus", "source": ".",
+                         "version": "2.0.0", "description": "x"}],
         }))
         # No Source 1 (no droid). No Source 2 (no CLAUDE_MARKETPLACE_FILE).
         env = os.environ.copy()
@@ -924,9 +956,9 @@ class TestSourceResolution:
             timeout=30,
         )
         assert result.returncode == 0, f"stderr: {result.stderr}\nstdout: {result.stdout}"
-        # Stripped to bare 'fallback' on the EXPECTED list, then re-prefixed for
-        # the Claude Code install command.
-        assert "+ fallback ... OK" in result.stdout
+        # Single optimus plugin installed (proves the Source-3 resolver
+        # succeeded).
+        assert "+ optimus ... OK" in result.stdout
 
     def test_empty_marketplace_via_source_2_fails(self, tmp_path: Path) -> None:
         """F38 analog: Source 1 missing, Source 2 is the only available source but

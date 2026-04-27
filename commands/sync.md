@@ -1,42 +1,5 @@
 ---
-name: optimus-sync
-description: "Sync all Optimus plugins — install new, update existing, remove orphaned. Supports Droid (Factory) and Claude Code simultaneously."
-trigger: >
-  - When user says "sync", "sync plugins", "update plugins", or "optimus sync"
-  - When user wants to install/update all Optimus plugins at once
-  - After a new Optimus release
-skip_when: >
-  - User wants to install a single specific plugin (use `droid plugin install` directly)
-prerequisite: >
-  - At least one supported platform: droid CLI installed OR claude CLI installed
-  - jq installed and available
-  - For Droid: Optimus marketplace registered (`droid plugin marketplace add https://github.com/alexgarzao/optimus`)
-  - For Claude Code: Optimus marketplace registered (`claude plugin marketplace add https://github.com/alexgarzao/optimus`) — one-time setup
-NOT_skip_when: >
-  - "I'll update plugins manually" -- optimus-sync handles scope conflicts and orphan removal automatically.
-  - "Only one plugin needs updating" -- sync is optimized for batch operations and ensures consistency.
-examples:
-  - name: Sync all plugins
-    invocation: "/optimus-sync"
-    expected_flow: >
-      1. Detect available platforms (Droid, Claude Code, or both)
-      2. Update each platform's marketplace cache
-      3. Calculate changes per platform (new/orphaned/existing)
-      4. Execute each operation with progress
-      5. Show per-platform summary
-related:
-  complementary:
-    - optimus-help
-  sequence:
-    after:
-      - optimus-help
-verification:
-  manual:
-    - At least one platform detected
-    - New plugins installed successfully
-    - Orphaned plugins removed
-    - Existing plugins updated
-    - Per-platform summary shows correct counts
+description: Sync all Optimus plugins — install new, update existing, remove orphaned. Supports Droid (Factory) and Claude Code simultaneously.
 ---
 
 # Optimus Sync
@@ -250,7 +213,7 @@ Only show platforms that were detected and synced.
 - If a plugin operation fails, the script logs it and continues. Do NOT stop
   the entire sync on a single failure.
 - If the user cancels mid-sync or the session is interrupted, inform them:
-  "Sync interrupted. Some plugins may be partially updated. Re-run `/optimus-sync` to complete."
+  "Sync interrupted. Some plugins may be partially updated. Re-run `/optimus:sync` to complete."
 - The `make sync-plugins` target in the project Makefile runs `sync/scripts/sync-user-plugins.sh`
   directly. Both the agent skill and CLI use the same script.
 - Claude Code sync **only** touches `*@optimus` plugins via the native plugin
