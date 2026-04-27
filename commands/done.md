@@ -485,11 +485,15 @@ push failed.
   Run `/optimus:report` to see updated project status and what to work on next."
 
 ### Dry-Run Mode
-If the user requests a dry-run (e.g., "dry-run close T-012", "preview close"):
-- Run ALL 3 gates normally (Phase 2)
-- Present results as information only
-- **Do NOT change task status**
-- **Do NOT run cleanup** — skip Phase 4 entirely
+
+Follow AGENTS.md Protocol: Dry-Run Mode. The canonical rules apply uniformly
+to plan/build/review/done — see the inlined Protocol: Dry-Run Mode block below.
+
+**Stage-4 (done) specifics:**
+- The "no status change" rule means skip the DONE status update.
+- The "no fix application" rule means skip Phase 4 (cleanup) entirely.
+- All 3 gates (Phase 2) still run in full so the user sees what would have
+  happened.
 
 <!-- INLINE-PROTOCOLS:START -->
 ## Shared Protocols (from AGENTS.md)
@@ -1009,6 +1013,10 @@ else
   SHOULD_FETCH=1
   if [ -f "$FETCH_MARKER" ]; then
     LAST_EPOCH=$(cat "$FETCH_MARKER" 2>/dev/null || echo 0)
+    # Defense-in-depth: ensure marker contents are numeric before arithmetic.
+    # A corrupted/manually-edited marker file would otherwise crash the
+    # `$((NOW_EPOCH - LAST_EPOCH))` expression under `set -euo pipefail`.
+    [[ "$LAST_EPOCH" =~ ^[0-9]+$ ]] || LAST_EPOCH=0
     if [ -n "$LAST_EPOCH" ] && [ "$((NOW_EPOCH - LAST_EPOCH))" -lt 300 ]; then
       SHOULD_FETCH=0
     fi
@@ -1039,6 +1047,32 @@ fi
   not the project code branches.
 
 Skills reference this as: "Check optimus-tasks.md divergence — see AGENTS.md Protocol: Divergence Warning."
+
+
+## Protocol: Dry-Run Mode
+
+**Referenced by:** plan, build, review, done (all stage agents 1-4).
+
+All stage agents support **dry-run mode**. When the user includes "dry-run" or
+"preview" in their invocation (e.g., "dry-run spec T-003", "preview review T-012"),
+the agent MUST:
+
+1. **Run all analysis/validation phases normally** — agent dispatch, findings, etc.
+2. **Do NOT change task status** — skip the status update step in state.json.
+3. **Do NOT commit or push anything** — no git operations that modify state.
+4. **Do NOT create workspaces** — skip branch/worktree creation (stage-1 only).
+5. **Do NOT apply fixes** — skip batch-apply phases.
+6. **Do NOT increment stage stats** — skip the Increment Stage Stats protocol.
+7. **Do NOT write session files** — session state is for crash recovery of real
+   executions, not previews.
+8. **Skip convergence rounds 2+** — round 1 (primary review pass) is sufficient
+   for preview; do NOT enter the convergence loop.
+9. **Present results as informational** — phrase the summary as "what would happen"
+   without implying any side effects occurred.
+
+Stage agents may add stage-specific dry-run notes (e.g., which phase numbers
+to skip), but MUST NOT relax any of the rules above. The point of dry-run is
+to give the user a reliable preview with zero state mutation.
 
 
 ### Protocol: GitHub CLI Check (HARD BLOCK)
@@ -1106,14 +1140,14 @@ Events and their parameter signatures:
 | `status-change` | `event task_id old_status new_status` | Any status transition |
 | `task-done` | `event task_id old_status "DONE"` | Task marked as done |
 | `task-cancelled` | `event task_id old_status "Cancelado"` | Task cancelled |
-| `task-blocked` | `event task_id current_status current_status reason` | Dependency check failed (5 args — includes reason) |
+| `task-blocked` | `event task_id current_status reason` | Dependency check failed (4 args — includes reason) |
 
 When a dependency check fails (provide defaults so hook payload is never malformed):
 ```bash
 : "${dep_id:=unknown}"
 : "${dep_status:=unknown}"
 if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" "task-blocked" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "blocked by $dep_id ($dep_status)")" 2>/dev/null &
+  "$HOOKS_FILE" "task-blocked" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "blocked by $dep_id ($dep_status)")" 2>/dev/null &
 fi
 ```
 
@@ -1293,6 +1327,14 @@ for TASK_ID in $TASK_IDS; do
   echo "$TASK_ID: $STATUS"
 done
 ```
+
+**Cancelado state.json shape contract:**
+When a task transitions to status `Cancelado`, the `branch` field MUST remain present
+in the state.json entry but MAY be set to empty string `""` (NOT removed) if the
+underlying branch was deleted by the cancel flow. Readers MUST treat `"branch": ""`
+as a valid Cancelado-state sentinel; they MUST NOT treat absence of the `branch`
+field as a meaningful state difference. The State Management writer ALWAYS produces
+the full `{status, branch, updated_at}` triple.
 
 **state.json is NEVER committed.** It is gitignored. No `git add` or `git commit`
 for state changes.

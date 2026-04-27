@@ -10,6 +10,7 @@ These tests cover:
   5. Gitignore inclusion of .optimus/logs/
 """
 
+import functools
 import re
 import shutil
 import subprocess
@@ -62,12 +63,17 @@ def _extract_protocol_section(title: str) -> str:
     return content[idx:next_idx] if next_idx != -1 else content[idx:]
 
 
+@functools.lru_cache(maxsize=1)
 def _extract_helper_bash() -> str:
     """Extract the bash block that defines `_optimus_quiet_run()`.
 
     Content-based extraction (NOT positional) so that future contributors can
     add introductory examples without breaking every helper test with cryptic
     `bash: _optimus_quiet_run: command not found` errors.
+
+    Cached at module scope to avoid re-reading AGENTS.md (~3000 lines) on each
+    of the 14+ tests that call this helper. Tests that rebind `AGENTS_MD` for
+    fixtures must call `_extract_helper_bash.cache_clear()` after the rebind.
     """
     section = _extract_protocol_section("Protocol: Quiet Command Execution")
     blocks = re.findall(r"```bash\n(.*?)\n```", section, re.DOTALL)
@@ -150,6 +156,50 @@ class TestQuietRunHelper:
         # The sanitized label must appear in the log path; '/' and '*' become '-'.
         assert "weird-chars-here-" in out, f"sanitization failed: {out}"
 
+    @pytest.mark.parametrize(
+        "label,expected",
+        [
+            # Whitespace becomes '-' (one per space, collapsed by `s/--*/-/g`).
+            ("a b c", "a-b-c"),
+            # Shell metacharacters that are likely to appear in real labels.
+            ("a;b", "a-b"),
+            ('a"b', "a-b"),
+            ("a'b", "a-b"),
+            # Leading and trailing parens are stripped after collapse.
+            ("(a)", "a"),
+            # Mixed: '/' and '*' and trailing '?' all become '-', last '-' is
+            # then stripped as trailing.
+            ("a/b*c?", "a-b-c"),
+            # Pipe + ampersand + dollar — each becomes '-' and runs collapse.
+            ("a|b&c$d", "a-b-c-d"),
+            # Underscores and dashes are PRESERVED (in the tr -c set).
+            ("a_b-c", "a_b-c"),
+        ],
+    )
+    def test_label_sanitization_parametrized(
+        self, tmp_path: Path, label: str, expected: str
+    ):
+        """Per-character sanitization contract.
+
+        Sanitize rule (AGENTS.md _optimus_quiet_run):
+          tr -c '[:alnum:]-_' '-' | sed 's/--*/-/g;s/^-//;s/-$//'
+        i.e. (a) every char NOT in [a-zA-Z0-9_-] becomes '-', then (b) runs
+        of '-' collapse to one, then (c) leading/trailing '-' are stripped.
+        Expected values above were derived from that rule, NOT from
+        observed output, so they catch any drift in either direction.
+        """
+        rc, out, _ = _run_helper(
+            tmp_path, f"_optimus_quiet_run {label!r} echo ok"
+        )
+        assert rc == 0, f"helper exited {rc} for label={label!r}: {out}"
+        # The sanitized label appears between the timestamp and the PID
+        # in the log filename: `<ts>-<safe>-<pid>.log`. Assert by
+        # substring match to stay timestamp/pid-agnostic.
+        assert f"-{expected}-" in out, (
+            f"label={label!r} expected sanitized={expected!r}, "
+            f"output did not contain it: {out}"
+        )
+
     def test_all_special_chars_falls_back_to_run(self, tmp_path: Path):
         rc, out, _ = _run_helper(tmp_path, '_optimus_quiet_run "///***???" echo ok')
         assert rc == 0
@@ -179,9 +229,10 @@ class TestQuietRunHelper:
         assert rc == 1, f"expected exit 1, got {rc}; out={out[:200]}"
         # Body between separator and end of stdout
         body = out.split("--- last 50 lines ---", 1)[1].strip().splitlines()
-        # `cat -v` may add a trailing $ marker on the last line, but line count
-        # should still be <= 50.
-        assert len(body) <= 50, f"expected <=50 lines, got {len(body)}"
+        # The contract is EXACTLY 50 lines for any input >= 50 lines. The
+        # 200-line input here exercises that contract — tightening from
+        # `<= 50` to `== 50` catches any future drift to e.g. 49 / 51.
+        assert len(body) == 50, f"expected exactly 50 lines, got {len(body)}"
 
     def test_nonexistent_command_returns_127(self, tmp_path: Path):
         rc, out, _ = _run_helper(
@@ -303,6 +354,38 @@ class TestQuietRunProtocolDoc:
         """Skills reference this protocol by an exact phrase."""
         content = AGENTS_MD.read_text()
         assert "AGENTS.md Protocol: Quiet Command Execution" in content
+
+    def test_extract_helper_skips_intro_blocks(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        """Given AGENTS.md with TWO bash blocks where only the SECOND defines
+        `_optimus_quiet_run()`, the extractor returns the SECOND block.
+
+        Regression guard for the content-based (not positional) extraction
+        promise documented in `_extract_helper_bash`. Without this test the
+        regex could silently drift back to a positional match that breaks
+        every helper test if a contributor adds an introductory example.
+        """
+        import sys
+        tqr = sys.modules[__name__]
+        fake = tmp_path / "AGENTS.md"
+        fake.write_text(
+            "### Protocol: Quiet Command Execution\n\n"
+            "An introductory example block (not the helper):\n\n"
+            "```bash\necho intro\n```\n\n"
+            "And here is the actual helper:\n\n"
+            "```bash\n_optimus_quiet_run() { echo real; }\n```\n"
+        )
+        monkeypatch.setattr(tqr, "AGENTS_MD", fake)
+        # Cache is on the function object — clear it after the AGENTS_MD
+        # rebind so the extractor re-reads the fake file rather than the
+        # cached real-AGENTS.md result.
+        _extract_helper_bash.cache_clear()
+        try:
+            extracted = _extract_helper_bash()
+        finally:
+            # Restore the cache to a clean state for subsequent tests.
+            _extract_helper_bash.cache_clear()
+        assert "_optimus_quiet_run() { echo real; }" in extracted
+        assert "echo intro" not in extracted
 
 
 # ---------------------------------------------------------------------------

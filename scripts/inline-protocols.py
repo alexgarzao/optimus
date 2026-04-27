@@ -90,7 +90,22 @@ def parse_agents_md() -> dict[str, str]:
 
 
 def extract_refs_from_content(content: str) -> set[str]:
-    """Extract all AGENTS.md references from SKILL.md content (body only, not inlined block)."""
+    """Extract all AGENTS.md references from SKILL.md content (body only, not inlined block).
+
+    Heuristic chain (intentional, in order):
+      1. Match the literal phrase ``AGENTS.md Protocol: <name>`` via PROTOCOL_RE.
+      2. Trim trailing prose at the first sentence boundary
+         (``. `` followed by uppercase) — cuts off "...Validation. Use stage=...".
+      3. Trim remaining trailing context (comma+with/followed clauses, bold
+         markers, semicolons) — cuts off "...Validation, with X" / "**Note**".
+      4. Strip terminal punctuation `.):` to normalize "...Validation):" cases.
+
+    This chain is fragile but currently functional: it relies on prose authors
+    NOT putting ":" or "**" inside the Protocol name itself, which is true
+    today. The structured alternative would be to require a dedicated form
+    such as ``<protocol-ref name="X" />`` in SKILL bodies; deferred until the
+    heuristic actually misfires.
+    """
     content = strip_existing_inline(content)
     refs: set[str] = set()
 
@@ -121,7 +136,9 @@ def extract_refs_from_content(content: str) -> set[str]:
 
 
 def extract_refs_from_skill(skill_path: Path) -> set[str]:
-    """Extract all AGENTS.md references from a SKILL.md file."""
+    """Test convenience: tests pass Path objects. Production code calls
+    extract_refs_from_content(raw_content) directly to avoid the extra
+    read_text() round-trip."""
     return extract_refs_from_content(skill_path.read_text())
 
 
@@ -367,6 +384,21 @@ def inline_protocols() -> None:
         inline_parts.append(MARKER_END)
 
         new_content = content + "\n".join(inline_parts) + "\n"
+
+        # F14e: Skip the write when the inlined output is byte-identical to
+        # what's already on disk. Keeps mtime stable on no-op runs, which
+        # matters for incremental tooling (Make, watchers) and avoids
+        # spurious git diffs. The matched/unmatched accounting is still
+        # printed below so reviewers see the full picture.
+        if new_content == raw_content:
+            print(
+                f"  {plugin_name}: no changes (already up to date) "
+                f"({len(refs)} refs, {len(unmatched)} unmatched)"
+            )
+            if unmatched:
+                for u in unmatched:
+                    print(f"    WARNING: unmatched ref: {u}", file=sys.stderr)
+            continue
 
         # F3.3d: Refuse to write through a symlink. Defense-in-depth against
         # a malicious commit that replaces SKILL.md with a symlink to e.g.

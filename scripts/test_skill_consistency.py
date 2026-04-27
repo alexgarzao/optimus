@@ -1,5 +1,30 @@
 #!/usr/bin/env python3
-"""Tests for cross-file consistency rules in SKILL.md and AGENTS.md."""
+"""Cross-skill consistency tests for the Optimus repo.
+
+This module is large (~1900+ LOC) by design — it spans many disjoint
+concerns that all share the same fixture surface (every SKILL.md plus
+AGENTS.md):
+
+- AskUser format consistency (TestAskUser*, TestStable*, TestStructured*)
+- Description matching (TestReadOnly*, TestOwner*, TestQuickReport*)
+- Stage/phase rename hygiene (TestStageRename*, no stale "check"/"5 stages")
+- Plugin/marketplace parity (TestDualPlatformParity, TestPluginCompleteness,
+  TestClaudeCommandsSync, TestMarketplace*)
+- Phase numbering and semantic anchors (TestPhase*, TestSemanticAnchor*)
+- Inline-protocols regressions (TestNeedsFormatAutoInjection, dead-code
+  guards for removed MIGRATE/RENAME constants)
+- Heading and reference hygiene (TestProtocolHeadings,
+  TestReferenceCanonicality)
+- Anti-rationalization / pressure-resistance hygiene
+- Numeric drift in stats hot-paths
+
+If splitting becomes necessary, the natural boundaries are the test
+classes — each is independent and can be moved to its own file with
+corresponding Makefile target updates. The current single-file layout
+is preferred while the test count and class count stay roughly stable;
+splitting prematurely would multiply the import overhead without
+improving navigability.
+"""
 
 import json
 import re
@@ -181,6 +206,15 @@ class TestDescriptionConsistency:
 
 # Patterns that indicate 'check' used as the stage-3 name (not as English verb
 # or part of 'pr-check' tool name or 'gh pr checks' CLI command).
+#
+# F14p: These patterns are intentionally aggressive. Stage 3 was renamed
+# from 'check' → 'review'; we want any future stale wording to fail loudly
+# in CI rather than silently survive a rebase or merge from a long-lived
+# branch. If a legitimate use case for any of these exact phrases emerges
+# (e.g., a new feature that genuinely talks about a "check" workflow that
+# is not the old stage-3), DO NOT weaken the regex — instead exclude the
+# specific file via an EXCLUSION_PATHS list (add one if needed) so the
+# guard remains tight everywhere else.
 STALE_CHECK_PATTERNS = [
     (re.compile(r"stage=`?check`?"), "stage=check reference"),
     (re.compile(r"plan, build, and check"), "pipeline list with check"),
@@ -191,6 +225,9 @@ STALE_CHECK_PATTERNS = [
     (re.compile(r"\bcheck Phase \d+"), "check Phase N reference"),
     (re.compile(r"\bcheck ×\d+"), "check xN display label"),
     (re.compile(r"\bAverage check runs\b"), "Average check runs"),
+    # F13a: stale lifecycle stage names (replaced by plan/build/review/done).
+    (re.compile(r"\(spec, impl, review, close\)"), "stale stage list (spec, impl, review, close)"),
+    (re.compile(r"\bstage-1 and close\b"), "stale stage-1 and close reference"),
 ]
 
 
@@ -483,13 +520,39 @@ class TestPluginCompleteness:
         )
 
     def test_expected_plugin_count(self):
-        """Marketplace must have exactly 17 plugins."""
+        """Marketplace must have exactly 17 plugins.
+
+        Defense-in-depth count check; the SET check below
+        (`test_expected_plugins_match_set`) catches identity drift, which
+        a count-only check cannot detect (e.g., `batch` removed and
+        `chat` added would still pass count==17).
+        """
         if not MARKETPLACE_JSON.exists():
             return
         marketplace = json.loads(MARKETPLACE_JSON.read_text())
         count = len(marketplace.get("plugins", []))
         assert count == 17, (
             f"Expected 17 plugins in marketplace, found {count}"
+        )
+
+    def test_expected_plugins_match_set(self):
+        """Marketplace plugin SET must match EXPECTED_PLUGINS exactly.
+
+        F14o: a count-only check (above) silently passes if a contributor
+        swaps one plugin for another. This set-comparison surfaces the
+        actual identity drift via `missing` / `extra` diffs.
+        """
+        if not MARKETPLACE_JSON.exists():
+            return
+        marketplace = json.loads(MARKETPLACE_JSON.read_text())
+        actual = set(p["name"] for p in marketplace.get("plugins", []))
+        expected = set(EXPECTED_PLUGINS)
+        assert actual == expected, (
+            f"Plugin set drift:\n"
+            f"  missing (in EXPECTED_PLUGINS but not marketplace): "
+            f"{sorted(expected - actual)}\n"
+            f"  extra   (in marketplace but not EXPECTED_PLUGINS): "
+            f"{sorted(actual - expected)}"
         )
 
     def test_no_removed_plugins_referenced(self):
@@ -2808,3 +2871,92 @@ class TestMarketplaceSchemaParity:
                         f"vs Claude='{claude_versions[name]}'"
                     )
         assert violations == [], "\n".join(violations)
+
+
+# --- F13c: Cancelado state.json shape contract ---
+
+
+class TestCanceladoStateShape:
+    """F13c: Cancelado state.json entries have branch="" (empty string),
+    NOT absent field. Documented in AGENTS.md State Management."""
+
+    def test_agents_md_documents_cancelado_branch_shape(self):
+        content = (REPO_ROOT / "AGENTS.md").read_text()
+        assert "Cancelado state.json shape" in content, (
+            "AGENTS.md must document the Cancelado branch-field shape contract."
+        )
+
+
+# --- F13d: task-blocked hook 4-arg signature ---
+
+
+class TestTaskBlockedHookSignature:
+    """F13d: task-blocked hook event uses 4 args (event, task_id, current_status,
+    reason) — not 5 with duplicate current_status."""
+
+    def test_no_duplicate_current_status_in_task_blocked_examples(self):
+        content = (REPO_ROOT / "AGENTS.md").read_text()
+        # Find task-blocked example invocations and verify they have 4 args
+        # not the historical 5-arg form. Each arg is wrapped in
+        # "$(_optimus_sanitize "$var")"; counting sanitize calls per
+        # invocation line tells us how many args were passed.
+        # 4-arg signature: 3 sanitized args (task_id, current_status, reason).
+        # 5-arg signature: 4 sanitized args (task_id, current_status, current_status, reason).
+        violations = []
+        for line in content.splitlines():
+            if "task-blocked" not in line:
+                continue
+            sanitize_calls = line.count("_optimus_sanitize")
+            if sanitize_calls >= 4:
+                violations.append(line.strip())
+        assert violations == [], (
+            "task-blocked example must use 4-arg signature: "
+            + "\n".join(violations)
+        )
+
+
+# --- F13e: resolve detects legacy schema ---
+
+
+class TestResolveDetectsLegacySchema:
+    """F13e: resolve must check for legacy Status/Branch columns before
+    attempting structural merge."""
+
+    def test_resolve_has_legacy_schema_pre_check(self):
+        path = REPO_ROOT / "resolve" / "skills" / "optimus-resolve" / "SKILL.md"
+        content = path.read_text()
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "legacy Status/Branch" in body or "legacy schema" in body, (
+            "resolve must document and check for the pre-redesign legacy column schema."
+        )
+
+
+# --- F13f: tasks re-validates after mutation ---
+
+
+class TestTasksReValidatesAfterMutation:
+    """F13f: tasks SKILL must re-validate optimus-tasks.md after every
+    mutation, before staging/committing."""
+
+    MUTATING_OPERATIONS = ["Apply Cancellation", "Apply Reopen", "Apply Advance",
+                          "Apply Demotion", "Apply Edit", "Apply Create", "Apply Remove"]
+
+    def test_each_mutation_step_re_validates(self):
+        path = REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md"
+        content = path.read_text()
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        # For each mutation step heading, find its section and check it
+        # references the validation protocol (or has a "Re-validate" instruction)
+        violations = []
+        for op in self.MUTATING_OPERATIONS:
+            # Find op in body; check next ~80 lines for re-validate reference
+            idx = body.find(op)
+            if idx < 0:
+                # Operation may not exist in current SKILL; skip silently
+                continue
+            window = body[idx:idx + 4000]  # ~80 lines worth
+            if not ("Re-validate" in window or "AGENTS.md Protocol: optimus-tasks.md Validation" in window):
+                violations.append(op)
+        assert violations == [], (
+            "Mutating operations must re-validate after edits:\n" + "\n".join(violations)
+        )

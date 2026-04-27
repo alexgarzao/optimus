@@ -37,7 +37,8 @@ if ! [[ "$MARKETPLACE_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
 fi
 readonly DROID_TIMEOUT="${OPTIMUS_DROID_TIMEOUT:-60}"
 readonly CLAUDE_TIMEOUT="${OPTIMUS_CLAUDE_TIMEOUT:-60}"
-readonly OPTIMUS_REPO_URL="${OPTIMUS_REPO_URL:-https://github.com/alexgarzao/optimus}"
+readonly OPTIMUS_REPO_DEFAULT_URL="https://github.com/alexgarzao/optimus"
+readonly OPTIMUS_REPO_URL="${OPTIMUS_REPO_URL:-$OPTIMUS_REPO_DEFAULT_URL}"
 readonly CLAUDE_MARKETPLACE_FILE="${CLAUDE_MARKETPLACE_FILE:-$HOME/.claude/plugins/marketplaces/${MARKETPLACE_NAME}/.claude-plugin/marketplace.json}"
 
 # ─── Platform detection ───────────────────────────────────────────────────────
@@ -586,8 +587,7 @@ echo "Platforms: $platforms"
 echo ""
 
 # Surface a custom OPTIMUS_REPO_URL so users notice it on each run.
-_default_url="https://github.com/alexgarzao/optimus"
-if [ "$OPTIMUS_REPO_URL" != "$_default_url" ]; then
+if [ "$OPTIMUS_REPO_URL" != "$OPTIMUS_REPO_DEFAULT_URL" ]; then
   echo "Note: using custom OPTIMUS_REPO_URL=$OPTIMUS_REPO_URL"
   echo ""
 fi

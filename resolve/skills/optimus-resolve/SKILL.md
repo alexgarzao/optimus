@@ -76,6 +76,32 @@ If no conflict markers found:
 - If no merge in progress → **STOP**: "No conflicts found in optimus-tasks.md. Nothing to resolve."
 - If merge in progress but optimus-tasks.md is not conflicted → **STOP**: "optimus-tasks.md is not conflicted. Use `git mergetool` for other files."
 
+**Pre-merge legacy schema check:** Before resolving structural conflicts in
+optimus-tasks.md, verify that NEITHER side of the merge contains the legacy
+Status/Branch columns. A long-lived feature branch from before the post-redesign
+migration may still carry the legacy schema and try to merge those columns back
+in. If detected, the merge cannot proceed safely — the legacy columns must be
+migrated first via `/optimus-import`.
+
+```bash
+# TASKS_GIT_REL was set by Protocol: Resolve Tasks Git Scope (the path of
+# optimus-tasks.md relative to the git scope's root). Use tasks_git so that
+# separate-repo scope queries the tasks repo, not the project repo.
+LEGACY_RE='\| Status \|.*\| Branch \|'
+for ref in HEAD MERGE_HEAD; do
+  if tasks_git show "${ref}:${TASKS_GIT_REL}" 2>/dev/null | head -20 | grep -qE "$LEGACY_RE"; then
+    echo "ERROR: ${ref} carries the legacy Status/Branch columns in optimus-tasks.md." >&2
+    echo "  This is the pre-redesign legacy schema. Status and Branch live in" >&2
+    echo "  state.json now (gitignored) and must NOT appear as table columns." >&2
+    echo "  Run /optimus-import on each side separately to migrate, then retry." >&2
+    exit 1
+  fi
+done
+```
+
+If no `MERGE_HEAD` exists (e.g., during a rebase rather than a merge), substitute
+the appropriate ref pair (`HEAD` and `REBASE_HEAD` or the rebase's onto target).
+
 ### Step 1.2: Parse Conflict Regions
 
 Read `optimus-tasks.md` and identify each conflict region:

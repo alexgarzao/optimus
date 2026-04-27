@@ -255,13 +255,15 @@ Options:
 **If "Link existing spec"**, search `<TASKS_DIR>/tasks/*.md` for task files, present
 matches based on keyword overlap with the task title, and let the user select one.
 
-### Step 2.4: Add to optimus-tasks.md
+### Step 2.4: Apply Create
 
 1. Add a new row to the table:
    ```
    | T-NNN | <title> | <tipo> | <depends> | <priority> | <version> | <estimate or -> | <taskspec or -> |
    ```
 2. Save the file
+3. **Re-validate after mutation** — see AGENTS.md Protocol: optimus-tasks.md Validation.
+   If validation fails, abort and revert the in-memory edits; do not commit.
 
 ### Step 2.5: Confirm
 
@@ -294,23 +296,25 @@ Determine which field(s) to edit. Editable fields:
 | Depends | Yes | Must validate references and check circular deps |
 | Estimate | Yes | Free text (S, M, L, XL, 2h, 1d) or `-` |
 | Status | **No** | Status is managed ONLY by stage agents |
-| Branch | **No** | Branch is managed ONLY by stage-1 and close |
+| Branch | **No** | Branch is managed ONLY by plan and done |
 | ID | **No** | IDs are immutable |
 | Ring reference | **No** | Managed by import and task creation only |
 
 **HARD BLOCK:** If the user tries to change Status or Branch, refuse:
 ```
-Status is managed by the cycle stage agents (spec, impl, review, close).
+Status is managed by the cycle stage agents (plan, build, review, done).
 To change status manually, use the Advance or Demote operations in this skill
 (e.g., "advance T-XXX" or "demote T-XXX"). To reopen a completed or cancelled
 task, use "reopen T-XXX".
 ```
 
-### Step 3.1: Apply Changes
+### Step 3.1: Apply Edit
 
 1. Update the relevant column(s) in the table row in optimus-tasks.md
 2. If Depends changed, validate all references exist and no circular dependencies
 3. Save the file
+4. **Re-validate after mutation** — see AGENTS.md Protocol: optimus-tasks.md Validation.
+   If validation fails, abort and revert the in-memory edits; do not commit.
 
 ### Step 3.2: Confirm
 
@@ -353,10 +357,12 @@ may cause data loss. Are you sure?
 
 Use `AskUser` for confirmation.
 
-### Step 4.2: Remove from optimus-tasks.md
+### Step 4.2: Apply Remove
 
 1. Remove the table row for T-XXX from optimus-tasks.md
 2. Save
+3. **Re-validate after mutation** — see AGENTS.md Protocol: optimus-tasks.md Validation.
+   If validation fails, abort and revert the in-memory edits; do not commit.
 
 **NOTE:** Do NOT renumber remaining task IDs. IDs are permanent identifiers.
 
@@ -382,6 +388,8 @@ Options:
 1. Rearrange table rows according to the requested order
 2. Do NOT change any cell values (ID, Title, Tipo, Status, Depends, Priority, Branch stay the same)
 3. Save the file
+4. **Re-validate after mutation** — see AGENTS.md Protocol: optimus-tasks.md Validation.
+   If validation fails, abort and revert the in-memory edits; do not commit.
 
 ### Step 5.2: Confirm
 
@@ -483,10 +491,19 @@ Show the new table order.
 ### Step 6.2: Apply Cancellation
 
 1. Update the status to `Cancelado` in state.json — see AGENTS.md Protocol: State Management.
-2. Remove the `branch` field from the task's entry in state.json (if branch was deleted in Step 6.1).
+2. If the underlying branch was deleted in Step 6.1, set the state.json entry's `branch`
+   field to empty string `""` via the State Management writer (the standard writer
+   template already produces `{status: "Cancelado", branch: "", updated_at: ...}`).
+   Do NOT remove the `branch` field — see AGENTS.md "Cancelado state.json shape contract".
 3. **Invoke notification hooks (if present)** — see AGENTS.md Protocol: Notification Hooks:
    ```bash
-   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+   if [ -f ./tasks-hooks.sh ]; then
+     HOOKS_FILE="./tasks-hooks.sh"
+   elif [ -f ./docs/tasks-hooks.sh ]; then
+     HOOKS_FILE="./docs/tasks-hooks.sh"
+   else
+     HOOKS_FILE=""
+   fi
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
      "$HOOKS_FILE" task-cancelled "$(_optimus_sanitize "T-XXX")" "$(_optimus_sanitize "<old status>")" "$(_optimus_sanitize "Cancelado")" 2>/dev/null &
    fi
@@ -495,9 +512,13 @@ Show the new table order.
    depends on T-XXX (identified in Step 6.1, item 3), fire the `task-blocked` hook:
    ```bash
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-     "$HOOKS_FILE" task-blocked "$(_optimus_sanitize "T-YYY")" "$(_optimus_sanitize "<dep-status>")" "$(_optimus_sanitize "<dep-status>")" "$(_optimus_sanitize "blocked by T-XXX (Cancelado)")" 2>/dev/null &
+     "$HOOKS_FILE" task-blocked "$(_optimus_sanitize "T-YYY")" "$(_optimus_sanitize "<dep-status>")" "$(_optimus_sanitize "blocked by T-XXX (Cancelado)")" 2>/dev/null &
    fi
    ```
+5. **Re-validate after mutation** — see AGENTS.md Protocol: optimus-tasks.md Validation.
+   Cancellation only writes to state.json (gitignored), but invariants can drift if a
+   prior structural edit was deferred. If validation fails, surface the violation and
+   refuse the cancel until it is fixed; do not stage/commit any pending edit.
 
 ### Step 6.3: Confirm
 
@@ -583,17 +604,27 @@ To resolve, run `/optimus:tasks`:
 
 1. Update the status in state.json to the target status determined in Step 7.1:
    - From `DONE`: `Em Andamento` if workspace exists, remove entry (= `Pendente`) if not
-   - From `Cancelado`: remove entry from state.json (= `Pendente`, must restart from stage-1)
-2. If reopening from `Cancelado`, also remove the `branch` field from state.json (any previous
-   branch is stale and should not be reused)
-3. Clean stale session state: `rm -f ".optimus/sessions/session-${TASK_ID}.json"`
-4. **Invoke notification hooks (if present)** — see AGENTS.md Protocol: Notification Hooks:
+   - From `Cancelado`: remove entry from state.json (= `Pendente`, must restart from plan)
+   When reopening from `Cancelado` via entry removal, any previous `branch` value is
+   discarded with the entry — there is no separate field-removal step.
+2. Clean stale session state: `rm -f ".optimus/sessions/session-${TASK_ID}.json"`
+3. **Invoke notification hooks (if present)** — see AGENTS.md Protocol: Notification Hooks:
    ```bash
-   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+   if [ -f ./tasks-hooks.sh ]; then
+     HOOKS_FILE="./tasks-hooks.sh"
+   elif [ -f ./docs/tasks-hooks.sh ]; then
+     HOOKS_FILE="./docs/tasks-hooks.sh"
+   else
+     HOOKS_FILE=""
+   fi
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
      "$HOOKS_FILE" status-change "$(_optimus_sanitize "T-XXX")" "$(_optimus_sanitize "DONE")" "$(_optimus_sanitize "<target status>")" 2>/dev/null &
    fi
    ```
+4. **Re-validate after mutation** — see AGENTS.md Protocol: optimus-tasks.md Validation.
+   Reopen only writes to state.json (gitignored), but invariants can drift if a
+   prior structural edit was deferred. If validation fails, surface the violation and
+   refuse the reopen until it is fixed; do not stage/commit any pending edit.
 
 ### Step 7.3: Confirm
 
@@ -670,11 +701,21 @@ code manually without using stage-2).
 1. Update the status in state.json to the target status — see AGENTS.md Protocol: State Management.
 2. **Invoke notification hooks (if present)** — see AGENTS.md Protocol: Notification Hooks:
    ```bash
-   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+   if [ -f ./tasks-hooks.sh ]; then
+     HOOKS_FILE="./tasks-hooks.sh"
+   elif [ -f ./docs/tasks-hooks.sh ]; then
+     HOOKS_FILE="./docs/tasks-hooks.sh"
+   else
+     HOOKS_FILE=""
+   fi
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
      "$HOOKS_FILE" status-change "$(_optimus_sanitize "T-XXX")" "$(_optimus_sanitize "<old status>")" "$(_optimus_sanitize "<target status>")" 2>/dev/null &
    fi
    ```
+3. **Re-validate after mutation** — see AGENTS.md Protocol: optimus-tasks.md Validation.
+   Advance only writes to state.json (gitignored), but invariants can drift if a
+   prior structural edit was deferred. If validation fails, surface the violation and
+   refuse the advance until it is fixed; do not stage/commit any pending edit.
 
 ---
 
@@ -726,11 +767,21 @@ that significant rework is needed and the task should go back to implementation)
 1. Update the status in state.json to the target status — see AGENTS.md Protocol: State Management.
 2. **Invoke notification hooks (if present)** — see AGENTS.md Protocol: Notification Hooks:
    ```bash
-   HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
+   if [ -f ./tasks-hooks.sh ]; then
+     HOOKS_FILE="./tasks-hooks.sh"
+   elif [ -f ./docs/tasks-hooks.sh ]; then
+     HOOKS_FILE="./docs/tasks-hooks.sh"
+   else
+     HOOKS_FILE=""
+   fi
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
      "$HOOKS_FILE" status-change "$(_optimus_sanitize "T-XXX")" "$(_optimus_sanitize "<old status>")" "$(_optimus_sanitize "<target status>")" 2>/dev/null &
    fi
    ```
+3. **Re-validate after mutation** — see AGENTS.md Protocol: optimus-tasks.md Validation.
+   Demotion only writes to state.json (gitignored), but invariants can drift if a
+   prior structural edit was deferred. If validation fails, surface the violation and
+   refuse the demote until it is fixed; do not stage/commit any pending edit.
 
 ---
 
@@ -877,7 +928,10 @@ Confirm move?
 
 1. Update the Version column for each identified task
 2. Do NOT change Status, Branch, Depends, Priority, or any other field
-3. Save and commit: `chore(tasks): move N tasks from <source> to <target>`
+3. Save the file
+4. **Re-validate after mutation** — see AGENTS.md Protocol: optimus-tasks.md Validation.
+   If validation fails, abort and revert the in-memory edits; do not commit.
+5. Commit: `chore(tasks): move N tasks from <source> to <target>`
 
 ## Rules
 
@@ -1191,14 +1245,14 @@ Events and their parameter signatures:
 | `status-change` | `event task_id old_status new_status` | Any status transition |
 | `task-done` | `event task_id old_status "DONE"` | Task marked as done |
 | `task-cancelled` | `event task_id old_status "Cancelado"` | Task cancelled |
-| `task-blocked` | `event task_id current_status current_status reason` | Dependency check failed (5 args — includes reason) |
+| `task-blocked` | `event task_id current_status reason` | Dependency check failed (4 args — includes reason) |
 
 When a dependency check fails (provide defaults so hook payload is never malformed):
 ```bash
 : "${dep_id:=unknown}"
 : "${dep_status:=unknown}"
 if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" "task-blocked" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "blocked by $dep_id ($dep_status)")" 2>/dev/null &
+  "$HOOKS_FILE" "task-blocked" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "blocked by $dep_id ($dep_status)")" 2>/dev/null &
 fi
 ```
 
@@ -1490,6 +1544,14 @@ for TASK_ID in $TASK_IDS; do
   echo "$TASK_ID: $STATUS"
 done
 ```
+
+**Cancelado state.json shape contract:**
+When a task transitions to status `Cancelado`, the `branch` field MUST remain present
+in the state.json entry but MAY be set to empty string `""` (NOT removed) if the
+underlying branch was deleted by the cancel flow. Readers MUST treat `"branch": ""`
+as a valid Cancelado-state sentinel; they MUST NOT treat absence of the `branch`
+field as a meaningful state difference. The State Management writer ALWAYS produces
+the full `{status, branch, updated_at}` triple.
 
 **state.json is NEVER committed.** It is gitignored. No `git add` or `git commit`
 for state changes.

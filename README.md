@@ -107,21 +107,28 @@ it under `optimus:`.
 | `/bt` | `/optimus:bt` | `/optimus:batch` | `/im` | `/optimus:im` | `/optimus:import` |
 | `/qr` | `/optimus:qr` | `/optimus:quick-report` | `/rs` | `/optimus:rs` | `/optimus:resolve` |
 | `/rp` | `/optimus:rp` | `/optimus:report` | `/t` | `/optimus:t` | `/optimus:tasks` |
-| `/rsm` | `/optimus:rsm` | `/optimus:resume` | | | |
-
-`help` and `sync` have no short alias; invoke them as `/optimus-help` /
-`/optimus-sync` on Droid and `/optimus:help` / `/optimus:sync` on Claude Code.
+| `/rsm` | `/optimus:rsm` | `/optimus:resume` | `/hp` | `/optimus:hp` | `/optimus:help` |
+| `/sy` | `/optimus:sy` | `/optimus:sync` | | | |
 
 ## How it works
 
-The repo packages the same SKILLs for two platforms:
+The repo packages the same SKILLs for two platforms, each with its own
+marketplace manifest at the repo root:
+
+- `.factory-plugin/marketplace.json` — Droid marketplace (lists 17 plugins)
+- `.claude-plugin/marketplace.json` — Claude Code marketplace (lists the
+  single `optimus` plugin sourced from `.`)
+
+Per platform:
 
 - **Droid:** 17 individual plugins, one per directory:
-  - `<plugin>/.factory-plugin/plugin.json` — plugin manifest
+  - `.factory-plugin/marketplace.json` at the repo root — enumerates the 17 plugins
+  - `<plugin>/.factory-plugin/plugin.json` — per-plugin manifest
   - `<plugin>/skills/optimus-<skill>/SKILL.md` — full instructions with frontmatter
   - `<plugin>/commands/<alias>.md` — optional short alias (redirects to `/optimus-<plugin>`)
 - **Claude Code:** ONE plugin (`optimus`) sourced from the repo root:
-  - `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` at the root
+  - `.claude-plugin/marketplace.json` at the repo root — enumerates the single `optimus` plugin
+  - `.claude-plugin/plugin.json` at the repo root — `optimus` plugin manifest
   - Top-level `commands/<plugin>.md` and `commands/<alias>.md` are auto-discovered
     by Claude Code and exposed as `/optimus:<command>` / `/optimus:<alias>`.
 

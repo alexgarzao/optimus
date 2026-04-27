@@ -477,50 +477,20 @@ directory is `subtasks/T-001/` (relative to `tasksDir`).
 
 ### Conventional Commits (PR Titles and Commit Messages)
 
-All PR titles and commit messages MUST follow the **Conventional Commits 1.0.0**
-specification (https://www.conventionalcommits.org/en/v1.0.0/).
+PR titles and commit messages follow **Conventional Commits 1.0.0**
+(https://www.conventionalcommits.org/en/v1.0.0/). Derive `type` from the
+task's Tipo column (Feature→`feat`, Fix→`fix`, Refactor→`refactor`,
+Chore→`chore`, Docs→`docs`, Test→`test` — see the **Tipo** table above for
+the full mapping). For task-linked PRs the task ID is a valid scope:
+`feat(T-003): add user registration API`. Append `!` before the colon to
+signal a breaking change: `feat(api)!: change authentication response format`.
 
-**Format:**
-```
-<type>[optional scope]: <description>
-```
+Two project-specific conventions on top of the spec:
 
-- **type** (REQUIRED): one of the prefixes from the Tipo table above (`feat`, `fix`,
-  `refactor`, `chore`, `docs`, `test`). Additional types allowed by the spec: `build`,
-  `ci`, `style`, `perf`.
-- **scope** (OPTIONAL): a noun in parentheses describing the section of the codebase,
-  e.g., `feat(auth):`, `fix(parser):`. For task-linked PRs, the task ID is a valid scope:
-  `feat(T-003):`.
-- **description** (REQUIRED): short imperative summary after the colon+space.
-- **`!`** (OPTIONAL): append before `:` to signal a breaking change, e.g., `feat(api)!:`.
-- Types are **lowercase**.
-
-**PR title examples (task-linked):**
-```
-feat(T-003): add user registration API
-fix(T-007): prevent duplicate login sessions
-refactor(T-012): extract auth middleware into shared module
-chore(T-015): upgrade Go to 1.22
-docs(T-020): add API reference for payments endpoint
-test(T-025): add E2E tests for checkout flow
-```
-
-**PR title examples (standalone / no task):**
-```
-feat: add dark mode toggle
-fix: resolve race condition in request handler
-feat(api)!: change authentication response format
-```
-
-**Deriving the type from Tipo:** When a PR is linked to a task, the `type` in the PR
-title MUST match the task's Tipo mapping (Feature→`feat`, Fix→`fix`, etc.). If the PR
-covers multiple tasks, use the type of the primary/largest change.
-
-**Administrative commits (optimus-tasks.md structural changes):** Structural changes to optimus-tasks.md
-(new task, dependency edit, version move) use `chore(tasks):` regardless of the task's
-Tipo. Status changes are NOT committed — they live in state.json (gitignored).
-
-**Reference:** Conventional Commits 1.0.0 — https://www.conventionalcommits.org/en/v1.0.0/
+- If the PR covers multiple tasks, use the type of the primary/largest change.
+- Structural changes to optimus-tasks.md (new task, dependency edit, version
+  move) use `chore(tasks):` regardless of the affected tasks' Tipo. Status
+  changes are NOT committed — they live in state.json (gitignored).
 
 ### Valid Status Values (stored in state.json)
 
@@ -677,7 +647,7 @@ It does NOT change task status and is NOT part of the pipeline stages.
    next agent. Agents may suggest but NEVER auto-invoke the next stage.
 3. **Status never goes backwards** — if a stage fails, the agent keeps working in
    the current status until it succeeds or the user stops it.
-4. **Anti-pulo** — each agent validates that the task is in the expected predecessor
+4. **Anti-rationalization** — each agent validates that the task is in the expected predecessor
    status (read from state.json) before proceeding. If not, it refuses and tells
    the user which agent to run first.
 5. **Re-execution allowed** — every agent (stages 1-3) accepts being re-run when
@@ -781,20 +751,30 @@ protection rules, CI workflows), not done. If the PR was merged, these already p
 
 If any gate fails, done stops immediately and status in state.json stays unchanged.
 
-## Dry-Run Mode (all stages)
+## Protocol: Dry-Run Mode
 
-All stage agents (1-4) support **dry-run mode**. When the user includes "dry-run" or
-"preview" in their invocation (e.g., "dry-run spec T-003", "preview review T-012"):
+**Referenced by:** plan, build, review, done (all stage agents 1-4).
+
+All stage agents support **dry-run mode**. When the user includes "dry-run" or
+"preview" in their invocation (e.g., "dry-run spec T-003", "preview review T-012"),
+the agent MUST:
 
 1. **Run all analysis/validation phases normally** — agent dispatch, findings, etc.
-2. **Do NOT change task status** — skip the status update step
-3. **Do NOT commit or push anything** — no git operations that modify state
-4. **Do NOT create workspaces** — skip branch/worktree creation (stage-1)
-5. **Do NOT apply fixes** — skip batch-apply phases
-6. **Present results as informational** — "what would happen" without side effects
-7. **Do NOT write session files** — session state is for crash recovery of real executions, not previews
+2. **Do NOT change task status** — skip the status update step in state.json.
+3. **Do NOT commit or push anything** — no git operations that modify state.
+4. **Do NOT create workspaces** — skip branch/worktree creation (stage-1 only).
+5. **Do NOT apply fixes** — skip batch-apply phases.
+6. **Do NOT increment stage stats** — skip the Increment Stage Stats protocol.
+7. **Do NOT write session files** — session state is for crash recovery of real
+   executions, not previews.
+8. **Skip convergence rounds 2+** — round 1 (primary review pass) is sufficient
+   for preview; do NOT enter the convergence loop.
+9. **Present results as informational** — phrase the summary as "what would happen"
+   without implying any side effects occurred.
 
-This allows users to preview what a stage would do before committing to it.
+Stage agents may add stage-specific dry-run notes (e.g., which phase numbers
+to skip), but MUST NOT relax any of the rules above. The point of dry-run is
+to give the user a reliable preview with zero state mutation.
 
 ## Reusable Protocols
 
@@ -2017,6 +1997,10 @@ else
   SHOULD_FETCH=1
   if [ -f "$FETCH_MARKER" ]; then
     LAST_EPOCH=$(cat "$FETCH_MARKER" 2>/dev/null || echo 0)
+    # Defense-in-depth: ensure marker contents are numeric before arithmetic.
+    # A corrupted/manually-edited marker file would otherwise crash the
+    # `$((NOW_EPOCH - LAST_EPOCH))` expression under `set -euo pipefail`.
+    [[ "$LAST_EPOCH" =~ ^[0-9]+$ ]] || LAST_EPOCH=0
     if [ -n "$LAST_EPOCH" ] && [ "$((NOW_EPOCH - LAST_EPOCH))" -lt 300 ]; then
       SHOULD_FETCH=0
     fi
@@ -2099,14 +2083,14 @@ Events and their parameter signatures:
 | `status-change` | `event task_id old_status new_status` | Any status transition |
 | `task-done` | `event task_id old_status "DONE"` | Task marked as done |
 | `task-cancelled` | `event task_id old_status "Cancelado"` | Task cancelled |
-| `task-blocked` | `event task_id current_status current_status reason` | Dependency check failed (5 args — includes reason) |
+| `task-blocked` | `event task_id current_status reason` | Dependency check failed (4 args — includes reason) |
 
 When a dependency check fails (provide defaults so hook payload is never malformed):
 ```bash
 : "${dep_id:=unknown}"
 : "${dep_status:=unknown}"
 if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" "task-blocked" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "blocked by $dep_id ($dep_status)")" 2>/dev/null &
+  "$HOOKS_FILE" "task-blocked" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "blocked by $dep_id ($dep_status)")" 2>/dev/null &
 fi
 ```
 
@@ -2596,6 +2580,14 @@ for TASK_ID in $TASK_IDS; do
 done
 ```
 
+**Cancelado state.json shape contract:**
+When a task transitions to status `Cancelado`, the `branch` field MUST remain present
+in the state.json entry but MAY be set to empty string `""` (NOT removed) if the
+underlying branch was deleted by the cancel flow. Readers MUST treat `"branch": ""`
+as a valid Cancelado-state sentinel; they MUST NOT treat absence of the `branch`
+field as a meaningful state difference. The State Management writer ALWAYS produces
+the full `{status, branch, updated_at}` triple.
+
 **state.json is NEVER committed.** It is gitignored. No `git add` or `git commit`
 for state changes.
 
@@ -2880,6 +2872,27 @@ All cycle review skills follow this pattern:
 10. After ALL N decisions collected: apply ALL approved fixes (see below)
 11. Run verification (see Verification Timing below)
 12. Present final summary
+
+### Pressure Resistance Patterns
+
+Users sometimes apply pressure to bypass review/approval gates ("we're in a
+hurry", "trust me"). The agent MUST recognize these patterns and respond
+according to the table below — NOT by relaxing the gate.
+
+| User Says | This Is | Your Response |
+|-----------|---------|---------------|
+| "skip convergence" mid-loop | TIME_PRESSURE | "Convergence is opt-in per round — exiting now sets status USER_STOPPED. Confirm exit?" |
+| "just apply all the fixes" | QUALITY_BYPASS | "Each finding requires per-finding decision. I'll proceed one by one." |
+| "trust me, this is fine" | AUTHORITY_OVERRIDE | "Following the AskUser flow as defined." |
+| "we're in a hurry, skip lint" | QUALITY_BYPASS | "Lint runs at every gate. I'll proceed; you'll see the verdict." |
+| "approve everything" | QUALITY_BYPASS | "Per-finding approval is the user-authority contract. Walking through each one." |
+| "just merge it" | QUALITY_BYPASS | "Merge requires the gate verdicts above to pass. Showing what's blocking." |
+
+The point of this pattern is **not** to refuse the user — it is to make the
+gate explicit so the user can either (a) genuinely confirm the exit/skip
+with awareness of the consequence, or (b) drop the pressure and let the
+flow continue normally. Phrasing the response as a question ("Confirm
+exit?") preserves user authority while keeping the gate honest.
 
 ### Fix Implementation (Complexity-Based Dispatch)
 
@@ -3220,7 +3233,7 @@ that dispatch review droids MUST include the applicable checklists in agent prom
 - i18n readiness: no hardcoded user-facing strings, date/number formatting locale-aware
 - Performance: no unnecessary re-renders, large lists virtualized, images optimized
 
-**Backend specialist** (`ring-dev-team-backend-engineer-golang` or TS equivalent) must additionally verify:
+**Backend specialist** (`ring-dev-team-backend-engineer-golang` or `ring-dev-team-backend-engineer-typescript`) must additionally verify:
 - Language idiomaticity: follows official style guide conventions
 - Graceful shutdown: SIGTERM handling, in-flight request draining
 - Connection pool sizing: appropriate for expected load

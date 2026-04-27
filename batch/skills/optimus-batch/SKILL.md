@@ -868,6 +868,14 @@ for TASK_ID in $TASK_IDS; do
 done
 ```
 
+**Cancelado state.json shape contract:**
+When a task transitions to status `Cancelado`, the `branch` field MUST remain present
+in the state.json entry but MAY be set to empty string `""` (NOT removed) if the
+underlying branch was deleted by the cancel flow. Readers MUST treat `"branch": ""`
+as a valid Cancelado-state sentinel; they MUST NOT treat absence of the `branch`
+field as a meaningful state difference. The State Management writer ALWAYS produces
+the full `{status, branch, updated_at}` triple.
+
 **state.json is NEVER committed.** It is gitignored. No `git add` or `git commit`
 for state changes.
 

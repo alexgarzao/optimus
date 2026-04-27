@@ -71,7 +71,15 @@ Each plugin includes a short alias for quick access:
 | `/bt` | `/optimus:batch` | `/im` | `/optimus:import` |
 | `/qr` | `/optimus:quick-report` | `/rs` | `/optimus:resolve` |
 | `/rp` | `/optimus:report` | `/t` | `/optimus:tasks` |
-| `/rsm` | `/optimus:resume` | | |
+| `/rsm` | `/optimus:resume` | `/hp` | `/optimus:help` |
+| `/sy` | `/optimus:sync` | | |
+
+<!-- F14bb: This alias table is hand-curated and will drift if a contributor
+     adds a new plugin without also updating it. The "Adding a new plugin"
+     checklist in AGENTS.md / CONTRIBUTING enumerates this update step.
+     If/when more than ~20 aliases exist, consider auto-deriving the table at
+     runtime by parsing the per-plugin commands/<alias>.md files (the same
+     source-of-truth used by scripts/sync-claude-commands.py). -->
 
 ---
 

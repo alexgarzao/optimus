@@ -151,10 +151,28 @@ if [ -z "$MAIN_WORKTREE" ]; then
 fi
 STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 if [ ! -f "$STATE_FILE" ]; then echo '{}' > "$STATE_FILE"; fi
-if [ -z "$TASK_ID" ] || [ -z "$LEGACY_STATUS" ]; then
-  echo "WARNING: Skipping migration for task with empty ID or status."
+if [ -z "$TASK_ID" ]; then
+  echo "WARNING: Skipping migration for task with empty ID."
 else
-  if jq --arg id "$TASK_ID" --arg status "$LEGACY_STATUS" --arg branch "$LEGACY_BRANCH" \
+  # Validate legacy status against current valid set; default unknowns to Pendente.
+  # Canonical list comes from AGENTS.md "Valid Status Values":
+  # Pendente | Validando Spec | Em Andamento | Validando Impl | DONE | Cancelado.
+  case "$LEGACY_STATUS" in
+    Pendente|"Validando Spec"|"Em Andamento"|"Validando Impl"|DONE|Cancelado)
+      NORMALIZED_STATUS="$LEGACY_STATUS"
+      ;;
+    "")
+      NORMALIZED_STATUS="Pendente"
+      ;;
+    *)
+      echo "  ⚠ Legacy status '${LEGACY_STATUS}' for ${TASK_ID} not recognized — defaulting to Pendente" >&2
+      echo "    (was likely a removed status like 'Revisando PR'; recorded in migration summary)" >&2
+      NORMALIZED_STATUS="Pendente"
+      # Track normalized tasks for the summary report.
+      NORMALIZED_TASKS="${NORMALIZED_TASKS:+$NORMALIZED_TASKS$'\n'}  - ${TASK_ID}: '${LEGACY_STATUS}' → 'Pendente'"
+      ;;
+  esac
+  if jq --arg id "$TASK_ID" --arg status "$NORMALIZED_STATUS" --arg branch "$LEGACY_BRANCH" \
     --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
     '.[$id] = {status: $status, branch: $branch, updated_at: $ts}' \
     "$STATE_FILE" > "${STATE_FILE}.tmp"; then
@@ -166,6 +184,18 @@ else
 fi
 ```
 After migration, inform the user: "Migrated N task statuses from legacy format to state.json."
+
+**Surface normalized statuses in the import summary.** If `NORMALIZED_TASKS` is non-empty
+after the migration loop, include a section like:
+
+```
+⚠ Status normalization (legacy values not in current valid set):
+  - T-XXX: 'Revisando PR' → 'Pendente'
+  - T-YYY: '<other-legacy>' → 'Pendente'
+
+These tasks were defaulted to 'Pendente'. Use /optimus:tasks advance to move
+them forward if work was already in progress.
+```
 
 For unmatched tasks (new in Ring but not in existing data), use defaults.
 
@@ -745,6 +775,14 @@ for TASK_ID in $TASK_IDS; do
   echo "$TASK_ID: $STATUS"
 done
 ```
+
+**Cancelado state.json shape contract:**
+When a task transitions to status `Cancelado`, the `branch` field MUST remain present
+in the state.json entry but MAY be set to empty string `""` (NOT removed) if the
+underlying branch was deleted by the cancel flow. Readers MUST treat `"branch": ""`
+as a valid Cancelado-state sentinel; they MUST NOT treat absence of the `branch`
+field as a meaningful state difference. The State Management writer ALWAYS produces
+the full `{status, branch, updated_at}` triple.
 
 **state.json is NEVER committed.** It is gitignored. No `git add` or `git commit`
 for state changes.
