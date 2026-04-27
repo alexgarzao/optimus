@@ -620,7 +620,11 @@ The optimus-tasks.md table only tracks structural data (dependencies, versions, 
 — it does NOT duplicate content from Ring.
 
 
-### Format Validation
+### Format Validation (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Format Validation`.**
+
+**Summary:** 15-rule validation for `<tasksDir>/optimus-tasks.md` enforced at Step 1.0.1 of every stage agent (1-4): format marker `<!-- optimus:tasks-v1 -->` present; `## Versions` table with valid columns; all Version Status values valid (`Ativa`/`Próxima`/`Planejada`/`Backlog`/`Concluída`); exactly one `Ativa`, at most one `Próxima`; tasks table columns correct (Status/Branch live in state.json, NOT here); IDs match `T-NNN`; Tipo ∈ {Feature, Fix, Refactor, Chore, Docs, Test}; Priority ∈ {Alta, Media, Baixa}; Depends resolves to existing task rows; Version cells reference existing version rows; no duplicate IDs; no circular dependencies; no unescaped pipes; empty-table guard. HARD BLOCK on any failure — STOP and suggest `/optimus-import`. See full 15-item enumeration in AGENTS.md.
 
 Every stage agent (1-4) MUST validate the optimus-tasks.md format before operating:
 1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
@@ -647,11 +651,6 @@ format validation and before task identification. If zero data rows: **STOP** an
 user: "No tasks found in optimus-tasks.md. Use `/optimus-tasks` to create a task or `/optimus-import`
 to import from Ring pre-dev." Do NOT proceed to task identification with an empty table.
 
-**NOTE:** For circular dependency detection (item 13), trace the full dependency chain for
-each task. If any task appears twice in the chain, a cycle exists. Report ALL tasks involved
-in the cycle so the user can fix it with `/optimus-tasks`.
-
-
 ### Protocol: Resolve Tasks Git Scope (summarized)
 
 > **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Resolve Tasks Git Scope`.**
@@ -664,7 +663,12 @@ in the cycle so the user can fix it with `/optimus-tasks`.
 
 **Summary:** Resolve `MAIN_WORKTREE` once via `git worktree list --porcelain | awk '/^worktree / {print $2; exit}'` with `${MAIN_WORKTREE:?…}` defensive guard. Use `${MAIN_WORKTREE}/.optimus/...` for ALL `.optimus/` paths (gitignored, so doesn't propagate across linked worktrees). See full recipe in AGENTS.md.
 
-### Finding Presentation (Unified Model)
+### Finding Presentation (Unified Model) (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Finding Presentation (Unified Model)`.**
+
+**Summary:** Common pattern for cycle review skills (plan, build, review, pr-check, deep-review, deep-doc-review, coderabbit-review): collect findings, dedup, group same-nature, present ONE-AT-A-TIME via AskUser with strict `[topic]/[option]` template, collect ALL decisions before applying ANY fixes. Mandatory: `(X/N)` progress prefix per finding; ALL findings presented (no auto-skip by severity); HARD BLOCK on "Tell me more" or free-text response — STOP and answer immediately, never defer to end of loop. Anti-rationalization defenses listed inline ("I'll address questions at end" — NO). Scope of structured template: finding-decision AskUsers in cycle review skills only; admin AskUsers MAY use prose. See full pattern + anti-rationalization examples in AGENTS.md.
+
 All cycle review skills follow this pattern:
 1. Collect findings from agents/tools
 2. Consolidate and deduplicate
@@ -687,49 +691,6 @@ All cycle review skills follow this pattern:
    - One option per proposed solution (Option A, Option B, Option C, etc.)
    - Skip — no action
    - Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
-
-   **AskUser template (MANDATORY — follow this exact structure for every finding):**
-   ```
-   1. [question] (X/N) SEVERITY — Finding title summary
-   [topic] (X/N) F#-Category
-   [option] Option A: recommended fix
-   [option] Option B: alternative approach
-   [option] Skip
-   [option] Tell me more
-   ```
-
-   **Scope of the structured AskUser template:**
-
-   The `[topic]/[option]` structured template applies ONLY to **AskUser calls that present
-   findings/decisions inside cycle review skills** (plan, build, review, pr-check,
-   deep-review, deep-doc-review, coderabbit-review). Each finding presentation must use
-   the template so the user gets consistent UX and the test suite can verify the contract.
-
-   Other AskUser calls — status confirmations, scope choosers, file-presence prompts,
-   admin operations like task creation/cancellation, resume reset confirmations, etc. —
-   MAY use prose. Authors should still aim for clarity and explicit option labels, but
-   the structured template is not required outside finding loops.
-
-   This scope is enforced by `TestStructuredAskUserScope` in `scripts/test_skill_consistency.py`.
-
-9. **HARD BLOCK — IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds
-   with free text (a question, disagreement, or request for clarification):**
-   **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
-   Research the user's concern RIGHT NOW using `WebSearch`, codebase analysis, or both.
-   Provide a thorough answer with evidence (links, code references, best practice citations).
-   Only AFTER the user is satisfied, re-present the SAME finding's options and ask for
-   their decision again. This may go back and forth multiple times — that is expected.
-   **NEVER defer the response to the end of the findings loop.**
-
-   **Anti-rationalization (excuses the agent MUST NOT use to skip immediate response):**
-   - "I'll address all questions after presenting the remaining findings" — NO
-   - "Let me continue with the next finding and come back to this" — NO
-   - "I'll research this after the findings loop" — NO
-   - "This is noted, moving to the next finding" — NO
-10. After ALL N decisions collected: apply ALL approved fixes (see below)
-11. Run verification (see Verification Timing below)
-12. Present final summary
-
 
 ### Protocol: Active Version Guard
 
@@ -818,79 +779,11 @@ Skills reference this as: "Check all-deps-cancelled — see AGENTS.md Protocol: 
 
 **Summary:** Multi-round review pattern for plan, build, review, pr-check, coderabbit-review, deep-review, deep-doc-review. Round 1 is mandatory (the skill's primary dispatch). Rounds 2-5 are gated behind explicit `AskUser` prompts (entry gate before round 2, per-round gate before 3/4/5). Each gated round dispatches the SAME droid roster as round 1 in parallel via `Task` tool with zero prior context — agents read files fresh from disk. Convergence detection (zero new findings, strict `same file + ±5 lines + same category` matching) exits silently with status `CONVERGED` — never asks for another round. Hard limit at round 5. Exit statuses: `CONVERGED`, `USER_STOPPED`, `SKIPPED`, `HARD_LIMIT`, `DISPATCH_FAILED_ABORTED` (build has a single-slot carve-out). See full recipe in AGENTS.md.
 
-### Protocol: Coverage Measurement
+### Protocol: Coverage Measurement (summarized)
 
-**Referenced by:** review, pr-check, coderabbit-review, deep-review, build
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Coverage Measurement`.**
 
-Measure test coverage using Makefile targets with stack-specific fallbacks.
-
-**Run coverage quietly.** Coverage commands are the single biggest source of
-verbose output (N packages × per-file coverage lines). Wrap them with
-`_optimus_quiet_run` (see Protocol: Quiet Command Execution) so the full output
-lands on disk and only a PASS/FAIL line reaches the agent. Then read only the
-"total" summary line to extract the percentage.
-
-**Unit coverage command resolution order:**
-1. `make test-coverage` (if Makefile target exists), run via `_optimus_quiet_run`
-2. Stack-specific fallback:
-   - Go: `go test -coverprofile=coverage-unit.out ./...` (wrapped) then `go tool cover -func=coverage-unit.out`
-   - Node: `npm test -- --coverage` (wrapped)
-   - Python: `pytest --cov=. --cov-report=term` (wrapped)
-
-If no unit coverage command is available, mark as **SKIP** — do not fail the verification.
-
-**Integration coverage command resolution order:**
-1. `make test-integration-coverage` (if Makefile target exists), run via `_optimus_quiet_run`
-2. Stack-specific fallback:
-   - Go: `go test -tags=integration -coverprofile=coverage-integration.out ./...` (wrapped) then `go tool cover -func=coverage-integration.out`
-   - Node: `npm run test:integration -- --coverage` (wrapped)
-   - Python: `pytest -m integration --cov=. --cov-report=term` (wrapped)
-
-If no integration coverage command is available, mark as **SKIP** — do not fail the verification.
-
-**Extracting the percentage (agent-visible output):** after the wrapped run, emit
-only the total line. Examples:
-
-```bash
-# Go
-_optimus_quiet_run "make-test-coverage" make test-coverage
-if [ -f coverage-unit.out ]; then
-  go tool cover -func=coverage-unit.out | awk '/^total:/ {print "Unit coverage: " $NF}'
-fi
-
-# Node (Istanbul JSON/text-summary)
-_optimus_quiet_run "npm-test-coverage" npm test -- --coverage
-if [ -f coverage/coverage-summary.json ]; then
-  jq -r '.total.lines.pct | "Unit coverage: \(.)%"' coverage/coverage-summary.json
-fi
-
-# Python (pytest-cov)
-_optimus_quiet_run "pytest-cov" pytest --cov=. --cov-report=term --cov-report=json:coverage.json
-if [ -f coverage.json ]; then
-  jq -r '.totals.percent_covered_display | "Unit coverage: \(.)%"' coverage.json
-fi
-```
-
-The agent sees ~2 lines total (PASS verdict + "Unit coverage: 87.4%"). The full
-per-file breakdown stays in `.optimus/logs/` and in the native coverage files.
-
-**Thresholds:**
-
-| Test Type | Threshold | Verdict if Below |
-|-----------|-----------|-----------------|
-| Unit tests | 85% | NEEDS_FIX / HIGH finding |
-| Integration tests | 70% | NEEDS_FIX / HIGH finding |
-
-**Coverage gap analysis:** When scanning for untested functions/methods (0% coverage),
-read the coverage output file (not the agent turn stdout) — either the native
-`coverage-*.out` / `coverage-summary.json` / `coverage.json` file, or the
-`.optimus/logs/<timestamp>-*-coverage-*.log` file produced by `_optimus_quiet_run`
-(the trailing `-<pid>` segment is part of every helper-produced log filename).
-Flag business-logic functions with 0% as HIGH, infrastructure/generated code with
-0% as SKIP.
-
-Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage Measurement."
-
+**Summary:** Measure unit + integration test coverage via Makefile targets with stack-specific fallbacks (Go: `go test -coverprofile`; Node: `npm test -- --coverage`; Python: `pytest --cov=. --cov-report=term`). Run wrapped in `_optimus_quiet_run` (Protocol: Quiet Command Execution) to keep agent context clean — the agent sees only PASS/FAIL + extracted total percentage; full per-file breakdown stays in `.optimus/logs/` and native coverage files. Thresholds: unit 85%, integration 70% (NEEDS_FIX/HIGH finding below). When scanning untested functions, read coverage output FILE (not stdout) — flag business-logic functions at 0% as HIGH; infrastructure/generated code as SKIP. If no coverage command resolves, mark SKIP — do not fail verification. See full extraction recipes in AGENTS.md.
 
 ### Protocol: Default Branch Refusal (HARD BLOCK)
 
@@ -1032,73 +925,11 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 ```
 
 
-### Protocol: Notification Hooks
+### Protocol: Notification Hooks (summarized)
 
-**Referenced by:** all stage agents (1-4), tasks
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Notification Hooks`.**
 
-After writing a status change to state.json, invoke notification hooks if present.
-
-**IMPORTANT — Capture timing:** Read the current status from state.json and store it as
-`OLD_STATUS` BEFORE writing the new status. The sequence is:
-1. Read current status (with guard for missing/empty state.json):
-   ```bash
-   if [ -f "$STATE_FILE" ]; then
-     OLD_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE" 2>/dev/null)
-     [ -z "$OLD_STATUS" ] && OLD_STATUS="Pendente"
-   else
-     OLD_STATUS="Pendente"
-   fi
-   ```
-2. Write new status to state.json
-3. Invoke hooks with `OLD_STATUS` and new status
-
-**IMPORTANT:** Always quote all arguments and sanitize user-derived values to prevent
-shell injection. Hook scripts MUST NOT pass their arguments to `eval` or shell
-interpretation — treat all arguments as untrusted data.
-
-```bash
-# Sanitize: allow only safe characters. Does NOT allow `.` or `/` (which would
-# enable path-traversal if hook args flow into file paths).
-_optimus_sanitize() { printf '%s' "$1" | tr -cd '[:alnum:][:space:]-_:'; }
-
-# Resolve HOOKS_FILE with an explicit if-elif-else (instead of the fragile
-# `test && echo || (test && echo)` pattern).
-if [ -f ./tasks-hooks.sh ]; then
-  HOOKS_FILE="./tasks-hooks.sh"
-elif [ -f ./docs/tasks-hooks.sh ]; then
-  HOOKS_FILE="./docs/tasks-hooks.sh"
-else
-  HOOKS_FILE=""
-fi
-
-if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" "$(_optimus_sanitize "$event")" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$old_status")" "$(_optimus_sanitize "$new_status")" 2>/dev/null &
-fi
-```
-
-Events and their parameter signatures:
-
-| Event | Parameters | Description |
-|-------|-----------|-------------|
-| `status-change` | `event task_id old_status new_status` | Any status transition |
-| `task-done` | `event task_id old_status "DONE"` | Task marked as done |
-| `task-cancelled` | `event task_id old_status "Cancelado"` | Task cancelled |
-| `task-blocked` | `event task_id current_status reason` | Dependency check failed (4 args — includes reason) |
-
-When a dependency check fails (provide defaults so hook payload is never malformed):
-```bash
-: "${dep_id:=unknown}"
-: "${dep_status:=unknown}"
-if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" "task-blocked" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "blocked by $dep_id ($dep_status)")" 2>/dev/null &
-fi
-```
-
-Hooks run in background (`&`) and their failure does NOT block the pipeline.
-If `tasks-hooks.sh` does not exist, hooks are silently skipped.
-
-Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol: Notification Hooks."
-
+**Summary:** Optional hook system: stages emit events (`status-change`, `task-blocked`, `task-done`, `task-cancelled`) by invoking `<repo>/tasks-hooks.sh <event> <task_id> <args...>` (or `<repo>/docs/tasks-hooks.sh`) if the file exists and is executable. Hook receives sanitized args (alphanumeric + space + `-_:` only — does NOT allow `.` or `/` to prevent path-traversal if hook authors interpolate args into file paths). Argument shape: 4 args for `status-change`/`task-done`/`task-cancelled` (`event task_id old_status new_status`); 4 args for `task-blocked` (`event task_id current_status reason`). Hooks run in background (`&`) — failures NEVER block the pipeline. Capture `OLD_STATUS` BEFORE writing the new status. See full event signatures + sanitization recipe in AGENTS.md.
 
 ### Protocol: PR Title Validation
 

@@ -1019,7 +1019,11 @@ The optimus-tasks.md table only tracks structural data (dependencies, versions, 
 — it does NOT duplicate content from Ring.
 
 
-### Format Validation
+### Format Validation (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Format Validation`.**
+
+**Summary:** 15-rule validation for `<tasksDir>/optimus:tasks.md` enforced at Step 1.0.1 of every stage agent (1-4): format marker `<!-- optimus:tasks-v1 -->` present; `## Versions` table with valid columns; all Version Status values valid (`Ativa`/`Próxima`/`Planejada`/`Backlog`/`Concluída`); exactly one `Ativa`, at most one `Próxima`; tasks table columns correct (Status/Branch live in state.json, NOT here); IDs match `T-NNN`; Tipo ∈ {Feature, Fix, Refactor, Chore, Docs, Test}; Priority ∈ {Alta, Media, Baixa}; Depends resolves to existing task rows; Version cells reference existing version rows; no duplicate IDs; no circular dependencies; no unescaped pipes; empty-table guard. HARD BLOCK on any failure — STOP and suggest `/optimus:import`. See full 15-item enumeration in AGENTS.md.
 
 Every stage agent (1-4) MUST validate the optimus-tasks.md format before operating:
 1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
@@ -1046,11 +1050,6 @@ format validation and before task identification. If zero data rows: **STOP** an
 user: "No tasks found in optimus-tasks.md. Use `/optimus:tasks` to create a task or `/optimus:import`
 to import from Ring pre-dev." Do NOT proceed to task identification with an empty table.
 
-**NOTE:** For circular dependency detection (item 13), trace the full dependency chain for
-each task. If any task appears twice in the chain, a cycle exists. Report ALL tasks involved
-in the cycle so the user can fix it with `/optimus:tasks`.
-
-
 ### Protocol: Resolve Main Worktree Path (summarized)
 
 > **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Resolve Main Worktree Path`.**
@@ -1063,73 +1062,11 @@ in the cycle so the user can fix it with `/optimus:tasks`.
 
 **Summary:** Create `${MAIN_WORKTREE}/.optimus/{sessions,reports,logs}/` with `mkdir -p`. Add `# optimus-operational-files` and `# optimus-operational-worktrees` markers to `${MAIN_WORKTREE}/.gitignore` idempotently (grep-anchor before append). Refuse symlinked `.gitignore`. Auto-prune `.optimus/logs/` (30 days, 500 files). See full recipe in AGENTS.md.
 
-### Protocol: Notification Hooks
+### Protocol: Notification Hooks (summarized)
 
-**Referenced by:** all stage agents (1-4), tasks
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Notification Hooks`.**
 
-After writing a status change to state.json, invoke notification hooks if present.
-
-**IMPORTANT — Capture timing:** Read the current status from state.json and store it as
-`OLD_STATUS` BEFORE writing the new status. The sequence is:
-1. Read current status (with guard for missing/empty state.json):
-   ```bash
-   if [ -f "$STATE_FILE" ]; then
-     OLD_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE" 2>/dev/null)
-     [ -z "$OLD_STATUS" ] && OLD_STATUS="Pendente"
-   else
-     OLD_STATUS="Pendente"
-   fi
-   ```
-2. Write new status to state.json
-3. Invoke hooks with `OLD_STATUS` and new status
-
-**IMPORTANT:** Always quote all arguments and sanitize user-derived values to prevent
-shell injection. Hook scripts MUST NOT pass their arguments to `eval` or shell
-interpretation — treat all arguments as untrusted data.
-
-```bash
-# Sanitize: allow only safe characters. Does NOT allow `.` or `/` (which would
-# enable path-traversal if hook args flow into file paths).
-_optimus_sanitize() { printf '%s' "$1" | tr -cd '[:alnum:][:space:]-_:'; }
-
-# Resolve HOOKS_FILE with an explicit if-elif-else (instead of the fragile
-# `test && echo || (test && echo)` pattern).
-if [ -f ./tasks-hooks.sh ]; then
-  HOOKS_FILE="./tasks-hooks.sh"
-elif [ -f ./docs/tasks-hooks.sh ]; then
-  HOOKS_FILE="./docs/tasks-hooks.sh"
-else
-  HOOKS_FILE=""
-fi
-
-if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" "$(_optimus_sanitize "$event")" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$old_status")" "$(_optimus_sanitize "$new_status")" 2>/dev/null &
-fi
-```
-
-Events and their parameter signatures:
-
-| Event | Parameters | Description |
-|-------|-----------|-------------|
-| `status-change` | `event task_id old_status new_status` | Any status transition |
-| `task-done` | `event task_id old_status "DONE"` | Task marked as done |
-| `task-cancelled` | `event task_id old_status "Cancelado"` | Task cancelled |
-| `task-blocked` | `event task_id current_status reason` | Dependency check failed (4 args — includes reason) |
-
-When a dependency check fails (provide defaults so hook payload is never malformed):
-```bash
-: "${dep_id:=unknown}"
-: "${dep_status:=unknown}"
-if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" "task-blocked" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "blocked by $dep_id ($dep_status)")" 2>/dev/null &
-fi
-```
-
-Hooks run in background (`&`) and their failure does NOT block the pipeline.
-If `tasks-hooks.sh` does not exist, hooks are silently skipped.
-
-Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol: Notification Hooks."
-
+**Summary:** Optional hook system: stages emit events (`status-change`, `task-blocked`, `task-done`, `task-cancelled`) by invoking `<repo>/tasks-hooks.sh <event> <task_id> <args...>` (or `<repo>/docs/tasks-hooks.sh`) if the file exists and is executable. Hook receives sanitized args (alphanumeric + space + `-_:` only — does NOT allow `.` or `/` to prevent path-traversal if hook authors interpolate args into file paths). Argument shape: 4 args for `status-change`/`task-done`/`task-cancelled` (`event task_id old_status new_status`); 4 args for `task-blocked` (`event task_id current_status reason`). Hooks run in background (`&`) — failures NEVER block the pipeline. Capture `OLD_STATUS` BEFORE writing the new status. See full event signatures + sanitization recipe in AGENTS.md.
 
 ### Protocol: Resolve Tasks Git Scope (summarized)
 

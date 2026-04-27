@@ -680,7 +680,11 @@ The agent MUST NOT use these excuses to skip or reorder steps:
 The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
-### Format Validation
+### Format Validation (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Format Validation`.**
+
+**Summary:** 15-rule validation for `<tasksDir>/optimus:tasks.md` enforced at Step 1.0.1 of every stage agent (1-4): format marker `<!-- optimus:tasks-v1 -->` present; `## Versions` table with valid columns; all Version Status values valid (`Ativa`/`Próxima`/`Planejada`/`Backlog`/`Concluída`); exactly one `Ativa`, at most one `Próxima`; tasks table columns correct (Status/Branch live in state.json, NOT here); IDs match `T-NNN`; Tipo ∈ {Feature, Fix, Refactor, Chore, Docs, Test}; Priority ∈ {Alta, Media, Baixa}; Depends resolves to existing task rows; Version cells reference existing version rows; no duplicate IDs; no circular dependencies; no unescaped pipes; empty-table guard. HARD BLOCK on any failure — STOP and suggest `/optimus:import`. See full 15-item enumeration in AGENTS.md.
 
 Every stage agent (1-4) MUST validate the optimus-tasks.md format before operating:
 1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
@@ -706,11 +710,6 @@ format validation PASSES. Stage agents (1-4) MUST check for this condition immed
 format validation and before task identification. If zero data rows: **STOP** and inform the
 user: "No tasks found in optimus-tasks.md. Use `/optimus:tasks` to create a task or `/optimus:import`
 to import from Ring pre-dev." Do NOT proceed to task identification with an empty table.
-
-**NOTE:** For circular dependency detection (item 13), trace the full dependency chain for
-each task. If any task appears twice in the chain, a cycle exists. Report ALL tasks involved
-in the cycle so the user can fix it with `/optimus:tasks`.
-
 
 ### Protocol: Resolve Tasks Git Scope (summarized)
 
