@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "optimus",
-      "source": ".",
+      "source": "./",
       "version": "2.0.0",
       "description": "Optimus task lifecycle plugin: planning, building, reviewing, and shipping tasks. Includes 17 commands accessible via /optimus:<command>.",
       "homepage": "https://github.com/alexgarzao/optimus",
