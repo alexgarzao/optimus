@@ -1836,10 +1836,11 @@ class TestDualPlatformParity:
             f"Claude marketplace plugin must be named `optimus`, got "
             f"{plugins[0]['name']!r}."
         )
-        assert plugins[0]["source"] == ".", (
-            f"Claude `optimus` plugin source must be `.` (repo root) so the "
-            f"top-level `commands/` directory is discovered, got "
-            f"{plugins[0]['source']!r}."
+        assert plugins[0]["source"] == "./", (
+            f"Claude `optimus` plugin source must be `./` (repo root) so the "
+            f"top-level `commands/` directory is discovered. Note: the leading "
+            f"`./` is required by the marketplace schema validator (bare `.` "
+            f"fails). Got {plugins[0]['source']!r}."
         )
 
     def test_every_plugin_has_both_platform_surfaces(self):
@@ -2960,3 +2961,171 @@ class TestTasksReValidatesAfterMutation:
         assert violations == [], (
             "Mutating operations must re-validate after edits:\n" + "\n".join(violations)
         )
+
+
+# --- TaskSpec self-heal in /optimus:plan ---
+
+
+class TestSpecSelfHeal:
+    """plan auto-heals missing TaskSpec via ring:pre-dev-feature; build/review redirect to plan."""
+
+    def test_plan_has_resolve_missing_spec_step(self):
+        """plan SKILL.md must declare a self-heal step that runs before TaskSpec Resolution."""
+        plan_md = (REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md").read_text()
+        assert "Step 1.0.4.5" in plan_md or "Resolve Missing Spec" in plan_md, (
+            "plan SKILL.md must contain a 'Step 1.0.4.5: Resolve Missing Spec' step "
+            "that handles TaskSpec=- BEFORE the workspace is created"
+        )
+        assert "ring:pre-dev-feature" in plan_md, (
+            "plan SKILL.md must delegate to ring:pre-dev-feature for spec generation"
+        )
+        assert "Link existing spec" in plan_md, (
+            "plan SKILL.md must offer 'Link existing spec' as a fallback when Ring unavailable"
+        )
+
+    def test_plan_self_heal_runs_before_taskspec_resolution(self):
+        """The self-heal step must appear textually before the TaskSpec Resolution call."""
+        plan_md = (REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md").read_text()
+        heal_idx = plan_md.find("Resolve Missing Spec")
+        resolve_idx = plan_md.find("Protocol: TaskSpec Resolution")
+        assert heal_idx > 0 and resolve_idx > 0, (
+            "Both 'Resolve Missing Spec' and 'Protocol: TaskSpec Resolution' must be present"
+        )
+        assert heal_idx < resolve_idx, (
+            "'Resolve Missing Spec' must appear BEFORE 'Protocol: TaskSpec Resolution' "
+            "so the spec is guaranteed valid by the time Resolution runs"
+        )
+
+    def test_protocol_redirects_to_plan(self):
+        """AGENTS.md Protocol: TaskSpec Resolution STOP message must redirect to /optimus-plan."""
+        agents_md = AGENTS_MD.read_text()
+        start = agents_md.find("### Protocol: TaskSpec Resolution")
+        assert start > 0, "Protocol: TaskSpec Resolution section missing"
+        end = agents_md.find("\n### ", start + 1)
+        section = agents_md[start:end if end > 0 else len(agents_md)]
+        assert "Run `/optimus-plan T-XXX`" in section
+        assert "ring:pre-dev-feature" in section
+        assert "Link one via `/optimus-tasks` or `/optimus-import`" not in section
+
+    def test_build_review_dont_self_heal(self):
+        """build and review SKILL.md bodies must not introduce their own self-heal logic."""
+        for skill in ("build", "review"):
+            content = (REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md").read_text()
+            # Body = SKILL.md content excluding the inlined-protocols block.
+            # The inlined block legitimately contains "ring:pre-dev-feature"
+            # (from the new TaskSpec Resolution STOP message), so we strip it
+            # before asserting the host body is self-heal-free.
+            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            assert "ring:pre-dev-feature" not in body, (
+                f"{skill} SKILL.md body must not invoke ring:pre-dev-feature — "
+                "only plan self-heals; build/review delegate via TaskSpec Resolution protocol"
+            )
+
+    def test_tasks_creation_offers_defer_option(self):
+        """tasks SKILL.md must offer 'Defer' as a first-class option at creation time
+        (not just a fallback when Ring is unavailable). This keeps the user in control
+        and is symmetric with plan's self-heal flow."""
+        tasks_md = (REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md").read_text()
+        assert "**Defer**" in tasks_md or "**Defer —" in tasks_md, (
+            "tasks SKILL.md must expose a 'Defer' option at task creation time "
+            "(sets TaskSpec to `-`, deferring spec generation to /optimus:plan)"
+        )
+        # Old fallback-only phrasing must be gone — Defer is now a top-level choice
+        assert "Create with empty TaskSpec" not in tasks_md, (
+            "tasks SKILL.md must not retain the old 'Create with empty TaskSpec' fallback "
+            "phrasing — replaced by the unconditional 'Defer' option"
+        )
+
+    def test_plan_self_heal_offers_cancel_option(self):
+        """Cancel must be a first-class option that aborts the plan with a clear STOP message."""
+        body = (REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md").read_text()
+        body = body.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "**Cancel**" in body, "plan self-heal must offer Cancel as first-class option"
+        assert "Plan cancelled" in body, "Cancel branch must STOP with deterministic message"
+
+    def test_plan_self_heal_revalidates_and_commits(self):
+        """Step 1.0.4.5 mutates optimus-tasks.md; it MUST re-validate + commit per AGENTS.md protocols."""
+        body = (REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md").read_text()
+        body = body.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        start = body.find("### Step 1.0.4.5")
+        end = body.find("### Step 1.0.5", start + 1)
+        section = body[start:end] if start >= 0 and end > start else ""
+        assert "Re-validate" in section, "self-heal must re-validate optimus-tasks.md after mutation"
+        assert "Protocol: optimus-tasks.md Validation" in section
+        assert "tasks_git" in section, "self-heal must commit via tasks_git"
+
+    def test_tasks_defer_documents_handoff_to_plan(self):
+        """Tasks Defer branch must point user at /optimus-plan for later spec generation."""
+        body = (REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md").read_text()
+        body = body.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "/optimus-plan" in body and "later" in body, (
+            "tasks Defer must inform user that /optimus-plan T-XXX will pick this up later"
+        )
+
+    def test_plan_self_heal_uses_progress_topic_format(self):
+        """The new AskUser prompt must use the canonical [topic] (X/N) progress prefix."""
+        import re
+        body = (REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md").read_text()
+        body = body.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        start = body.find("### Step 1.0.4.5")
+        end = body.find("### Step 1.0.5", start + 1)
+        section = body[start:end] if start >= 0 and end > start else ""
+        assert re.search(r"\[topic\]\s+\(\d+/\d+\)", section), (
+            "Resolve Missing Spec AskUser prompt must use [topic] (X/N) format"
+        )
+
+    def test_protocol_references_resolve(self):
+        """Every 'AGENTS.md Protocol: X' reference in any SKILL.md must resolve
+        to a real `### Protocol: X` heading in AGENTS.md. Catches dangling refs early.
+
+        Uses the same heuristic chain as inline-protocols.py (see
+        ``extract_refs_from_content`` there) so that references resolved by the
+        inliner are also resolved here, and references it warns about as
+        unmatched are also surfaced as test failures."""
+        import re
+        import sys
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        try:
+            inline_protocols = __import__("inline-protocols")
+        finally:
+            sys.path.pop(0)
+
+        agents_sections = inline_protocols.parse_agents_md()
+        violations = []
+        for path in _all_skill_files():
+            # Use the inliner's body-only extraction to skip the inlined block.
+            content = path.read_text()
+            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            refs = inline_protocols.extract_refs_from_content(body)
+            for ref in refs:
+                if not ref.startswith("Protocol: "):
+                    continue
+                if inline_protocols.match_ref_to_section(ref, agents_sections) is None:
+                    rel = path.relative_to(REPO_ROOT)
+                    violations.append(f"{rel}: '{ref}' has no matching heading in AGENTS.md")
+        assert violations == [], "Dangling protocol references:\n" + "\n".join(violations)
+
+    def test_link_existing_spec_uses_canonical_protocol_reference(self):
+        """Both plan and tasks 'Link existing spec' must reference the canonical protocol."""
+        canonical = "AGENTS.md Protocol: TaskSpec Resolution"
+        for skill_path in [
+            REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md",
+            REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md",
+        ]:
+            content = skill_path.read_text().split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            link_section = content.split("Link existing spec", 1)[1].split("\n\n###", 1)[0]
+            assert canonical in link_section, (
+                f"{skill_path.parent.parent.name} 'Link existing spec' must reference {canonical}"
+            )
+
+    def test_link_existing_spec_mentions_symlink(self):
+        """Symlink TOCTOU is part of the protocol — prose must surface it at the new entry point."""
+        for skill_path in [
+            REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md",
+            REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md",
+        ]:
+            content = skill_path.read_text().split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            link_section = content.split("Link existing spec", 1)[1].split("\n\n###", 1)[0]
+            assert "symlink" in link_section.lower(), (
+                f"{skill_path.parent.parent.name} 'Link existing spec' must explicitly mention symlinks"
+            )

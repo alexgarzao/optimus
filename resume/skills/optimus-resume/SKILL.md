@@ -649,6 +649,7 @@ Map current status + PR state to the recommended next command:
 
 | Current status     | PR state                      | Next recommended                               |
 |--------------------|-------------------------------|------------------------------------------------|
+| `Validando Spec` + `TaskSpec=-` | any              | `/optimus-plan` (spec is missing — re-run plan to resolve) |
 | `Validando Spec`   | any                           | `/optimus-build`                               |
 | `Em Andamento`     | any                           | `/optimus-review` (or re-run `/optimus-build`) |
 | `Validando Impl`   | OPEN                          | `/optimus-pr-check` (then `/optimus-done`)     |

@@ -251,7 +251,73 @@ from a previous run that was interrupted (crash, user closed terminal, etc.).
    3. Remove the task entry from state.json (resets to Pendente)
    4. **STOP** — task is back to Pendente, user can re-run stage-1 when ready
 
-4. **If no branch or worktree exists** → proceed to Step 1.0.5
+4. **If no branch or worktree exists** → proceed to Step 1.0.4.5
+
+### Step 1.0.4.5: Resolve Missing Spec
+
+Before reserving the task and creating the workspace, detect and self-heal a missing spec.
+This runs BEFORE Step 1.0.5 so that a Cancel here leaves the task untouched (no orphan
+workspace, no `Validando Spec` status leak).
+
+> Note: This prompt offers Cancel (not Defer) because plan needs the spec to do its work. To create a task without a spec, use `/optimus-tasks` and pick Defer.
+
+1. Parse `optimus-tasks.md` and read the task row's `TaskSpec` column.
+2. If `TaskSpec` is NOT `-`, skip this step (proceed to Step 1.0.5).
+3. If `TaskSpec` is `-`, ask via `AskUser`:
+
+   ```
+   [topic] (1/1) Task T-XXX has no Ring pre-dev spec. How should I proceed?
+   ```
+
+   Options:
+   - **Generate via Ring** (recommended) — invoke `ring:pre-dev-feature`
+   - **Link existing spec** — search `<TASKS_DIR>/tasks/*.md`
+   - **Cancel** — abort plan
+
+4. **If "Generate via Ring":**
+   1. Verify `ring:pre-dev-feature` is available. If unavailable → fall back to "Link existing spec" automatically and warn the user.
+   2. Invoke `ring:pre-dev-feature` via the `Skill` tool. The Skill tool has no argument channel — state the task title and tipo in conversation context immediately before the invocation (e.g., "Generating spec for T-XXX: <title> (Tipo: <tipo>)"). Ring will read these from context.
+   3. **If Ring fails or returns no spec path:**
+      - Warn the user: "Ring failed to generate the spec: <error>."
+      - Re-prompt with `Link existing spec` / `Cancel`. Do NOT silently fall through.
+      - If user picks Cancel → STOP — "Plan cancelled — task spec required."
+   4. **If Ring succeeds:**
+      - Capture the generated spec file path (relative to `<TASKS_DIR>`). Save in a variable `SPEC_PATH`.
+      - Update the task's `TaskSpec` column in `optimus-tasks.md`.
+   5. **Re-validate** optimus-tasks.md — see AGENTS.md Protocol: optimus-tasks.md Validation.
+      - If validation fails:
+        a. Revert the in-memory edit to the TaskSpec column.
+        b. Remove the spec file Ring just created at `<TASKS_DIR>/<SPEC_PATH>` (rollback Ring's side effect).
+        c. STOP and report the validation error.
+   6. Commit the TaskSpec update:
+      ```bash
+      tasks_git add "$TASKS_GIT_REL"
+      COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
+      chmod 600 "$COMMIT_MSG_FILE"
+      printf '%s' "chore(tasks): heal TaskSpec for T-XXX (self-heal)" > "$COMMIT_MSG_FILE"
+      tasks_git commit -F "$COMMIT_MSG_FILE"
+      rm -f "$COMMIT_MSG_FILE"
+      ```
+
+5. **If "Link existing spec":**
+   1. Glob `<TASKS_DIR>/tasks/*.md`. Rank candidates by keyword overlap with the task title.
+   2. Present the top 5 matches via `AskUser`; user picks one or types a custom relative path under `<TASKS_DIR>/tasks/`.
+   3. **HARD BLOCK** — Validate the chosen path: (a) exists, (b) is a regular file (NOT a symlink), (c) resolves inside `<TASKS_DIR>` with no intermediate symlink components, (d) contains no pipe (`|`), control characters, newlines. Apply the realpath/case-glob/symlink rejection block from AGENTS.md Protocol: TaskSpec Resolution. If validation fails, do NOT write to optimus-tasks.md; loop back to the picker.
+   4. Update the task's `TaskSpec` column in `optimus-tasks.md`.
+   5. **Re-validate** optimus-tasks.md — see AGENTS.md Protocol: optimus-tasks.md Validation. If validation fails, abort and revert the in-memory edit; do not commit.
+   6. Commit the TaskSpec update:
+      ```bash
+      tasks_git add "$TASKS_GIT_REL"
+      COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
+      chmod 600 "$COMMIT_MSG_FILE"
+      printf '%s' "chore(tasks): heal TaskSpec for T-XXX (self-heal)" > "$COMMIT_MSG_FILE"
+      tasks_git commit -F "$COMMIT_MSG_FILE"
+      rm -f "$COMMIT_MSG_FILE"
+      ```
+
+6. **If "Cancel":** **STOP** — "Plan cancelled — task spec required."
+
+7. Post-condition: `TaskSpec` is now a valid relative path (not `-`). Proceed to Step 1.0.5.
 
 ### Step 1.0.5: Reserve Task and Create Workspace
 
@@ -958,7 +1024,7 @@ These operations require explicit user confirmation.
 
 ### Task Spec Resolution
 
-Every task MUST have a Ring pre-dev reference in the `TaskSpec` column. Stage agents
+Every task SHOULD have a Ring pre-dev reference in the `TaskSpec` column. Tasks may be created with `TaskSpec=-` (deferred); the next `/optimus-plan` run will offer to generate or link a spec. Stage agents
 (plan, build, review) resolve the full path as `<tasksDir>/<TaskSpec>` and read the
 referenced file for objective, acceptance criteria, and implementation details.
 
@@ -2376,7 +2442,7 @@ Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: Sta
 Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
 
 1. Read the task's `TaskSpec` column from `optimus-tasks.md`
-2. If `TaskSpec` is `-` → **STOP**: "Task T-XXX has no Ring pre-dev spec. Link one via `/optimus-tasks` or `/optimus-import`."
+2. If `TaskSpec` is `-` → **STOP**: "Task T-XXX has no Ring pre-dev spec. Run `/optimus-plan T-XXX` to generate one (it will offer to invoke `ring:pre-dev-feature` interactively)."
 3. Resolve full path: `TASK_SPEC_PATH = <TASKS_DIR>/<TaskSpec>`
 4. **Path traversal validation (HARD BLOCK):** `TaskSpec` must resolve to a file **inside `TASKS_DIR`**.
    This prevents a malicious TaskSpec value like `../../../etc/passwd` from escaping the

@@ -171,8 +171,7 @@ Options:
 
 #### Built-in Templates
 
-Templates pre-fill Tipo and Priority. The task creation flow delegates to Ring
-pre-dev to generate the spec (Step 2.3.1).
+Templates pre-fill Tipo and Priority. The task creation flow delegates to Step 2.3.1 (Resolve TaskSpec for the New Task) which offers Generate/Link/Defer.
 
 **API Endpoint template:** Tipo: `Feature`, Priority: `Alta`
 **Bug Fix template:** Tipo: `Fix`, Priority: `Alta`
@@ -193,7 +192,7 @@ The user can then modify any field before confirming.
 4. **Estimate** (optional): Task size estimate (`S`, `M`, `L`, `XL`, `2h`, `1d`, etc.). Default: `-`
 5. **Version** (required): Must match a version in the Versions table. Default: the version with Status `Ativa`
 6. **Dependencies** (optional): Comma-separated task IDs (e.g., `T-001, T-003`) or `-` for none
-7. **Ring pre-dev reference** (required): Link to Ring pre-dev task spec. If not provided by the user, Ring pre-dev discovery (Step 2.3.1) will search for a match. A task cannot be created without a Ring reference.
+7. **Ring pre-dev reference** (optional): If not provided, Step 2.3.1 will offer to generate via Ring, link an existing spec, or defer (TaskSpec=-).
 
 If the user provided some of these in the initial request, use them and ask only for missing fields.
 
@@ -287,25 +286,47 @@ If the user specified dependencies:
 3. Check for circular dependencies: if T-NEW depends on T-X, and T-X (directly or transitively) would depend on T-NEW → reject
 4. If any dependency ID is invalid → ask the user to correct it
 
-### Step 2.3.1: Generate Ring Pre-Dev Spec
+### Step 2.3.1: Resolve TaskSpec for the New Task
 
-Delegate to Ring to generate the task spec:
+Ask the user how to handle the spec for this task. Always ask, even when Ring is available — the user may want to defer spec generation (e.g., creating multiple tasks in a row, batch-generating specs later).
 
-1. Invoke `ring:pre-dev-feature` via `Skill` tool, passing the task title and type
-2. Ring generates the spec file in `<TASKS_DIR>/tasks/`
-3. After Ring completes, capture the generated spec file path (relative to `TASKS_DIR`)
-4. Store as the `TaskSpec` value for this task
+> Note: This prompt offers Defer (not Cancel) because task creation can succeed without an immediate spec; the next `/optimus-plan T-XXX` will offer to resolve.
 
-**If Ring pre-dev is not available** (skill not installed), ask via `AskUser`:
+Ask via `AskUser`:
+
 ```
-Ring pre-dev skill is not available. How should I proceed?
+[topic] (1/1) How should I handle the spec for this task?
 ```
+
 Options:
+- **Generate via Ring** (recommended) — invoke `ring:pre-dev-feature` now
 - **Link existing spec** — search `<TASKS_DIR>/tasks/` for matching specs
-- **Create with empty TaskSpec** — set TaskSpec to `-`, link later
+- **Defer** — set TaskSpec to `-`. The next `/optimus-plan T-XXX` run will offer to generate it later.
 
-**If "Link existing spec"**, search `<TASKS_DIR>/tasks/*.md` for task files, present
-matches based on keyword overlap with the task title, and let the user select one.
+**If "Generate via Ring":**
+
+1. Verify `ring:pre-dev-feature` is available. If unavailable → warn and fall back to "Link existing spec" automatically.
+2. Invoke `ring:pre-dev-feature` via the `Skill` tool. The Skill tool has no argument channel — state the task title and tipo in conversation context immediately before the invocation (e.g., "Generating spec for T-XXX: <title> (Tipo: <tipo>)"). Ring will read these from context.
+3. **If Ring fails or returns no spec path:**
+   - Warn the user: "Ring failed to generate the spec: <error>."
+   - Re-prompt with `Link existing spec` / `Defer`. Do NOT silently fall through.
+4. **If Ring succeeds:**
+   - Ring generates the spec file in `<TASKS_DIR>/tasks/`.
+   - Capture the generated spec file path (relative to `TASKS_DIR`).
+   - Store as the `TaskSpec` value for this task.
+
+**If "Link existing spec":**
+
+1. Search `<TASKS_DIR>/tasks/*.md` for task files.
+2. Rank candidates by keyword overlap with the task title; present the top 5 matches via `AskUser`.
+3. User picks one or types a custom relative path under `<TASKS_DIR>/tasks/`.
+4. **HARD BLOCK** — Validate the chosen path: (a) exists, (b) is a regular file (NOT a symlink), (c) resolves inside `<TASKS_DIR>` with no intermediate symlink components, (d) contains no pipe (`|`), control characters, newlines. Apply the realpath/case-glob/symlink rejection block from AGENTS.md Protocol: TaskSpec Resolution. If validation fails, do NOT write to optimus-tasks.md; loop back to the picker.
+5. Store the chosen path as the `TaskSpec` value for this task.
+
+**If "Defer":**
+
+1. Set TaskSpec to `-`.
+2. Note to user: "Task created without spec. Run `/optimus-plan T-XXX` later to generate or link one."
 
 ### Step 2.4: Apply Create
 
@@ -1120,6 +1141,21 @@ state.json is implicitly `Pendente`.
 These operations require explicit user confirmation.
 
 
+### Task Spec Resolution
+
+Every task SHOULD have a Ring pre-dev reference in the `TaskSpec` column. Tasks may be created with `TaskSpec=-` (deferred); the next `/optimus-plan` run will offer to generate or link a spec. Stage agents
+(plan, build, review) resolve the full path as `<tasksDir>/<TaskSpec>` and read the
+referenced file for objective, acceptance criteria, and implementation details.
+
+The subtasks directory is derived automatically from the TaskSpec path:
+- TaskSpec: `tasks/task_001.md` → Subtasks: `<tasksDir>/subtasks/T-001/`
+- The `T-NNN` identifier is extracted from the task spec filename convention
+
+Agents read objective and acceptance criteria directly from the Ring source files.
+The optimus-tasks.md table only tracks structural data (dependencies, versions, priorities)
+— it does NOT duplicate content from Ring.
+
+
 ### Format Validation
 
 Every stage agent (1-4) MUST validate the optimus-tasks.md format before operating:
@@ -1621,6 +1657,57 @@ and offer to run reconciliation before proceeding. This prevents tasks from sile
 appearing as `Pendente` when they actually have active worktrees.
 
 Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: State Management."
+
+
+### Protocol: TaskSpec Resolution
+
+**Referenced by:** plan, build, review
+
+Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
+
+1. Read the task's `TaskSpec` column from `optimus-tasks.md`
+2. If `TaskSpec` is `-` → **STOP**: "Task T-XXX has no Ring pre-dev spec. Run `/optimus-plan T-XXX` to generate one (it will offer to invoke `ring:pre-dev-feature` interactively)."
+3. Resolve full path: `TASK_SPEC_PATH = <TASKS_DIR>/<TaskSpec>`
+4. **Path traversal validation (HARD BLOCK):** `TaskSpec` must resolve to a file **inside `TASKS_DIR`**.
+   This prevents a malicious TaskSpec value like `../../../etc/passwd` from escaping the
+   Ring pre-dev tree. Also rejects symlinks to prevent symlink-bypass TOCTOU attacks:
+   ```bash
+   TASKS_DIR_ABS=$(cd "$TASKS_DIR" 2>/dev/null && pwd) || { echo "ERROR: tasksDir does not exist." >&2; exit 1; }
+   RESOLVED_PATH=$(cd "$TASKS_DIR_ABS" && realpath -m "$TASK_SPEC" 2>/dev/null \
+     || python3 -c "import os,sys; print(os.path.realpath(os.path.join(sys.argv[1], sys.argv[2])))" "$TASKS_DIR_ABS" "$TASK_SPEC" 2>/dev/null)
+   if [ -z "$RESOLVED_PATH" ]; then
+     echo "ERROR: Cannot resolve TaskSpec path — realpath and python3 both unavailable." >&2
+     exit 1
+   fi
+   case "$RESOLVED_PATH" in
+     "$TASKS_DIR_ABS"/*) ;; # OK — within tasksDir
+     *) echo "ERROR: TaskSpec path traversal detected — resolved path is outside tasksDir." >&2; exit 1 ;;
+   esac
+   # Reject symlinks: if TASK_SPEC itself or any intermediate component is a
+   # symlink, a TOCTOU attacker could swap the target between validation and
+   # read. realpath -m resolves symlinks transparently; this post-check ensures
+   # no symlink is present in the final path.
+   if [ -L "$RESOLVED_PATH" ]; then
+     echo "ERROR: TaskSpec resolves to a symlink — refusing to read." >&2
+     exit 1
+   fi
+   ```
+
+   **Validate `TASKS_DIR` itself:** `TASKS_DIR` must be inside a valid git repository
+   (same repo as project, OR a separate repo — both are allowed). Resolution of
+   `TASKS_GIT_SCOPE` (Protocol: Resolve Tasks Git Scope) already enforces this by
+   running `git -C "$TASKS_DIR" rev-parse --show-toplevel`. If that call fails,
+   `TASKS_DIR` is not a git repository and skills STOP.
+
+   **NOTE:** `TASKS_DIR` is NO LONGER required to be inside `PROJECT_ROOT`. Teams using
+   separate-repo scope (e.g., `tasksDir: ../tasks-repo/project-alfa`) are supported.
+   The security guarantee is that the **TaskSpec value** cannot escape `TASKS_DIR`.
+
+5. Read the task spec file at `TASK_SPEC_PATH`
+6. Derive subtasks directory: if TaskSpec is `tasks/task_001.md`, subtasks are at `<TASKS_DIR>/subtasks/T-001/`
+7. If subtasks directory exists, read all `.md` files inside it
+
+Skills reference this as: "Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution."
 
 
 ### Protocol: optimus-tasks.md Validation (HARD BLOCK)

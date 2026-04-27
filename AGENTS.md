@@ -530,7 +530,7 @@ These operations require explicit user confirmation.
 
 ### Task Spec Resolution
 
-Every task MUST have a Ring pre-dev reference in the `TaskSpec` column. Stage agents
+Every task SHOULD have a Ring pre-dev reference in the `TaskSpec` column. Tasks may be created with `TaskSpec=-` (deferred); the next `/optimus-plan` run will offer to generate or link a spec. Stage agents
 (plan, build, review) resolve the full path as `<tasksDir>/<TaskSpec>` and read the
 referenced file for objective, acceptance criteria, and implementation details.
 
@@ -2236,7 +2236,7 @@ Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Titl
 Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
 
 1. Read the task's `TaskSpec` column from `optimus-tasks.md`
-2. If `TaskSpec` is `-` → **STOP**: "Task T-XXX has no Ring pre-dev spec. Link one via `/optimus-tasks` or `/optimus-import`."
+2. If `TaskSpec` is `-` → **STOP**: "Task T-XXX has no Ring pre-dev spec. Run `/optimus-plan T-XXX` to generate one (it will offer to invoke `ring:pre-dev-feature` interactively)."
 3. Resolve full path: `TASK_SPEC_PATH = <TASKS_DIR>/<TaskSpec>`
 4. **Path traversal validation (HARD BLOCK):** `TaskSpec` must resolve to a file **inside `TASKS_DIR`**.
    This prevents a malicious TaskSpec value like `../../../etc/passwd` from escaping the
@@ -3266,6 +3266,8 @@ agents run simultaneously (e.g., two terminals), the last write wins and the fir
 task's status update may be lost. This is an accepted limitation — Optimus processes
 one task at a time. For parallel task work, use separate worktrees but run stage
 commands sequentially.
+
+Note: Self-heal in `/optimus:plan` Step 1.0.4.5 also mutates `optimus-tasks.md` (the TaskSpec column). The same caveat applies — run plan sequentially against the same task to avoid duplicate Ring invocations and merge conflicts on the TaskSpec column. The `optimus-resolve` skill handles the conflict if it occurs.
 
 ### Standalone Skills vs Ring Droid Dispatch
 The `deep-review` and `deep-doc-review` standalone skills apply fixes directly in their
