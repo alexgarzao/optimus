@@ -625,46 +625,11 @@ to the `Ativa` version. If not, present options before proceeding.
 Skills reference this as: "Check active version guard — see AGENTS.md Protocol: Active Version Guard."
 
 
-### Protocol: All-Dependencies-Cancelled Resolution
+### Protocol: All-Dependencies-Cancelled Resolution (summarized)
 
-**Referenced by:** plan, build, review, done, batch
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: All-Dependencies-Cancelled Resolution`.**
 
-When all dependencies of a task are status `Cancelado`, emit a multi-option resolution
-message AFTER the per-dependency status check (i.e., after detecting that every dep is
-`Cancelado`, before the per-dep error-and-exit). The check supplements the per-dep loop;
-it does not replace it.
-
-**Variable contract:** the caller's dep-check loop populates an array `DEP_STATUSES`
-with one status string per dependency (the same status read from `state.json` for each
-dep ID listed in the Depends column). If the existing skill code uses a different
-variable name, adapt the recipe below to match — the contract is "an iterable of
-dependency status strings".
-
-**Bash recipe:**
-
-```bash
-# Assumes DEP_STATUSES is an array of dependency status strings,
-# already populated by the caller's dep-check loop.
-ALL_CANCELLED=true
-for dep_status in "${DEP_STATUSES[@]}"; do
-  if [ "$dep_status" != "Cancelado" ]; then
-    ALL_CANCELLED=false
-    break
-  fi
-done
-
-if [ "$ALL_CANCELLED" = true ] && [ "${#DEP_STATUSES[@]}" -gt 0 ]; then
-  echo "All dependencies of $TASK_ID are cancelled. To unblock:" >&2
-  echo "  (a) remove all dependencies: /optimus:tasks edit $TASK_ID" >&2
-  echo "  (b) replace with alternative task IDs: /optimus:tasks edit $TASK_ID" >&2
-  echo "  (c) cancel $TASK_ID: /optimus:tasks cancel $TASK_ID" >&2
-  exit 1
-fi
-# Per-dep message follows here (existing logic).
-```
-
-Skills reference this as: "Check all-deps-cancelled — see AGENTS.md Protocol: All-Dependencies-Cancelled Resolution."
-
+**Summary:** When every dependency in a task's `Depends:` column has status `Cancelado`, emit a multi-option resolution message AFTER the per-dep status check loop populates the `DEP_STATUSES` array. Recipe: iterate `DEP_STATUSES`, set `ALL_CANCELLED=true` if every entry equals `Cancelado`; when `ALL_CANCELLED=true` AND the array is non-empty, print three options to stderr — (a) remove all dependencies, (b) replace with alternative task IDs, (c) cancel the task itself — each with the corresponding `/optimus:tasks` invocation, then `exit 1`. If the array is empty or any dep is non-Cancelado, fall through to per-dep error. Variable contract: `DEP_STATUSES` is the canonical name; adapt if existing skill code uses another. See full recipe in AGENTS.md.
 
 ### Protocol: Default Branch Refusal (HARD BLOCK)
 
@@ -758,71 +723,11 @@ skill that needs the default branch MUST use the recipe above.
 Skills reference this as: "Resolve default branch — see AGENTS.md Protocol: Default Branch Resolution."
 
 
-### Protocol: Divergence Warning
+### Protocol: Divergence Warning (summarized)
 
-**Referenced by:** all stage agents (1-4)
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Divergence Warning`.**
 
-Since status and branch data live in state.json (gitignored), optimus-tasks.md rarely changes
-on feature branches. This protocol detects the uncommon case where optimus-tasks.md WAS modified
-(e.g., Active Version Guard moved a task). It uses `tasks_git` so it works in both
-same-repo and separate-repo scopes.
-
-**Prerequisite:** Protocol: Resolve Tasks Git Scope must have been executed so
-`TASKS_FILE`, `TASKS_GIT_REL`, `TASKS_GIT_SCOPE`, `TASKS_DEFAULT_BRANCH`, and
-`tasks_git` are defined.
-
-```bash
-# Requires Protocol: Resolve Main Worktree Path to have run first
-# (or resolve inline; see that protocol).
-MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
-MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
-if [ -z "$TASKS_DEFAULT_BRANCH" ]; then
-  echo "WARNING: Cannot determine default branch for tasks repo. Skipping divergence check."
-  # Skip — this is a warning, not a HARD BLOCK
-else
-  # Throttle fetch: only re-fetch if the cached timestamp is older than 5 minutes.
-  # Each stage skill would otherwise pay ~2s network latency per invocation.
-  # The cache lives in the PROJECT repo's .optimus/ (always present, gitignored).
-  FETCH_MARKER="${MAIN_WORKTREE}/.optimus/.last-tasks-fetch"
-  NOW_EPOCH=$(date +%s)
-  SHOULD_FETCH=1
-  if [ -f "$FETCH_MARKER" ]; then
-    LAST_EPOCH=$(cat "$FETCH_MARKER" 2>/dev/null || echo 0)
-    # Defense-in-depth: ensure marker contents are numeric before arithmetic.
-    # A corrupted/manually-edited marker file would otherwise crash the
-    # `$((NOW_EPOCH - LAST_EPOCH))` expression under `set -euo pipefail`.
-    [[ "$LAST_EPOCH" =~ ^[0-9]+$ ]] || LAST_EPOCH=0
-    if [ -n "$LAST_EPOCH" ] && [ "$((NOW_EPOCH - LAST_EPOCH))" -lt 300 ]; then
-      SHOULD_FETCH=0
-    fi
-  fi
-  if [ "$SHOULD_FETCH" = "1" ]; then
-    if tasks_git fetch origin "$TASKS_DEFAULT_BRANCH" --quiet 2>/dev/null; then
-      mkdir -p "${MAIN_WORKTREE}/.optimus"
-      printf '%s' "$NOW_EPOCH" > "$FETCH_MARKER"
-    else
-      echo "WARNING: Could not fetch from origin. Divergence check may use stale data."
-    fi
-  fi
-  tasks_git diff "origin/$TASKS_DEFAULT_BRANCH" -- "$TASKS_GIT_REL" 2>/dev/null | head -20
-fi
-```
-
-- If diff output is non-empty → warn via `AskUser`:
-  ```
-  optimus-tasks.md has diverged between your branch and <default_branch>.
-  This may cause merge conflicts when the PR is merged.
-  ```
-  Options:
-  - **Sync now** — run `tasks_git merge origin/<default_branch>` to incorporate changes
-  - **Continue without syncing** — I'll handle conflicts later
-- If diff output is empty → proceed silently (files are in sync)
-- **NOTE:** This is a warning, not a HARD BLOCK. The user may choose to continue.
-- **NOTE:** In separate-repo scope, "diverged" means the tasks repo branches diverge —
-  not the project code branches.
-
-Skills reference this as: "Check optimus-tasks.md divergence — see AGENTS.md Protocol: Divergence Warning."
-
+**Summary:** Detects when `optimus-tasks.md` has diverged between the current branch and the tasks repo's default branch. Uses `tasks_git` so it works in both same-repo and separate-repo scopes. Throttles `tasks_git fetch` via a 5-minute cache marker at `${MAIN_WORKTREE}/.optimus/.last-tasks-fetch` (defense-in-depth: validates marker contents are numeric before arithmetic to survive corrupted marker files under `set -euo pipefail`). Compares against `origin/$TASKS_DEFAULT_BRANCH` via `tasks_git diff` limited to `$TASKS_GIT_REL`. On non-empty diff, warns via `AskUser` with options to **Sync now** (merge `origin/<default>`) or **Continue without syncing**. NOT a HARD BLOCK — divergence is a soft warning. Skipped silently when `TASKS_DEFAULT_BRANCH` is unresolved. See full recipe in AGENTS.md.
 
 ## Protocol: Dry-Run Mode
 
