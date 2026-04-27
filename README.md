@@ -62,14 +62,17 @@ Then run `/optimus-sync` to install all plugins at once.
 
 ```bash
 claude plugin marketplace add https://github.com/alexgarzao/optimus
-claude plugin install optimus-sync@optimus
+claude plugin install optimus@optimus
 ```
 
-Reopen Claude Code (so the new plugin is discovered), then run `/optimus-sync` —
-it installs all other plugins automatically via Claude Code's native plugin system.
+Reopen Claude Code (so the new plugin is discovered). All commands are exposed
+under the `optimus:` namespace — e.g., `/optimus:plan`, `/optimus:build`,
+`/optimus:done`. Aliases keep their short form but are also namespaced:
+`/optimus:sp`, `/optimus:bd`, `/optimus:rv`, etc. (see Command Aliases below).
 
-**Note:** Command aliases (`/sp`, `/bd`, etc.) are not supported on Claude Code.
-Use the full skill name (e.g., `/optimus-plan`, `/optimus-build`).
+**Note:** On Claude Code there is a single `optimus` plugin instead of 17
+separate plugins; running `/optimus-sync` (or `claude plugin update optimus@optimus`)
+keeps it up to date as new commands are added.
 
 ### Staying up to date
 
@@ -91,24 +94,43 @@ Or use `/optimus-batch` to chain all stages with checkpoints between them.
 
 ## Command Aliases
 
-Each plugin includes a short alias for quick access:
+Each skill includes a short alias for quick access. Droid and Claude Code use
+different invocation forms — Droid keeps the bare alias; Claude Code namespaces
+it under `optimus:`.
 
-| Alias | Command | Alias | Command |
-|-------|---------|-------|---------|
-| `/sp` | `/optimus-plan` | `/dr` | `/optimus-deep-review` |
-| `/bd` | `/optimus-build` | `/ddr` | `/optimus-deep-doc-review` |
-| `/rv` | `/optimus-review` | `/cr` | `/optimus-coderabbit-review` |
-| `/dn` | `/optimus-done` | `/prc` | `/optimus-pr-check` |
-| `/bt` | `/optimus-batch` | `/im` | `/optimus-import` |
-| `/qr` | `/optimus-quick-report` | `/rs` | `/optimus-resolve` |
-| `/rp` | `/optimus-report` | `/t` | `/optimus-tasks` |
-| `/rsm` | `/optimus-resume` | | |
+| Alias (Droid) | Claude Code | Command | Alias (Droid) | Claude Code | Command |
+|---|---|---|---|---|---|
+| `/sp` | `/optimus:sp` | `/optimus-plan` (Droid) / `/optimus:plan` (Claude) | `/dr` | `/optimus:dr` | `/optimus:deep-review` |
+| `/bd` | `/optimus:bd` | `/optimus:build` | `/ddr` | `/optimus:ddr` | `/optimus:deep-doc-review` |
+| `/rv` | `/optimus:rv` | `/optimus:review` | `/cr` | `/optimus:cr` | `/optimus:coderabbit-review` |
+| `/dn` | `/optimus:dn` | `/optimus:done` | `/prc` | `/optimus:prc` | `/optimus:pr-check` |
+| `/bt` | `/optimus:bt` | `/optimus:batch` | `/im` | `/optimus:im` | `/optimus:import` |
+| `/qr` | `/optimus:qr` | `/optimus:quick-report` | `/rs` | `/optimus:rs` | `/optimus:resolve` |
+| `/rp` | `/optimus:rp` | `/optimus:report` | `/t` | `/optimus:t` | `/optimus:tasks` |
+| `/rsm` | `/optimus:rsm` | `/optimus:resume` | | | |
+
+`help` and `sync` have no short alias; invoke them as `/optimus-help` /
+`/optimus-sync` on Droid and `/optimus:help` / `/optimus:sync` on Claude Code.
 
 ## How it works
 
-Each skill is an installable plugin with:
-- `<plugin>/.factory-plugin/plugin.json` — plugin manifest
-- `<plugin>/skills/optimus-<skill>/SKILL.md` — full instructions with frontmatter (trigger, prerequisite, etc.)
+The repo packages the same SKILLs for two platforms:
+
+- **Droid:** 17 individual plugins, one per directory:
+  - `<plugin>/.factory-plugin/plugin.json` — plugin manifest
+  - `<plugin>/skills/optimus-<skill>/SKILL.md` — full instructions with frontmatter
+  - `<plugin>/commands/<alias>.md` — optional short alias (redirects to `/optimus-<plugin>`)
+- **Claude Code:** ONE plugin (`optimus`) sourced from the repo root:
+  - `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` at the root
+  - Top-level `commands/<plugin>.md` and `commands/<alias>.md` are auto-discovered
+    by Claude Code and exposed as `/optimus:<command>` / `/optimus:<alias>`.
+
+The `commands/` directory at the repo root is **generated** by
+`scripts/sync-claude-commands.py` from the per-skill `SKILL.md` (and the
+optional `<plugin>/commands/<alias>.md`) — run the script after editing a
+SKILL or an alias to keep the Claude side in sync. Tests in
+`scripts/test_skill_consistency.py` (class `TestClaudeCommandsSync`) enforce
+that the script was run before commit.
 
 Future improvements are tracked in `docs/future-improvements.md`.
 
