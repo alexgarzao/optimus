@@ -233,15 +233,28 @@ without Ring pre-dev specs):
 1. Count tasks without specs
 2. Ask via `AskUser`:
    ```
-   N tasks have no Ring pre-dev spec. Generate specs now?
+   N tasks have no Ring pre-dev spec. How should I proceed?
    ```
    Options:
-   - **Generate all** — invoke `ring:pre-dev-feature` for each task
-   - **Skip** — keep TaskSpec as `-`, generate specs later
-3. If "Generate all":
-   - For each task, invoke `ring:pre-dev-feature` passing title and tipo
-   - After Ring generates the spec, update the task's TaskSpec value
-4. If Ring is not available, warn and keep TaskSpec as `-`
+   - **Generate all via Ring** — invoke `ring:pre-dev-feature` for each task
+   - **Generate selectively** — for each task, ask Generate via Ring / Link existing spec / Defer (per-task choice)
+   - **Skip all** — keep TaskSpec as `-` for all; the next `/optimus:plan T-XXX` will offer to resolve
+3. If "Generate all via Ring":
+   - For each task, invoke `ring:pre-dev-feature` via the `Skill` tool. The Skill tool has no argument channel — state the task title and tipo in conversation context immediately before the invocation (e.g., "Generating spec for T-XXX: <title> (Tipo: <tipo>)"). Ring will read these from context.
+   - After Ring generates the spec, update the task's TaskSpec value.
+   - If Ring fails for a task, warn the user and keep that task's TaskSpec as `-` (the next `/optimus:plan T-XXX` will offer to resolve).
+4. If "Generate selectively":
+   - For each task with `TaskSpec = -`, ask via `AskUser`:
+     ```
+     [topic] (X/N) Task T-XXX (<title>) — how should I handle the spec?
+     ```
+     Options:
+     - **Generate via Ring** (recommended) — invoke `ring:pre-dev-feature`
+     - **Link existing spec** — search `<TASKS_DIR>/tasks/*.md`; pick from top 5 matches; **HARD BLOCK** validate the chosen path: (a) exists, (b) is a regular file (NOT a symlink), (c) resolves inside `<TASKS_DIR>` with no intermediate symlink components, (d) contains no pipe (`|`), control characters, newlines. Apply the realpath/case-glob/symlink rejection block from AGENTS.md Protocol: TaskSpec Resolution.
+     - **Defer** — keep TaskSpec as `-`; the next `/optimus:plan T-XXX` will offer to resolve.
+5. If "Skip all":
+   - Keep TaskSpec as `-` for every task; inform the user that `/optimus:plan T-XXX` will offer to generate or link a spec when they next plan that task.
+6. If Ring is not available at any point, warn and keep TaskSpec as `-` for the affected tasks.
 
 ---
 
@@ -560,6 +573,21 @@ state.json is implicitly `Pendente`.
 These operations require explicit user confirmation.
 
 
+### Task Spec Resolution
+
+Every task SHOULD have a Ring pre-dev reference in the `TaskSpec` column. Tasks may be created with `TaskSpec=-` (deferred); the next `/optimus:plan` run will offer to generate or link a spec. Stage agents
+(plan, build, review) resolve the full path as `<tasksDir>/<TaskSpec>` and read the
+referenced file for objective, acceptance criteria, and implementation details.
+
+The subtasks directory is derived automatically from the TaskSpec path:
+- TaskSpec: `tasks/task_001.md` → Subtasks: `<tasksDir>/subtasks/T-001/`
+- The `T-NNN` identifier is extracted from the task spec filename convention
+
+Agents read objective and acceptance criteria directly from the Ring source files.
+The optimus-tasks.md table only tracks structural data (dependencies, versions, priorities)
+— it does NOT duplicate content from Ring.
+
+
 ### Protocol: Initialize .optimus Directory
 
 **Referenced by:** import, tasks, report (export), quick-report, batch, pr-check, deep-review, coderabbit-review, all stage agents (1-4) for session files
@@ -800,6 +828,57 @@ and offer to run reconciliation before proceeding. This prevents tasks from sile
 appearing as `Pendente` when they actually have active worktrees.
 
 Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: State Management."
+
+
+### Protocol: TaskSpec Resolution
+
+**Referenced by:** plan, build, review
+
+Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
+
+1. Read the task's `TaskSpec` column from `optimus-tasks.md`
+2. If `TaskSpec` is `-` → **STOP**: "Task T-XXX has no Ring pre-dev spec. Run `/optimus:plan T-XXX` to generate one (it will offer to invoke `ring:pre-dev-feature` interactively)."
+3. Resolve full path: `TASK_SPEC_PATH = <TASKS_DIR>/<TaskSpec>`
+4. **Path traversal validation (HARD BLOCK):** `TaskSpec` must resolve to a file **inside `TASKS_DIR`**.
+   This prevents a malicious TaskSpec value like `../../../etc/passwd` from escaping the
+   Ring pre-dev tree. Also rejects symlinks to prevent symlink-bypass TOCTOU attacks:
+   ```bash
+   TASKS_DIR_ABS=$(cd "$TASKS_DIR" 2>/dev/null && pwd) || { echo "ERROR: tasksDir does not exist." >&2; exit 1; }
+   RESOLVED_PATH=$(cd "$TASKS_DIR_ABS" && realpath -m "$TASK_SPEC" 2>/dev/null \
+     || python3 -c "import os,sys; print(os.path.realpath(os.path.join(sys.argv[1], sys.argv[2])))" "$TASKS_DIR_ABS" "$TASK_SPEC" 2>/dev/null)
+   if [ -z "$RESOLVED_PATH" ]; then
+     echo "ERROR: Cannot resolve TaskSpec path — realpath and python3 both unavailable." >&2
+     exit 1
+   fi
+   case "$RESOLVED_PATH" in
+     "$TASKS_DIR_ABS"/*) ;; # OK — within tasksDir
+     *) echo "ERROR: TaskSpec path traversal detected — resolved path is outside tasksDir." >&2; exit 1 ;;
+   esac
+   # Reject symlinks: if TASK_SPEC itself or any intermediate component is a
+   # symlink, a TOCTOU attacker could swap the target between validation and
+   # read. realpath -m resolves symlinks transparently; this post-check ensures
+   # no symlink is present in the final path.
+   if [ -L "$RESOLVED_PATH" ]; then
+     echo "ERROR: TaskSpec resolves to a symlink — refusing to read." >&2
+     exit 1
+   fi
+   ```
+
+   **Validate `TASKS_DIR` itself:** `TASKS_DIR` must be inside a valid git repository
+   (same repo as project, OR a separate repo — both are allowed). Resolution of
+   `TASKS_GIT_SCOPE` (Protocol: Resolve Tasks Git Scope) already enforces this by
+   running `git -C "$TASKS_DIR" rev-parse --show-toplevel`. If that call fails,
+   `TASKS_DIR` is not a git repository and skills STOP.
+
+   **NOTE:** `TASKS_DIR` is NO LONGER required to be inside `PROJECT_ROOT`. Teams using
+   separate-repo scope (e.g., `tasksDir: ../tasks-repo/project-alfa`) are supported.
+   The security guarantee is that the **TaskSpec value** cannot escape `TASKS_DIR`.
+
+5. Read the task spec file at `TASK_SPEC_PATH`
+6. Derive subtasks directory: if TaskSpec is `tasks/task_001.md`, subtasks are at `<TASKS_DIR>/subtasks/T-001/`
+7. If subtasks directory exists, read all `.md` files inside it
+
+Skills reference this as: "Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution."
 
 
 <!-- INLINE-PROTOCOLS:END -->
