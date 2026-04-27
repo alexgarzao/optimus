@@ -258,8 +258,14 @@ class TestDependencyChecks:
 
 class TestPlatformDetection:
     def test_detects_claude_code_when_claude_binary_present(self, tmp_path: Path) -> None:
-        """When `claude` is on PATH and Droid is not, Claude Code is detected."""
-        _install_claude_mock(tmp_path)
+        """When `claude` is on PATH and Droid is not, Claude Code is detected.
+
+        F9-1: Banner-only assertion was insufficient — a regression that
+        announced the platform but skipped the install loop would slip past.
+        Strengthened with log-file evidence proving the install machinery
+        ran (the mock `claude` binary records every invocation).
+        """
+        claude_log = _install_claude_mock(tmp_path)
         _create_claude_marketplace_cache(tmp_path, ["alpha"])
         result = _run_sync(tmp_path, exclude_droid=True, env_extra={
             "CLAUDE_MARKETPLACE_FILE": str(
@@ -271,9 +277,20 @@ class TestPlatformDetection:
         assert "Claude Code" in result.stdout
         assert "── Claude Code ──" in result.stdout
         assert "── Droid (Factory) ──" not in result.stdout
+        # F9-1: Prove the install loop actually ran — banner alone is not
+        # sufficient evidence that the platform was exercised.
+        assert claude_log.exists(), "claude mock log not created — install loop never invoked claude"
+        log_content = claude_log.read_text()
+        assert "plugin list" in log_content, (
+            f"claude `plugin list` not invoked; install loop did not run. log={log_content!r}"
+        )
 
     def test_skips_claude_code_when_claude_binary_missing(self, tmp_path: Path) -> None:
-        """When `claude` is absent and droid present, only Droid runs."""
+        """When `claude` is absent and droid present, only Droid runs.
+
+        F9-1: The log-file assertion (`install alpha@optimus`) already proves
+        the Droid install loop ran — kept and clarified.
+        """
         log = tmp_path / "droid.log"
         _create_mock_bin(tmp_path, "droid", _droid_script(log))
         _create_marketplace(tmp_path, ["alpha"])
@@ -281,7 +298,12 @@ class TestPlatformDetection:
         assert result.returncode == 0
         assert "── Droid (Factory) ──" in result.stdout
         assert "── Claude Code ──" not in result.stdout
-        assert "install alpha@optimus" in log.read_text()
+        # F9-1: log-file evidence — confirms install loop entered, not just the banner.
+        assert log.exists(), "droid mock log not created — install loop never invoked droid"
+        log_content = log.read_text()
+        assert "install alpha@optimus" in log_content, (
+            f"droid install loop did not run. log={log_content!r}"
+        )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -457,13 +479,18 @@ esac
 
 class TestSignalHandling:
     def test_trap_on_sigterm(self, tmp_path: Path) -> None:
+        # F9-2: Replace flaky time.sleep(2) with marker-file polling. The mock
+        # droid touches READY_FILE before its inner sleep, so the test can wait
+        # deterministically for the install loop to enter `sleep 30` rather than
+        # guessing a wall-clock duration that breaks on slow CI.
         log = tmp_path / "droid.log"
+        ready_file = tmp_path / "READY"
         script = f"""
 CMD="$1 $2"
 case "$CMD" in
   "plugin marketplace") exit 0 ;;
   "plugin list") echo "" ;;
-  "plugin install") sleep 30; echo "install $3" >> "{log}"; exit 0 ;;
+  "plugin install") touch "$READY_FILE"; sleep 30; echo "install $3" >> "{log}"; exit 0 ;;
   *) echo "unknown: $@" >> "{log}" ;;
 esac
 """
@@ -473,6 +500,7 @@ esac
         bin_dir = tmp_path / "bin"
         env["PATH"] = f"{bin_dir}:{_path_without('claude')}"
         env["HOME"] = str(tmp_path / "home")
+        env["READY_FILE"] = str(ready_file)
         import signal
         import time
         proc = subprocess.Popen(
@@ -483,7 +511,17 @@ esac
             env=env,
             start_new_session=True,
         )
-        time.sleep(2)
+        # Poll for the ready marker (5s cap) instead of sleeping a fixed
+        # wall-clock duration — eliminates flakiness on slow CI.
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            if ready_file.exists():
+                break
+            time.sleep(0.05)
+        else:
+            proc.terminate()
+            proc.communicate(timeout=10)
+            pytest.fail("Mock droid did not reach READY marker within 5s")
         os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
         proc.communicate(timeout=10)
         assert proc.returncode == 130

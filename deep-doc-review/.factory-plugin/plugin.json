@@ -3,6 +3,7 @@
   "description": "Deep review of project documentation. Finds errors, inconsistencies, gaps, and improvements with interactive one-by-one resolution.",
   "version": "2.0.0",
   "author": {
-    "name": "Alex Garzao"
+    "name": "Alex Garzão",
+    "email": "alexgarzao@gmail.com"
   }
 }

@@ -1,6 +1,6 @@
 ---
 name: optimus-report
-description: "Task status dashboard. Reads optimus-tasks.md, computes dependency graph, and presents a comprehensive project status report. Shows progress, active tasks, blocked tasks, ready-to-start tasks, dependency graph, and parallelization opportunities. Read-only -- this agent NEVER modifies any files."
+description: "Task status dashboard. Reads optimus-tasks.md, computes dependency graph, and presents a comprehensive project status report. Shows progress, active tasks, blocked tasks, ready-to-start tasks, dependency graph, and parallelization opportunities. Mostly read-only — only writes .optimus/config.json defaultScope when user opts in."
 trigger: >
   - When user asks for project status (e.g., "show tasks", "project status", "what's ready?")
   - When user wants to know what can be parallelized

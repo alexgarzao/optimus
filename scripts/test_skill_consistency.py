@@ -885,9 +885,10 @@ class TestTasksDirLocation:
         the script and asserts the attribute is absent.
         """
         import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "inline_protocols", REPO_ROOT / "scripts" / "inline-protocols.py",
-        )
+        ip_path = REPO_ROOT / "scripts" / "inline-protocols.py"
+        spec = importlib.util.spec_from_file_location("inline_protocols", ip_path)
+        assert spec is not None, f"Cannot load spec for {ip_path}"
+        assert spec.loader is not None, f"Spec loader is None for {ip_path}"
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         assert not hasattr(mod, "MIGRATE_PROTOCOL_KEY"), (
@@ -903,9 +904,10 @@ class TestTasksDirLocation:
         project needs the rename anymore — the constant must stay gone.
         """
         import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "inline_protocols", REPO_ROOT / "scripts" / "inline-protocols.py",
-        )
+        ip_path = REPO_ROOT / "scripts" / "inline-protocols.py"
+        spec = importlib.util.spec_from_file_location("inline_protocols", ip_path)
+        assert spec is not None, f"Cannot load spec for {ip_path}"
+        assert spec.loader is not None, f"Spec loader is None for {ip_path}"
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         assert not hasattr(mod, "RENAME_PROTOCOL_KEY"), (
@@ -1609,9 +1611,10 @@ class TestInlineProtocolsFoundational:
         """When a skill references Protocol: optimus-tasks.md Validation, the inlined block
         MUST contain Protocol: Resolve Tasks Git Scope (validation depends on it)."""
         import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "inline_protocols", REPO_ROOT / "scripts" / "inline-protocols.py",
-        )
+        ip_path = REPO_ROOT / "scripts" / "inline-protocols.py"
+        spec = importlib.util.spec_from_file_location("inline_protocols", ip_path)
+        assert spec is not None, f"Cannot load spec for {ip_path}"
+        assert spec.loader is not None, f"Spec loader is None for {ip_path}"
         ip = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(ip)
 
@@ -2685,3 +2688,123 @@ class TestTerminalIdentificationNotPastedInBody:
             "`Protocol: Terminal Identification` block:\n"
             + "\n".join(violations)
         )
+
+
+class TestReadOnlyDescriptionsMatchSkillBody:
+    """F10a: Skills that claim 'Read-only' in their public descriptions
+    must NOT have any write operations in their SKILL.md body. If a skill
+    DOES write (like report/quick-report writing config.json defaultScope),
+    its description must reflect that ('Mostly read-only')."""
+
+    KNOWN_OPT_IN_WRITERS = {"report", "quick-report"}
+
+    def test_skills_with_writes_dont_claim_pure_read_only(self):
+        violations = []
+        for skill in self.KNOWN_OPT_IN_WRITERS:
+            skill_path = REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md"
+            content = skill_path.read_text()
+            # SKILL frontmatter
+            if "Read-only" in content[:300] and "Mostly read-only" not in content[:300]:
+                violations.append(
+                    f"{skill_path.relative_to(REPO_ROOT)}: claims 'Read-only' in frontmatter "
+                    f"but writes config.json"
+                )
+            # Plugin.json
+            plugin_path = REPO_ROOT / skill / ".factory-plugin" / "plugin.json"
+            if plugin_path.exists():
+                pcontent = plugin_path.read_text()
+                if "Read-only" in pcontent and "Mostly read-only" not in pcontent:
+                    violations.append(f"{plugin_path.relative_to(REPO_ROOT)}: claims 'Read-only'")
+        assert violations == [], "\n".join(violations)
+
+    def test_marketplaces_describe_writers_accurately(self):
+        violations = []
+        for mp_file in [".factory-plugin/marketplace.json", ".claude-plugin/marketplace.json"]:
+            with open(REPO_ROOT / mp_file) as f:
+                data = json.load(f)
+            for plugin in data.get("plugins", []):
+                # plugin schema differs between droid and claude
+                name = plugin.get("name", "")
+                desc = plugin.get("description", "")
+                # normalize: claude uses "optimus-report", droid uses "report"
+                bare = name.replace("optimus-", "")
+                if bare in self.KNOWN_OPT_IN_WRITERS:
+                    if "Read-only" in desc and "Mostly read-only" not in desc:
+                        violations.append(f"{mp_file}: '{name}' description claims 'Read-only'")
+        assert violations == [], "\n".join(violations)
+
+
+class TestOwnerIdentityConsistency:
+    """F10b: Owner identity must be canonical across all metadata surfaces.
+    Canonical identity: 'Alex Garzão' (with diacritic) + 'alexgarzao@gmail.com'.
+    Sources of drift: .factory-plugin/marketplace.json, .claude-plugin/marketplace.json,
+    each <plugin>/.factory-plugin/plugin.json (×17)."""
+
+    CANONICAL_NAME = "Alex Garzão"
+    CANONICAL_EMAIL = "alexgarzao@gmail.com"
+
+    def test_no_undiacritized_alex_garzao(self):
+        """No file in the repo metadata may spell 'Alex Garzao' without diacritic."""
+        violations = []
+        for path in REPO_ROOT.glob("**/marketplace.json"):
+            content = path.read_text()
+            if "Alex Garzao" in content:
+                violations.append(f"{path.relative_to(REPO_ROOT)}: contains 'Alex Garzao' (missing diacritic)")
+        for path in REPO_ROOT.glob("**/plugin.json"):
+            content = path.read_text()
+            if "Alex Garzao" in content:
+                violations.append(f"{path.relative_to(REPO_ROOT)}: contains 'Alex Garzao' (missing diacritic)")
+        assert violations == [], "\n".join(violations)
+
+    def test_marketplace_owners_have_email(self):
+        """Both marketplace files must declare the canonical email."""
+        for mp_file in [".factory-plugin/marketplace.json", ".claude-plugin/marketplace.json"]:
+            with open(REPO_ROOT / mp_file) as f:
+                data = json.load(f)
+            owner = data.get("owner") or data.get("author") or {}
+            if isinstance(owner, dict):
+                email = owner.get("email", "")
+            else:
+                email = ""
+            assert email == self.CANONICAL_EMAIL, (
+                f"{mp_file}: owner email '{email}' does not match canonical '{self.CANONICAL_EMAIL}'"
+            )
+
+
+class TestMarketplaceSchemaParity:
+    """F10c: Droid marketplace plugin entries must include the same metadata
+    fields as Claude marketplace entries (version, homepage, repository, license).
+    Without this, Droid cannot detect plugin versions or license compliance."""
+
+    REQUIRED_FIELDS = ["version", "homepage", "repository", "license"]
+
+    def test_droid_marketplace_has_full_schema(self):
+        with open(REPO_ROOT / ".factory-plugin" / "marketplace.json") as f:
+            data = json.load(f)
+        violations = []
+        for plugin in data.get("plugins", []):
+            name = plugin.get("name", "<unknown>")
+            for field in self.REQUIRED_FIELDS:
+                if field not in plugin:
+                    violations.append(f"{name}: missing '{field}'")
+        assert violations == [], "\n".join(violations)
+
+    def test_marketplaces_have_matching_versions(self):
+        """For each plugin name present in both marketplaces (post-name-normalization),
+        the version string must agree."""
+        with open(REPO_ROOT / ".factory-plugin" / "marketplace.json") as f:
+            droid = json.load(f)
+        with open(REPO_ROOT / ".claude-plugin" / "marketplace.json") as f:
+            claude = json.load(f)
+        droid_versions = {p["name"]: p.get("version") for p in droid.get("plugins", [])}
+        claude_versions = {p["name"].replace("optimus-", "", 1): p.get("version")
+                           for p in claude.get("plugins", [])}
+        violations = []
+        for name in droid_versions:
+            if name in claude_versions:
+                if droid_versions[name] != claude_versions[name]:
+                    violations.append(
+                        f"{name}: Droid='{droid_versions[name]}' "
+                        f"vs Claude='{claude_versions[name]}'"
+                    )
+        assert violations == [], "\n".join(violations)

@@ -97,6 +97,11 @@ def _run_helper(tmp_path: Path, snippet: str):
 # Derive adopter list from AGENTS.md "Referenced by" — single source of truth.
 # Computed after _extract_protocol_section is in scope.
 HELPER_ADOPTERS = _helper_adopters_from_agents_md()
+assert HELPER_ADOPTERS, (
+    "AGENTS.md Referenced-by parser produced empty list. "
+    "If this fires, check the regex in _helper_adopters_from_agents_md "
+    "against the current AGENTS.md `Referenced by:` line in Protocol: Quiet Command Execution."
+)
 
 
 # ---------------------------------------------------------------------------
@@ -158,7 +163,9 @@ class TestQuietRunHelper:
         _run_helper(
             tmp_path, '_optimus_quiet_run "se" sh -c "echo to-err >&2"'
         )
-        log = next((tmp_path / ".optimus" / "logs").glob("*-se-*.log"))
+        logs = list((tmp_path / ".optimus" / "logs").glob("*-se-*.log"))
+        assert logs, "_optimus_quiet_run did not create any *-se-*.log file"
+        log = logs[0]
         assert "to-err" in log.read_text()
 
     def test_truncates_to_50_lines_on_failure(self, tmp_path: Path):
@@ -207,6 +214,12 @@ class TestQuietRunHelper:
         NOT claim to prevent collisions for backgrounded subshells within ONE
         bash process — those share `$$` (only `$BASHPID` differs), which is a
         documented limitation of the helper.
+
+        Note on rare-case PID reuse: on systems that aggressively recycle PIDs,
+        the second bash invocation could theoretically receive the same PID as
+        the first and produce only 1 file. In practice, pytest's modern Python
+        process manager does not exhibit this between two consecutive
+        subprocess.run() calls within a single test, so we assert == 2.
         """
         helper = _extract_helper_bash()
         for _ in range(2):
@@ -217,11 +230,10 @@ class TestQuietRunHelper:
                 capture_output=True,
             )
         log_files = list((tmp_path / ".optimus" / "logs").glob("*-dup-*.log"))
-        # On rare occasions both bash invocations get distinct PIDs but are
-        # close enough to share a timestamp: still 2 distinct files because PID
-        # differs. On extremely rare same-PID reuse, we'd have only 1 file —
-        # but that is OS-level PID recycling, not a helper bug.
-        assert len(log_files) >= 1, "expected at least 1 log file"
+        assert len(log_files) == 2, (
+            f"Expected 2 distinct log files (one per subprocess invocation), "
+            f"got {len(log_files)}: {log_files}"
+        )
         contents = " ".join(p.read_text() for p in log_files)
         assert "A" in contents
 
@@ -230,7 +242,9 @@ class TestQuietRunHelper:
         sensitive test output (credentials, internal stack traces) on
         multi-user systems."""
         _run_helper(tmp_path, '_optimus_quiet_run "perm" echo hi')
-        log = next((tmp_path / ".optimus" / "logs").glob("*-perm-*.log"))
+        logs = list((tmp_path / ".optimus" / "logs").glob("*-perm-*.log"))
+        assert logs, "_optimus_quiet_run did not create any *-perm-*.log file"
+        log = logs[0]
         mode = log.stat().st_mode & 0o777
         assert mode == 0o600, f"expected mode 0600 for log file, got {oct(mode)}"
 

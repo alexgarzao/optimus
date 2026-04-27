@@ -1,5 +1,5 @@
 ---
-description: Compact daily status dashboard. Shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Read-only -- this agent NEVER modifies any files.
+description: Compact daily status dashboard. Shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Mostly read-only — only writes .optimus/config.json defaultScope when user opts in.
 ---
 
 # Quick Report
@@ -8,7 +8,10 @@ Compact daily status dashboard. Parses `optimus-tasks.md` and presents a focused
 version progress, active tasks with current status, ready-to-start tasks,
 and blocked tasks.
 
-**CRITICAL:** This agent NEVER modifies any files. It only reads and reports.
+**CRITICAL:** This agent is mostly read-only. The ONE allowed write is
+`.optimus/config.json` `defaultScope` when the user explicitly opts in (see
+`Protocol: Default Scope Resolution` in AGENTS.md). It NEVER modifies
+`optimus-tasks.md`, `state.json`, code, or any other project file.
 
 ---
 
