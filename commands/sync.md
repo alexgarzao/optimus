@@ -167,13 +167,22 @@ if [ -z "$SCRIPT" ] && command -v claude >/dev/null 2>&1; then
   fi
 fi
 
-# 3b. Versioned-path fallback if `claude plugin list --json` failed.
-# NOTE: 2.0.0 is the version pinned in .claude-plugin/marketplace.json. If that
-# version changes, update this fallback too — but the dynamic lookup above is
-# the preferred resolver and should normally make this unnecessary.
+# 3b. Version-globbed fallback if `claude plugin list --json` failed.
+# Walks the per-version directories under Claude Code's plugin cache and
+# picks whichever sync-user-plugins.sh exists. Iteration is alphabetical
+# (last match wins), giving us a version-agnostic resolver — no need to
+# bump a hardcoded version when .claude-plugin/marketplace.json changes.
 if [ -z "$SCRIPT" ]; then
-  CANDIDATE="$HOME/.claude/plugins/cache/optimus/optimus/2.0.0/sync/scripts/sync-user-plugins.sh"
-  [ -f "$CANDIDATE" ] && SCRIPT="$CANDIDATE"
+  for v_dir in "$HOME/.claude/plugins/cache/optimus/optimus:sync/"*/; do
+    [ -d "$v_dir" ] || continue
+    CANDIDATE="${v_dir}sync/scripts/sync-user-plugins.sh"
+    if [ -f "$CANDIDATE" ]; then
+      SCRIPT="$CANDIDATE"
+    fi
+  done
+  if [ -n "$SCRIPT" ]; then
+    echo "Found script via Claude Code plugin cache (version-globbed): $SCRIPT"
+  fi
 fi
 
 if [ -z "$SCRIPT" ]; then
@@ -184,7 +193,7 @@ fi
 bash "$SCRIPT" 2>&1
 ```
 
-Use a 90-second timeout for the entire Execute call.
+Use an Execute timeout of `(OPTIMUS_DROID_TIMEOUT × plugin_count + retry_overhead)` seconds. With defaults (DROID_TIMEOUT=60, ~20 plugins, 1 retry round), that is approximately `(60 × 20 + 60)` = 1260s (21 min). For typical syncs of 17 healthy plugins, normal completion is under 90s; the longer budget is the safety upper bound for transient failures with retry.
 
 ---
 
