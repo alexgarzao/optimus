@@ -341,14 +341,30 @@ If a worktree is found (`WORKTREE_PATH` non-empty), ask via `AskUser`:
 Task T-XXX is done. A worktree still exists at '<path>'. What should I do?
 ```
 Options:
-- **Remove worktree**: `git worktree remove <path>`
+- **Remove worktree**: `git worktree remove <path>` then prune empty parent dirs (see snippet below)
 - **Keep**: Leave the worktree as is
+
+**Removal snippet** — after the user picks "Remove worktree":
+
+```bash
+git worktree remove "$WORKTREE_PATH"
+# Cleanup intermediate parent dirs (e.g., empty .worktrees/feat/ after removing leaf).
+# Idempotent: rmdir refuses non-empty dirs silently.
+parent="$(dirname "$WORKTREE_PATH")"
+while [ "$parent" != "${MAIN_WORKTREE}/.worktrees" ] && [ "$parent" != "/" ]; do
+  rmdir "$parent" 2>/dev/null || break
+  parent="$(dirname "$parent")"
+done
+```
+
+This walks up from the removed worktree leaf to `${MAIN_WORKTREE}/.worktrees/` removing
+empty intermediate dirs (`feat/`, `fix/`, etc.) but stops at `.worktrees/` itself.
 
 **Edge case — running INSIDE the worktree:** If the agent's current working directory IS
 the worktree being removed, `cd` to the main repository first:
 1. Identify the main repository path from `git worktree list` (first entry)
 2. `cd <main-repo-path>`
-3. Then `git worktree remove <worktree-path>`
+3. Then run the **Removal snippet** above.
 
 ### Step 4.2: Check for Task Branch
 

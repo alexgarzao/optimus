@@ -3135,16 +3135,30 @@ class TestWorktreeLocationConvention:
     pattern; .gitignore auto-inject uses post-F1 ${MAIN_WORKTREE}/.gitignore contract."""
 
     CREATOR_FILES = [
-        ("AGENTS.md", None),  # Workspace Auto-Navigation
-        ("plan", "Step 1.0.5"),
-        ("resume", "Step 3.3"),
+        (REPO_ROOT / "AGENTS.md", "Workspace Auto-Navigation"),
+        (REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md", "Step 1.0.5"),
+        (REPO_ROOT / "resume" / "skills" / "optimus-resume" / "SKILL.md", "Step 3.3"),
+    ]
+
+    # User-facing command mirrors (auto-generated from SKILL.md by sync-claude-commands.py).
+    COMMAND_MIRRORS = [
+        REPO_ROOT / "commands" / "plan.md",
+        REPO_ROOT / "commands" / "resume.md",
     ]
 
     def test_no_sibling_worktree_path_pattern(self):
         """No `../${REPO_NAME}-...` or `../<repo>-...` worktree-add invocations should remain."""
         violations = []
-        for skill in ["plan", "resume"]:
-            path = REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md"
+        for path, _ in self.CREATOR_FILES:
+            content = path.read_text()
+            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            for lineno, line in enumerate(body.splitlines(), start=1):
+                if "git worktree add" in line and "../" in line:
+                    violations.append(f"{path.relative_to(REPO_ROOT)}:{lineno}: sibling pattern: {line.strip()}")
+        # Also check user-facing command mirrors.
+        for path in self.COMMAND_MIRRORS:
+            if not path.exists():
+                continue
             content = path.read_text()
             body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
             for lineno, line in enumerate(body.splitlines(), start=1):
@@ -3153,9 +3167,23 @@ class TestWorktreeLocationConvention:
         assert violations == [], "\n".join(violations)
 
     def test_worktree_paths_use_dot_worktrees(self):
-        """plan and resume creation sites use ${MAIN_WORKTREE}/.worktrees/."""
-        for skill in ["plan", "resume"]:
-            path = REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md"
+        """Creator sites and command mirrors use ${MAIN_WORKTREE}/.worktrees/.
+
+        AGENTS.md is skipped in this check because ${MAIN_WORKTREE}/.worktrees/
+        IS in AGENTS.md auto-nav (and that's exactly what we want to verify
+        elsewhere via the dedicated test for the convention section)."""
+        for path, _ in self.CREATOR_FILES:
+            if path.name == "AGENTS.md":
+                continue
+            content = path.read_text()
+            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            assert "${MAIN_WORKTREE}/.worktrees/" in body, (
+                f"{path.relative_to(REPO_ROOT)}: missing ${{MAIN_WORKTREE}}/.worktrees/ pattern"
+            )
+        # Also verify the command mirrors.
+        for path in self.COMMAND_MIRRORS:
+            if not path.exists():
+                continue
             content = path.read_text()
             body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
             assert "${MAIN_WORKTREE}/.worktrees/" in body, (
@@ -3164,33 +3192,46 @@ class TestWorktreeLocationConvention:
 
     def test_agents_md_documents_worktree_convention(self):
         content = (REPO_ROOT / "AGENTS.md").read_text()
-        assert "## Worktree Location Convention" in content
+        assert "### Protocol: Worktree Location" in content
+        # And content (not just header)
+        idx = content.find("### Protocol: Worktree Location")
+        section = content[idx:idx + 4000]
+        assert "${MAIN_WORKTREE}/.worktrees/" in section
+        assert "Resolve Main Worktree Path" in section  # cross-reference
+        assert "Backwards compatibility" in section
 
     def test_gitignore_auto_inject_uses_main_worktree_path(self):
         """Post-F1 contract: gitignore auto-inject must use ${MAIN_WORKTREE}/.gitignore,
         NOT bare .gitignore (which would write to the linked worktree's .gitignore
-        when run from a linked worktree)."""
+        when run from a linked worktree).
+
+        Validates EVERY occurrence of the operational-worktrees marker, not just
+        the first — both Initialize Directory and Session State protocols
+        contain the auto-inject block."""
         content = (REPO_ROOT / "AGENTS.md").read_text()
-        # The auto-inject block for worktrees must reference ${MAIN_WORKTREE}/.gitignore
-        # (find the optimus-operational-worktrees marker context)
-        idx = content.find("optimus-operational-worktrees")
-        assert idx >= 0, "AGENTS.md must add .worktrees/ to .gitignore via auto-inject"
-        window = content[max(0, idx - 200):idx + 500]
-        # The block must use prefixed .gitignore, not bare
-        assert '"${MAIN_WORKTREE}/.gitignore"' in window or "${MAIN_WORKTREE}/.gitignore" in window, (
-            "gitignore auto-inject for .worktrees/ must use ${MAIN_WORKTREE}/.gitignore (post-F1 contract)"
-        )
+        # All occurrences of the marker token (covers both grep guard and
+        # printf payload sites). We then assert the protective ${MAIN_WORKTREE}
+        # path appears in the surrounding window for each.
+        indices = [m.start() for m in re.finditer(r'optimus-operational-worktrees', content)]
+        assert indices, "AGENTS.md missing optimus-operational-worktrees marker"
+        for idx in indices:
+            window = content[max(0, idx - 300):idx + 500]
+            assert "${MAIN_WORKTREE}/.gitignore" in window, (
+                f"AGENTS.md byte {idx}: gitignore auto-inject must use ${{MAIN_WORKTREE}}/.gitignore"
+            )
 
     def test_branch_traversal_guard_in_creator_sites(self):
-        """All worktree-creator sites must guard against path-traversal in branch names."""
+        """All worktree-creator sites that actually call `git worktree add`
+        MUST guard branch names against path traversal via a `case ... in
+        *..*|/*)` statement."""
+        # Match `case "<var>" in <newline> *..*|/*)` allowing optional
+        # whitespace before the case-arm pattern.
+        pattern = re.compile(r'case\s+"[^"]*"\s+in\s*\n\s*\*\.\.\*\|/\*\)')
         violations = []
-        for skill in ["plan", "resume"]:
-            path = REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md"
-            content = path.read_text()
-            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
-            # Must contain `*..*|/*)` or equivalent traversal guard
-            if "*..*" not in body or "git worktree add" not in body:
-                # Only flag if the file actually creates a worktree
-                if "git worktree add" in body and "*..*" not in body:
-                    violations.append(f"{path.relative_to(REPO_ROOT)}: missing path-traversal guard")
+        for path, _ in self.CREATOR_FILES:
+            body = path.read_text().split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            if "git worktree add" not in body:
+                continue
+            if not pattern.search(body):
+                violations.append(f"{path.relative_to(REPO_ROOT)}: missing case-stmt traversal guard")
         assert violations == [], "\n".join(violations)

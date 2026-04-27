@@ -2549,18 +2549,19 @@ MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repo
 # agents — which call Session State but not Initialize Directory — also create
 # the dirs and update .gitignore on first phase transition.
 mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports" "${MAIN_WORKTREE}/.optimus/logs"
-if ! grep -q '^# optimus-operational-files' "${MAIN_WORKTREE}/.gitignore" 2>/dev/null; then
-  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> "${MAIN_WORKTREE}/.gitignore"
-fi
-# Linked worktrees managed by Optimus live at ${MAIN_WORKTREE}/.worktrees/
-# (see Worktree Location Convention). Add a separate marker so existing
-# projects whose .gitignore already carries the operational-files block
-# still get the worktree exclusion idempotently.
 # Refuse symlinked .gitignore (defense against link-following file-write).
+# Hoisted ABOVE the operational-files write so the first append is also protected.
 if [ -L "${MAIN_WORKTREE}/.gitignore" ]; then
   echo "ERROR: ${MAIN_WORKTREE}/.gitignore is a symlink — refusing to append (potential symlink attack)." >&2
   exit 1
 fi
+if ! grep -q '^# optimus-operational-files' "${MAIN_WORKTREE}/.gitignore" 2>/dev/null; then
+  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> "${MAIN_WORKTREE}/.gitignore"
+fi
+# Linked worktrees managed by Optimus live at ${MAIN_WORKTREE}/.worktrees/
+# (see Protocol: Worktree Location). Add a separate marker so existing
+# projects whose .gitignore already carries the operational-files block
+# still get the worktree exclusion idempotently.
 if ! grep -q '^# optimus-operational-worktrees' "${MAIN_WORKTREE}/.gitignore" 2>/dev/null; then
   printf '\n# optimus-operational-worktrees\n.worktrees/\n' >> "${MAIN_WORKTREE}/.gitignore"
 fi
@@ -2981,10 +2982,13 @@ fi
      fi
      ```
      If the branch exists, create the worktree automatically. Canonical path
-     follows the Worktree Location Convention:
+     follows Protocol: Worktree Location:
      ```bash
      # Resolve main worktree first — see Protocol: Resolve Main Worktree Path.
-     MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+     # Reuse cached MAIN_WORKTREE if caller already resolved.
+     if [ -z "${MAIN_WORKTREE:-}" ]; then
+       MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+     fi
      MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 
      # Path-traversal guard (defense in depth): branch name comes from state.json

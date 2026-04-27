@@ -3,6 +3,7 @@
 
 import importlib.util
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -806,3 +807,80 @@ class TestRefAliasCollision:
         assert "INFO" in captured.err
         assert "ref alias collapsed" in captured.err
         assert "Protocol: Foo Bar Resolution" in captured.err
+
+
+# --- F-worktrees: behavioral verification of symlink refusal in the
+# auto-inject block. The block is shared by Protocol: Initialize .optimus
+# Directory and Protocol: Session State; both must exit non-zero when
+# .gitignore is a symlink BEFORE writing to it.
+
+class TestGitignoreAutoInjectSymlinkRefusal:
+    """Verifies the bash auto-inject snippet exits non-zero when .gitignore is a symlink."""
+
+    # Minimal stand-in mirroring the auto-inject block from AGENTS.md
+    # (Protocol: Initialize .optimus Directory and Protocol: Session State).
+    # The symlink check is HOISTED to fire BEFORE either write — so a
+    # symlink victim must remain unmodified.
+    AUTO_INJECT_SNIPPET = r"""
+set -e
+MAIN_WORKTREE="$1"
+mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports" "${MAIN_WORKTREE}/.optimus/logs"
+# Refuse symlinked .gitignore (defense against link-following file-write).
+# Hoisted ABOVE the operational-files write so the first append is also protected.
+if [ -L "${MAIN_WORKTREE}/.gitignore" ]; then
+  echo "ERROR: ${MAIN_WORKTREE}/.gitignore is a symlink — refusing to append (potential symlink attack)." >&2
+  exit 1
+fi
+if ! grep -q '^# optimus-operational-files' "${MAIN_WORKTREE}/.gitignore" 2>/dev/null; then
+  printf '\n# optimus-operational-files\n.optimus/\n' >> "${MAIN_WORKTREE}/.gitignore"
+fi
+if ! grep -q '^# optimus-operational-worktrees' "${MAIN_WORKTREE}/.gitignore" 2>/dev/null; then
+  printf '\n# optimus-operational-worktrees\n.worktrees/\n' >> "${MAIN_WORKTREE}/.gitignore"
+fi
+"""
+
+    def test_symlink_gitignore_is_refused(self, tmp_path: Path):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        # Symlink target: a sensitive innocent file (mimics e.g. ~/.bashrc).
+        target = tmp_path / "innocent.txt"
+        target.write_text("# innocent — must not be modified\n")
+        gitignore = repo / ".gitignore"
+        gitignore.symlink_to(target)
+        before = target.read_text()
+
+        result = subprocess.run(
+            ["bash", "-c", self.AUTO_INJECT_SNIPPET, "_", str(repo)],
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode != 0, (
+            f"Snippet must exit non-zero when .gitignore is a symlink "
+            f"(got rc={result.returncode}, stderr={result.stderr!r})"
+        )
+        assert "ERROR" in result.stderr
+        assert "symlink" in result.stderr.lower()
+        # CRITICAL: the symlink target must remain UNCHANGED — proves the
+        # refusal fires BEFORE either write (defense in depth).
+        assert target.read_text() == before, (
+            "Symlink target was modified — refusal fired AFTER a write "
+            "(F2 regression: symlink check must precede operational-files write)"
+        )
+
+    def test_regular_gitignore_still_writes(self, tmp_path: Path):
+        """Sanity: with a regular file, the snippet appends both markers."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        gitignore = repo / ".gitignore"
+        gitignore.write_text("# pre-existing\n")
+
+        result = subprocess.run(
+            ["bash", "-c", self.AUTO_INJECT_SNIPPET, "_", str(repo)],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        body = gitignore.read_text()
+        assert "# optimus-operational-files" in body
+        assert "# optimus-operational-worktrees" in body

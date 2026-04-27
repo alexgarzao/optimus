@@ -358,9 +358,11 @@ if [ -z "$TASK_ID" ] || ! [[ "$TASK_ID" =~ ^T-[0-9]+$ ]]; then
 fi
 
 # Anchor the match on the kebab-cased task ID (e.g., `-t-1-`) so substrings like
-# `t-1` cannot match `t-10`/`t-100`. Worktree paths follow the convention
-# `<parent>/<repo>-<id>-<keywords>`, and feature branches follow
-# `<tipo>/<id>-<keywords>` — both surround the lowercased ID with hyphens.
+# `t-1` cannot match `t-10`/`t-100`. Worktree paths follow Protocol: Worktree
+# Location: ${MAIN_WORKTREE}/.worktrees/<branch-name> (legacy sibling paths
+# ../<repo>-<id>-<keywords> still resolve via git worktree list metadata).
+# Feature branches follow `<tipo>/<id>-<keywords>` — both surround the
+# lowercased ID with hyphens.
 TASK_KEBAB="-$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')-"
 WORKTREE_PATH=$(git worktree list --porcelain 2>/dev/null \
   | awk -v anchor="$TASK_KEBAB" '
@@ -380,7 +382,7 @@ fi
 
 ### Step 3.3: Apply Resolution Order
 
-**Canonical worktree path** — see AGENTS.md Worktree Location Convention.
+**Canonical worktree path** — see AGENTS.md Protocol: Worktree Location.
 
 1. **Worktree found** → `cd "$WORKTREE_PATH"` for the rest of the session. Continue to Phase 4.
 
@@ -390,7 +392,10 @@ fi
 
    ```bash
    # Resolve main worktree first — see AGENTS.md Protocol: Resolve Main Worktree Path.
-   MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+   # Reuse cached MAIN_WORKTREE if caller already resolved (per Protocol: Resolve Main Worktree Path).
+   if [ -z "${MAIN_WORKTREE:-}" ]; then
+     MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+   fi
    MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 
    # Belt-and-suspenders: upstream guards (Step 2.1, Step 3.1, Step 3.2) already validated
@@ -408,7 +413,7 @@ fi
 
    # HARD BLOCK on git worktree add failure (dir exists, branch checked out elsewhere, etc.)
    if ! git worktree add "$WORKTREE_DIR" "$TASK_BRANCH"; then
-     echo "ERROR: 'git worktree add $WORKTREE_DIR $TASK_BRANCH' failed."
+     echo "ERROR: 'git worktree add $WORKTREE_DIR $TASK_BRANCH' failed (branch already checked out, dir collision, or filesystem error)."
      echo "       Possible causes: directory exists, branch checked out elsewhere, or local repo state."
      # STOP
    fi
@@ -418,6 +423,8 @@ fi
      # STOP
    fi
    ```
+
+   **Initialize .optimus directory** (ensures `.optimus/logs/`, `.gitignore` exclusions for `.optimus/` and `.worktrees/`) — see AGENTS.md Protocol: Initialize .optimus Directory.
 
 <a id="step-reset-to-pendente-recovery"></a>
 3. **Worktree missing AND branch missing:**
@@ -974,6 +981,64 @@ Where:
 Skills reference this as: "Derive branch name — see AGENTS.md Protocol: Branch Name Derivation."
 
 
+### Protocol: Initialize .optimus Directory
+
+**Referenced by:** import, tasks, report (export), quick-report, batch, pr-check, deep-review, coderabbit-review, all stage agents (1-4) for session files
+
+Before creating ANY file inside `.optimus/`, ensure the directory structure exists
+and that the entire `.optimus/` tree is gitignored (it is 100% operational/per-user).
+
+```bash
+# Requires Protocol: Resolve Main Worktree Path to have run first
+# (or resolve inline; see that protocol).
+MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
+mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports" "${MAIN_WORKTREE}/.optimus/logs"
+# Refuse symlinked .gitignore (defense against link-following file-write).
+# Hoisted ABOVE the operational-files write so the first append is also protected.
+if [ -L "${MAIN_WORKTREE}/.gitignore" ]; then
+  echo "ERROR: ${MAIN_WORKTREE}/.gitignore is a symlink — refusing to append (potential symlink attack)." >&2
+  exit 1
+fi
+if ! grep -q '^# optimus-operational-files' "${MAIN_WORKTREE}/.gitignore" 2>/dev/null; then
+  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> "${MAIN_WORKTREE}/.gitignore"
+fi
+# Linked worktrees managed by Optimus live at ${MAIN_WORKTREE}/.worktrees/
+# (see Protocol: Worktree Location). Add a separate marker so existing
+# projects whose .gitignore already carries the operational-files block
+# still get the worktree exclusion idempotently.
+if ! grep -q '^# optimus-operational-worktrees' "${MAIN_WORKTREE}/.gitignore" 2>/dev/null; then
+  printf '\n# optimus-operational-worktrees\n.worktrees/\n' >> "${MAIN_WORKTREE}/.gitignore"
+fi
+# Log retention (idempotent — fires once per init): age-based + count-cap prune.
+# Also duplicated in Protocol: Session State so stage agents (which call Session
+# State but not Initialize Directory) get pruning at every phase transition.
+# Both prune sites are no-ops on clean directories; running both is harmless.
+find "${MAIN_WORKTREE}/.optimus/logs" -type f -name '*.log' -mtime +30 -delete 2>/dev/null
+if [ -d "${MAIN_WORKTREE}/.optimus/logs" ]; then
+  ls -1t "${MAIN_WORKTREE}/.optimus/logs"/*.log 2>/dev/null | tail -n +501 \
+    | while IFS= read -r _log_to_rm; do rm -f -- "$_log_to_rm"; done
+fi
+```
+
+**Log retention** for `.optimus/logs/` runs at TWO sites for full coverage:
+- **Protocol: Initialize .optimus Directory** (this protocol) — fires when
+  admin/standalone skills (`import`, `tasks`, `report`, `quick-report`, `batch`,
+  `pr-check`, `deep-review`, `coderabbit-review`) initialize `.optimus/`.
+- **Protocol: Session State** — fires at every stage agent (`plan`, `build`,
+  `review`, `done`) phase transition.
+
+Both sites are idempotent (no-op on clean directories) and use the same prune
+logic (30-day age cap + 500-file count cap). Running both per session is a
+harmless cheap operation.
+
+Everything inside `.optimus/` is gitignored. The planning tree is versioned
+separately at `<tasksDir>/optimus-tasks.md` (and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/`
+for Ring specs) — see the File Location section above.
+
+Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
+
+
 ### Protocol: Resolve Main Worktree Path
 
 **Referenced by:** all skills that read or write `.optimus/` operational files (state.json, stats.json, sessions, reports, logs, and checkpoint markers).
@@ -1116,6 +1181,45 @@ will not see a title update.
    silently no-op.
 
 Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Terminal Identification."
+
+
+### Protocol: Worktree Location
+
+**Referenced by:** plan (Step 1.0.5), resume (Step 3.3 Case 2), Protocol: Workspace Auto-Navigation (see Reusable Protocols), done (Phase 4.1 cleanup)
+
+Optimus creates linked git worktrees during the task lifecycle:
+
+- `/optimus-plan` creates a worktree when a task starts (Step 1.0.5).
+- `/optimus-resume` creates a worktree on recovery if branch exists but worktree is missing (Step 3.3).
+- Protocol: Workspace Auto-Navigation (see Reusable Protocols) creates a worktree as a fallback when an Optimus skill is invoked from the default branch and the task's worktree is missing.
+
+**Canonical path:** `${MAIN_WORKTREE}/.worktrees/<branch-name>` — gitignored (auto-injected by `Protocol: Initialize .optimus Directory` and `Protocol: Session State`), project-rooted, and resolved against the main worktree (path correct even when invoked from a linked worktree, per Protocol: Resolve Main Worktree Path).
+
+**Note on branch names with `/`:** branch names contain `/` (see `Protocol: Branch Name Derivation`). Used as a directory under `.worktrees/`, the `/` creates intermediate subdirectories — `<repo>/.worktrees/feat/t-007-user-auth/`. `git worktree add` creates these automatically. `ls .worktrees/` shows the tipo-prefix dirs (`feat/`, `fix/`, `chore/`); `find .worktrees/ -mindepth 2 -maxdepth 2 -type d` lists each leaf.
+
+**Why nested under the project repo:**
+
+| Concern | Resolution |
+|---|---|
+| Discoverability | All worktrees for a project listed by `ls <repo>/.worktrees/` |
+| Cleanup lifecycle | Removing the project directory also removes worktrees |
+| `.optimus/` companion | Both `.optimus/` and `.worktrees/` live inside the repo, gitignored — same operational pattern |
+| Cross-repo safety | Worktrees always belong to the **project repo**, never the tasks repo (separate-repo `tasksDir` does not affect worktree location) |
+| Main-worktree resolution | `git worktree list --porcelain` correctly identifies main first regardless of nested linked worktrees — Protocol: Resolve Main Worktree Path unaffected |
+
+**IDE exclusion (recommended):** add `.worktrees/` to your editor's search/index exclusions to prevent double-indexing the same files in main and linked worktrees.
+
+- VS Code (`.vscode/settings.json`): `"search.exclude": { "**/.worktrees": true }, "files.watcherExclude": { "**/.worktrees/**": true }`
+- IntelliJ: mark `.worktrees/` as Excluded in Project Structure.
+
+**Backwards compatibility:**
+
+- Existing worktrees in older sibling locations (`../<repo>-<task>`) continue to work — `git worktree list` finds them regardless of path.
+- New worktrees from `/optimus-plan` and `resume`'s recovery land in `.worktrees/`.
+- No forced migration.
+- Users may relocate manually with `git worktree move <old-path> ${MAIN_WORKTREE}/.worktrees/<branch-name>` when convenient.
+
+Skills reference this as: "see AGENTS.md Protocol: Worktree Location."
 
 
 ### Protocol: optimus-tasks.md Validation (HARD BLOCK)
