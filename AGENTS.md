@@ -810,6 +810,10 @@ Skills reference this as: "Find and validate optimus-tasks.md (HARD BLOCK) — s
 
 ### Protocol: Resolve Tasks Git Scope
 
+<!-- inline-mode: summarize -->
+
+**Summary:** Resolves `TASKS_DIR` (from `.optimus/config.json` `tasksDir` key, default `docs/pre-dev`) and `TASKS_FILE` (`<tasksDir>/optimus-tasks.md`), then detects whether tasksDir lives inside the project repo (`same-repo`) or a separate git repo (`separate-repo`). Sets `TASKS_REPO_ROOT`, `TASKS_GIT_REL`, `TASKS_DEFAULT_BRANCH`, and exposes a `tasks_git()` helper that wraps `git -C "$TASKS_DIR"` in separate-repo mode. Hard guards: reject `tasksDir` starting with `-` (git-option injection), require `python3` for separate-repo path computation, validate `TASKS_DEFAULT_BRANCH` against `^[a-zA-Z0-9._/-]+$`. Skills MUST use `tasks_git` (never raw `git`) on `$TASKS_FILE`. See full recipe in AGENTS.md.
+
 **Referenced by:** all stage agents (1-4), tasks, batch, resolve, import, resume, report, quick-report
 
 Resolves `TASKS_DIR` (Ring pre-dev root) and `TASKS_FILE` (`<tasksDir>/optimus-tasks.md`), then
@@ -1083,6 +1087,10 @@ for Ring specs) — see the File Location section above.
 Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
 
 ### Protocol: Quiet Command Execution
+
+<!-- inline-mode: summarize -->
+
+**Summary:** `_optimus_quiet_run <label> <command>` redirects stdout+stderr to `${MAIN_WORKTREE}/.optimus/logs/<ts>-<label>-<pid>.log`, emits a single `PASS`/`FAIL` line, and on failure dumps the last 50 lines (with `cat -v` to neutralize ANSI/OSC escape sequences). Uses `umask 0077` on the log file (output may contain credentials/stack traces). Exit code preserved so `if _optimus_quiet_run ...; then ... fi` works. Reserved exit codes: `2` = missing label/command; `3` = cannot create logs dir. Log retention (30-day age cap + 500-file count cap) is pruned at every Initialize Directory + Session State call. Use for verification commands only; never for output the agent must parse turn-by-turn. See full recipe in AGENTS.md.
 
 **Referenced by:** build, review, pr-check, coderabbit-review, deep-review (for `make test`, `make lint`, `make test-integration`, coverage runs)
 
@@ -2515,6 +2523,10 @@ Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Pus
 
 ### Protocol: State Management
 
+<!-- inline-mode: summarize -->
+
+**Summary:** Read/write/delete entries in `${MAIN_WORKTREE}/.optimus/state.json` with `jq`. Schema: `{task_id: {status, branch, updated_at}}`. Status values: `Pendente | Validando Spec | Em Andamento | Validando Impl | DONE | Cancelado`. All writes use `jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" '.[$id] = {...}'` (injection-safe), with a tmp-file + `jq empty` validation step before `mv` to guarantee atomicity. Cancelado entries keep `branch: ""` (empty string, NOT absent — readers must treat both as Cancelado-state). Corrupted state.json is removed and treated as empty (reconciliation via worktree scan). state.json is gitignored; never committed. See full recipe in AGENTS.md for jq templates and reconciliation steps.
+
 **Referenced by:** all stage agents (1-4), tasks, report, quick-report, import, batch
 
 All status and branch data is stored in `.optimus/state.json` (gitignored).
@@ -3131,7 +3143,12 @@ Every finding must present 2-3 options with this structure:
 - **Very high:** Architectural change, many files, extensive testing, risk of regressions
 
 ### Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)
-Applies to: plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review, build
+
+<!-- inline-mode: summarize -->
+
+**Summary:** Multi-round review pattern for plan, build, review, pr-check, coderabbit-review, deep-review, deep-doc-review. Round 1 is mandatory (the skill's primary dispatch). Rounds 2-5 are gated behind explicit `AskUser` prompts (entry gate before round 2, per-round gate before 3/4/5). Each gated round dispatches the SAME droid roster as round 1 in parallel via `Task` tool with zero prior context — agents read files fresh from disk. Convergence detection (zero new findings, strict `same file + ±5 lines + same category` matching) exits silently with status `CONVERGED` — never asks for another round. Hard limit at round 5. Exit statuses: `CONVERGED`, `USER_STOPPED`, `SKIPPED`, `HARD_LIMIT`, `DISPATCH_FAILED_ABORTED` (build has a single-slot carve-out). See full recipe in AGENTS.md.
+
+**Applies to:** plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review, build
 
 Round 1 (the skill's primary agent dispatch) is MANDATORY and uses the per-skill
 default ring roster. Convergence rounds 2+ are OPTIONAL and gated behind explicit

@@ -3237,19 +3237,25 @@ class TestWorktreeLocationConvention:
         assert violations == [], "\n".join(violations)
 
 
-# --- Phase 1 of issue #34: top-3 most-duplicated protocols carry the
+# --- Phases 1+2 of issue #34: top duplicated protocols carry the
 # `<!-- inline-mode: summarize -->` marker AND a `**Summary:**` subsection
 # in AGENTS.md. The inliner reads both at runtime; this test guards the
 # source-of-truth so the marker can't be dropped without flipping a test.
 
 class TestProtocolSummarizeMarker:
-    """Phase 1 of issue #34: Verify the 3 top-duplicated protocols carry
+    """Phases 1+2 of issue #34: Verify the top-duplicated protocols carry
     the <!-- inline-mode: summarize --> marker in AGENTS.md."""
 
     SUMMARIZED_PROTOCOLS = [
+        # Phase 1:
         "Resolve Main Worktree Path",
         "Session State",
         "Initialize .optimus Directory",
+        # Phase 2:
+        "Resolve Tasks Git Scope",
+        "State Management",
+        "Quiet Command Execution",
+        "Convergence Loop (Full Roster Model — Opt-In, Gated)",
     ]
 
     def test_summarize_marker_present_for_top_protocols(self):

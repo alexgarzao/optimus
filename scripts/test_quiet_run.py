@@ -423,16 +423,42 @@ class TestQuietRunAdoption:
         )
 
     def test_helper_inlined_into_consumer_skills(self):
+        # Phase 2 of issue #34: Quiet Command Execution carries the
+        # `<!-- inline-mode: summarize -->` marker, so consumers receive a
+        # summary STUB (not the full helper body). The helper body lives
+        # ONLY in AGENTS.md as the single source of truth — agents look it
+        # up via the stub's "Full recipe at AGENTS.md -> ..." pointer.
+        #
+        # Detect the summarize mode at runtime so this test adapts to the
+        # source-of-truth without needing manual updates.
+        section = _extract_protocol_section("Protocol: Quiet Command Execution")
+        summarized = "<!-- inline-mode: summarize -->" in section
+
         missing = []
         for skill in HELPER_ADOPTERS:
             content = _read_skill(skill)
-            if "_optimus_quiet_run()" not in content:
-                missing.append(skill)
-        assert missing == [], (
-            "Skills declared as Quiet Command Execution adopters but missing "
-            "_optimus_quiet_run() helper body (run inline-protocols.py):\n"
-            + "\n".join(f"  - {m}" for m in missing)
-        )
+            if summarized:
+                # In summarize mode, require the stub pointer (not the body).
+                if (
+                    "Protocol: Quiet Command Execution (summarized)" not in content
+                    and "AGENTS.md -> Protocol: Quiet Command Execution" not in content
+                ):
+                    missing.append(skill)
+            else:
+                if "_optimus_quiet_run()" not in content:
+                    missing.append(skill)
+        if summarized:
+            assert missing == [], (
+                "Skills declared as Quiet Command Execution adopters but missing "
+                "the summary stub pointer (run inline-protocols.py):\n"
+                + "\n".join(f"  - {m}" for m in missing)
+            )
+        else:
+            assert missing == [], (
+                "Skills declared as Quiet Command Execution adopters but missing "
+                "_optimus_quiet_run() helper body (run inline-protocols.py):\n"
+                + "\n".join(f"  - {m}" for m in missing)
+            )
 
     def test_referenced_by_field_lists_all_adopters(self):
         section = _extract_protocol_section("Protocol: Quiet Command Execution")
