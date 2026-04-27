@@ -1579,6 +1579,10 @@ Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Termin
 
 ### Protocol: Workspace Auto-Navigation (HARD BLOCK)
 
+<!-- inline-mode: summarize -->
+
+**Summary:** When an Optimus stage skill (build, review, done) is invoked from the default branch (main/master) instead of from the task's linked worktree, automatically detect the correct workspace and navigate there before any mutation. Resolution order: (1) state.json `branch` field for the task; (2) match against `git worktree list` by branch ref; (3) fallback path-segment match by anchored kebab task-ID (`-t-NNN-`); (4) recovery: if branch exists but worktree is missing, create at `${MAIN_WORKTREE}/.worktrees/<branch-name>` per Protocol: Worktree Location. HARD BLOCK on default branch — refuses to mutate from main/master regardless of resolution outcome. See full recipe + Default Branch Refusal cross-reference in AGENTS.md.
+
 **Referenced by:** stages 2-4
 
 Execution stages (2-4) resolve the correct workspace automatically. The agent MUST
@@ -1796,6 +1800,10 @@ Skills reference this as: "Resolve default branch — see AGENTS.md Protocol: De
 
 ### Protocol: Discover Review Droids
 
+<!-- inline-mode: summarize -->
+
+**Summary:** Single source of truth for review-droid roster discovery. Discovers installed `~/.factory/droids/ring-*.md` (or all `*.md` if `INCLUDE_NON_RING=true`), applies permanent exclusion list (codebase-explorer, write-plan, review-slicer, devops/ui/sre engineers, finance/finops/ops/pm/pmm/pmo/tw teams — none are code reviewers), then description-based relevance filter (Core: `code review|security|testing|safety|reviewer|audit`; Stack: language-specific only if project uses it; Domain: technology-specific only if relevant). Plus deny-list filter (`architecture|design|planning|process|workflow|strategy` excluded even if matched). Returns categorized roster (Ring Core / Ring Stack / Ring Domain / Non-Ring) or `MIN_NOT_MET` if `code-reviewer` AND `security-reviewer` aren't both present. See full filter cascade in AGENTS.md.
+
 **Referenced by:** deep-review, pr-check
 
 **Why:** Both review skills need a roster of installed review droids. Hardcoding the
@@ -1914,6 +1922,10 @@ message instructing the user to install the missing droids and re-run.
 Skills reference this as: "Execute Protocol: Discover Review Droids — see AGENTS.md Protocol: Discover Review Droids."
 
 ### Protocol: Parse CodeRabbit Review Body
+
+<!-- inline-mode: summarize -->
+
+**Summary:** Deterministic algorithm for extracting actionable findings from a CodeRabbit GraphQL review-body response. Both pr-check and coderabbit-review consume the same source format; this protocol is the single source of truth. Steps: fetch GraphQL payload (review body + comment thread URLs); per-comment fix-block extraction (`[Minimal fix]` and `[Suggested refactor]` markers, with surrounding code-fence boundaries); count-parity HARD BLOCK (parsed N must equal expected M from header); outdated-thread partitioning (separate from active findings); origin tagging (CodeRabbit vs Codacy vs DeepSource vs human). On count mismatch: STOP with diagnostic ("parsed N, expected M, missing/extra IDs") — never offer opt-out (silent partial-set continuation is the failure mode this gate prevents). See full algorithm in AGENTS.md.
 
 **Referenced by:** pr-check, coderabbit-review
 
