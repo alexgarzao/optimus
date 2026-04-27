@@ -93,6 +93,7 @@ rationalize these away.
 ## Editing Rules
 
 - **Canonical protocol reference phrasing:** Skills MUST reference protocols using the exact form `see AGENTS.md Protocol: <Exact Heading>` (with optional verb prefix like `Execute`, `Verify`, etc.). Variants like `AGENTS.md "Common Patterns > X"` are tolerated only for Common Patterns. The inliner regex is anchored on these forms; deviations cause silent unmatched refs.
+- **Bash code-block contract:** Bash code blocks in SKILL.md (between triple-backtick `bash` fences) execute in an environment where `set -euo pipefail` MUST be assumed active. The harness or invoking shell is responsible for setting these flags before executing block content. Authors may add `set -euo pipefail` explicitly at the top of a block to be defensive in copy-paste contexts. The Quiet Command Execution helper and other shared protocols rely on this contract — disabling these flags inside a block (e.g., `set +u`, `set +e`, `set +o pipefail`) is forbidden and enforced by `scripts/test_skill_consistency.py::TestBashBlockHygiene`.
 
 ### SKILL.md Files
 - Preserve YAML frontmatter structure (---, name, description, trigger, skip_when, etc.)

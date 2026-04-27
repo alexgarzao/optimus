@@ -1026,6 +1026,159 @@ class TestPluginNameValidation:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Claude timeout / retry / marketplace name validation (F4)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TestClaudeTimeout:
+    def test_claude_helper_uses_timeout(self) -> None:
+        """`_claude()` must exist and reference OPTIMUS_CLAUDE_TIMEOUT (or its
+        normalized CLAUDE_TIMEOUT constant)."""
+        content = SCRIPT.read_text()
+        assert "_claude()" in content, "missing _claude() helper"
+        # Either the env var or the readonly that derives from it must appear
+        # in the helper's vicinity.
+        helper_idx = content.index("_claude()")
+        snippet = content[helper_idx:helper_idx + 600]
+        assert "CLAUDE_TIMEOUT" in snippet, (
+            "_claude() should reference CLAUDE_TIMEOUT"
+        )
+
+    def test_claude_calls_route_through_helper(self) -> None:
+        """No bare `claude plugin` call sites should remain outside the
+        `_claude()` definition (comments and error-message hints excluded)."""
+        # Strip comments and string literals before scanning.
+        offending: list[str] = []
+        for lineno, line in enumerate(SCRIPT.read_text().splitlines(), start=1):
+            stripped = line.strip()
+            if stripped.startswith("#"):
+                continue
+            # Allow user-facing hint lines that emit `claude plugin marketplace add` to stderr.
+            if "echo " in stripped:
+                continue
+            # Match standalone `claude plugin ...` invocations (not `_claude`,
+            # not `claude_` substring inside another identifier).
+            # The (?<![_A-Za-z]) lookbehind avoids matching `_claude plugin` and
+            # the `b` boundary on the right side avoids `claude_xyz`.
+            import re
+            if re.search(r"(?<![_A-Za-z])claude\s+plugin\b", stripped):
+                offending.append(f"{lineno}: {line}")
+        assert not offending, (
+            "Bare `claude plugin` call sites must route through `_claude`:\n"
+            + "\n".join(offending)
+        )
+
+    def test_invalid_OPTIMUS_CLAUDE_TIMEOUT_rejected(self, tmp_path: Path) -> None:
+        """Non-numeric OPTIMUS_CLAUDE_TIMEOUT should fail validation."""
+        _install_claude_mock(tmp_path, installed_plugins=[])
+        _create_claude_marketplace_cache(tmp_path, ["alpha"])
+        result = _run_sync(tmp_path, exclude_droid=True, env_extra={
+            "OPTIMUS_CLAUDE_TIMEOUT": "abc",
+            "CLAUDE_MARKETPLACE_FILE": str(
+                tmp_path / "home" / ".claude" / "plugins" / "marketplaces"
+                / "optimus" / ".claude-plugin" / "marketplace.json"),
+        })
+        assert result.returncode == 1
+        assert "OPTIMUS_CLAUDE_TIMEOUT" in result.stderr
+        assert "positive integer" in result.stderr
+
+    def test_zero_OPTIMUS_CLAUDE_TIMEOUT_rejected(self, tmp_path: Path) -> None:
+        _install_claude_mock(tmp_path, installed_plugins=[])
+        _create_claude_marketplace_cache(tmp_path, ["alpha"])
+        result = _run_sync(tmp_path, exclude_droid=True, env_extra={
+            "OPTIMUS_CLAUDE_TIMEOUT": "0",
+            "CLAUDE_MARKETPLACE_FILE": str(
+                tmp_path / "home" / ".claude" / "plugins" / "marketplaces"
+                / "optimus" / ".claude-plugin" / "marketplace.json"),
+        })
+        assert result.returncode == 1
+        assert "OPTIMUS_CLAUDE_TIMEOUT" in result.stderr
+
+
+class TestClaudeRetry:
+    def test_claude_retry_helper_present(self) -> None:
+        """`_claude_retry_once()` helper must exist in the script."""
+        content = SCRIPT.read_text()
+        assert "_claude_retry_once()" in content, (
+            "missing _claude_retry_once() helper"
+        )
+
+    def test_claude_install_retries_on_transient_failure(self, tmp_path: Path) -> None:
+        """A claude plugin install that fails the first time then succeeds on
+        the second attempt should still report success and log the retry."""
+        log = tmp_path / "claude.log"
+        state_dir = tmp_path / "state"
+        state_dir.mkdir()
+        # Mock claude that fails the first install attempt then succeeds.
+        json_out = json.dumps([])
+        log_q = shlex.quote(str(log))
+        state_q = shlex.quote(str(state_dir))
+        script = f"""
+echo "$@" >> {log_q}
+case "$1 $2" in
+  "plugin list")
+    if [ "$3" = "--json" ]; then
+      cat <<'JSONEOF'
+{json_out}
+JSONEOF
+      exit 0
+    fi
+    exit 0
+    ;;
+  "plugin install")
+    count_file={state_q}/install.count
+    count=$(cat "$count_file" 2>/dev/null || echo 0)
+    count=$((count + 1))
+    echo "$count" > "$count_file"
+    if [ "$count" -eq 1 ]; then exit 1; fi
+    exit 0
+    ;;
+  "plugin update") exit 0 ;;
+  "plugin uninstall") exit 0 ;;
+  "plugin marketplace") exit 0 ;;
+esac
+exit 0
+"""
+        _create_mock_bin(tmp_path, "claude", script)
+        _create_claude_marketplace_cache(tmp_path, ["alpha"])
+        result = _run_sync(tmp_path, exclude_droid=True, env_extra={
+            "CLAUDE_MARKETPLACE_FILE": str(
+                tmp_path / "home" / ".claude" / "plugins" / "marketplaces"
+                / "optimus" / ".claude-plugin" / "marketplace.json"),
+        })
+        assert result.returncode == 0, (
+            f"stderr={result.stderr}\nstdout={result.stdout}"
+        )
+        assert "+ optimus ... OK" in result.stdout
+        assert "retrying once" in result.stderr
+        # Two install attempts must be logged.
+        log_content = log.read_text()
+        # `plugin install optimus@optimus --scope user` fires twice.
+        assert log_content.count("plugin install optimus@optimus --scope user") == 2
+
+
+class TestMarketplaceNameValidation:
+    def test_invalid_OPTIMUS_MARKETPLACE_NAME_rejected(self, tmp_path: Path) -> None:
+        """Path-traversal-like marketplace names must be rejected."""
+        log = tmp_path / "droid.log"
+        _create_mock_bin(tmp_path, "droid", _droid_script(log))
+        result = _run_sync(tmp_path, exclude_claude=True, env_extra={
+            "OPTIMUS_MARKETPLACE_NAME": "../etc",
+        })
+        assert result.returncode == 1
+        assert "OPTIMUS_MARKETPLACE_NAME" in result.stderr
+
+    def test_uppercase_OPTIMUS_MARKETPLACE_NAME_rejected(self, tmp_path: Path) -> None:
+        """Uppercase letters in marketplace names violate the contract."""
+        log = tmp_path / "droid.log"
+        _create_mock_bin(tmp_path, "droid", _droid_script(log))
+        result = _run_sync(tmp_path, exclude_claude=True, env_extra={
+            "OPTIMUS_MARKETPLACE_NAME": "Optimus",
+        })
+        assert result.returncode == 1
+        assert "OPTIMUS_MARKETPLACE_NAME" in result.stderr
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Custom OPTIMUS_REPO_URL surfacing
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1070,3 +1223,231 @@ class TestBootstrapContract:
         # Both marketplace files must exist so dual-platform bootstrap works.
         assert (repo_root / ".claude-plugin" / "marketplace.json").exists()
         assert (repo_root / ".factory-plugin" / "marketplace.json").exists()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# F5 — Bash hygiene refactors
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# The next three test classes exercise the F5 refactors directly, sourcing the
+# shell helpers via a small `bash -c` wrapper that pulls in the same script
+# under test (read into a temp file with the bottom main-body stripped).
+
+# Helper to source the script's helper definitions only (everything above the
+# main "=== Optimus Plugin Sync ===" banner). This avoids running the actual
+# sync logic — we only want the function definitions in scope.
+_HELPERS_HEADER_BOUNDARY = "echo \"=== Optimus Plugin Sync ===\""
+
+
+def _helpers_only_script(tmp_path: Path) -> Path:
+    """Write a copy of the sync script truncated just before the main body so
+    only function/constant definitions are sourced. Required env (HOME,
+    OPTIMUS_MARKETPLACE_NAME, etc.) is set by the caller.
+    """
+    full = SCRIPT.read_text()
+    idx = full.index(_HELPERS_HEADER_BOUNDARY)
+    helpers = full[:idx]
+    # Trim the trailing comment delimiter line if present.
+    helpers_path = tmp_path / "helpers.sh"
+    helpers_path.write_text(helpers)
+    return helpers_path
+
+
+def _bash_eval(tmp_path: Path, snippet: str, env_extra: dict[str, str] | None = None,
+               extra_path_dirs: list[Path] | None = None) -> subprocess.CompletedProcess:
+    """Source the helpers and run an arbitrary bash snippet. Returns the
+    CompletedProcess so tests can assert on stdout/stderr/returncode.
+
+    Helpers run with HAS_DROID/HAS_CLAUDE_CODE detection guarded; we set HOME
+    and PATH so the script's top-of-file validation succeeds (a `droid` mock
+    is installed in tmp_path/bin so HAS_DROID=true).
+    """
+    helpers = _helpers_only_script(tmp_path)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    # Provide a no-op droid so HAS_DROID=true and validation passes.
+    if not (bin_dir / "droid").exists():
+        (bin_dir / "droid").write_text("#!/bin/bash\nexit 0\n")
+        (bin_dir / "droid").chmod(0o755)
+    # Provide jq if missing (system jq is fine; otherwise stub).
+    if not shutil.which("jq") and not (bin_dir / "jq").exists():
+        (bin_dir / "jq").write_text("#!/bin/bash\nexit 0\n")
+        (bin_dir / "jq").chmod(0o755)
+    env = os.environ.copy()
+    extras = [str(bin_dir)]
+    if extra_path_dirs:
+        extras = [str(d) for d in extra_path_dirs] + extras
+    env["PATH"] = ":".join([*extras, env.get("PATH", "/usr/bin:/bin")])
+    env["HOME"] = str(tmp_path / "home")
+    (tmp_path / "home").mkdir(exist_ok=True)
+    if env_extra:
+        env.update(env_extra)
+    full_script = f"source {shlex.quote(str(helpers))}\n{snippet}\n"
+    return subprocess.run(
+        [BASH, "-c", full_script],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=15,
+    )
+
+
+class TestComputeDiffsEval:
+    """`_compute_diffs` prints three NAME=value lines to stdout that the caller
+    consumes via `eval`. No globals are mutated."""
+
+    def test_compute_diffs_outputs_three_kv_lines(self, tmp_path: Path) -> None:
+        """Stdout should contain NEW_PLUGINS=, ORPHANED_PLUGINS=, EXISTING_PLUGINS=."""
+        snippet = (
+            'expected=$(printf "alpha\\nbeta\\ngamma")\n'
+            'installed=$(printf "beta\\nzulu")\n'
+            '_compute_diffs "$expected" "$installed"\n'
+        )
+        result = _bash_eval(tmp_path, snippet)
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        assert "NEW_PLUGINS=" in result.stdout
+        assert "ORPHANED_PLUGINS=" in result.stdout
+        assert "EXISTING_PLUGINS=" in result.stdout
+
+    def test_compute_diffs_eval_works_in_caller(self, tmp_path: Path) -> None:
+        """`eval "$(_compute_diffs ...)"` populates the three vars correctly."""
+        snippet = (
+            'expected=$(printf "alpha\\nbeta\\ngamma")\n'
+            'installed=$(printf "beta\\nzulu")\n'
+            'eval "$(_compute_diffs "$expected" "$installed")"\n'
+            # Iterate each multiline var with a stable per-line tag so the
+            # Python side can assert on grouped entries without parsing
+            # bash quote escapes.
+            'while IFS= read -r p; do [ -n "$p" ] && echo "NEW_ITEM=$p"; done <<< "$NEW_PLUGINS"\n'
+            'while IFS= read -r p; do [ -n "$p" ] && echo "ORPH_ITEM=$p"; done <<< "$ORPHANED_PLUGINS"\n'
+            'while IFS= read -r p; do [ -n "$p" ] && echo "EXIST_ITEM=$p"; done <<< "$EXISTING_PLUGINS"\n'
+        )
+        result = _bash_eval(tmp_path, snippet)
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        # alpha and gamma are NEW; zulu is ORPHANED; beta is EXISTING.
+        assert "NEW_ITEM=alpha" in result.stdout
+        assert "NEW_ITEM=gamma" in result.stdout
+        assert "ORPH_ITEM=zulu" in result.stdout
+        assert "EXIST_ITEM=beta" in result.stdout
+        # Cross-bucket sanity.
+        assert "NEW_ITEM=beta" not in result.stdout
+        assert "ORPH_ITEM=alpha" not in result.stdout
+        assert "EXIST_ITEM=zulu" not in result.stdout
+
+    def test_compute_diffs_empty_expected_returns_error(self, tmp_path: Path) -> None:
+        """An empty expected list is a programmer bug — error and non-zero exit."""
+        snippet = (
+            'set +e\n'
+            '_compute_diffs "" "alpha"\n'
+            'echo "rc=$?"\n'
+        )
+        result = _bash_eval(tmp_path, snippet)
+        # Helper itself returns 1; the snippet captures the rc.
+        assert "rc=1" in result.stdout
+        assert "BUG: _compute_diffs called with empty expected list" in result.stderr
+
+    def test_compute_diffs_empty_installed_marks_all_as_new(self, tmp_path: Path) -> None:
+        """When installed="" — first-run case — every expected entry is NEW."""
+        snippet = (
+            'expected=$(printf "alpha\\nbeta")\n'
+            'eval "$(_compute_diffs "$expected" "")"\n'
+            # Use a delimiter so multiline values stay grouped; iterate via
+            # bash to print one entry per line in a stable form.
+            'while IFS= read -r p; do echo "NEW_ITEM=$p"; done <<< "$NEW_PLUGINS"\n'
+            'echo "ORPH=[$ORPHANED_PLUGINS]"\n'
+            'echo "EXIST=[$EXISTING_PLUGINS]"\n'
+        )
+        result = _bash_eval(tmp_path, snippet)
+        assert result.returncode == 0, f"stderr: {result.stderr}"
+        # Both expected entries must appear as NEW_ITEMs.
+        assert "NEW_ITEM=alpha" in result.stdout
+        assert "NEW_ITEM=beta" in result.stdout
+        # ORPH and EXIST must be empty.
+        assert "ORPH=[]" in result.stdout
+        assert "EXIST=[]" in result.stdout
+
+
+class TestReadResult:
+    """`_read_result` returns the file's first line, or sentinels for missing/
+    unreadable inputs."""
+
+    def test_read_result_returns_token_for_existing_file(self, tmp_path: Path) -> None:
+        target = tmp_path / "result"
+        target.write_text("OK\n")
+        snippet = f'_read_result {shlex.quote(str(target))}\n'
+        result = _bash_eval(tmp_path, snippet)
+        assert result.returncode == 0
+        assert result.stdout.strip() == "OK"
+
+    def test_read_result_returns_MISSING_for_nonexistent(self, tmp_path: Path) -> None:
+        missing = tmp_path / "does_not_exist"
+        snippet = f'_read_result {shlex.quote(str(missing))}\n'
+        result = _bash_eval(tmp_path, snippet)
+        assert result.returncode == 0
+        assert result.stdout.strip() == "MISSING"
+
+    def test_read_result_returns_empty_for_empty_file(self, tmp_path: Path) -> None:
+        empty = tmp_path / "empty"
+        empty.write_text("")
+        snippet = f'_read_result {shlex.quote(str(empty))}\n'
+        result = _bash_eval(tmp_path, snippet)
+        assert result.returncode == 0
+        # Empty file: read returns non-zero (EOF immediately) but file is
+        # readable, so helper emits empty token.
+        assert result.stdout.strip() == ""
+
+    def test_read_result_uses_no_fork(self) -> None:
+        """`_read_result` body must not invoke `cat` (no-fork hygiene)."""
+        content = SCRIPT.read_text()
+        # Find the function body between `_read_result()` definition and the
+        # closing brace at column 0 ("\n}").
+        idx = content.index("_read_result()")
+        # Slice out roughly 800 characters of definition; sufficient for the
+        # whole function body.
+        body_window = content[idx:idx + 800]
+        # The body should NOT contain `cat "$file"` or similar.
+        assert "cat " not in body_window or 'cat "$file"' not in body_window, (
+            "_read_result must use bash builtin `read`, not `cat`"
+        )
+        # Stronger assertion: literal "cat " must not appear in the helper.
+        body_end = body_window.index("\n}")
+        body = body_window[:body_end]
+        assert "cat " not in body, (
+            f"_read_result body must not invoke `cat`; got:\n{body}"
+        )
+
+
+class TestPluginListPipelineParsing:
+    """The `_droid plugin list` pipeline collapses to a single awk that strips
+    the `@MARKETPLACE_NAME` suffix and emits bare names."""
+
+    def test_plugin_list_strips_marketplace_suffix(self, tmp_path: Path) -> None:
+        """Feed mock `_droid plugin list` output with `@optimus` suffix; the
+        Droid sync branch should see bare names in `installed`."""
+        log = tmp_path / "droid.log"
+        # `plugin list` emits @optimus rows plus a row from a different
+        # marketplace that must be filtered out by the awk pipeline. (Header
+        # rows starting with uppercase letters are also filtered, but the
+        # mock keeps the row set tight to keep assertions deterministic.)
+        list_output = (
+            "alpha@optimus  installed\n"
+            "beta@optimus  installed\n"
+            "ringthing@ring  installed"
+        )
+        _create_mock_bin(tmp_path, "droid", _droid_script(
+            log, list_output=list_output))
+        # Marketplace expects only "alpha" — beta is orphaned, ringthing
+        # ignored.
+        _create_marketplace(tmp_path, ["alpha"])
+        result = _run_sync(tmp_path, exclude_claude=True)
+        assert result.returncode == 0, (
+            f"stderr: {result.stderr}\nstdout: {result.stdout}"
+        )
+        # alpha is updated (it's in both expected and installed).
+        assert "Updated: 1" in result.stdout
+        # beta is removed (in installed but not in expected).
+        assert "Removed: 1" in result.stdout
+        # ringthing was filtered (different marketplace), so no removal for it.
+        log_content = log.read_text()
+        assert "uninstall ringthing" not in log_content
+        assert "uninstall beta@optimus" in log_content

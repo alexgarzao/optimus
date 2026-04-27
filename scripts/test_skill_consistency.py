@@ -2120,3 +2120,48 @@ class TestSanitizeCharsetUniformity:
             f"Body-level redefinition of _optimus_sanitize() found in: {violations}. "
             f"Use the inlined canonical helper from Protocol: Notification Hooks."
         )
+
+
+class TestBashBlockHygiene:
+    """Ensures bash code blocks in SKILL.md and AGENTS.md don't disable set flags
+    that the contract assumes (e.g., `set +u`, `set +e`, `set +o pipefail`).
+
+    The contract is documented in AGENTS.md under Editing Rules:
+    `set -euo pipefail` MUST be assumed active inside any bash code block.
+    Disabling those flags inline silently breaks the assumption that helpers
+    like the Quiet Command Execution wrapper rely on.
+    """
+
+    DISABLERS = ("set +u", "set +e", "set +o pipefail")
+
+    def test_no_disable_set_flags_in_bash_blocks(self):
+        """No bash block may disable -e, -u, or pipefail."""
+        violations = []
+        targets = [AGENTS_MD] + list(REPO_ROOT.glob("*/skills/*/SKILL.md"))
+        for path in targets:
+            if not path.exists():
+                continue
+            content = path.read_text()
+            in_bash = False
+            for lineno, line in enumerate(content.splitlines(), start=1):
+                stripped = line.strip()
+                if stripped.startswith("```bash"):
+                    in_bash = True
+                    continue
+                if stripped.startswith("```"):
+                    in_bash = False
+                    continue
+                if in_bash and any(d in stripped for d in self.DISABLERS):
+                    rel = path.relative_to(REPO_ROOT)
+                    violations.append(f"{rel}:{lineno}: {stripped}")
+        assert violations == [], (
+            "Bash blocks may not disable set flags that the contract assumes:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    def test_bash_block_contract_documented_in_agents_md(self):
+        """AGENTS.md must document the bash code-block contract under Editing Rules."""
+        content = AGENTS_MD.read_text()
+        assert "Bash code-block contract" in content, (
+            "AGENTS.md must document the bash code-block contract under Editing Rules."
+        )

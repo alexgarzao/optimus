@@ -31,7 +31,12 @@ trap 'echo ""; _warn "Sync interrupted. Re-run /optimus-sync to complete."; exit
 
 # ─── Configurable constants ───────────────────────────────────────────────────
 readonly MARKETPLACE_NAME="${OPTIMUS_MARKETPLACE_NAME:-optimus}"
+if ! [[ "$MARKETPLACE_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
+  _error "OPTIMUS_MARKETPLACE_NAME must match ^[a-z0-9][a-z0-9_-]*\$ (got: '$MARKETPLACE_NAME')"
+  exit 1
+fi
 readonly DROID_TIMEOUT="${OPTIMUS_DROID_TIMEOUT:-60}"
+readonly CLAUDE_TIMEOUT="${OPTIMUS_CLAUDE_TIMEOUT:-60}"
 readonly OPTIMUS_REPO_URL="${OPTIMUS_REPO_URL:-https://github.com/alexgarzao/optimus}"
 readonly CLAUDE_MARKETPLACE_FILE="${CLAUDE_MARKETPLACE_FILE:-$HOME/.claude/plugins/marketplaces/${MARKETPLACE_NAME}/.claude-plugin/marketplace.json}"
 
@@ -45,6 +50,13 @@ command -v claude >/dev/null 2>&1 && HAS_CLAUDE_CODE=true
 if [ "$HAS_DROID" = true ]; then
   if ! [[ "$DROID_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
     _error "OPTIMUS_DROID_TIMEOUT must be a positive integer (got: '$DROID_TIMEOUT')"
+    exit 1
+  fi
+fi
+
+if [ "$HAS_CLAUDE_CODE" = true ]; then
+  if ! [[ "$CLAUDE_TIMEOUT" =~ ^[1-9][0-9]*$ ]]; then
+    _error "OPTIMUS_CLAUDE_TIMEOUT must be a positive integer (got: '$CLAUDE_TIMEOUT')"
     exit 1
   fi
 fi
@@ -73,25 +85,93 @@ _droid() {
   fi
 }
 
+_claude() {
+  # Wraps `claude` invocations with a timeout (mirrors _droid() pattern).
+  # OPTIMUS_CLAUDE_TIMEOUT is the per-invocation budget in seconds (default 60).
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$CLAUDE_TIMEOUT" claude "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$CLAUDE_TIMEOUT" claude "$@"
+  else
+    claude "$@"
+  fi
+}
+
+_claude_retry_once() {
+  # Usage: _claude_retry_once <description> <cmd> [args...]
+  # Runs cmd; on failure, sleeps briefly and retries once. Returns final exit code.
+  # The caller is responsible for any stdout/stderr suppression on the inner cmd.
+  local description="$1"; shift
+  local rc=0
+  "$@" || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    return 0
+  fi
+  echo "  ⚠ $description failed (exit=$rc); retrying once..." >&2
+  sleep 1
+  rc=0
+  "$@" || rc=$?
+  return "$rc"
+}
+
+_claude_quiet() {
+  # Helper to invoke `_claude` while suppressing stdout/stderr. Used together
+  # with `_claude_retry_once` so retries get the same suppression.
+  _claude "$@" >/dev/null 2>&1
+}
+
 _read_result() {
-  local file="$1"
-  cat "$file" 2>/dev/null || echo "FAIL"
+  # Reads single-line result token from $1; emits the token, or:
+  #   "MISSING" if file does not exist (no result was written)
+  #   "ERROR"   if file exists but is unreadable (permission/IO)
+  # Uses bash builtin read (no fork).
+  local file="$1" line=""
+  if [ ! -f "$file" ]; then
+    echo "MISSING"
+    return
+  fi
+  if ! IFS= read -r line < "$file" 2>/dev/null; then
+    if [ -r "$file" ]; then
+      # File exists, readable, but empty — return empty token.
+      echo ""
+      return
+    fi
+    echo "ERROR"
+    return
+  fi
+  echo "$line"
 }
 
 # _compute_diffs <expected> <installed>
-# Sets globals: NEW_PLUGINS, ORPHANED_PLUGINS, EXISTING_PLUGINS
+# Computes diff between expected and installed plugin lists.
+# Prints three lines on stdout for the caller to eval-import into local vars:
+#   NEW_PLUGINS=<shell-quoted>
+#   ORPHANED_PLUGINS=<shell-quoted>
+#   EXISTING_PLUGINS=<shell-quoted>
+# Caller usage:
+#   eval "$(_compute_diffs "$expected" "$installed")"
+# Returns non-zero (caller's `set -e` propagates) if `expected` is empty.
 _compute_diffs() {
-  local expected="$1"
-  local installed="$2"
-  if [ -z "$installed" ]; then
-    NEW_PLUGINS="$expected"
-    ORPHANED_PLUGINS=""
-    EXISTING_PLUGINS=""
-  else
-    NEW_PLUGINS=$(comm -23 <(echo "$expected") <(echo "$installed"))
-    ORPHANED_PLUGINS=$(comm -13 <(echo "$expected") <(echo "$installed"))
-    EXISTING_PLUGINS=$(comm -12 <(echo "$expected") <(echo "$installed"))
+  local expected="$1" installed="$2"
+  if [ -z "$expected" ]; then
+    _error "BUG: _compute_diffs called with empty expected list"
+    return 1
   fi
+  local new orphan exist
+  if [ -z "$installed" ]; then
+    new="$expected"
+    orphan=""
+    exist=""
+  else
+    new=$(comm -23 <(printf '%s\n' "$expected" | sort -u) <(printf '%s\n' "$installed" | sort -u))
+    orphan=$(comm -13 <(printf '%s\n' "$expected" | sort -u) <(printf '%s\n' "$installed" | sort -u))
+    exist=$(comm -12 <(printf '%s\n' "$expected" | sort -u) <(printf '%s\n' "$installed" | sort -u))
+  fi
+  # Print on stdout for caller eval. `printf %q` does shell-safe quoting;
+  # values are already validated plugin names by upstream regex so they're safe.
+  printf 'NEW_PLUGINS=%q\n' "$new"
+  printf 'ORPHANED_PLUGINS=%q\n' "$orphan"
+  printf 'EXISTING_PLUGINS=%q\n' "$exist"
 }
 
 # ─── Get expected plugins from marketplace JSON ──────────────────────────────
@@ -177,16 +257,23 @@ _sync_droid() {
   echo "── Droid (Factory) ──"
   echo ""
 
-  # Get installed optimus plugins
+  # Get installed optimus plugins. Single awk pass: filter to lines starting
+  # with [a-z0-9] whose first field ends with @MARKETPLACE_NAME, then strip
+  # that suffix and emit the bare name.
   local installed
   installed=$(_droid plugin list 2>/dev/null \
-    | grep -F "@${MARKETPLACE_NAME}" \
-    | awk '{print $1}' \
-    | while IFS= read -r _line; do echo "${_line%@"${MARKETPLACE_NAME}"}"; done \
-    | sort) || true
+    | awk -v mp="@${MARKETPLACE_NAME}" '
+        /^[a-z0-9]/ && index($1, mp) == length($1) - length(mp) + 1 {
+          sub(mp"$", "", $1)
+          print $1
+        }
+      ' \
+    | sort -u) || true
 
-  # Calculate diffs
-  _compute_diffs "$expected" "$installed"
+  # Calculate diffs. _compute_diffs prints NEW_PLUGINS=, ORPHANED_PLUGINS=,
+  # EXISTING_PLUGINS= on stdout; eval imports them into local vars.
+  local NEW_PLUGINS ORPHANED_PLUGINS EXISTING_PLUGINS
+  eval "$(_compute_diffs "$expected" "$installed")"
   local new_plugins="$NEW_PLUGINS"
   local orphaned_plugins="$ORPHANED_PLUGINS"
   local existing_plugins="$EXISTING_PLUGINS"
@@ -199,6 +286,7 @@ _sync_droid() {
   # shellcheck disable=SC2064
   trap "rm -rf '$results_dir'; echo ''; _warn 'Sync interrupted. Re-run /optimus-sync to complete.'; exit 130" INT TERM
   local retry_removals="" retry_installs="" retry_updates=""
+  local result
 
   # Remove orphaned plugins (parallel)
   if [ -n "$orphaned_plugins" ]; then
@@ -216,10 +304,14 @@ _sync_droid() {
     wait
     while IFS= read -r plugin; do
       [ -z "$plugin" ] && continue
-      if [ "$(_read_result "$results_dir/remove-${plugin}")" = "RETRY" ]; then
-        retry_removals="${retry_removals}${plugin}
-"
-      fi
+      result=$(_read_result "$results_dir/remove-${plugin}")
+      case "$result" in
+        OK)         ;;  # success
+        RETRY)      retry_removals+="${plugin}"$'\n' ;;
+        MISSING)    echo "  ⚠ $plugin: result file missing (worker did not complete)" >&2; retry_removals+="${plugin}"$'\n' ;;
+        ERROR)      echo "  ⚠ $plugin: result file unreadable" >&2; retry_removals+="${plugin}"$'\n' ;;
+        *)          retry_removals+="${plugin}"$'\n' ;;  # any other token treated as retry
+      esac
     done <<< "$orphaned_plugins"
   fi
 
@@ -239,10 +331,14 @@ _sync_droid() {
     wait
     while IFS= read -r plugin; do
       [ -z "$plugin" ] && continue
-      if [ "$(_read_result "$results_dir/install-${plugin}")" = "RETRY" ]; then
-        retry_installs="${retry_installs}${plugin}
-"
-      fi
+      result=$(_read_result "$results_dir/install-${plugin}")
+      case "$result" in
+        OK)         ;;  # success
+        RETRY)      retry_installs+="${plugin}"$'\n' ;;
+        MISSING)    echo "  ⚠ $plugin: result file missing (worker did not complete)" >&2; retry_installs+="${plugin}"$'\n' ;;
+        ERROR)      echo "  ⚠ $plugin: result file unreadable" >&2; retry_installs+="${plugin}"$'\n' ;;
+        *)          retry_installs+="${plugin}"$'\n' ;;  # any other token treated as retry
+      esac
     done <<< "$new_plugins"
   fi
 
@@ -262,10 +358,14 @@ _sync_droid() {
     wait
     while IFS= read -r plugin; do
       [ -z "$plugin" ] && continue
-      if [ "$(_read_result "$results_dir/update-${plugin}")" = "RETRY" ]; then
-        retry_updates="${retry_updates}${plugin}
-"
-      fi
+      result=$(_read_result "$results_dir/update-${plugin}")
+      case "$result" in
+        OK)         ;;  # success
+        RETRY)      retry_updates+="${plugin}"$'\n' ;;
+        MISSING)    echo "  ⚠ $plugin: result file missing (worker did not complete)" >&2; retry_updates+="${plugin}"$'\n' ;;
+        ERROR)      echo "  ⚠ $plugin: result file unreadable" >&2; retry_updates+="${plugin}"$'\n' ;;
+        *)          retry_updates+="${plugin}"$'\n' ;;  # any other token treated as retry
+      esac
     done <<< "$existing_plugins"
   fi
 
@@ -314,7 +414,6 @@ _sync_droid() {
 
   # Collect results
   local removed=0 added=0 updated=0 failed=0
-  local result
 
   if [ -n "$orphaned_plugins" ]; then
     while IFS= read -r plugin; do
@@ -375,7 +474,7 @@ _sync_droid() {
 #   [
 #     {
 #       "id": "<plugin-name>@<marketplace-name>",
-#       "version": "1.0.0",
+#       "version": "<semver>",
 #       "scope": "user",
 #       "enabled": true,
 #       "installPath": "/Users/.../.claude/plugins/cache/<marketplace>/<plugin>/<version>",
@@ -406,7 +505,7 @@ _sync_claude_code() {
   #   - Legacy `optimus-<name>@optimus` installs from the pre-2.0 layout.
   # We sync the new plugin first, then sweep any legacy entries.
   local installed_ids=""
-  installed_ids=$(claude plugin list --json 2>/dev/null \
+  installed_ids=$(_claude plugin list --json 2>/dev/null \
     | jq -r --arg mp "@${marketplace}" '.[] | select(.id | endswith($mp)) | .id' \
     | sort) || true
 
@@ -427,9 +526,11 @@ _sync_claude_code() {
 
   local added=0 updated=0 removed=0 failed=0
 
-  # Install or update the single `optimus` plugin.
+  # Install or update the single `optimus` plugin. Each call has one retry on
+  # transient failure (no parallelism — Claude's plugin daemon owns the cache).
   if [ "$single_installed" = false ]; then
-    if claude plugin install "optimus@${marketplace}" --scope user >/dev/null 2>&1; then
+    if _claude_retry_once "install optimus@${marketplace}" \
+        _claude_quiet plugin install "optimus@${marketplace}" --scope user; then
       echo "  + optimus ... OK"
       added=$((added + 1))
     else
@@ -437,7 +538,8 @@ _sync_claude_code() {
       failed=$((failed + 1))
     fi
   else
-    if claude plugin update "optimus@${marketplace}" >/dev/null 2>&1; then
+    if _claude_retry_once "update optimus@${marketplace}" \
+        _claude_quiet plugin update "optimus@${marketplace}"; then
       echo "  * optimus ... OK"
       updated=$((updated + 1))
     else
@@ -451,7 +553,8 @@ _sync_claude_code() {
   if [ -n "$legacy_plugins" ]; then
     while IFS= read -r plugin; do
       [ -z "$plugin" ] && continue
-      if claude plugin uninstall "${plugin}@${marketplace}" >/dev/null 2>&1; then
+      if _claude_retry_once "uninstall ${plugin}@${marketplace}" \
+          _claude_quiet plugin uninstall "${plugin}@${marketplace}"; then
         echo "  - $plugin (legacy) ... OK"
         removed=$((removed + 1))
       else
@@ -496,7 +599,7 @@ if [ "$HAS_DROID" = true ]; then
 fi
 if [ "$HAS_CLAUDE_CODE" = true ]; then
   echo "Updating Claude Code marketplace..."
-  claude plugin marketplace update "$MARKETPLACE_NAME" >/dev/null 2>&1 || _warn "Could not update Claude Code marketplace. Using cached version."
+  _claude plugin marketplace update "$MARKETPLACE_NAME" >/dev/null 2>&1 || _warn "Could not update Claude Code marketplace. Using cached version."
 fi
 echo ""
 
