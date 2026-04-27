@@ -588,112 +588,17 @@ The optimus-tasks.md table only tracks structural data (dependencies, versions, 
 — it does NOT duplicate content from Ring.
 
 
-### Protocol: Initialize .optimus Directory
+### Protocol: Initialize .optimus Directory (summarized)
 
-**Referenced by:** import, tasks, report (export), quick-report, batch, pr-check, deep-review, coderabbit-review, all stage agents (1-4) for session files
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Initialize .optimus Directory`.**
 
-Before creating ANY file inside `.optimus/`, ensure the directory structure exists
-and that the entire `.optimus/` tree is gitignored (it is 100% operational/per-user).
+**Summary:** Create `${MAIN_WORKTREE}/.optimus/{sessions,reports,logs}/` with `mkdir -p`. Add `# optimus-operational-files` and `# optimus-operational-worktrees` markers to `${MAIN_WORKTREE}/.gitignore` idempotently (grep-anchor before append). Refuse symlinked `.gitignore`. Auto-prune `.optimus/logs/` (30 days, 500 files). See full recipe in AGENTS.md.
 
-```bash
-# Requires Protocol: Resolve Main Worktree Path to have run first
-# (or resolve inline; see that protocol).
-MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
-MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
-mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports" "${MAIN_WORKTREE}/.optimus/logs"
-# Refuse symlinked .gitignore (defense against link-following file-write).
-# Hoisted ABOVE the operational-files write so the first append is also protected.
-if [ -L "${MAIN_WORKTREE}/.gitignore" ]; then
-  echo "ERROR: ${MAIN_WORKTREE}/.gitignore is a symlink — refusing to append (potential symlink attack)." >&2
-  exit 1
-fi
-if ! grep -q '^# optimus-operational-files' "${MAIN_WORKTREE}/.gitignore" 2>/dev/null; then
-  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> "${MAIN_WORKTREE}/.gitignore"
-fi
-# Linked worktrees managed by Optimus live at ${MAIN_WORKTREE}/.worktrees/
-# (see Protocol: Worktree Location). Add a separate marker so existing
-# projects whose .gitignore already carries the operational-files block
-# still get the worktree exclusion idempotently.
-if ! grep -q '^# optimus-operational-worktrees' "${MAIN_WORKTREE}/.gitignore" 2>/dev/null; then
-  printf '\n# optimus-operational-worktrees\n.worktrees/\n' >> "${MAIN_WORKTREE}/.gitignore"
-fi
-# Log retention (idempotent — fires once per init): age-based + count-cap prune.
-# Also duplicated in Protocol: Session State so stage agents (which call Session
-# State but not Initialize Directory) get pruning at every phase transition.
-# Both prune sites are no-ops on clean directories; running both is harmless.
-find "${MAIN_WORKTREE}/.optimus/logs" -type f -name '*.log' -mtime +30 -delete 2>/dev/null
-if [ -d "${MAIN_WORKTREE}/.optimus/logs" ]; then
-  ls -1t "${MAIN_WORKTREE}/.optimus/logs"/*.log 2>/dev/null | tail -n +501 \
-    | while IFS= read -r _log_to_rm; do rm -f -- "$_log_to_rm"; done
-fi
-```
+### Protocol: Resolve Main Worktree Path (summarized)
 
-**Log retention** for `.optimus/logs/` runs at TWO sites for full coverage:
-- **Protocol: Initialize .optimus Directory** (this protocol) — fires when
-  admin/standalone skills (`import`, `tasks`, `report`, `quick-report`, `batch`,
-  `pr-check`, `deep-review`, `coderabbit-review`) initialize `.optimus/`.
-- **Protocol: Session State** — fires at every stage agent (`plan`, `build`,
-  `review`, `done`) phase transition.
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Resolve Main Worktree Path`.**
 
-Both sites are idempotent (no-op on clean directories) and use the same prune
-logic (30-day age cap + 500-file count cap). Running both per session is a
-harmless cheap operation.
-
-Everything inside `.optimus/` is gitignored. The planning tree is versioned
-separately at `<tasksDir>/optimus:tasks.md` (and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/`
-for Ring specs) — see the File Location section above.
-
-Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
-
-
-### Protocol: Resolve Main Worktree Path
-
-**Referenced by:** all skills that read or write `.optimus/` operational files (state.json, stats.json, sessions, reports, logs, and checkpoint markers).
-
-**Why:** `.optimus/` is gitignored. Git does NOT propagate ignored files across linked worktrees (`git worktree add` creates a sibling working tree but does not share gitignored files). When a skill runs from a linked worktree (the common case for `/optimus:build`, `/optimus:review`, `/optimus:done` which default to the task's worktree), reads and writes against `.optimus/state.json` resolve to the worktree's isolated copy. Updates never reach the main worktree. When the linked worktree is later removed (e.g., by `/optimus:done` cleanup), the writes are lost — silent data loss.
-
-**Recipe:**
-
-```bash
-MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
-if [ -z "$MAIN_WORKTREE" ]; then
-  echo "ERROR: Cannot determine main worktree — not in a git repository." >&2
-  exit 1
-fi
-```
-
-The first `worktree` line in `git worktree list --porcelain` is always the main worktree (where the bare `.git/` directory or the repo's HEAD lives), regardless of where the command is run from.
-
-**Path resolution pattern:**
-
-After resolving `MAIN_WORKTREE`, every `.optimus/` path MUST be prefixed:
-
-```bash
-# RIGHT (works from any worktree):
-STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
-SESSION_FILE="${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
-STATS_FILE="${MAIN_WORKTREE}/.optimus/stats.json"
-mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" \
-         "${MAIN_WORKTREE}/.optimus/reports" \
-         "${MAIN_WORKTREE}/.optimus/logs"
-
-# WRONG (resolves against PWD, breaks in linked worktrees):
-STATE_FILE=".optimus/state.json"
-SESSION_FILE=".optimus/sessions/session-${TASK_ID}.json"
-STATS_FILE=".optimus/stats.json"
-mkdir -p .optimus/sessions .optimus/reports .optimus/logs
-```
-
-**What does NOT need this protocol:**
-
-- `<tasksDir>/optimus:tasks.md` and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/` — versioned content, propagated by git across worktrees automatically.
-- `.optimus/config.json` — when **versioned** (legacy projects), it propagates via git; when **gitignored** (current default), it suffers the same isolation as state.json. **Treat `.optimus/config.json` as gitignored and resolve via `$MAIN_WORKTREE` for safety in current projects** — the cost is a single `git worktree list` call.
-- `.gitignore` itself — versioned, propagated via git.
-
-**Idempotency:** the resolution is read-only against git metadata; safe to call multiple times in the same skill execution. Cache `MAIN_WORKTREE` in a local variable rather than re-running `git worktree list` for each path.
-
-Skills reference this as: "Resolve main worktree — see AGENTS.md Protocol: Resolve Main Worktree Path."
-
+**Summary:** Resolve `MAIN_WORKTREE` once via `git worktree list --porcelain | awk '/^worktree / {print $2; exit}'` with `${MAIN_WORKTREE:?…}` defensive guard. Use `${MAIN_WORKTREE}/.optimus/...` for ALL `.optimus/` paths (gitignored, so doesn't propagate across linked worktrees). See full recipe in AGENTS.md.
 
 ### Protocol: State Management
 
