@@ -779,100 +779,11 @@ Skills reference this as: "Derive branch name — see AGENTS.md Protocol: Branch
 
 **Summary:** Resolve `MAIN_WORKTREE` once via `git worktree list --porcelain | awk '/^worktree / {print $2; exit}'` with `${MAIN_WORKTREE:?…}` defensive guard. Use `${MAIN_WORKTREE}/.optimus/...` for ALL `.optimus/` paths (gitignored, so doesn't propagate across linked worktrees). See full recipe in AGENTS.md.
 
-### Protocol: Terminal Identification
+### Protocol: Terminal Identification (summarized)
 
-**Referenced by:** all stage agents (1-4), batch
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Terminal Identification`.**
 
-After the task ID is identified and confirmed, set the terminal title to show the
-current stage and task. This allows users running multiple agents in parallel terminals
-to identify each terminal at a glance.
-
-**Set title (after task ID is known):**
-
-```bash
-_optimus_set_title() {
-  # iTerm2 AppleScript title updater. Empirical testing showed that Optimus
-  # tasks always run in "divorced" iTerm2 sessions where the profile's
-  # autoNameFormat is locked to a literal — OSC 0/1/2 and OSC 1337
-  # SetUserVar are both ineffective in that state, so AppleScript's
-  # `set name of s` is the only channel that actually mutates session.name.
-  # The Execute tool runs bash without a controlling TTY, so /dev/tty fails
-  # with ENODEV; we resolve the parent process's TTY via ps instead. Walk
-  # up to 4 ancestors in case of nested shells. First run triggers a macOS
-  # TCC prompt ("droid wants to control iTerm"); approving enables this
-  # permanently. Silent no-op outside macOS/iTerm2 or when osascript is
-  # unavailable — non-iTerm2 / non-macOS users get no title update.
-  local title="$1"
-  local pid="$PPID" tty=""
-  for _ in 1 2 3 4; do
-    [ -z "$pid" ] || [ "$pid" = "1" ] && break
-    tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
-    case "$tty" in
-      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') ;;
-      *) break ;;
-    esac
-  done
-  if { [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; } \
-     && command -v osascript >/dev/null 2>&1 && [ -n "$tty" ] \
-     && [ "$tty" != "?" ] && [ "$tty" != "??" ]; then
-    osascript \
-      -e 'on run argv' \
-      -e '  set targetTty to "/dev/" & item 1 of argv' \
-      -e '  set newName to item 2 of argv' \
-      -e '  tell application "iTerm2"' \
-      -e '    repeat with w in windows' \
-      -e '      repeat with t in tabs of w' \
-      -e '        repeat with s in sessions of t' \
-      -e '          if (tty of s as string) is targetTty then' \
-      -e '            try' \
-      -e '              set name of s to newName' \
-      -e '            end try' \
-      -e '          end if' \
-      -e '        end repeat' \
-      -e '      end repeat' \
-      -e '    end repeat' \
-      -e '  end tell' \
-      -e 'end run' \
-      -- "$tty" "$title" >/dev/null 2>&1 || true
-  fi
-}
-_optimus_set_title "optimus: <STAGE> $TASK_ID — $TASK_TITLE"
-```
-
-Example output in terminal tab: `optimus: REVIEW T-003 — User Auth JWT`
-
-**Why the parent-process TTY:** The Execute tool runs `bash -c` without a controlling
-terminal, so `/dev/tty` returns `ENODEV` ("Device not configured"). The resolver above
-asks `ps` for the parent's controlling TTY device path and matches it against iTerm2's
-session list via AppleScript — that device is connected to the user's real iTerm2
-session. If no ancestor has a TTY (Docker/CI) or osascript is unavailable, the
-function silently no-ops.
-
-**Restore title (at stage completion or exit):**
-
-```bash
-_optimus_set_title ""
-```
-
-**NOTE:** This helper is iTerm2-on-macOS only. Optimus tasks always run in
-"divorced" iTerm2 sessions, where AppleScript's `set name of s` is the only
-channel that reliably mutates `session.name`. Non-iTerm2 / non-macOS users
-will not see a title update.
-
-**Troubleshooting iTerm2 (if the title still doesn't update):**
-
-1. **Window > Edit Tab Title** must be empty. A manually-set tab title is
-   sticky on the tab label and overrides the session name visually, even
-   when `session.name` is updated correctly underneath.
-2. The first run on macOS triggers a TCC prompt ("`droid` wants to control
-   `iTerm`"). Approve it to enable the helper. Denying makes the helper a
-   silent no-op.
-3. The helper requires the parent process to have a controlling TTY. Inside
-   Docker/CI without a TTY, no ancestor will resolve and the helper will
-   silently no-op.
-
-Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Terminal Identification."
-
+**Summary:** `_optimus_set_title <text>` updates the terminal title for iTerm2-on-macOS via AppleScript (`osascript ... set name of s to newName`) — the only channel that reliably mutates `session.name` in "divorced" iTerm2 sessions where OSC 0/1/2 and SetUserVar are ineffective. Used by stage skills to surface task context (e.g., `optimus: PLAN T-007 — User auth`) so users running multiple Optimus sessions can identify them at a glance. The function is auto-inlined into 6 SKILLs by `inline-protocols.py` (do NOT manually paste the body in SKILL.md — F12f rule). Title is informational; failure to set it is non-fatal (silent no-op outside iTerm2/macOS, in Docker/CI without TTY, or when osascript denied). See full bash function in AGENTS.md.
 
 ### Protocol: Worktree Location
 

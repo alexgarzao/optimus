@@ -517,98 +517,13 @@ to plan/build/review/done — see the inlined Protocol: Dry-Run Mode block below
 The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
-### File Location
+### File Location (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> File Location`.**
+
+**Summary:** Defines where Optimus operational files live: `${MAIN_WORKTREE}/.optimus/{state.json, stats.json, sessions/, reports/, logs/}` (gitignored, per-user) vs `<tasksDir>/optimus:tasks.md` + `<tasksDir>/{tasks,subtasks}/` (versioned, project-team-shared, propagated by git). Also: `${MAIN_WORKTREE}/.gitignore` (versioned), `${MAIN_WORKTREE}/.worktrees/` (gitignored linked-worktree dir). Critical contract: `.optimus/*` paths NEVER propagate across linked worktrees (gitignored = not shared by `git worktree add`); use `${MAIN_WORKTREE}/` prefix consistently. See full table in AGENTS.md.
 
 Optimus splits its files into two trees:
-
-**Operational tree (`.optimus/`) — 100% gitignored, per-user/per-machine:**
-
-```
-.optimus/
-├── config.json          # gitignored — optional overrides (tasksDir, defaultScope)
-├── state.json           # gitignored — operational state (status, branch per task)
-├── stats.json           # gitignored — stage execution counters per task
-├── sessions/            # gitignored — session state for crash recovery
-└── reports/             # gitignored — exported reports
-```
-
-**Planning tree (`<tasksDir>/`) — versioned, shared with the team:**
-
-```
-<tasksDir>/              # default: docs/pre-dev/
-├── optimus-tasks.md     # versioned — structural task data (NO status, NO branch)
-├── tasks/               # versioned — Ring pre-dev task specs (task_001.md, ...)
-└── subtasks/            # versioned — Ring pre-dev subtask specs (T-001/, ...)
-```
-
-**Configuration** (optional) is stored in `.optimus/config.json`:
-
-```json
-{
-  "tasksDir": "docs/pre-dev",
-  "defaultScope": "ativa"
-}
-```
-
-- **`tasksDir`** (optional): Path to the Ring pre-dev artifacts root. Default:
-  `docs/pre-dev`. The import and stage agents look for `optimus-tasks.md`, `tasks/`, and
-  `subtasks/` inside this directory. Can point to a path inside the project repo
-  (default case) OR to a path in a separate git repo (for teams that separate task
-  tracking from code).
-- **`defaultScope`** (optional): Default version scope used by `report` and `quick-report`
-  when the user does not specify one in the invocation. Valid values: `ativa`, `upcoming`,
-  `all`, or a specific version name (must exist in the Versions table). When set, skills
-  skip the "Which version scope do you want to see?" prompt. See Protocol: Default Scope
-  Resolution.
-
-Since `config.json` is gitignored, it exists ONLY when the user overrides a default.
-Projects using the defaults do not need a `config.json`.
-
-**Tasks file** is always at `<tasksDir>/optimus:tasks.md` (derived from `tasksDir`).
-
-**Operational state** is stored in `.optimus/state.json` (gitignored):
-
-```json
-{
-  "T-001": { "status": "DONE", "branch": "feat/t-001-setup-auth", "updated_at": "2025-01-15T10:30:00Z" },
-  "T-003": { "status": "Em Andamento", "branch": "feat/t-003-user-registration", "updated_at": "2025-01-16T14:00:00Z" }
-}
-```
-
-- Each key is a task ID. A task with no entry is `Pendente` (implicit default).
-- `status`: current pipeline stage (see Valid Status Values).
-- `branch`: the derived branch name, stored for quick reference (always re-derivable).
-- Stage agents read and write this file — never optimus-tasks.md — for status changes.
-- If state.json is lost, status can be reconstructed: task with a worktree = in progress,
-  without = Pendente. The agent asks the user to confirm before proceeding.
-
-**Stage execution stats** are stored in `.optimus/stats.json` (gitignored):
-
-```json
-{
-  "T-001": { "plan_runs": 2, "review_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_review": "2025-01-16T14:00:00Z" },
-  "T-002": { "plan_runs": 1, "review_runs": 0 }
-}
-```
-
-- Each key is a task ID. Values track how many times `plan` and `review` executed on the task.
-- A high `plan_runs` signals unclear or problematic specs. A high `review_runs` signals
-  complex review cycles or specification gaps.
-- The file is created on first use by `plan` or `review`. If missing, agents treat all
-  counters as 0.
-- `report` reads this file to display churn metrics.
-
-Agents resolve paths:
-1. **Read `.optimus/config.json`** for `tasksDir` if it exists. Fallback: `docs/pre-dev`.
-2. **Tasks file:** `${tasksDir}/optimus:tasks.md` (derived, not configurable separately).
-3. **If `<tasksDir>/optimus:tasks.md` not found:** **STOP** and suggest running `import` to create one.
-
-Everything inside `.optimus/` is gitignored. The planning tree (`<tasksDir>/optimus:tasks.md`,
-`<tasksDir>/tasks/`, `<tasksDir>/subtasks/`) is versioned (structural data shared with
-the team) — but the repo that versions it depends on `tasksDir`: if `tasksDir` is inside
-the project repo, it is committed alongside the code; if `tasksDir` is in a separate
-repo, it is committed there.
-
 
 ### Valid Status Values (stored in state.json)
 
@@ -1030,100 +945,11 @@ Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol:
 
 **Summary:** Read/write/delete entries in `${MAIN_WORKTREE}/.optimus/state.json` with `jq`. Schema: `{task_id: {status, branch, updated_at}}`. Status values: `Pendente | Validando Spec | Em Andamento | Validando Impl | DONE | Cancelado`. All writes use `jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" '.[$id] = {...}'` (injection-safe), with a tmp-file + `jq empty` validation step before `mv` to guarantee atomicity. Cancelado entries keep `branch: ""` (empty string, NOT absent — readers must treat both as Cancelado-state). Corrupted state.json is removed and treated as empty (reconciliation via worktree scan). state.json is gitignored; never committed. See full recipe in AGENTS.md for jq templates and reconciliation steps.
 
-### Protocol: Terminal Identification
+### Protocol: Terminal Identification (summarized)
 
-**Referenced by:** all stage agents (1-4), batch
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Terminal Identification`.**
 
-After the task ID is identified and confirmed, set the terminal title to show the
-current stage and task. This allows users running multiple agents in parallel terminals
-to identify each terminal at a glance.
-
-**Set title (after task ID is known):**
-
-```bash
-_optimus_set_title() {
-  # iTerm2 AppleScript title updater. Empirical testing showed that Optimus
-  # tasks always run in "divorced" iTerm2 sessions where the profile's
-  # autoNameFormat is locked to a literal — OSC 0/1/2 and OSC 1337
-  # SetUserVar are both ineffective in that state, so AppleScript's
-  # `set name of s` is the only channel that actually mutates session.name.
-  # The Execute tool runs bash without a controlling TTY, so /dev/tty fails
-  # with ENODEV; we resolve the parent process's TTY via ps instead. Walk
-  # up to 4 ancestors in case of nested shells. First run triggers a macOS
-  # TCC prompt ("droid wants to control iTerm"); approving enables this
-  # permanently. Silent no-op outside macOS/iTerm2 or when osascript is
-  # unavailable — non-iTerm2 / non-macOS users get no title update.
-  local title="$1"
-  local pid="$PPID" tty=""
-  for _ in 1 2 3 4; do
-    [ -z "$pid" ] || [ "$pid" = "1" ] && break
-    tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
-    case "$tty" in
-      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') ;;
-      *) break ;;
-    esac
-  done
-  if { [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; } \
-     && command -v osascript >/dev/null 2>&1 && [ -n "$tty" ] \
-     && [ "$tty" != "?" ] && [ "$tty" != "??" ]; then
-    osascript \
-      -e 'on run argv' \
-      -e '  set targetTty to "/dev/" & item 1 of argv' \
-      -e '  set newName to item 2 of argv' \
-      -e '  tell application "iTerm2"' \
-      -e '    repeat with w in windows' \
-      -e '      repeat with t in tabs of w' \
-      -e '        repeat with s in sessions of t' \
-      -e '          if (tty of s as string) is targetTty then' \
-      -e '            try' \
-      -e '              set name of s to newName' \
-      -e '            end try' \
-      -e '          end if' \
-      -e '        end repeat' \
-      -e '      end repeat' \
-      -e '    end repeat' \
-      -e '  end tell' \
-      -e 'end run' \
-      -- "$tty" "$title" >/dev/null 2>&1 || true
-  fi
-}
-_optimus_set_title "optimus: <STAGE> $TASK_ID — $TASK_TITLE"
-```
-
-Example output in terminal tab: `optimus: REVIEW T-003 — User Auth JWT`
-
-**Why the parent-process TTY:** The Execute tool runs `bash -c` without a controlling
-terminal, so `/dev/tty` returns `ENODEV` ("Device not configured"). The resolver above
-asks `ps` for the parent's controlling TTY device path and matches it against iTerm2's
-session list via AppleScript — that device is connected to the user's real iTerm2
-session. If no ancestor has a TTY (Docker/CI) or osascript is unavailable, the
-function silently no-ops.
-
-**Restore title (at stage completion or exit):**
-
-```bash
-_optimus_set_title ""
-```
-
-**NOTE:** This helper is iTerm2-on-macOS only. Optimus tasks always run in
-"divorced" iTerm2 sessions, where AppleScript's `set name of s` is the only
-channel that reliably mutates `session.name`. Non-iTerm2 / non-macOS users
-will not see a title update.
-
-**Troubleshooting iTerm2 (if the title still doesn't update):**
-
-1. **Window > Edit Tab Title** must be empty. A manually-set tab title is
-   sticky on the tab label and overrides the session name visually, even
-   when `session.name` is updated correctly underneath.
-2. The first run on macOS triggers a TCC prompt ("`droid` wants to control
-   `iTerm`"). Approve it to enable the helper. Denying makes the helper a
-   silent no-op.
-3. The helper requires the parent process to have a controlling TTY. Inside
-   Docker/CI without a TTY, no ancestor will resolve and the helper will
-   silently no-op.
-
-Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Terminal Identification."
-
+**Summary:** `_optimus_set_title <text>` updates the terminal title for iTerm2-on-macOS via AppleScript (`osascript ... set name of s to newName`) — the only channel that reliably mutates `session.name` in "divorced" iTerm2 sessions where OSC 0/1/2 and SetUserVar are ineffective. Used by stage skills to surface task context (e.g., `optimus: PLAN T-007 — User auth`) so users running multiple Optimus sessions can identify them at a glance. The function is auto-inlined into 6 SKILLs by `inline-protocols.py` (do NOT manually paste the body in SKILL.md — F12f rule). Title is informational; failure to set it is non-fatal (silent no-op outside iTerm2/macOS, in Docker/CI without TTY, or when osascript denied). See full bash function in AGENTS.md.
 
 ### Protocol: optimus-tasks.md Validation (HARD BLOCK)
 

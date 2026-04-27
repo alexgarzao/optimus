@@ -904,94 +904,11 @@ This protocol handles CodeRabbit only. The caller separately identifies:
 Skills reference this as: "Parse CodeRabbit review body — see AGENTS.md Protocol: Parse CodeRabbit Review Body."
 
 
-### Protocol: Per-Droid Quality Checklists
+### Protocol: Per-Droid Quality Checklists (summarized)
 
-**Referenced by:** review, pr-check, deep-review, coderabbit-review, plan, build
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Per-Droid Quality Checklists`.**
 
-Each droid type has specific dimensions it MUST verify beyond its core domain. Skills
-that dispatch review droids MUST include the applicable checklists in agent prompts.
-
-**Code Quality agent** (`ring-default-code-reviewer`) must additionally verify:
-- Resilience: external calls have timeout, retry with backoff, circuit breaker where appropriate
-- Resource lifecycle: all opened connections/handles are closed (defer, cleanup, graceful shutdown)
-- Concurrency: shared state has proper synchronization, no goroutine leaks, no deadlock risk
-- Performance: no N+1 queries, no unbounded queries, indexes exist for query patterns, no hot-path allocations
-- Configuration: no hardcoded values that should be environment-configurable, safe defaults
-- Cognitive complexity: functions with >3 nesting levels or >30 lines flagged for decomposition
-- Error handling: errors wrapped with context, consistent with codebase error patterns
-- Domain purity: no infrastructure concerns in domain layer, dependency direction correct
-- Resource leaks: DB connections, HTTP clients, file handles, channels properly closed
-
-**Business Logic agent** (`ring-default-business-logic-reviewer`) must additionally verify:
-- Spec traceability: each code path maps to a spec requirement (flag orphan logic with no spec backing)
-- Data integrity: transaction boundaries correct, partial writes impossible, rollback defined
-- Backward compatibility: existing consumers/contracts not broken by this change
-- API semantics: correct HTTP status codes, idempotent operations marked as such, pagination consistent
-- Domain edge cases: what happens with zero, negative, maximum, duplicate, concurrent values?
-- Business rule completeness: all business rules from spec have implementation AND test
-
-**Security agent** (`ring-default-security-reviewer`) must additionally verify:
-- Data privacy: PII not logged, sensitive fields masked in responses, LGPD/GDPR compliance
-- Error responses: no internal details leaked (stack traces, DB schemas, internal paths, SQL)
-- Rate limiting: high-throughput or public endpoints have rate limiting consideration
-- Input validation: happens at the right layer (not just client-side), consistent with codebase
-- Secrets: no hardcoded credentials, tokens, API keys in code or config files
-- Auth propagation: authentication context properly propagated through the call chain
-
-**Test Quality agent** (`ring-default-ring-test-reviewer`) must additionally verify:
-- Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag tests where assertions only check mock.Called() without verifying output/state
-- False positive risk: could these tests pass while the feature is actually broken?
-- Test coupling: are tests coupled to implementation details (private fields, internal struct layout)?
-- Spec traceability: for each acceptance criterion in the task spec, is there a test?
-- Integration tests: do they use real dependencies (testcontainers/docker) or just mocks?
-- Test isolation: can tests run in parallel without interference? Shared state between tests?
-- Error scenario completeness: each error return path has a corresponding test?
-- Boundary values: min, max, zero, empty, nil, negative tested where applicable?
-
-**Nil/Null Safety agent** (`ring-default-ring-nil-safety-reviewer`) must additionally verify:
-- Resource cleanup: nil checks before Close/Release calls
-- Channel safety: sends to nil/closed channels
-- Map safety: reads/writes to nil maps
-- Slice safety: index bounds after filtering/transforming
-
-**Ripple Effects agent** (`ring-default-ring-consequences-reviewer`) must additionally verify:
-- Values duplicated between files that should be a shared constant
-- Imports follow the project's layer architecture (no circular deps, no backwards imports)
-- New code follows the same patterns as existing code in the same domain
-- Backward compatibility: does this change break any existing consumer or API contract?
-- Configuration drift: new defaults reasonable? existing config overrides still valid?
-- Migration path: if breaking change, is migration strategy documented?
-- Shared state: new global/package-level state that could cause issues across modules?
-- Event/message contracts: changes to event payloads affect downstream consumers?
-
-**Dead Code agent** (`ring-default-ring-dead-code-reviewer`) must additionally verify:
-- Dead code: unused imports, unreachable branches, commented-out code
-- Zombie test infrastructure: test helpers, fixtures, mocks no longer used by any test
-- Feature flags: stale feature flag checks for flags that were already fully rolled out
-- Deprecated paths: code paths behind deprecated API versions with no remaining consumers
-
-**Spec Compliance / QA agent** (`ring-dev-team-qa-analyst`) must additionally verify:
-- Testability assessment: is the code structured for testability? (dependency injection, interfaces)
-- Operational readiness: can ops monitor, debug, and rollback this in production?
-- Acceptance criteria coverage: each AC has both success AND failure test scenarios
-- Cross-cutting scenarios: concurrent modifications, large datasets, special characters, timezone handling
-
-**Frontend specialist** (`ring-dev-team-frontend-engineer`) must additionally verify:
-- UX completeness: loading states, empty states, error states all handled
-- Accessibility: keyboard navigation, screen reader support, ARIA labels, color contrast
-- Responsive behavior: works across viewport sizes (mobile, tablet, desktop)
-- i18n readiness: no hardcoded user-facing strings, date/number formatting locale-aware
-- Performance: no unnecessary re-renders, large lists virtualized, images optimized
-
-**Backend specialist** (`ring-dev-team-backend-engineer-golang` or `ring-dev-team-backend-engineer-typescript`) must additionally verify:
-- Language idiomaticity: follows official style guide conventions
-- Graceful shutdown: SIGTERM handling, in-flight request draining
-- Connection pool sizing: appropriate for expected load
-- Context propagation: request context passed through the full call chain
-- Structured logging: logs include correlation IDs, operation names, durations
-
-Skills reference this as: "Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists."
-
+**Summary:** Per-droid quality dimensions that review/pr-check/deep-review/coderabbit-review/plan/build skills MUST include in their agent prompts beyond the core review domain. Examples: code-reviewer adds resilience/concurrency/cognitive-complexity/error-handling checks; security-reviewer adds PII/error-response-leakage/rate-limiting/secrets; test-reviewer adds effectiveness/false-positive-risk/spec-traceability; nil-safety adds channel/map/slice safety; consequences adds backward-compat/migration-path/event-contract; dead-code adds zombie test infrastructure and stale feature flags; qa-analyst adds testability/operational-readiness; frontend adds UX states/accessibility/i18n; backend adds graceful-shutdown/context-propagation/structured-logging. Skills reference this when building specialist droid prompts so agents review uniformly. See full per-droid lists in AGENTS.md.
 
 ### Protocol: Project Rules Discovery
 
