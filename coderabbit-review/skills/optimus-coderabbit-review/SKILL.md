@@ -684,96 +684,11 @@ All cycle review skills follow this pattern:
 12. Present final summary
 
 
-### Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)
-Applies to: plan, review, pr-check, coderabbit-review, deep-review, deep-doc-review, build
+### Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated) (summarized)
 
-Round 1 (the skill's primary agent dispatch) is MANDATORY and uses the per-skill
-default ring roster. Convergence rounds 2+ are OPTIONAL and gated behind explicit
-user prompts. Convergence detection (zero new findings) exits the loop silently
-without offering further rounds.
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)`.**
 
-- **Round 1:** Orchestrator dispatches the per-skill default roster of specialist
-  ring droids in parallel (with full session context). This round is NOT counted
-  as a "convergence round" — it is the skill's primary review pass.
-- **Rounds 2-5 (each gated by user prompt):** The **same agent roster** as round 1
-  is dispatched in parallel via `Task` tool, each with zero prior context. Each
-  agent reads all files fresh from disk.
-- **Sub-agents do NOT receive the findings ledger.** Dedup is performed entirely
-  by the orchestrator after agents return, using **strict matching**: same file +
-  same line range (±5 lines) + same category. "Description similarity" is NOT
-  sufficient for dedup — the file, location, and category must all match.
-- LOW severity findings are NOT a reason to skip presentation — ALL findings are
-  presented to the user.
-
-**Entry gate (before round 2 — MANDATORY):** After round 1 completes (decisions
-collected, fixes applied), ask via `AskUser`:
-```
-1. [question] Round 1 produced N findings (X fixed, Y skipped). Run convergence
-   round 2 (re-dispatches the same roster with clean context)?
-[topic] Convergence-Entry
-[option] Run round 2
-[option] Skip convergence loop
-```
-- "Skip convergence loop" → exit with status `SKIPPED`.
-- "Run round 2" → dispatch round 2.
-
-**Per-round gate (before rounds 3, 4, 5 — MANDATORY):** After each round 2+
-completes (findings presented, fixes applied), before dispatching the next round:
-```
-1. [question] Round N-1 produced M new findings. Run round N?
-[topic] Convergence-RoundN
-[option] Continue (run round N)
-[option] Stop here
-```
-- "Stop here" → exit with status `USER_STOPPED`.
-- "Continue" → dispatch round N.
-
-**Convergence detection (after each dispatched round — DO NOT ASK):** If a
-dispatched round returns ZERO new findings (using the strict matching rules
-above), the orchestrator MUST:
-1. Print: `Convergence reached at round N: zero new findings.`
-2. Exit immediately with status `CONVERGED`.
-3. NEVER offer to run another round — the user is informed, not asked.
-
-**Hard limit:** Round 5 is the maximum. After round 5 completes (with new
-findings present), exit with status `HARD_LIMIT` without asking.
-
-**Dispatch failure (default):** If a `Task` dispatch fails entirely (transport error,
-ring droid unavailable, etc.), do NOT count as zero findings (would falsely
-mark `CONVERGED`). Ask via `AskUser`:
-```
-1. [question] Round N dispatch failed: <error>. Retry, or stop here?
-[topic] Convergence-DispatchFail
-[option] Retry round N
-[option] Stop here
-```
-- "Retry round N" → re-dispatch.
-- "Stop here" → exit with status `DISPATCH_FAILED_ABORTED`.
-
-**Dispatch failure (build-specific carve-out):** `build` runs the convergence loop
-deep inside Phase 2.3 of a potentially hours-long multi-subtask implementation. A
-blocking prompt at this point is disruptive. `build` therefore MAY treat a single
-failed slot as "zero new findings for that slot" and continue silently with a
-printed warning. The user is informed via the Final Summary. If multiple slots
-fail in the same round, `build` falls back to the default behavior (ask immediately).
-This carve-out applies ONLY to `build`; all other skills use the default.
-
-**Exit statuses (recorded for the Final Summary):**
-
-| Status | Trigger |
-|--------|---------|
-| `CONVERGED` | A dispatched round returned zero new findings |
-| `USER_STOPPED` | User chose "Stop here" at a per-round gate (before rounds 3, 4, or 5) |
-| `SKIPPED` | User chose "Skip convergence loop" at the entry gate |
-| `HARD_LIMIT` | Round 5 completed with new findings still present |
-| `DISPATCH_FAILED_ABORTED` | Dispatch failure followed by user choosing to stop |
-
-**Why full roster, not a single agent:** A single generalist agent structurally cannot
-replicate the coverage of 8-10 domain specialists. The security-reviewer catches injection
-risks a code-reviewer won't. The nil-safety-reviewer catches empty guards a QA analyst won't.
-Dispatching a single agent in rounds 2+ creates false convergence — the agent declares
-"zero new findings" because it lacks the domain depth, not because the code is clean.
-
+**Summary:** Multi-round review pattern for plan, build, review, pr-check, coderabbit-review, deep-review, deep-doc-review. Round 1 is mandatory (the skill's primary dispatch). Rounds 2-5 are gated behind explicit `AskUser` prompts (entry gate before round 2, per-round gate before 3/4/5). Each gated round dispatches the SAME droid roster as round 1 in parallel via `Task` tool with zero prior context — agents read files fresh from disk. Convergence detection (zero new findings, strict `same file + ±5 lines + same category` matching) exits silently with status `CONVERGED` — never asks for another round. Hard limit at round 5. Exit statuses: `CONVERGED`, `USER_STOPPED`, `SKIPPED`, `HARD_LIMIT`, `DISPATCH_FAILED_ABORTED` (build has a single-slot carve-out). See full recipe in AGENTS.md.
 
 ### Protocol: Coverage Measurement
 
@@ -1190,136 +1105,11 @@ skill versions after pushing changes.
 Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Push Commits."
 
 
-### Protocol: Quiet Command Execution
+### Protocol: Quiet Command Execution (summarized)
 
-**Referenced by:** build, review, pr-check, coderabbit-review, deep-review (for `make test`, `make lint`, `make test-integration`, coverage runs)
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Quiet Command Execution`.**
 
-Long-running verification commands (`make test`, `make lint`, `make test-coverage`,
-`make test-integration`, `make test-integration-coverage`) often emit thousands of
-output lines. Capturing that output in the agent's context wastes tokens and slows
-down every turn, even when the command passes cleanly.
-
-This protocol defines `_optimus_quiet_run`, a bash helper that runs a command with
-stdout/stderr redirected to a log file under `${MAIN_WORKTREE}/.optimus/logs/`
-(the **main worktree** copy, so logs survive linked-worktree cleanup) and emits
-**a single verdict line** based on the exit code. On failure it also prints the
-last 50 lines of the log so the agent can diagnose without ingesting the full
-output. The exit code is preserved, so downstream control flow
-(`if ...; then ... fi`) keeps working.
-
-**Helper (auto-inlined — do NOT manually copy):**
-
-This helper is automatically inlined into every consumer skill by
-`scripts/inline-protocols.py` (see Shared Protocols block at the end of each
-SKILL.md). You do NOT need to paste it into skills manually — editing this single
-source of truth is enough.
-
-```bash
-_optimus_quiet_run() {
-  # Usage: _optimus_quiet_run <label> <command> [args...]
-  # Runs <command> with stdout+stderr redirected to
-  # ${MAIN_WORKTREE}/.optimus/logs/<timestamp>-<label>-<pid>.log (under the main
-  # worktree, so logs survive linked-worktree cleanup). Prints a single
-  # PASS/FAIL line; on FAIL also prints last 50 lines of the log (terminal
-  # escapes stripped). Returns the command's exit code unchanged.
-  local label="$1"; shift
-  if [ -z "$label" ] || [ $# -eq 0 ]; then
-    echo "ERROR: _optimus_quiet_run requires <label> and <command>" >&2
-    return 2
-  fi
-  local safe
-  safe=$(printf '%s' "$label" | tr -c '[:alnum:]-_' '-' | sed 's/--*/-/g;s/^-//;s/-$//')
-  [ -z "$safe" ] && safe="run"
-  local ts
-  ts=$(date +%Y%m%d-%H%M%S)
-  # Resolve MAIN_WORKTREE if not already set by caller. Helper may be invoked
-  # in unusual contexts (e.g., outside the standard Resolve-Main-Worktree
-  # invocation chain), so fall back to PWD with a WARNING rather than crash.
-  if [ -z "${MAIN_WORKTREE:-}" ]; then
-    MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
-  fi
-  if [ -z "$MAIN_WORKTREE" ]; then
-    echo "WARNING: _optimus_quiet_run could not resolve MAIN_WORKTREE; logging to PWD-relative path" >&2
-    MAIN_WORKTREE="."
-  fi
-  # PID suffix prevents same-second same-label collisions (parallel or fast sequential).
-  local log="${MAIN_WORKTREE}/.optimus/logs/${ts}-${safe}-$$.log"
-  if ! mkdir -p "$(dirname "$log")" 2>/dev/null; then
-    echo "ERROR: _optimus_quiet_run cannot create $(dirname "$log") (permission denied, disk full, or read-only FS)" >&2
-    return 3
-  fi
-  # umask 0077 ensures log file is owner-read/write only (logs may contain
-  # sensitive test output: credentials in debug lines, internal stack traces).
-  if ( umask 0077; "$@" > "$log" 2>&1 ); then
-    echo "PASS: $label (log: $log)"
-    return 0
-  else
-    local rc=$?
-    echo "FAIL: $label (exit=$rc, log: $log)"
-    echo "--- last 50 lines ---"
-    # `cat -v` strips terminal escape sequences (non-printable bytes become ^X
-    # notation), preventing a malicious test from hijacking the terminal title
-    # or obscuring errors via ANSI/OSC sequences.
-    tail -n 50 "$log" | cat -v
-    return $rc
-  fi
-}
-```
-
-**Usage examples:**
-
-```bash
-_optimus_quiet_run "make-lint" make lint
-_optimus_quiet_run "make-test" make test
-_optimus_quiet_run "make-test-coverage" make test-coverage
-_optimus_quiet_run "make-test-integration" make test-integration
-```
-
-**Contract:**
-
-1. **Success path (exit 0):** one line `PASS: <label> (log: <path>)` — this is ALL the
-   output the agent reads. The full log stays on disk for manual inspection.
-2. **Failure path (exit != 0):** `FAIL: <label> (exit=N, log: <path>)` + a separator
-   line + the last 50 lines of the log (with terminal escape sequences stripped via
-   `cat -v`). The agent has enough context to diagnose or dispatch a fix droid
-   without loading the full output.
-3. **Exit code preserved:** the helper returns the same exit code as the wrapped
-   command. Downstream `if _optimus_quiet_run ...; then ... fi` works the same as
-   `if make test; then ... fi` would.
-4. **Log retention:** logs accumulate under `.optimus/logs/` (gitignored). Both
-   Protocol: Initialize .optimus Directory (admin/standalone skills) and
-   Protocol: Session State (stage agents at phase transitions) automatically
-   prune logs older than 30 days AND cap the directory at 500 most-recent
-   files, whichever limit hits first. Users may `rm .optimus/logs/*.log` at any
-   time to reclaim space manually.
-5. **Reserved exit codes:** `2` = missing/empty label or missing command;
-   `3` = cannot create `.optimus/logs/` (perm denied, disk full, read-only FS).
-   Any other exit code comes from the wrapped command.
-
-**Label naming convention:**
-- `make-<target>` for Makefile targets: `make-lint`, `make-test`, `make-test-coverage`, `make-test-integration`, `make-test-integration-coverage`
-- `<tool>` for direct tool invocations: `go-vet`, `goimports`, `gofmt`, `prettier`
-- `<tool>-<action>` when a single tool has multiple modes: `npm-test-coverage`, `pytest-cov`
-
-Keep labels short (≤30 chars) and filesystem-safe — the helper sanitizes aggressively,
-but readable labels produce readable log filenames in `.optimus/logs/`.
-
-**When the agent needs full output:** use `cat "${MAIN_WORKTREE}/.optimus/logs/<filename>.log"` or
-point a sub-agent to the log path (`Read` tool). Never re-run the command just to
-see the output — the log already has it.
-
-**Output parsing (e.g., coverage %):** do NOT parse the stdout of
-`_optimus_quiet_run`. Read the log file or, better, use a separate command that
-prints only the metric (example in Protocol: Coverage Measurement).
-
-**When NOT to use this helper:**
-- Commands whose output must be parsed by the agent turn-by-turn (rare for
-  verification, common for `git log`, `gh pr view`, etc.) — use normal Execute.
-- Interactive commands that expect TTY input.
-- Commands under 20 lines of output where the savings are negligible.
-
-Skills reference this as: "Run quietly — see AGENTS.md Protocol: Quiet Command Execution."
-
+**Summary:** `_optimus_quiet_run <label> <command>` redirects stdout+stderr to `${MAIN_WORKTREE}/.optimus/logs/<ts>-<label>-<pid>.log`, emits a single `PASS`/`FAIL` line, and on failure dumps the last 50 lines (with `cat -v` to neutralize ANSI/OSC escape sequences). Uses `umask 0077` on the log file (output may contain credentials/stack traces). Exit code preserved so `if _optimus_quiet_run ...; then ... fi` works. Reserved exit codes: `2` = missing label/command; `3` = cannot create logs dir. Log retention (30-day age cap + 500-file count cap) is pruned at every Initialize Directory + Session State call. Use for verification commands only; never for output the agent must parse turn-by-turn. See full recipe in AGENTS.md.
 
 ### Protocol: Ring Droid Requirement Check
 
