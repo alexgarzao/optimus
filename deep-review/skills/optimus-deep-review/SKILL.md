@@ -628,6 +628,20 @@ All cycle review skills follow this pattern:
    [option] Tell me more
    ```
 
+   **Scope of the structured AskUser template:**
+
+   The `[topic]/[option]` structured template applies ONLY to **AskUser calls that present
+   findings/decisions inside cycle review skills** (plan, build, review, pr-check,
+   deep-review, deep-doc-review, coderabbit-review). Each finding presentation must use
+   the template so the user gets consistent UX and the test suite can verify the contract.
+
+   Other AskUser calls — status confirmations, scope choosers, file-presence prompts,
+   admin operations like task creation/cancellation, resume reset confirmations, etc. —
+   MAY use prose. Authors should still aim for clarity and explicit option labels, but
+   the structured template is not required outside finding loops.
+
+   This scope is enforced by `TestStructuredAskUserScope` in `scripts/test_skill_consistency.py`.
+
 9. **HARD BLOCK — IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds
    with free text (a question, disagreement, or request for clarification):**
    **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.

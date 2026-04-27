@@ -82,7 +82,7 @@ Since Status and Branch live in state.json (gitignored, not in optimus-tasks.md)
 are limited to structural columns: ID, Title, Tipo, Depends, Priority, Version,
 Estimate, TaskSpec. No status ordering or "most-advanced-status rule" is needed.
 
-### Step 2.2: Resolve Each Conflicted Task
+### Step 2.1: Resolve Each Conflicted Task
 
 For each task that differs between current and incoming:
 
@@ -99,7 +99,7 @@ Conflicts in optimus-tasks.md are limited to structural columns only.
    - If changed on one side → keep the change
    - If changed on BOTH sides → flag for user decision (cannot auto-resolve)
 
-### Step 2.3: Handle Structural Conflicts
+### Step 2.2: Handle Structural Conflicts
 
 Since Status and Branch live in state.json (not optimus-tasks.md), conflicts are limited to
 structural fields. If both sides changed the same structural field (e.g., Priority or
@@ -163,14 +163,12 @@ Write the fully resolved `optimus-tasks.md` (no conflict markers remaining).
 
 ### Step 4.2: Validate Format
 
-Run the standard format validation (from AGENTS.md) on the resolved file:
-1. Format marker present (`<!-- optimus:tasks-v1 -->`)
-2. Versions table valid
-3. Task table columns correct
-4. All IDs, statuses, types, priorities valid
-5. No circular dependencies
-6. No duplicate IDs
-7. No unescaped pipe characters in titles
+**Validate the resolved file** — see AGENTS.md Protocol: optimus-tasks.md Validation.
+
+This protocol enforces all 15 format-validation rules (format marker, exactly-one-Ativa,
+at-most-one-Próxima, valid Tipo/Priority/Status enumerations, all Version/Depends
+references resolve to existing rows, no duplicates, no circular dependencies, no
+unescaped pipes, no empty table). Failing validation aborts the apply phase.
 
 If validation fails, inform the user and offer to fix or abort.
 
@@ -220,6 +218,38 @@ Run `/optimus:report` to verify the dashboard looks correct.
 
 The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
+
+### Format Validation
+
+Every stage agent (1-4) MUST validate the optimus-tasks.md format before operating:
+1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
+2. A `## Versions` section exists with a table containing columns: Version, Status, Description
+3. All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
+4. Exactly one version has Status `Ativa`
+5. At most one version has Status `Próxima`
+6. A markdown table exists with columns: ID, Title, Tipo, Depends, Priority, Version (Estimate and TaskSpec are optional — tables without them are still valid). **Status and Branch columns are NOT expected** — they live in state.json.
+7. All task IDs follow the `T-NNN` pattern
+8. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
+9. All Depends values are either `-` or comma-separated valid task IDs that exist as rows in the tasks table (not just matching `T-NNN` pattern — the referenced task must actually exist)
+10. All Priority values are one of: `Alta`, `Media`, `Baixa`
+11. All Version values reference a version name that exists in the Versions table
+12. No duplicate task IDs
+13. No circular dependencies in the dependency graph (e.g., T-001 → T-002 → T-001)
+
+If the format marker is missing or validation fails, the agent must **STOP** and suggest
+running `/optimus:import` to fix the format. Do NOT attempt to interpret malformed data.
+
+14. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
+15. **Empty table handling:** If the tasks table exists but has zero data rows (only headers),
+format validation PASSES. Stage agents (1-4) MUST check for this condition immediately after
+format validation and before task identification. If zero data rows: **STOP** and inform the
+user: "No tasks found in optimus-tasks.md. Use `/optimus:tasks` to create a task or `/optimus:import`
+to import from Ring pre-dev." Do NOT proceed to task identification with an empty table.
+
+**NOTE:** For circular dependency detection (item 13), trace the full dependency chain for
+each task. If any task appears twice in the chain, a cycle exists. Report ALL tasks involved
+in the cycle so the user can fix it with `/optimus:tasks`.
+
 
 ### Protocol: Resolve Tasks Git Scope
 
@@ -380,6 +410,27 @@ Raw `git` on `$TASKS_FILE` breaks in separate-repo mode.
 project repo). `tasks_git push` pushes the tasks repo. The project repo is unaffected.
 
 Skills reference this as: "Resolve tasks git scope — see AGENTS.md Protocol: Resolve Tasks Git Scope."
+
+
+### Protocol: optimus-tasks.md Validation (HARD BLOCK)
+
+**Referenced by:** all stage agents (1-4), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
+
+Every stage agent MUST validate optimus-tasks.md before operating. The full validation rules are
+defined in the "Format Validation" section above (items 1-15). This protocol is the
+executable version:
+
+1. **Resolve paths and git scope:** Execute Protocol: Resolve Tasks Git Scope (below) to
+   resolve `TASKS_DIR`, `TASKS_FILE`, `TASKS_GIT_SCOPE`, and the `tasks_git` helper.
+2. **Find optimus-tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus:import`.
+3. **Validate format:** Execute all 15 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus:import`.
+
+**All subsequent references to `optimus-tasks.md` in the skill use the resolved `TASKS_FILE` path.
+All references to Ring pre-dev artifacts use `TASKS_DIR` as the root** — never hardcoded paths.
+**All git operations on optimus-tasks.md use the `tasks_git` helper** (which handles both same-repo
+and separate-repo scopes).
+
+Skills reference this as: "Find and validate optimus-tasks.md (HARD BLOCK) — see AGENTS.md Protocol: optimus-tasks.md Validation."
 
 
 <!-- INLINE-PROTOCOLS:END -->

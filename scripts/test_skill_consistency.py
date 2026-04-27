@@ -1327,21 +1327,28 @@ class TestResumeAdmin:
         )
 
     def test_resume_step_2_3_has_explicit_extraction(self):
-        """Step 2.3 must have bash extracting TASK_TITLE/TIPO/DEPENDS/VERSION with
-        non-empty assertions — prose-only is insufficient. (R1)
+        """The Read-Task-Metadata step (anchor `step-read-task-metadata`) must have
+        bash extracting TASK_TITLE/TIPO/DEPENDS/VERSION with non-empty assertions —
+        prose-only is insufficient. (R1)
+
+        Anchor-based reference replaces the verbatim numeric step ID for stability.
         """
         content = _read_skill("resume")
         body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert '<a id="step-read-task-metadata"></a>' in body, (
+            "resume must define a `step-read-task-metadata` anchor above the "
+            "metadata-extraction step."
+        )
         assert "TASK_ROW=" in body, (
-            "resume Step 2.3 must capture the row into TASK_ROW via awk/grep"
+            "resume read-task-metadata step must capture the row into TASK_ROW via awk/grep"
         )
         assert re.search(r"awk -F'\|'.*print\s*\$3", body) or "print $3" in body, (
-            "resume Step 2.3 must extract columns 3/4/5/7 via awk -F'|'"
+            "resume read-task-metadata step must extract columns 3/4/5/7 via awk -F'|'"
         )
         # Must loop over the captured vars and STOP if any is empty
         assert "TASK_TITLE TASK_TIPO TASK_DEPENDS TASK_VERSION" in body or \
                all(v in body for v in ["TASK_TITLE", "TASK_TIPO", "TASK_DEPENDS", "TASK_VERSION"]), (
-            "resume Step 2.3 must reference all four extracted vars"
+            "resume read-task-metadata step must reference all four extracted vars"
         )
 
     def test_resume_git_worktree_add_checks_exit(self):
@@ -1371,21 +1378,24 @@ class TestResumeAdmin:
         )
 
     def test_resume_case3_no_unsafe_plan_delegation(self):
-        """Step 3.3 Case 3 must NOT offer a bare 'Re-run /optimus-plan' option — plan's
-        anti-pulo rejects in-progress statuses. Use the chained "Reset then plan" option.
-        (R3)
+        """The Reset-to-Pendente recovery (anchor `step-reset-to-pendente-recovery`)
+        must NOT offer a bare 'Re-run /optimus-plan' option — plan's anti-pulo rejects
+        in-progress statuses. Use the chained "Reset then plan" option. (R3)
+
+        Anchor reference instead of verbatim step number keeps the test stable across
+        phase renumbering.
         """
         content = _read_skill("resume")
         body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
-        # The in-progress Case 3 sub-case must use the chained option
+        # The in-progress recovery sub-case must use the chained option
         assert "Reset to Pendente, then run /optimus-plan" in body, (
-            "resume Step 3.3 must offer 'Reset to Pendente, then run /optimus-plan'"
+            "resume reset-to-pendente recovery must offer 'Reset to Pendente, then run /optimus-plan'"
         )
         # And must not offer a bare "Re-run /optimus-plan" alongside
         case3_section = body.split("Inconsistency: T-XXX has status")[-1]
         case3_section = case3_section.split("**Abort**")[0] if "**Abort**" in case3_section else case3_section
         assert "**Re-run /optimus-plan**" not in case3_section, (
-            "resume Step 3.3 Case 3 must NOT offer a bare 'Re-run /optimus-plan' option"
+            "resume reset-to-pendente recovery must NOT offer a bare 'Re-run /optimus-plan' option"
         )
 
     def test_resume_reset_tracks_success(self):
@@ -1403,11 +1413,30 @@ class TestResumeAdmin:
         )
 
     def test_resume_dry_run_forbids_reset(self):
-        """Step 3.4 must explicitly forbid the Reset-to-Pendente recovery in dry-run mode. (R25)"""
+        """The dry-run short-circuit step (anchor `step-dry-run-short-circuit`) must
+        explicitly forbid the Reset-to-Pendente recovery (anchor
+        `step-reset-to-pendente-recovery`) in dry-run mode. (R25)
+
+        Anchor-based check stays stable across phase renumbering.
+        """
         content = _read_skill("resume")
         body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
-        assert re.search(r"Do NOT run the Step 3.3 Case 3.*Reset", body), (
-            "resume Step 3.4 must forbid the Step 3.3 Case 3 Reset-to-Pendente recovery in dry-run mode"
+        # Both anchors must be present (locating the steps is not number-dependent).
+        assert '<a id="step-dry-run-short-circuit"></a>' in body, (
+            "resume must define a `step-dry-run-short-circuit` anchor above the "
+            "dry-run short-circuit step."
+        )
+        assert '<a id="step-reset-to-pendente-recovery"></a>' in body, (
+            "resume must define a `step-reset-to-pendente-recovery` anchor above "
+            "the inconsistent-state recovery option."
+        )
+        # The dry-run section must explicitly forbid the Reset-to-Pendente recovery.
+        # Match on the action description, not on a verbatim step number.
+        assert re.search(
+            r"Do NOT run the .*Reset to Pendente.*recovery", body
+        ), (
+            "resume dry-run short-circuit must forbid the Reset-to-Pendente recovery "
+            "(prose 'Do NOT run the ... Reset to Pendente ... recovery')."
         )
 
     def test_resume_whitelists_non_terminal_status(self):
@@ -1650,10 +1679,13 @@ class TestInlineProtocolsFoundational:
 
     def test_pr_check_has_outdated_thread_cleanup(self):
         """pr-check MUST collect outdated threads into a separate `outdated_threads`
-        list (NOT discard them) and auto-resolve them in Step 13.0. Without this,
-        outdated threads remain open on the PR — CodeRabbit and similar approval
-        gates withhold approval as long as ANY thread (active or outdated) is
-        unresolved.
+        list (NOT discard them) and auto-resolve them in the cleanup step (anchor
+        `step-cleanup-outdated-threads`). Without this, outdated threads remain
+        open on the PR — CodeRabbit and similar approval gates withhold approval
+        as long as ANY thread (active or outdated) is unresolved.
+
+        References use a stable semantic anchor instead of the verbatim numeric
+        step ID so this test does not break when phases are renumbered.
         """
         path = REPO_ROOT / "pr-check/skills/optimus-pr-check/SKILL.md"
         content = path.read_text()
@@ -1662,40 +1694,41 @@ class TestInlineProtocolsFoundational:
         # references to the old discard-only model. These assertions catch regressions
         # where future edits accidentally re-introduce filter terminology.
         stale_phrases = [
-            "Outdated (filtered)",         # Step 1.3.4 summary template (F2)
-            "outdated filtered",            # Step 1.3.4 totals line (F2)
-            "filtered set",                  # Step 1.8 findings_total formula (F1)
-            "filtered out by Step 1.3.1",   # Step 1.3.3 narrative (F3)
+            "Outdated (filtered)",         # summary template (F2)
+            "outdated filtered",            # totals line (F2)
+            "filtered set",                  # findings_total formula (F1)
+            "filtered out by Step 1.3.1",   # narrative (F3)
         ]
         remaining = [p for p in stale_phrases if p in content]
         assert not remaining, (
             f"Stale 'filter/filtered' prose found in pr-check after the partition "
-            f"refactor at Step 1.3.1. The partition model replaced the old discard "
-            f"semantics; these phrases are vestigial and contradict the new flow: "
-            f"{remaining}. See Step 13.0 for the hygiene path."
+            f"refactor at the thread-collection step. The partition model replaced "
+            f"the old discard semantics; these phrases are vestigial and contradict "
+            f"the new flow: {remaining}. See the cleanup step anchored at "
+            f"`step-cleanup-outdated-threads` for the hygiene path."
         )
 
-        # Step 1.3.1 must partition into active + outdated lists, not discard.
+        # Thread-collection step must partition into active + outdated lists, not discard.
         assert "outdated_threads" in content, (
-            "pr-check Step 1.3.1 must collect outdated threads into an "
+            "pr-check thread-collection step must collect outdated threads into an "
             "`outdated_threads` list (not discard via filter). Without the list, "
-            "Step 13.0 has no input to clean up."
+            "the cleanup step has no input to clean up."
         )
         # Old discard-only language must be gone.
         assert "Filter outdated threads:** Remove all threads" not in content, (
-            "pr-check Step 1.3.1 still uses the old discard-only language for "
-            "outdated threads. Replace with the partition-into-two-lists pattern."
+            "pr-check thread-collection step still uses the old discard-only language "
+            "for outdated threads. Replace with the partition-into-two-lists pattern."
         )
-        # Step 13.0 must exist and target outdated threads.
-        assert "Step 13.0:" in content, (
-            "pr-check is missing Step 13.0 (auto-resolve outdated threads). "
-            "Outdated threads block CodeRabbit approval and must be hygienically "
-            "auto-resolved regardless of REVIEW_MODE."
+        # Cleanup step must exist (located via stable anchor) and target outdated threads.
+        assert '<a id="step-cleanup-outdated-threads"></a>' in content, (
+            "pr-check is missing the outdated-thread cleanup step (semantic anchor "
+            "`step-cleanup-outdated-threads`). Outdated threads block CodeRabbit "
+            "approval and must be hygienically auto-resolved regardless of REVIEW_MODE."
         )
         # The auto-reply text must be present so runtime LLMs use a stable phrase
-        # (Step 13.0's idempotency check matches against this exact string).
+        # (the cleanup step's idempotency check matches against this exact string).
         assert "Outdated — this thread references code that was modified" in content, (
-            "pr-check Step 13.0 must specify the exact auto-reply text. The "
+            "pr-check cleanup step must specify the exact auto-reply text. The "
             "idempotency check (skip reply if it already exists) matches this "
             "string verbatim to handle re-runs after a crash."
         )
@@ -2076,7 +2109,10 @@ class TestWorkspaceValidationHardening:
         Without this note in the canonical protocol, contributors reading
         AGENTS.md assume `done` follows the same logic as build/review and may
         introduce drift. The note tells them where to look for the strict-mode
-        rule (done/SKILL.md Step 1.0.2).
+        rule (anchored in done/SKILL.md as `step-resolve-current-workspace`).
+
+        Anchor reference instead of verbatim step number keeps the test stable
+        across phase renumbering.
         """
         content = AGENTS_MD.read_text()
         protocol_start = content.index("### Protocol: Workspace Auto-Navigation")
@@ -2091,10 +2127,17 @@ class TestWorkspaceValidationHardening:
             "Stage-specific overrides must reference `/optimus-done` explicitly."
         )
         # Must point readers at the concrete location of the strict-mode rule so
-        # they don't have to grep blindly.
-        assert "Step 1.0.2" in section, (
-            "Stage-specific overrides must point at done/SKILL.md Step 1.0.2 for "
-            "the full strict-mode rule."
+        # they don't have to grep blindly. The location is identified by a stable
+        # semantic anchor (kebab-case, prefixed `step-`) embedded in done/SKILL.md.
+        assert "step-resolve-current-workspace" in section, (
+            "Stage-specific overrides must point at the `step-resolve-current-workspace` "
+            "anchor in done/SKILL.md for the full strict-mode rule."
+        )
+        # And the anchor MUST actually exist in done/SKILL.md.
+        done_skill = (REPO_ROOT / "done/skills/optimus-done/SKILL.md").read_text()
+        assert '<a id="step-resolve-current-workspace"></a>' in done_skill, (
+            "done/SKILL.md must define the `step-resolve-current-workspace` anchor "
+            "above the workspace-resolution step."
         )
 
 
@@ -2164,4 +2207,247 @@ class TestBashBlockHygiene:
         content = AGENTS_MD.read_text()
         assert "Bash code-block contract" in content, (
             "AGENTS.md must document the bash code-block contract under Editing Rules."
+        )
+
+
+class TestSemanticAnchorConvention:
+    """Stable semantic anchors (`<a id="step-..."></a>`) replace verbatim numeric
+    step IDs in cross-skill / cross-test references. This prevents test rigidity
+    when SKILL.md phases are renumbered."""
+
+    ANCHOR_PATTERN = re.compile(r'<a id="(step|phase)-([a-z0-9][a-z0-9-]*[a-z0-9])"></a>')
+
+    def test_anchors_are_kebab_lowercase(self):
+        violations = []
+        for path in REPO_ROOT.glob("*/skills/*/SKILL.md"):
+            content = path.read_text()
+            for match in re.finditer(r'<a id="([^"]+)"></a>', content):
+                anchor = match.group(1)
+                if not self.ANCHOR_PATTERN.fullmatch(f'<a id="{anchor}"></a>'):
+                    violations.append(
+                        f"{path.relative_to(REPO_ROOT)}: invalid anchor '{anchor}' "
+                        f"(must be 'step-<kebab>' or 'phase-<kebab>')"
+                    )
+        assert violations == [], "\n".join(violations)
+
+    def test_no_duplicate_anchors_within_a_skill(self):
+        violations = []
+        for path in REPO_ROOT.glob("*/skills/*/SKILL.md"):
+            content = path.read_text()
+            anchors = re.findall(r'<a id="([^"]+)"></a>', content)
+            seen = set()
+            for a in anchors:
+                if a in seen:
+                    violations.append(f"{path.relative_to(REPO_ROOT)}: duplicate anchor '{a}'")
+                seen.add(a)
+        assert violations == [], "\n".join(violations)
+
+
+class TestPhaseNumberingNoGaps:
+    """Step/Phase numbering inside a phase must be sequential — no gaps allowed
+    (e.g., Step 6.2 numbered 1,2,4,5 is a bug because the markdown-rendered
+    list shows 1,2,3,4 regardless, hiding the gap from readers).
+
+    Scans ordered-list items (`^\\d+\\. `) directly under Step/Phase headings and
+    asserts the integer prefixes form a sequential 1..K range. Skips ordered
+    lists inside fenced code blocks.
+    """
+
+    # Match an ordered-list item at the start of a line (no leading spaces, since
+    # nested lists belong to a sub-context — we only check the top-level list under
+    # a heading). Captures the integer prefix.
+    OL_ITEM_RE = re.compile(r"^(\d+)\.\s+\S")
+    # Sub-numbered items like `3.1.` or `1.0.2.` — these are "labels", not list
+    # entries. They appear inline with top-level lists in some skills. Treat them
+    # as neutral: don't capture them into the sequence, but also don't reset it.
+    SUB_NUM_RE = re.compile(r"^\d+\.\d")
+    HEADING_RE = re.compile(r"^#{1,6}\s+(Step|Phase)\s+([\d.]+)\b")
+
+    def _scan_skill(self, path):
+        """Yield (heading_label, expected_seq, actual_seq) for each numbered list
+        directly under a Step/Phase heading.
+
+        Implementation: collect ALL top-level (zero-indent) `^\\d+\\. ` items
+        between consecutive Step/Phase headings as one logical group. This is
+        intentionally tolerant of intervening narrative paragraphs, tables, and
+        bold-emphasis lines, because those forms commonly appear inside a single
+        instruction list in our SKILL.md style guide. Sub-numbered items
+        (`3.1. ...`) and content inside fenced code blocks are excluded. A
+        "group" is only checked when it has >= 2 items (single-item lists are
+        meaningless for sequence detection). If the same heading section
+        contains multiple discontiguous lists (e.g., separated by another
+        heading), each is checked independently.
+        """
+        content = path.read_text()
+        # Strip the inlined-protocols block — those steps belong to AGENTS.md and
+        # are not authored in the skill body.
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+
+        lines = body.splitlines()
+        in_fence = False
+        current_heading = None
+        current_seq = []
+
+        results = []
+
+        def flush():
+            if current_heading is not None and len(current_seq) >= 2:
+                expected = list(range(1, len(current_seq) + 1))
+                results.append((current_heading, expected, list(current_seq)))
+
+        for line in lines:
+            stripped = line.lstrip()
+            # Code-fence toggle (any ``` opens or closes a fence).
+            if stripped.startswith("```"):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+
+            heading = self.HEADING_RE.match(line)
+            if heading:
+                # New heading — flush any prior list, start a fresh group.
+                flush()
+                current_heading = f"{heading.group(1)} {heading.group(2)}"
+                current_seq = []
+                continue
+
+            # Sub-numbered "labels" (e.g., `3.1. **Active version guard:**`) are
+            # neutral — skip without touching state.
+            if self.SUB_NUM_RE.match(line):
+                continue
+
+            # Top-level (zero-indent) ordered-list item.
+            ol = self.OL_ITEM_RE.match(line)
+            if ol:
+                value = int(ol.group(1))
+                # If we encounter `1.` while a list is already in progress, that
+                # is the start of a NEW list — flush the prior one first. (Some
+                # Step/Phase sections legitimately contain multiple distinct
+                # numbered lists separated by prose.)
+                if value == 1 and current_seq:
+                    flush()
+                    current_seq = []
+                current_seq.append(value)
+                continue
+
+            # Everything else (prose, tables, indented continuations, blank lines)
+            # is ignored — we tolerate intervening content within a single
+            # heading's instruction list.
+
+        flush()
+        return results
+
+    def test_step_numbering_within_phase_is_sequential(self):
+        """For each numbered list directly under a Step/Phase heading, the leading
+        integer prefixes must be `range(1, K+1)` — no gaps, no duplicates, no
+        non-1 starts.
+        """
+        violations = []
+        scanned_count = 0
+        for path in sorted(REPO_ROOT.glob("*/skills/*/SKILL.md")):
+            for heading, expected, actual in self._scan_skill(path):
+                scanned_count += 1
+                if actual != expected:
+                    violations.append(
+                        f"{path.relative_to(REPO_ROOT)}: under '{heading}', "
+                        f"numbered list is {actual} (expected sequential {expected})"
+                    )
+        assert violations == [], (
+            "Numbering gaps found in numbered lists under Step/Phase headings:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+        # Sanity: the scanner must find a non-trivial number of lists, otherwise
+        # the test silently passes on any future SKILL.md edit that changes the
+        # heading style.
+        assert scanned_count >= 5, (
+            f"Phase-numbering scanner only found {scanned_count} numbered lists "
+            f"under Step/Phase headings — expected at least 5. The scanner "
+            f"regex may have drifted from the actual SKILL.md heading format."
+        )
+
+
+class TestAllDepsCancelledMessage:
+    """AGENTS.md Protocol: All-Dependencies-Cancelled Resolution must be referenced
+    by each stage agent that performs dependency checks."""
+
+    REQUIRED_SKILLS = ["plan", "build", "review", "done", "batch"]
+    REQUIRED_REF = "AGENTS.md Protocol: All-Dependencies-Cancelled Resolution"
+
+    def test_stage_skills_reference_all_deps_cancelled_protocol(self):
+        violations = []
+        for skill in self.REQUIRED_SKILLS:
+            path = REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md"
+            content = path.read_text()
+            # Strip inlined block
+            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            if self.REQUIRED_REF not in body:
+                violations.append(f"{path.relative_to(REPO_ROOT)}: missing reference")
+        assert violations == [], "\n".join(violations)
+
+
+class TestResolveFullValidation:
+    """resolve Step 4.2 must reference the full Protocol: optimus-tasks.md Validation
+    rather than enumerating a subset of checks inline."""
+
+    def test_resolve_uses_full_format_validation_protocol(self):
+        """Resolve Step 4.2 must reference Protocol: optimus-tasks.md Validation
+        (full 15-item check), not enumerate a subset of checks inline."""
+        path = REPO_ROOT / "resolve" / "skills" / "optimus-resolve" / "SKILL.md"
+        content = path.read_text()
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "AGENTS.md Protocol: optimus-tasks.md Validation" in body, (
+            "Resolve must reference the full validation protocol, not an inline subset."
+        )
+
+
+class TestStructuredAskUserScope:
+    """The structured AskUser template ([topic]/[option]) is required ONLY for
+    finding-decision AskUsers in cycle review skills. Documenting and enforcing
+    this scope prevents two failure modes:
+    1. Cycle review skills slipping a prose AskUser inside a finding loop.
+    2. Admin/stage skills being incorrectly flagged for using prose AskUser
+       in legitimate non-finding contexts.
+    """
+
+    # Only skills that present findings/decisions are required to use the
+    # structured template. `done` is a stage skill but presents prose
+    # confirmations (close confirmation, divergence warnings, PR-state prompts)
+    # — it is NOT a finding-loop skill, so the structured template is not
+    # required there. AGENTS.md's "Common Patterns" section formally lists
+    # plan, review, pr-check, coderabbit-review as cycle review skills, with
+    # deep-review and deep-doc-review as variants that follow the same finding
+    # presentation principles. build is included because it presents finding
+    # decisions during pre-dev artifact validation.
+    CYCLE_REVIEW_SKILLS = [
+        "plan", "build", "review",
+        "pr-check", "deep-review", "deep-doc-review", "coderabbit-review",
+    ]
+
+    def test_cycle_review_skills_use_structured_template_in_findings(self):
+        """Within Phase 5 / finding-decision sections of cycle review skills,
+        AskUser calls must include `[topic]` and `[option]` markers."""
+        # Scan each cycle review SKILL.md body, find AskUser calls (look for
+        # `AskUser` or `AskUserQuestion` mentions), and check that within
+        # finding-decision contexts (sections containing keywords like
+        # "Phase 5", "Phase 4", "for each finding", "AskUser per-finding"),
+        # the structured markers are present.
+        violations = []
+        for skill in self.CYCLE_REVIEW_SKILLS:
+            path = REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md"
+            content = path.read_text()
+            # Look for the canonical [topic]/[option] template presence anywhere
+            # in the body — every cycle review skill should have at least one.
+            if "[topic]" not in content or "[option]" not in content:
+                violations.append(
+                    f"{path.relative_to(REPO_ROOT)}: cycle review skill missing "
+                    f"structured AskUser template"
+                )
+        assert violations == [], "\n".join(violations)
+
+    def test_scope_clarification_documented_in_agents_md(self):
+        """AGENTS.md must document the structured AskUser scope explicitly."""
+        content = (REPO_ROOT / "AGENTS.md").read_text()
+        assert "Scope of the structured AskUser template" in content, (
+            "AGENTS.md must document the scope of the AskUser structured template."
         )

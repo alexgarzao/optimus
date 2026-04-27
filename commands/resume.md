@@ -153,6 +153,7 @@ IN_PROGRESS=$(printf '%s' "$STATE_JSON" | jq -r '
 - **If exactly 1 task** → use that ID as `TASK_ID` (no AskUser — resume does not change status, so there is no expanded-confirmation requirement).
 - **If N tasks** → present via `AskUser` with one option per task (`T-XXX — <title> (<status>, updated <relative-time>)`) plus **Cancel**. Do NOT offer Resume/Start fresh/Continue.
 
+<a id="step-read-task-metadata"></a>
 ### Step 2.3: Read Task Metadata (HARD BLOCK)
 
 Extract task metadata from optimus-tasks.md. The agent MUST execute the bash snippet literally;
@@ -362,6 +363,7 @@ fi
    fi
    ```
 
+<a id="step-reset-to-pendente-recovery"></a>
 3. **Worktree missing AND branch missing:**
    - **If status is `Pendente` or has no state.json entry:** present via `AskUser`:
      ```
@@ -431,6 +433,7 @@ fi
 
      - **Abort** — **STOP** with: `"Inconsistency not resolved. Investigate via /optimus:tasks edit T-$TASK_ID before retrying."`
 
+<a id="step-dry-run-short-circuit"></a>
 ### Step 3.4: Dry-Run Short-Circuit
 
 If the user invoked a dry-run (e.g., "dry-run resume T-XXX", "preview resume"):
@@ -438,8 +441,9 @@ If the user invoked a dry-run (e.g., "dry-run resume T-XXX", "preview resume"):
 - Perform Steps 3.1–3.2 normally (read-only)
 - Do NOT run `git worktree add`
 - Do NOT `cd`
-- Do NOT run the Step 3.3 Case 3 "Reset to Pendente, then /optimus:plan" recovery — if
-  reached, STOP with: `"dry-run: no recovery attempted. Re-run without dry-run to repair state."`
+- Do NOT run the "Reset to Pendente, then /optimus:plan" recovery (anchor
+  `step-reset-to-pendente-recovery`) — if reached, STOP with: `"dry-run: no recovery
+  attempted. Re-run without dry-run to repair state."`
 - Do NOT delegate to any other skill (no `Skill` tool invocation)
 - Proceed to Phase 4 and label the summary as **(dry-run, no changes applied)**
 - Skip Phase 5 entirely

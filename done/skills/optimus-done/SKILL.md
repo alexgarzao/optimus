@@ -61,6 +61,7 @@ Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
 **HARD BLOCK:** Find and validate optimus-tasks.md — see AGENTS.md Protocol: optimus-tasks.md Validation.
 
+<a id="step-resolve-current-workspace"></a>
 ### Step 1.0.2: Resolve Current Workspace (HARD BLOCK)
 
 Use the Workspace Auto-Navigation guardrails, but for `done` apply a stricter rule:
@@ -181,10 +182,11 @@ _optimus_set_title ""
    - If status is `Cancelado` → **STOP**: "Task T-XXX was cancelled. Cannot close a cancelled task."
 3. **Check dependencies (HARD BLOCK):** Read the Depends column for this task from optimus-tasks.md.
    - If Depends is `-` → proceed (no dependencies)
-   - For each dependency ID listed, read its status from state.json:
+   - For each dependency ID listed, read its status from state.json (collecting all statuses into a `DEP_STATUSES` array as you go):
      - If ALL dependencies have status `DONE` → proceed
      - If ANY dependency is NOT `DONE`:
        - Invoke notification hooks (event=`task-blocked`) — see AGENTS.md Protocol: Notification Hooks.
+       - **Check all-deps-cancelled** — see AGENTS.md Protocol: All-Dependencies-Cancelled Resolution.
        - If the dependency has status `Cancelado` → **STOP**: `"T-YYY was cancelled (Cancelado). Consider removing this dependency via /optimus-tasks."`
        - Otherwise → **STOP**: `"Task T-XXX depends on T-YYY (status: '<status>'). T-YYY must be DONE first."`
 3.1. **Active version guard:** Check active version guard — see AGENTS.md Protocol: Active Version Guard.
@@ -802,6 +804,47 @@ to the `Ativa` version. If not, present options before proceeding.
 6. **If "Cancel":** **STOP** — do not proceed with the stage
 
 Skills reference this as: "Check active version guard — see AGENTS.md Protocol: Active Version Guard."
+
+
+### Protocol: All-Dependencies-Cancelled Resolution
+
+**Referenced by:** plan, build, review, done, batch
+
+When all dependencies of a task are status `Cancelado`, emit a multi-option resolution
+message AFTER the per-dependency status check (i.e., after detecting that every dep is
+`Cancelado`, before the per-dep error-and-exit). The check supplements the per-dep loop;
+it does not replace it.
+
+**Variable contract:** the caller's dep-check loop populates an array `DEP_STATUSES`
+with one status string per dependency (the same status read from `state.json` for each
+dep ID listed in the Depends column). If the existing skill code uses a different
+variable name, adapt the recipe below to match — the contract is "an iterable of
+dependency status strings".
+
+**Bash recipe:**
+
+```bash
+# Assumes DEP_STATUSES is an array of dependency status strings,
+# already populated by the caller's dep-check loop.
+ALL_CANCELLED=true
+for dep_status in "${DEP_STATUSES[@]}"; do
+  if [ "$dep_status" != "Cancelado" ]; then
+    ALL_CANCELLED=false
+    break
+  fi
+done
+
+if [ "$ALL_CANCELLED" = true ] && [ "${#DEP_STATUSES[@]}" -gt 0 ]; then
+  echo "All dependencies of $TASK_ID are cancelled. To unblock:" >&2
+  echo "  (a) remove all dependencies: /optimus-tasks edit $TASK_ID" >&2
+  echo "  (b) replace with alternative task IDs: /optimus-tasks edit $TASK_ID" >&2
+  echo "  (c) cancel $TASK_ID: /optimus-tasks cancel $TASK_ID" >&2
+  exit 1
+fi
+# Per-dep message follows here (existing logic).
+```
+
+Skills reference this as: "Check all-deps-cancelled — see AGENTS.md Protocol: All-Dependencies-Cancelled Resolution."
 
 
 ### Protocol: Default Branch Refusal (HARD BLOCK)
