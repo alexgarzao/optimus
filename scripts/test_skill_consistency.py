@@ -3021,3 +3021,18 @@ class TestSpecSelfHeal:
                 f"{skill} SKILL.md body must not invoke ring:pre-dev-feature — "
                 "only plan self-heals; build/review delegate via TaskSpec Resolution protocol"
             )
+
+    def test_tasks_creation_offers_defer_option(self):
+        """tasks SKILL.md must offer 'Defer' as a first-class option at creation time
+        (not just a fallback when Ring is unavailable). This keeps the user in control
+        and is symmetric with plan's self-heal flow."""
+        tasks_md = (REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md").read_text()
+        assert "**Defer**" in tasks_md or "**Defer —" in tasks_md, (
+            "tasks SKILL.md must expose a 'Defer' option at task creation time "
+            "(sets TaskSpec to `-`, deferring spec generation to /optimus:plan)"
+        )
+        # Old fallback-only phrasing must be gone — Defer is now a top-level choice
+        assert "Create with empty TaskSpec" not in tasks_md, (
+            "tasks SKILL.md must not retain the old 'Create with empty TaskSpec' fallback "
+            "phrasing — replaced by the unconditional 'Defer' option"
+        )

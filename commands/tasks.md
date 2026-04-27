@@ -235,25 +235,41 @@ If the user specified dependencies:
 3. Check for circular dependencies: if T-NEW depends on T-X, and T-X (directly or transitively) would depend on T-NEW → reject
 4. If any dependency ID is invalid → ask the user to correct it
 
-### Step 2.3.1: Generate Ring Pre-Dev Spec
+### Step 2.3.1: Resolve TaskSpec for the New Task
 
-Delegate to Ring to generate the task spec:
+Ask the user how to handle the spec for this task. Always ask, even when Ring is available — the user may want to defer spec generation (e.g., creating multiple tasks in a row, batch-generating specs later).
 
-1. Invoke `ring:pre-dev-feature` via `Skill` tool, passing the task title and type
-2. Ring generates the spec file in `<TASKS_DIR>/tasks/`
-3. After Ring completes, capture the generated spec file path (relative to `TASKS_DIR`)
-4. Store as the `TaskSpec` value for this task
+Ask via `AskUser`:
 
-**If Ring pre-dev is not available** (skill not installed), ask via `AskUser`:
 ```
-Ring pre-dev skill is not available. How should I proceed?
+[topic] (1/1) How should I handle the spec for this task?
 ```
+
 Options:
+- **Generate via Ring** (default) — invoke `ring:pre-dev-feature` now
 - **Link existing spec** — search `<TASKS_DIR>/tasks/` for matching specs
-- **Create with empty TaskSpec** — set TaskSpec to `-`, link later
+- **Defer** — set TaskSpec to `-`. The next `/optimus:plan T-XXX` run will offer to generate it.
 
-**If "Link existing spec"**, search `<TASKS_DIR>/tasks/*.md` for task files, present
-matches based on keyword overlap with the task title, and let the user select one.
+**If "Generate via Ring":**
+
+1. Verify `ring:pre-dev-feature` is available. If unavailable → warn and fall back to "Link existing spec" automatically.
+2. Invoke `ring:pre-dev-feature` via `Skill` tool, passing the task title and type.
+3. Ring generates the spec file in `<TASKS_DIR>/tasks/`.
+4. After Ring completes, capture the generated spec file path (relative to `TASKS_DIR`).
+5. Store as the `TaskSpec` value for this task.
+
+**If "Link existing spec":**
+
+1. Search `<TASKS_DIR>/tasks/*.md` for task files.
+2. Rank candidates by keyword overlap with the task title; present the top 5 matches via `AskUser`.
+3. User picks one or types a custom relative path under `<TASKS_DIR>/tasks/`.
+4. Validate the chosen path exists and resolves inside `<TASKS_DIR>` (path-traversal protection — see AGENTS.md Protocol: TaskSpec Resolution).
+5. Store the chosen path as the `TaskSpec` value for this task.
+
+**If "Defer":**
+
+1. Set TaskSpec to `-`.
+2. Note to user: "Task created without spec. Run `/optimus:plan T-XXX` later to generate or link one."
 
 ### Step 2.4: Apply Create
 
