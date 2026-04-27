@@ -541,9 +541,10 @@ and that the entire `.optimus/` tree is gitignored (it is 100% operational/per-u
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports" "${MAIN_WORKTREE}/.optimus/logs"
-if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
-  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> .gitignore
+if ! grep -q '^# optimus-operational-files' "${MAIN_WORKTREE}/.gitignore" 2>/dev/null; then
+  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> "${MAIN_WORKTREE}/.gitignore"
 fi
 # Log retention (idempotent — fires once per init): age-based + count-cap prune.
 # Also duplicated in Protocol: Session State so stage agents (which call Session
@@ -644,6 +645,7 @@ fi
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 if [ -f "$STATE_FILE" ]; then
   # Validate JSON integrity before reading
@@ -670,6 +672,7 @@ A task with no entry in state.json is implicitly `Pendente`.
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 # Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
 STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 if [ ! -f "$STATE_FILE" ]; then
@@ -702,6 +705,7 @@ fi
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 if [ ! -f "$STATE_FILE" ]; then
   echo "state.json does not exist — task is already implicitly Pendente."
@@ -721,6 +725,7 @@ fi
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 # TASKS_FILE is resolved via Protocol: Resolve Tasks Git Scope (<tasksDir>/optimus:tasks.md).
 # Validate state.json if it exists

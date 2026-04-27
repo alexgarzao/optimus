@@ -1088,9 +1088,10 @@ and that the entire `.optimus/` tree is gitignored (it is 100% operational/per-u
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports" "${MAIN_WORKTREE}/.optimus/logs"
-if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
-  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> .gitignore
+if ! grep -q '^# optimus-operational-files' "${MAIN_WORKTREE}/.gitignore" 2>/dev/null; then
+  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> "${MAIN_WORKTREE}/.gitignore"
 fi
 # Log retention (idempotent — fires once per init): age-based + count-cap prune.
 # Also duplicated in Protocol: Session State so stage agents (which call Session
@@ -1119,6 +1120,74 @@ separately at `<tasksDir>/optimus:tasks.md` (and `<tasksDir>/tasks/`, `<tasksDir
 for Ring specs) — see the File Location section above.
 
 Skills reference this as: "Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory."
+
+
+### Protocol: Notification Hooks
+
+**Referenced by:** all stage agents (1-4), tasks
+
+After writing a status change to state.json, invoke notification hooks if present.
+
+**IMPORTANT — Capture timing:** Read the current status from state.json and store it as
+`OLD_STATUS` BEFORE writing the new status. The sequence is:
+1. Read current status (with guard for missing/empty state.json):
+   ```bash
+   if [ -f "$STATE_FILE" ]; then
+     OLD_STATUS=$(jq -r --arg id "$TASK_ID" '.[$id].status // "Pendente"' "$STATE_FILE" 2>/dev/null)
+     [ -z "$OLD_STATUS" ] && OLD_STATUS="Pendente"
+   else
+     OLD_STATUS="Pendente"
+   fi
+   ```
+2. Write new status to state.json
+3. Invoke hooks with `OLD_STATUS` and new status
+
+**IMPORTANT:** Always quote all arguments and sanitize user-derived values to prevent
+shell injection. Hook scripts MUST NOT pass their arguments to `eval` or shell
+interpretation — treat all arguments as untrusted data.
+
+```bash
+# Sanitize: allow only safe characters. Does NOT allow `.` or `/` (which would
+# enable path-traversal if hook args flow into file paths).
+_optimus_sanitize() { printf '%s' "$1" | tr -cd '[:alnum:][:space:]-_:'; }
+
+# Resolve HOOKS_FILE with an explicit if-elif-else (instead of the fragile
+# `test && echo || (test && echo)` pattern).
+if [ -f ./tasks-hooks.sh ]; then
+  HOOKS_FILE="./tasks-hooks.sh"
+elif [ -f ./docs/tasks-hooks.sh ]; then
+  HOOKS_FILE="./docs/tasks-hooks.sh"
+else
+  HOOKS_FILE=""
+fi
+
+if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+  "$HOOKS_FILE" "$(_optimus_sanitize "$event")" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$old_status")" "$(_optimus_sanitize "$new_status")" 2>/dev/null &
+fi
+```
+
+Events and their parameter signatures:
+
+| Event | Parameters | Description |
+|-------|-----------|-------------|
+| `status-change` | `event task_id old_status new_status` | Any status transition |
+| `task-done` | `event task_id old_status "DONE"` | Task marked as done |
+| `task-cancelled` | `event task_id old_status "Cancelado"` | Task cancelled |
+| `task-blocked` | `event task_id current_status current_status reason` | Dependency check failed (5 args — includes reason) |
+
+When a dependency check fails (provide defaults so hook payload is never malformed):
+```bash
+: "${dep_id:=unknown}"
+: "${dep_status:=unknown}"
+if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
+  "$HOOKS_FILE" "task-blocked" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "blocked by $dep_id ($dep_status)")" 2>/dev/null &
+fi
+```
+
+Hooks run in background (`&`) and their failure does NOT block the pipeline.
+If `tasks-hooks.sh` does not exist, hooks are silently skipped.
+
+Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol: Notification Hooks."
 
 
 ### Protocol: Resolve Tasks Git Scope
@@ -1303,6 +1372,7 @@ fi
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 if [ -f "$STATE_FILE" ]; then
   # Validate JSON integrity before reading
@@ -1329,6 +1399,7 @@ A task with no entry in state.json is implicitly `Pendente`.
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 # Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
 STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 if [ ! -f "$STATE_FILE" ]; then
@@ -1361,6 +1432,7 @@ fi
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 if [ ! -f "$STATE_FILE" ]; then
   echo "state.json does not exist — task is already implicitly Pendente."
@@ -1380,6 +1452,7 @@ fi
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 # TASKS_FILE is resolved via Protocol: Resolve Tasks Git Scope (<tasksDir>/optimus:tasks.md).
 # Validate state.json if it exists
