@@ -466,14 +466,14 @@ Show the new table order.
 
 1. Update the status to `Cancelado` in state.json — see AGENTS.md Protocol: State Management.
 2. Remove the `branch` field from the task's entry in state.json (if branch was deleted in Step 6.1).
-4. **Invoke notification hooks (if present)** — see AGENTS.md Protocol: Notification Hooks:
+3. **Invoke notification hooks (if present)** — see AGENTS.md Protocol: Notification Hooks:
    ```bash
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
      "$HOOKS_FILE" task-cancelled "$(_optimus_sanitize "T-XXX")" "$(_optimus_sanitize "<old status>")" "$(_optimus_sanitize "Cancelado")" 2>/dev/null &
    fi
    ```
-5. **Fire `task-blocked` hook for affected dependents:** For each non-cancelled task that
+4. **Fire `task-blocked` hook for affected dependents:** For each non-cancelled task that
    depends on T-XXX (identified in Step 6.1, item 3), fire the `task-blocked` hook:
    ```bash
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
@@ -618,8 +618,8 @@ code manually without using stage-2).
    - If target status is `Cancelado` → **STOP**: "Cannot advance to Cancelado. Use the cancel operation (`cancel T-XXX`) which handles cleanup."
 2. **Current status validation:**
    - If status is `DONE` or `Cancelado` → **STOP**: "Task T-XXX is in terminal status '<status>'. Use 'reopen' for DONE tasks."
-2. **Check dependencies (HARD BLOCK):** same rules as stage agents — all dependencies must be `DONE`.
-3. **Workspace check (warning):** If the target status is `Validando Spec` or later, verify
+3. **Check dependencies (HARD BLOCK):** same rules as stage agents — all dependencies must be `DONE`.
+4. **Workspace check (warning):** If the target status is `Validando Spec` or later, verify
    that a workspace exists for this task (stage-1 normally creates the workspace when
    setting `Validando Spec` — advancing manually bypasses this):
    - Read the `branch` field from state.json for the task (or search by task ID pattern)
@@ -632,7 +632,7 @@ code manually without using stage-2).
      - Advance anyway (I'll create the workspace manually)
      - Cancel (run /optimus:plan first to create the workspace)
      ```
-4. Warn via `AskUser`:
+5. Warn via `AskUser`:
    ```
    You are manually advancing task T-XXX status.
 
@@ -706,7 +706,7 @@ that significant rework is needed and the task should go back to implementation)
 ### Step 9.2: Apply Demotion
 
 1. Update the status in state.json to the target status — see AGENTS.md Protocol: State Management.
-3. **Invoke notification hooks (if present)** — see AGENTS.md Protocol: Notification Hooks:
+2. **Invoke notification hooks (if present)** — see AGENTS.md Protocol: Notification Hooks:
    ```bash
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then

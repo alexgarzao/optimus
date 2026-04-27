@@ -82,8 +82,9 @@ dependencies `DONE`. Prioritize by version (`Ativa` first), then priority, then 
 For each task:
 1. **Read status from state.json** — see AGENTS.md Protocol: State Management. Check that the task's status allows the requested starting stage
    - **Exclude tasks with status `Cancelado`** — cancelled tasks cannot be processed through the pipeline
-2. Check that all dependencies are `DONE` (read Depends from optimus-tasks.md, status for each dependency from state.json)
-3. If any task is blocked, report it and exclude from the batch
+2. Check that all dependencies are `DONE` (read Depends from optimus-tasks.md, status for each dependency from state.json — collect them into a `DEP_STATUSES` array)
+3. **Check all-deps-cancelled** — see AGENTS.md Protocol: All-Dependencies-Cancelled Resolution.
+4. If any task is blocked, report it and exclude from the batch
 
 **NOTE:** Eligibility is re-evaluated after each task completes (Step 2.4). Tasks that
 become eligible during batch execution (e.g., because a dependency was just completed)
@@ -645,6 +646,47 @@ mkdir -p .optimus/sessions .optimus/reports .optimus/logs
 **Idempotency:** the resolution is read-only against git metadata; safe to call multiple times in the same skill execution. Cache `MAIN_WORKTREE` in a local variable rather than re-running `git worktree list` for each path.
 
 Skills reference this as: "Resolve main worktree — see AGENTS.md Protocol: Resolve Main Worktree Path."
+
+
+### Protocol: All-Dependencies-Cancelled Resolution
+
+**Referenced by:** plan, build, review, done, batch
+
+When all dependencies of a task are status `Cancelado`, emit a multi-option resolution
+message AFTER the per-dependency status check (i.e., after detecting that every dep is
+`Cancelado`, before the per-dep error-and-exit). The check supplements the per-dep loop;
+it does not replace it.
+
+**Variable contract:** the caller's dep-check loop populates an array `DEP_STATUSES`
+with one status string per dependency (the same status read from `state.json` for each
+dep ID listed in the Depends column). If the existing skill code uses a different
+variable name, adapt the recipe below to match — the contract is "an iterable of
+dependency status strings".
+
+**Bash recipe:**
+
+```bash
+# Assumes DEP_STATUSES is an array of dependency status strings,
+# already populated by the caller's dep-check loop.
+ALL_CANCELLED=true
+for dep_status in "${DEP_STATUSES[@]}"; do
+  if [ "$dep_status" != "Cancelado" ]; then
+    ALL_CANCELLED=false
+    break
+  fi
+done
+
+if [ "$ALL_CANCELLED" = true ] && [ "${#DEP_STATUSES[@]}" -gt 0 ]; then
+  echo "All dependencies of $TASK_ID are cancelled. To unblock:" >&2
+  echo "  (a) remove all dependencies: /optimus-tasks edit $TASK_ID" >&2
+  echo "  (b) replace with alternative task IDs: /optimus-tasks edit $TASK_ID" >&2
+  echo "  (c) cancel $TASK_ID: /optimus-tasks cancel $TASK_ID" >&2
+  exit 1
+fi
+# Per-dep message follows here (existing logic).
+```
+
+Skills reference this as: "Check all-deps-cancelled — see AGENTS.md Protocol: All-Dependencies-Cancelled Resolution."
 
 
 ### Protocol: GitHub CLI Check (HARD BLOCK)
