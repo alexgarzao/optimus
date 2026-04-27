@@ -327,16 +327,54 @@ class TestTerminalTitleFormat:
         iTerm2 profiles with "Terminal may set window title" disabled silently
         discard OSC 0/1/2 title updates. AppleScript `set name of session` is
         the only channel that reliably mutates session.name in that scenario.
+
+        Phase 3 of issue #34 marks `Protocol: Terminal Identification` as
+        summarize-mode, so the AppleScript body no longer appears verbatim in
+        each consuming SKILL.md — only the `**Summary:**` stub does. When the
+        marker is present, we instead assert the inlined block carries the
+        stub pointer ("(summarized)" + the AGENTS.md back-ref); the full body
+        is single-sourced in AGENTS.md and the source-of-truth coverage is
+        provided by TestProtocolSummarizeMarker. Falls back to verbatim
+        assertion if Phase 4+ unmarks the protocol.
         """
+        agents_text = AGENTS_MD.read_text()
+        # Detect summarize-mode by inspecting AGENTS.md (single source of truth).
+        proto_idx = agents_text.find("### Protocol: Terminal Identification")
+        proto_window = (
+            agents_text[proto_idx: proto_idx + 600] if proto_idx >= 0 else ""
+        )
+        is_summarized = "<!-- inline-mode: summarize -->" in proto_window
         missing = []
         for skill in TITLE_SKILLS:
             content = _read_skill(skill)
-            if "osascript" not in content or "set name of s to" not in content:
-                missing.append(skill)
-        assert missing == [], (
-            "Skills missing AppleScript Layer A (osascript set name of s):\n"
-            + "\n".join(f"  - {v}" for v in missing)
-        )
+            if is_summarized:
+                # After Phase 3 summarize, expect the stub pointer in the
+                # inlined block instead of the full body.
+                if (
+                    "Protocol: Terminal Identification (summarized)"
+                    not in content
+                    or "AGENTS.md -> Protocol: Terminal Identification"
+                    not in content
+                ):
+                    missing.append(skill)
+            else:
+                # Pre-Phase-3 invariant: full helper body inlined verbatim.
+                if (
+                    "osascript" not in content
+                    or "set name of s to" not in content
+                ):
+                    missing.append(skill)
+        if is_summarized:
+            assert missing == [], (
+                "Skills missing summarized Terminal Identification stub "
+                "pointer (expected '(summarized)' + AGENTS.md back-ref):\n"
+                + "\n".join(f"  - {v}" for v in missing)
+            )
+        else:
+            assert missing == [], (
+                "Skills missing AppleScript Layer A (osascript set name of s):\n"
+                + "\n".join(f"  - {v}" for v in missing)
+            )
 
 # --- Finding presentation: Tell me more, IMMEDIATE RESPONSE RULE, anti-rationalization ---
 
@@ -3237,15 +3275,18 @@ class TestWorktreeLocationConvention:
         assert violations == [], "\n".join(violations)
 
 
-# --- Phases 1+2 of issue #34: top duplicated protocols carry the
+# --- Phases 1+2+3 of issue #34: top duplicated protocols carry the
 # `<!-- inline-mode: summarize -->` marker AND a `**Summary:**` subsection
 # in AGENTS.md. The inliner reads both at runtime; this test guards the
 # source-of-truth so the marker can't be dropped without flipping a test.
 
 class TestProtocolSummarizeMarker:
-    """Phases 1+2 of issue #34: Verify the top-duplicated protocols carry
+    """Phases 1+2+3 of issue #34: Verify the top-duplicated protocols carry
     the <!-- inline-mode: summarize --> marker in AGENTS.md."""
 
+    # Protocols carrying the standard `### Protocol: <name>` heading.
+    # File Location is a non-`Protocol:` H3 section; tested separately
+    # via test_summarize_marker_present_for_file_location_section.
     SUMMARIZED_PROTOCOLS = [
         # Phase 1:
         "Resolve Main Worktree Path",
@@ -3256,6 +3297,9 @@ class TestProtocolSummarizeMarker:
         "State Management",
         "Quiet Command Execution",
         "Convergence Loop (Full Roster Model — Opt-In, Gated)",
+        # Phase 3:
+        "Terminal Identification",
+        "Per-Droid Quality Checklists",
     ]
 
     def test_summarize_marker_present_for_top_protocols(self):
@@ -3292,3 +3336,30 @@ class TestProtocolSummarizeMarker:
                 f"{proto}: marker must come before **Summary:** "
                 f"(marker={marker_idx}, summary={summary_idx})"
             )
+
+    def test_summarize_marker_present_for_file_location_section(self):
+        """Phase 3: the `### File Location` section (a non-`Protocol:` H3)
+        also carries the summarize marker. We special-case it because the
+        inliner's heading-detection is structure-agnostic (any H2/H3 can
+        be summarized) but the SUMMARIZED_PROTOCOLS list is keyed by
+        `Protocol: <name>` form. This test guards the source-of-truth for
+        File Location specifically."""
+        content = AGENTS_MD.read_text()
+        heading = "### File Location"
+        idx = content.find(heading)
+        assert idx >= 0, f"{heading} missing from AGENTS.md"
+        window = content[idx: idx + 1200]
+        marker_idx = window.find("<!-- inline-mode: summarize -->")
+        summary_idx = window.find("**Summary:**")
+        assert marker_idx >= 0, (
+            "File Location: missing <!-- inline-mode: summarize --> marker "
+            "(must be placed immediately under the heading)"
+        )
+        assert summary_idx >= 0, (
+            "File Location: missing **Summary:** subsection "
+            "(must follow the summarize marker)"
+        )
+        assert marker_idx < summary_idx, (
+            "File Location: marker must come before **Summary:** "
+            f"(marker={marker_idx}, summary={summary_idx})"
+        )

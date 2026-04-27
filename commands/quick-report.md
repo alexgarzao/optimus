@@ -238,98 +238,13 @@ Examples: `[█░░] 1/3`, `[██░] 2/3`, `[███] 3/3`
 The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
-### File Location
+### File Location (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> File Location`.**
+
+**Summary:** Defines where Optimus operational files live: `${MAIN_WORKTREE}/.optimus/{state.json, stats.json, sessions/, reports/, logs/}` (gitignored, per-user) vs `<tasksDir>/optimus:tasks.md` + `<tasksDir>/{tasks,subtasks}/` (versioned, project-team-shared, propagated by git). Also: `${MAIN_WORKTREE}/.gitignore` (versioned), `${MAIN_WORKTREE}/.worktrees/` (gitignored linked-worktree dir). Critical contract: `.optimus/*` paths NEVER propagate across linked worktrees (gitignored = not shared by `git worktree add`); use `${MAIN_WORKTREE}/` prefix consistently. See full table in AGENTS.md.
 
 Optimus splits its files into two trees:
-
-**Operational tree (`.optimus/`) — 100% gitignored, per-user/per-machine:**
-
-```
-.optimus/
-├── config.json          # gitignored — optional overrides (tasksDir, defaultScope)
-├── state.json           # gitignored — operational state (status, branch per task)
-├── stats.json           # gitignored — stage execution counters per task
-├── sessions/            # gitignored — session state for crash recovery
-└── reports/             # gitignored — exported reports
-```
-
-**Planning tree (`<tasksDir>/`) — versioned, shared with the team:**
-
-```
-<tasksDir>/              # default: docs/pre-dev/
-├── optimus-tasks.md     # versioned — structural task data (NO status, NO branch)
-├── tasks/               # versioned — Ring pre-dev task specs (task_001.md, ...)
-└── subtasks/            # versioned — Ring pre-dev subtask specs (T-001/, ...)
-```
-
-**Configuration** (optional) is stored in `.optimus/config.json`:
-
-```json
-{
-  "tasksDir": "docs/pre-dev",
-  "defaultScope": "ativa"
-}
-```
-
-- **`tasksDir`** (optional): Path to the Ring pre-dev artifacts root. Default:
-  `docs/pre-dev`. The import and stage agents look for `optimus-tasks.md`, `tasks/`, and
-  `subtasks/` inside this directory. Can point to a path inside the project repo
-  (default case) OR to a path in a separate git repo (for teams that separate task
-  tracking from code).
-- **`defaultScope`** (optional): Default version scope used by `report` and `quick-report`
-  when the user does not specify one in the invocation. Valid values: `ativa`, `upcoming`,
-  `all`, or a specific version name (must exist in the Versions table). When set, skills
-  skip the "Which version scope do you want to see?" prompt. See Protocol: Default Scope
-  Resolution.
-
-Since `config.json` is gitignored, it exists ONLY when the user overrides a default.
-Projects using the defaults do not need a `config.json`.
-
-**Tasks file** is always at `<tasksDir>/optimus:tasks.md` (derived from `tasksDir`).
-
-**Operational state** is stored in `.optimus/state.json` (gitignored):
-
-```json
-{
-  "T-001": { "status": "DONE", "branch": "feat/t-001-setup-auth", "updated_at": "2025-01-15T10:30:00Z" },
-  "T-003": { "status": "Em Andamento", "branch": "feat/t-003-user-registration", "updated_at": "2025-01-16T14:00:00Z" }
-}
-```
-
-- Each key is a task ID. A task with no entry is `Pendente` (implicit default).
-- `status`: current pipeline stage (see Valid Status Values).
-- `branch`: the derived branch name, stored for quick reference (always re-derivable).
-- Stage agents read and write this file — never optimus-tasks.md — for status changes.
-- If state.json is lost, status can be reconstructed: task with a worktree = in progress,
-  without = Pendente. The agent asks the user to confirm before proceeding.
-
-**Stage execution stats** are stored in `.optimus/stats.json` (gitignored):
-
-```json
-{
-  "T-001": { "plan_runs": 2, "review_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_review": "2025-01-16T14:00:00Z" },
-  "T-002": { "plan_runs": 1, "review_runs": 0 }
-}
-```
-
-- Each key is a task ID. Values track how many times `plan` and `review` executed on the task.
-- A high `plan_runs` signals unclear or problematic specs. A high `review_runs` signals
-  complex review cycles or specification gaps.
-- The file is created on first use by `plan` or `review`. If missing, agents treat all
-  counters as 0.
-- `report` reads this file to display churn metrics.
-
-Agents resolve paths:
-1. **Read `.optimus/config.json`** for `tasksDir` if it exists. Fallback: `docs/pre-dev`.
-2. **Tasks file:** `${tasksDir}/optimus:tasks.md` (derived, not configurable separately).
-3. **If `<tasksDir>/optimus:tasks.md` not found:** **STOP** and suggest running `import` to create one.
-
-Everything inside `.optimus/` is gitignored. The planning tree (`<tasksDir>/optimus:tasks.md`,
-`<tasksDir>/tasks/`, `<tasksDir>/subtasks/`) is versioned (structural data shared with
-the team) — but the repo that versions it depends on `tasksDir`: if `tasksDir` is inside
-the project repo, it is committed alongside the code; if `tasksDir` is in a separate
-repo, it is committed there.
-
 
 ### Valid Status Values (stored in state.json)
 

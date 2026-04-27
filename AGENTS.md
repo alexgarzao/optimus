@@ -272,6 +272,10 @@ source of truth for task tracking.
 
 ### File Location
 
+<!-- inline-mode: summarize -->
+
+**Summary:** Defines where Optimus operational files live: `${MAIN_WORKTREE}/.optimus/{state.json, stats.json, sessions/, reports/, logs/}` (gitignored, per-user) vs `<tasksDir>/optimus-tasks.md` + `<tasksDir>/{tasks,subtasks}/` (versioned, project-team-shared, propagated by git). Also: `${MAIN_WORKTREE}/.gitignore` (versioned), `${MAIN_WORKTREE}/.worktrees/` (gitignored linked-worktree dir). Critical contract: `.optimus/*` paths NEVER propagate across linked worktrees (gitignored = not shared by `git worktree add`); use `${MAIN_WORKTREE}/` prefix consistently. See full table in AGENTS.md.
+
 Optimus splits its files into two trees:
 
 **Operational tree (`.optimus/`) — 100% gitignored, per-user/per-machine:**
@@ -1468,6 +1472,10 @@ rm -f "${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
 Skills reference this as: "Execute session state protocol from AGENTS.md using stage=`<name>`, status=`<status>`."
 
 ### Protocol: Terminal Identification
+
+<!-- inline-mode: summarize -->
+
+**Summary:** `_optimus_set_title <text>` updates the terminal title for iTerm2-on-macOS via AppleScript (`osascript ... set name of s to newName`) — the only channel that reliably mutates `session.name` in "divorced" iTerm2 sessions where OSC 0/1/2 and SetUserVar are ineffective. Used by stage skills to surface task context (e.g., `optimus: PLAN T-007 — User auth`) so users running multiple Optimus sessions can identify them at a glance. The function is auto-inlined into 6 SKILLs by `inline-protocols.py` (do NOT manually paste the body in SKILL.md — F12f rule). Title is informational; failure to set it is non-fatal (silent no-op outside iTerm2/macOS, in Docker/CI without TTY, or when osascript denied). See full bash function in AGENTS.md.
 
 **Referenced by:** all stage agents (1-4), batch
 
@@ -3265,6 +3273,10 @@ section:
 5. Search the codebase for how similar problems were solved — flag inconsistencies
 
 ### Protocol: Per-Droid Quality Checklists
+
+<!-- inline-mode: summarize -->
+
+**Summary:** Per-droid quality dimensions that review/pr-check/deep-review/coderabbit-review/plan/build skills MUST include in their agent prompts beyond the core review domain. Examples: code-reviewer adds resilience/concurrency/cognitive-complexity/error-handling checks; security-reviewer adds PII/error-response-leakage/rate-limiting/secrets; test-reviewer adds effectiveness/false-positive-risk/spec-traceability; nil-safety adds channel/map/slice safety; consequences adds backward-compat/migration-path/event-contract; dead-code adds zombie test infrastructure and stale feature flags; qa-analyst adds testability/operational-readiness; frontend adds UX states/accessibility/i18n; backend adds graceful-shutdown/context-propagation/structured-logging. Skills reference this when building specialist droid prompts so agents review uniformly. See full per-droid lists in AGENTS.md.
 
 **Referenced by:** review, pr-check, deep-review, coderabbit-review, plan, build
 

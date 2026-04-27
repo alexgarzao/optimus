@@ -512,98 +512,13 @@ to plan/build/review/done — see the inlined Protocol: Dry-Run Mode block below
 The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
-### File Location
+### File Location (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> File Location`.**
+
+**Summary:** Defines where Optimus operational files live: `${MAIN_WORKTREE}/.optimus/{state.json, stats.json, sessions/, reports/, logs/}` (gitignored, per-user) vs `<tasksDir>/optimus:tasks.md` + `<tasksDir>/{tasks,subtasks}/` (versioned, project-team-shared, propagated by git). Also: `${MAIN_WORKTREE}/.gitignore` (versioned), `${MAIN_WORKTREE}/.worktrees/` (gitignored linked-worktree dir). Critical contract: `.optimus/*` paths NEVER propagate across linked worktrees (gitignored = not shared by `git worktree add`); use `${MAIN_WORKTREE}/` prefix consistently. See full table in AGENTS.md.
 
 Optimus splits its files into two trees:
-
-**Operational tree (`.optimus/`) — 100% gitignored, per-user/per-machine:**
-
-```
-.optimus/
-├── config.json          # gitignored — optional overrides (tasksDir, defaultScope)
-├── state.json           # gitignored — operational state (status, branch per task)
-├── stats.json           # gitignored — stage execution counters per task
-├── sessions/            # gitignored — session state for crash recovery
-└── reports/             # gitignored — exported reports
-```
-
-**Planning tree (`<tasksDir>/`) — versioned, shared with the team:**
-
-```
-<tasksDir>/              # default: docs/pre-dev/
-├── optimus-tasks.md     # versioned — structural task data (NO status, NO branch)
-├── tasks/               # versioned — Ring pre-dev task specs (task_001.md, ...)
-└── subtasks/            # versioned — Ring pre-dev subtask specs (T-001/, ...)
-```
-
-**Configuration** (optional) is stored in `.optimus/config.json`:
-
-```json
-{
-  "tasksDir": "docs/pre-dev",
-  "defaultScope": "ativa"
-}
-```
-
-- **`tasksDir`** (optional): Path to the Ring pre-dev artifacts root. Default:
-  `docs/pre-dev`. The import and stage agents look for `optimus-tasks.md`, `tasks/`, and
-  `subtasks/` inside this directory. Can point to a path inside the project repo
-  (default case) OR to a path in a separate git repo (for teams that separate task
-  tracking from code).
-- **`defaultScope`** (optional): Default version scope used by `report` and `quick-report`
-  when the user does not specify one in the invocation. Valid values: `ativa`, `upcoming`,
-  `all`, or a specific version name (must exist in the Versions table). When set, skills
-  skip the "Which version scope do you want to see?" prompt. See Protocol: Default Scope
-  Resolution.
-
-Since `config.json` is gitignored, it exists ONLY when the user overrides a default.
-Projects using the defaults do not need a `config.json`.
-
-**Tasks file** is always at `<tasksDir>/optimus:tasks.md` (derived from `tasksDir`).
-
-**Operational state** is stored in `.optimus/state.json` (gitignored):
-
-```json
-{
-  "T-001": { "status": "DONE", "branch": "feat/t-001-setup-auth", "updated_at": "2025-01-15T10:30:00Z" },
-  "T-003": { "status": "Em Andamento", "branch": "feat/t-003-user-registration", "updated_at": "2025-01-16T14:00:00Z" }
-}
-```
-
-- Each key is a task ID. A task with no entry is `Pendente` (implicit default).
-- `status`: current pipeline stage (see Valid Status Values).
-- `branch`: the derived branch name, stored for quick reference (always re-derivable).
-- Stage agents read and write this file — never optimus-tasks.md — for status changes.
-- If state.json is lost, status can be reconstructed: task with a worktree = in progress,
-  without = Pendente. The agent asks the user to confirm before proceeding.
-
-**Stage execution stats** are stored in `.optimus/stats.json` (gitignored):
-
-```json
-{
-  "T-001": { "plan_runs": 2, "review_runs": 3, "last_plan": "2025-01-15T10:30:00Z", "last_review": "2025-01-16T14:00:00Z" },
-  "T-002": { "plan_runs": 1, "review_runs": 0 }
-}
-```
-
-- Each key is a task ID. Values track how many times `plan` and `review` executed on the task.
-- A high `plan_runs` signals unclear or problematic specs. A high `review_runs` signals
-  complex review cycles or specification gaps.
-- The file is created on first use by `plan` or `review`. If missing, agents treat all
-  counters as 0.
-- `report` reads this file to display churn metrics.
-
-Agents resolve paths:
-1. **Read `.optimus/config.json`** for `tasksDir` if it exists. Fallback: `docs/pre-dev`.
-2. **Tasks file:** `${tasksDir}/optimus:tasks.md` (derived, not configurable separately).
-3. **If `<tasksDir>/optimus:tasks.md` not found:** **STOP** and suggest running `import` to create one.
-
-Everything inside `.optimus/` is gitignored. The planning tree (`<tasksDir>/optimus:tasks.md`,
-`<tasksDir>/tasks/`, `<tasksDir>/subtasks/`) is versioned (structural data shared with
-the team) — but the repo that versions it depends on `tasksDir`: if `tasksDir` is inside
-the project repo, it is committed alongside the code; if `tasksDir` is in a separate
-repo, it is committed there.
-
 
 ### Valid Status Values (stored in state.json)
 
@@ -1142,94 +1057,11 @@ If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
 Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Title Validation."
 
 
-### Protocol: Per-Droid Quality Checklists
+### Protocol: Per-Droid Quality Checklists (summarized)
 
-**Referenced by:** review, pr-check, deep-review, coderabbit-review, plan, build
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Per-Droid Quality Checklists`.**
 
-Each droid type has specific dimensions it MUST verify beyond its core domain. Skills
-that dispatch review droids MUST include the applicable checklists in agent prompts.
-
-**Code Quality agent** (`ring-default-code-reviewer`) must additionally verify:
-- Resilience: external calls have timeout, retry with backoff, circuit breaker where appropriate
-- Resource lifecycle: all opened connections/handles are closed (defer, cleanup, graceful shutdown)
-- Concurrency: shared state has proper synchronization, no goroutine leaks, no deadlock risk
-- Performance: no N+1 queries, no unbounded queries, indexes exist for query patterns, no hot-path allocations
-- Configuration: no hardcoded values that should be environment-configurable, safe defaults
-- Cognitive complexity: functions with >3 nesting levels or >30 lines flagged for decomposition
-- Error handling: errors wrapped with context, consistent with codebase error patterns
-- Domain purity: no infrastructure concerns in domain layer, dependency direction correct
-- Resource leaks: DB connections, HTTP clients, file handles, channels properly closed
-
-**Business Logic agent** (`ring-default-business-logic-reviewer`) must additionally verify:
-- Spec traceability: each code path maps to a spec requirement (flag orphan logic with no spec backing)
-- Data integrity: transaction boundaries correct, partial writes impossible, rollback defined
-- Backward compatibility: existing consumers/contracts not broken by this change
-- API semantics: correct HTTP status codes, idempotent operations marked as such, pagination consistent
-- Domain edge cases: what happens with zero, negative, maximum, duplicate, concurrent values?
-- Business rule completeness: all business rules from spec have implementation AND test
-
-**Security agent** (`ring-default-security-reviewer`) must additionally verify:
-- Data privacy: PII not logged, sensitive fields masked in responses, LGPD/GDPR compliance
-- Error responses: no internal details leaked (stack traces, DB schemas, internal paths, SQL)
-- Rate limiting: high-throughput or public endpoints have rate limiting consideration
-- Input validation: happens at the right layer (not just client-side), consistent with codebase
-- Secrets: no hardcoded credentials, tokens, API keys in code or config files
-- Auth propagation: authentication context properly propagated through the call chain
-
-**Test Quality agent** (`ring-default-ring-test-reviewer`) must additionally verify:
-- Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag tests where assertions only check mock.Called() without verifying output/state
-- False positive risk: could these tests pass while the feature is actually broken?
-- Test coupling: are tests coupled to implementation details (private fields, internal struct layout)?
-- Spec traceability: for each acceptance criterion in the task spec, is there a test?
-- Integration tests: do they use real dependencies (testcontainers/docker) or just mocks?
-- Test isolation: can tests run in parallel without interference? Shared state between tests?
-- Error scenario completeness: each error return path has a corresponding test?
-- Boundary values: min, max, zero, empty, nil, negative tested where applicable?
-
-**Nil/Null Safety agent** (`ring-default-ring-nil-safety-reviewer`) must additionally verify:
-- Resource cleanup: nil checks before Close/Release calls
-- Channel safety: sends to nil/closed channels
-- Map safety: reads/writes to nil maps
-- Slice safety: index bounds after filtering/transforming
-
-**Ripple Effects agent** (`ring-default-ring-consequences-reviewer`) must additionally verify:
-- Values duplicated between files that should be a shared constant
-- Imports follow the project's layer architecture (no circular deps, no backwards imports)
-- New code follows the same patterns as existing code in the same domain
-- Backward compatibility: does this change break any existing consumer or API contract?
-- Configuration drift: new defaults reasonable? existing config overrides still valid?
-- Migration path: if breaking change, is migration strategy documented?
-- Shared state: new global/package-level state that could cause issues across modules?
-- Event/message contracts: changes to event payloads affect downstream consumers?
-
-**Dead Code agent** (`ring-default-ring-dead-code-reviewer`) must additionally verify:
-- Dead code: unused imports, unreachable branches, commented-out code
-- Zombie test infrastructure: test helpers, fixtures, mocks no longer used by any test
-- Feature flags: stale feature flag checks for flags that were already fully rolled out
-- Deprecated paths: code paths behind deprecated API versions with no remaining consumers
-
-**Spec Compliance / QA agent** (`ring-dev-team-qa-analyst`) must additionally verify:
-- Testability assessment: is the code structured for testability? (dependency injection, interfaces)
-- Operational readiness: can ops monitor, debug, and rollback this in production?
-- Acceptance criteria coverage: each AC has both success AND failure test scenarios
-- Cross-cutting scenarios: concurrent modifications, large datasets, special characters, timezone handling
-
-**Frontend specialist** (`ring-dev-team-frontend-engineer`) must additionally verify:
-- UX completeness: loading states, empty states, error states all handled
-- Accessibility: keyboard navigation, screen reader support, ARIA labels, color contrast
-- Responsive behavior: works across viewport sizes (mobile, tablet, desktop)
-- i18n readiness: no hardcoded user-facing strings, date/number formatting locale-aware
-- Performance: no unnecessary re-renders, large lists virtualized, images optimized
-
-**Backend specialist** (`ring-dev-team-backend-engineer-golang` or `ring-dev-team-backend-engineer-typescript`) must additionally verify:
-- Language idiomaticity: follows official style guide conventions
-- Graceful shutdown: SIGTERM handling, in-flight request draining
-- Connection pool sizing: appropriate for expected load
-- Context propagation: request context passed through the full call chain
-- Structured logging: logs include correlation IDs, operation names, durations
-
-Skills reference this as: "Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists."
-
+**Summary:** Per-droid quality dimensions that review/pr-check/deep-review/coderabbit-review/plan/build skills MUST include in their agent prompts beyond the core review domain. Examples: code-reviewer adds resilience/concurrency/cognitive-complexity/error-handling checks; security-reviewer adds PII/error-response-leakage/rate-limiting/secrets; test-reviewer adds effectiveness/false-positive-risk/spec-traceability; nil-safety adds channel/map/slice safety; consequences adds backward-compat/migration-path/event-contract; dead-code adds zombie test infrastructure and stale feature flags; qa-analyst adds testability/operational-readiness; frontend adds UX states/accessibility/i18n; backend adds graceful-shutdown/context-propagation/structured-logging. Skills reference this when building specialist droid prompts so agents review uniformly. See full per-droid lists in AGENTS.md.
 
 ### Protocol: Project Rules Discovery
 
@@ -1452,100 +1284,11 @@ Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
 Skills reference this as: "Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution."
 
 
-### Protocol: Terminal Identification
+### Protocol: Terminal Identification (summarized)
 
-**Referenced by:** all stage agents (1-4), batch
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Terminal Identification`.**
 
-After the task ID is identified and confirmed, set the terminal title to show the
-current stage and task. This allows users running multiple agents in parallel terminals
-to identify each terminal at a glance.
-
-**Set title (after task ID is known):**
-
-```bash
-_optimus_set_title() {
-  # iTerm2 AppleScript title updater. Empirical testing showed that Optimus
-  # tasks always run in "divorced" iTerm2 sessions where the profile's
-  # autoNameFormat is locked to a literal — OSC 0/1/2 and OSC 1337
-  # SetUserVar are both ineffective in that state, so AppleScript's
-  # `set name of s` is the only channel that actually mutates session.name.
-  # The Execute tool runs bash without a controlling TTY, so /dev/tty fails
-  # with ENODEV; we resolve the parent process's TTY via ps instead. Walk
-  # up to 4 ancestors in case of nested shells. First run triggers a macOS
-  # TCC prompt ("droid wants to control iTerm"); approving enables this
-  # permanently. Silent no-op outside macOS/iTerm2 or when osascript is
-  # unavailable — non-iTerm2 / non-macOS users get no title update.
-  local title="$1"
-  local pid="$PPID" tty=""
-  for _ in 1 2 3 4; do
-    [ -z "$pid" ] || [ "$pid" = "1" ] && break
-    tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
-    case "$tty" in
-      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') ;;
-      *) break ;;
-    esac
-  done
-  if { [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; } \
-     && command -v osascript >/dev/null 2>&1 && [ -n "$tty" ] \
-     && [ "$tty" != "?" ] && [ "$tty" != "??" ]; then
-    osascript \
-      -e 'on run argv' \
-      -e '  set targetTty to "/dev/" & item 1 of argv' \
-      -e '  set newName to item 2 of argv' \
-      -e '  tell application "iTerm2"' \
-      -e '    repeat with w in windows' \
-      -e '      repeat with t in tabs of w' \
-      -e '        repeat with s in sessions of t' \
-      -e '          if (tty of s as string) is targetTty then' \
-      -e '            try' \
-      -e '              set name of s to newName' \
-      -e '            end try' \
-      -e '          end if' \
-      -e '        end repeat' \
-      -e '      end repeat' \
-      -e '    end repeat' \
-      -e '  end tell' \
-      -e 'end run' \
-      -- "$tty" "$title" >/dev/null 2>&1 || true
-  fi
-}
-_optimus_set_title "optimus: <STAGE> $TASK_ID — $TASK_TITLE"
-```
-
-Example output in terminal tab: `optimus: REVIEW T-003 — User Auth JWT`
-
-**Why the parent-process TTY:** The Execute tool runs `bash -c` without a controlling
-terminal, so `/dev/tty` returns `ENODEV` ("Device not configured"). The resolver above
-asks `ps` for the parent's controlling TTY device path and matches it against iTerm2's
-session list via AppleScript — that device is connected to the user's real iTerm2
-session. If no ancestor has a TTY (Docker/CI) or osascript is unavailable, the
-function silently no-ops.
-
-**Restore title (at stage completion or exit):**
-
-```bash
-_optimus_set_title ""
-```
-
-**NOTE:** This helper is iTerm2-on-macOS only. Optimus tasks always run in
-"divorced" iTerm2 sessions, where AppleScript's `set name of s` is the only
-channel that reliably mutates `session.name`. Non-iTerm2 / non-macOS users
-will not see a title update.
-
-**Troubleshooting iTerm2 (if the title still doesn't update):**
-
-1. **Window > Edit Tab Title** must be empty. A manually-set tab title is
-   sticky on the tab label and overrides the session name visually, even
-   when `session.name` is updated correctly underneath.
-2. The first run on macOS triggers a TCC prompt ("`droid` wants to control
-   `iTerm`"). Approve it to enable the helper. Denying makes the helper a
-   silent no-op.
-3. The helper requires the parent process to have a controlling TTY. Inside
-   Docker/CI without a TTY, no ancestor will resolve and the helper will
-   silently no-op.
-
-Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Terminal Identification."
-
+**Summary:** `_optimus_set_title <text>` updates the terminal title for iTerm2-on-macOS via AppleScript (`osascript ... set name of s to newName`) — the only channel that reliably mutates `session.name` in "divorced" iTerm2 sessions where OSC 0/1/2 and SetUserVar are ineffective. Used by stage skills to surface task context (e.g., `optimus: PLAN T-007 — User auth`) so users running multiple Optimus sessions can identify them at a glance. The function is auto-inlined into 6 SKILLs by `inline-protocols.py` (do NOT manually paste the body in SKILL.md — F12f rule). Title is informational; failure to set it is non-fatal (silent no-op outside iTerm2/macOS, in Docker/CI without TTY, or when osascript denied). See full bash function in AGENTS.md.
 
 ### Protocol: Workspace Auto-Navigation (HARD BLOCK)
 
