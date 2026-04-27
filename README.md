@@ -141,6 +141,21 @@ that the script was run before commit.
 
 Future improvements are tracked in `docs/future-improvements.md`.
 
+## Worktree layout
+
+Optimus creates linked git worktrees under `<repo>/.worktrees/<branch-name>/` (gitignored). For project setup, configure your editor to exclude `.worktrees/` from search and indexing:
+
+- **VS Code** (`.vscode/settings.json`):
+  ```json
+  {
+    "search.exclude": { "**/.worktrees": true },
+    "files.watcherExclude": { "**/.worktrees/**": true }
+  }
+  ```
+- **IntelliJ:** mark `.worktrees/` as Excluded in Project Structure.
+
+For the full convention (rationale, backwards compatibility, branch-name handling), see [AGENTS.md Protocol: Worktree Location](AGENTS.md#protocol-worktree-location).
+
 ## Logs
 
 Verification skills (`build`, `review`, `pr-check`, `coderabbit-review`, `deep-review`)
