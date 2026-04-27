@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-spec = importlib.util.spec_from_file_location(
-    "inline_protocols",
-    Path(__file__).parent / "inline-protocols.py",
-)
+_IP_PATH = Path(__file__).parent / "inline-protocols.py"
+spec = importlib.util.spec_from_file_location("inline_protocols", _IP_PATH)
+assert spec is not None, f"Cannot load spec for {_IP_PATH}"
+assert spec.loader is not None, f"Spec loader is None for {_IP_PATH}"
 ip = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ip)
 
@@ -348,6 +348,9 @@ class TestIdempotency:
         assert "State mgmt content" in content
 
     def test_handles_read_error_gracefully(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+        # F9-3: Use monkeypatch instead of chmod 0o000, which is bypassed when
+        # tests run as root (e.g., in CI containers). Forcing PermissionError
+        # via Path.read_text is deterministic across user contexts.
         agents = tmp_path / "AGENTS.md"
         agents.write_text("## Protocol: X\nContent\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
@@ -357,15 +360,20 @@ class TestIdempotency:
         skill_dir.mkdir(parents=True)
         skill = skill_dir / "SKILL.md"
         skill.write_text("see AGENTS.md Protocol: X.\n")
-        skill.chmod(0o000)
 
-        try:
-            ip.inline_protocols()
-            captured = capsys.readouterr()
-            output = captured.out + captured.err
-            assert "ERROR" in output and "skipping" in output.lower()
-        finally:
-            skill.chmod(0o644)
+        original_read_text = Path.read_text
+
+        def fake_read_text(self, *args, **kwargs):
+            if self.name == "SKILL.md":
+                raise PermissionError("simulated permission denied")
+            return original_read_text(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", fake_read_text)
+
+        ip.inline_protocols()
+        captured = capsys.readouterr()
+        output = captured.out + captured.err
+        assert "ERROR" in output and "skipping" in output.lower()
 
     def test_processes_multiple_skills(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         agents = tmp_path / "AGENTS.md"
@@ -439,6 +447,9 @@ class TestCriticalPaths:
         assert "Protocol: Push Commits" in refs
 
     def test_handles_write_error_gracefully(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+        # F9-3: Use monkeypatch instead of chmod 0o555 on the parent dir, which
+        # is bypassed when tests run as root. Forcing OSError on Path.write_text
+        # for the atomic-write tmp sibling is deterministic across user contexts.
         agents = tmp_path / "AGENTS.md"
         agents.write_text("## Protocol: Y\nContent Y\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
@@ -448,19 +459,23 @@ class TestCriticalPaths:
         skill_dir.mkdir(parents=True)
         skill = skill_dir / "SKILL.md"
         skill.write_text("see AGENTS.md Protocol: Y.\n")
-        # F3.3c: atomic write uses tmp.replace(), so file permissions on
-        # the target don't block the write — the parent dir must be
-        # write-protected to force OSError. Strip write+execute from the
-        # parent so creating the .tmp sibling fails.
-        skill_dir.chmod(0o555)
 
-        try:
-            ip.inline_protocols()
-            captured = capsys.readouterr()
-            output = captured.out + captured.err
-            assert "ERROR" in output or "Failed to write" in output
-        finally:
-            skill_dir.chmod(0o755)
+        original_write_text = Path.write_text
+
+        def fake_write_text(self, *args, **kwargs):
+            # F3.3c: atomic write writes to a `<name>.tmp` sibling first, then
+            # uses tmp.replace(skill_path). Trip on the .tmp sibling so the
+            # OSError fires inside the production atomic-write try block.
+            if self.name == "SKILL.md.tmp":
+                raise OSError("simulated write failure")
+            return original_write_text(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "write_text", fake_write_text)
+
+        ip.inline_protocols()
+        captured = capsys.readouterr()
+        output = captured.out + captured.err
+        assert "ERROR" in output or "Failed to write" in output
 
 
 # --- F4: Edge case tests ---

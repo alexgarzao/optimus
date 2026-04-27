@@ -1,8 +1,9 @@
 {
   "name": "report",
-  "description": "Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Read-only.",
+  "description": "Task status dashboard. Shows progress, active/blocked/ready tasks, dependency graph, and parallelization opportunities. Mostly read-only — opt-in writes only to .optimus/config.json defaultScope.",
   "version": "2.0.0",
   "author": {
-    "name": "Alex Garzao"
+    "name": "Alex Garzão",
+    "email": "alexgarzao@gmail.com"
   }
 }

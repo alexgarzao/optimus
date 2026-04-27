@@ -1,8 +1,9 @@
 {
   "name": "quick-report",
-  "description": "Compact daily status dashboard. Shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Read-only.",
+  "description": "Compact daily status dashboard. Shows version progress, active tasks with current status, ready-to-start, and blocked tasks. Mostly read-only — opt-in writes only to .optimus/config.json defaultScope.",
   "version": "2.0.0",
   "author": {
-    "name": "Alex Garzao"
+    "name": "Alex Garzão",
+    "email": "alexgarzao@gmail.com"
   }
 }

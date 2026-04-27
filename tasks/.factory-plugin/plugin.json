@@ -3,6 +3,7 @@
   "description": "Administrative: Create, edit, remove, reorder, cancel, and reopen tasks. Manage versions and move tasks between versions. Runs on any branch.",
   "version": "2.0.0",
   "author": {
-    "name": "Alex Garzao"
+    "name": "Alex Garzão",
+    "email": "alexgarzao@gmail.com"
   }
 }

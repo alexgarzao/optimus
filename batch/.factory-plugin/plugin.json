@@ -3,6 +3,7 @@
   "description": "Pipeline orchestrator: chains stages 1-4 for one or more tasks with user checkpoints between stages.",
   "version": "2.0.0",
   "author": {
-    "name": "Alex Garzao"
+    "name": "Alex Garzão",
+    "email": "alexgarzao@gmail.com"
   }
 }
