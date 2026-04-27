@@ -527,8 +527,19 @@ _sync_claude_code() {
 
   local added=0 updated=0 removed=0 failed=0
 
-  # Install or update the single `optimus` plugin. Each call has one retry on
+  # Install or refresh the single `optimus` plugin. Each call has one retry on
   # transient failure (no parallelism — Claude's plugin daemon owns the cache).
+  #
+  # NOTE: When the plugin is already installed we uninstall + reinstall instead
+  # of `claude plugin update`. Reason: `claude plugin update` is a no-op when
+  # the plugin's `version` field in marketplace.json hasn't changed, even if
+  # the underlying source files in the repo have. Since Optimus ships SKILL
+  # changes without bumping the marketplace version on every PR, `update` would
+  # leave users on stale cached SKILL.md content (e.g. the cache at
+  # `~/.claude/plugins/cache/optimus/optimus/2.0.0/...` would not refresh).
+  # Uninstall + install forces a fresh fetch from the marketplace cache,
+  # guaranteeing the user runs the latest committed prose. Cost: one extra
+  # round-trip to the plugin daemon (~1s); acceptable.
   if [ "$single_installed" = false ]; then
     if _claude_retry_once "install optimus@${marketplace}" \
         _claude_quiet plugin install "optimus@${marketplace}" --scope user; then
@@ -539,12 +550,17 @@ _sync_claude_code() {
       failed=$((failed + 1))
     fi
   else
-    if _claude_retry_once "update optimus@${marketplace}" \
-        _claude_quiet plugin update "optimus@${marketplace}"; then
-      echo "  * optimus ... OK"
+    # Force-refresh path: uninstall (best-effort) then reinstall. If the
+    # uninstall fails for a transient reason, the reinstall path will still
+    # try to install over whatever state remains — `claude plugin install`
+    # handles "already installed" gracefully when scopes match.
+    _claude_quiet plugin uninstall "optimus@${marketplace}" || true
+    if _claude_retry_once "reinstall optimus@${marketplace}" \
+        _claude_quiet plugin install "optimus@${marketplace}" --scope user; then
+      echo "  * optimus ... OK (refreshed)"
       updated=$((updated + 1))
     else
-      echo "  * optimus ... FAIL"
+      echo "  * optimus ... FAIL (reinstall)"
       failed=$((failed + 1))
     fi
   fi
