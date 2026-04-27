@@ -94,6 +94,7 @@ rationalize these away.
 
 - **Canonical protocol reference phrasing:** Skills MUST reference protocols using the exact form `see AGENTS.md Protocol: <Exact Heading>` (with optional verb prefix like `Execute`, `Verify`, etc.). Variants like `AGENTS.md "Common Patterns > X"` are tolerated only for Common Patterns. The inliner regex is anchored on these forms; deviations cause silent unmatched refs.
 - **Bash code-block contract:** Bash code blocks in SKILL.md (between triple-backtick `bash` fences) execute in an environment where `set -euo pipefail` MUST be assumed active. The harness or invoking shell is responsible for setting these flags before executing block content. Authors may add `set -euo pipefail` explicitly at the top of a block to be defensive in copy-paste contexts. The Quiet Command Execution helper and other shared protocols rely on this contract — disabling these flags inside a block (e.g., `set +u`, `set +e`, `set +o pipefail`) is forbidden and enforced by `scripts/test_skill_consistency.py::TestBashBlockHygiene`.
+- **Summarize mode for high-fan-out protocols:** Protocols inlined into >=5 skills MAY carry an `<!-- inline-mode: summarize -->` marker. When present, the inliner emits only a terse 5-10 line stub in consumers (keeping the full body only in AGENTS.md). Each protocol's `**Summary:**` subsection (placed immediately after the marker) is the canonical stub content. This reduces SKILL.md token cost without losing correctness — agents reading the stub know to consult AGENTS.md for the full recipe when they need bash details. Phase 1 of issue #34 applies this to the top three most-duplicated protocols (`Resolve Main Worktree Path`, `Session State`, `Initialize .optimus Directory`). Run `make inline-stats` to see current bloat metrics; the inliner respects `--no-summarize` to fall back to full-body inlining for diagnostic runs.
 
 ### SKILL.md Files
 - Preserve YAML frontmatter structure (---, name, description, trigger, skip_when, etc.)
@@ -362,6 +363,10 @@ the project repo, it is committed alongside the code; if `tasksDir` is in a sepa
 repo, it is committed there.
 
 ### Protocol: Resolve Main Worktree Path
+
+<!-- inline-mode: summarize -->
+
+**Summary:** Resolve `MAIN_WORKTREE` once via `git worktree list --porcelain | awk '/^worktree / {print $2; exit}'` with `${MAIN_WORKTREE:?…}` defensive guard. Use `${MAIN_WORKTREE}/.optimus/...` for ALL `.optimus/` paths (gitignored, so doesn't propagate across linked worktrees). See full recipe in AGENTS.md.
 
 **Referenced by:** all skills that read or write `.optimus/` operational files (state.json, stats.json, sessions, reports, logs, and checkpoint markers).
 
@@ -1018,6 +1023,10 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 
 ### Protocol: Initialize .optimus Directory
 
+<!-- inline-mode: summarize -->
+
+**Summary:** Create `${MAIN_WORKTREE}/.optimus/{sessions,reports,logs}/` with `mkdir -p`. Add `# optimus-operational-files` and `# optimus-operational-worktrees` markers to `${MAIN_WORKTREE}/.gitignore` idempotently (grep-anchor before append). Refuse symlinked `.gitignore`. Auto-prune `.optimus/logs/` (30 days, 500 files). See full recipe in AGENTS.md.
+
 **Referenced by:** import, tasks, report (export), quick-report, batch, pr-check, deep-review, coderabbit-review, all stage agents (1-4) for session files
 
 Before creating ANY file inside `.optimus/`, ensure the directory structure exists
@@ -1281,6 +1290,10 @@ Follow these rules to prevent injection and silent failures:
 Skills reference this as: "Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelines."
 
 ### Protocol: Session State
+
+<!-- inline-mode: summarize -->
+
+**Summary:** Session lifecycle state at `${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json` tracks `task_id`, `branch`, `phase`, `convergence_status`, `started_at`. Update at every phase transition. Initialize `.optimus/` directory + auto-prune `.optimus/logs/` (30-day, 500-file cap) on transition. See full recipe in AGENTS.md.
 
 **Referenced by:** all stage agents (1-4)
 

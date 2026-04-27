@@ -8,10 +8,19 @@ Skills reference "see AGENTS.md Protocol: X" but agents can't find AGENTS.md.
 Solution: Append only the referenced protocols/patterns to each SKILL.md,
 making each plugin self-contained.
 
-Usage: python3 scripts/inline-protocols.py
+Phase 1 of issue #34 (inline-protocol bloat reduction):
+Protocols carrying `<!-- inline-mode: summarize -->` immediately under their
+heading propagate as a 5-10 line stub (their `**Summary:**` block) instead of
+the full body. Pass `--no-summarize` to fall back to full-body inlining.
+
+Usage:
+    python3 scripts/inline-protocols.py             # summarize mode (default)
+    python3 scripts/inline-protocols.py --no-summarize
+    python3 scripts/inline-protocols.py --stats-only
 """
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from pathlib import Path
@@ -20,6 +29,8 @@ REPO_ROOT = Path(__file__).parent.parent
 AGENTS_MD = REPO_ROOT / "AGENTS.md"
 MARKER_START = "<!-- INLINE-PROTOCOLS:START -->"
 MARKER_END = "<!-- INLINE-PROTOCOLS:END -->"
+SUMMARIZE_MARKER = "<!-- inline-mode: summarize -->"
+SUMMARY_PREFIX = "**Summary:**"
 # Max file size (5 MB) — prevents hanging on bloated or corrupted inputs.
 MAX_FILE_SIZE = 5 * 1024 * 1024
 
@@ -32,6 +43,7 @@ MAIN_WORKTREE_PROTOCOL_KEY = "Protocol: Resolve Main Worktree Path"
 
 # Module-level compiled patterns.
 HEADING_RE = re.compile(r'^(?:#{2,3})\s+(.+)$')
+H2_OR_H3_RE = re.compile(r'^#{2,3}\s+')
 PROTOCOL_RE = re.compile(r'AGENTS\.md Protocol:\s*([^\n"]+)')
 COMMON_PATTERN_RE = re.compile(r'AGENTS\.md\s*"Common Patterns\s*>\s*([^"]+)"')
 FINDING_PRESENTATION_RE = re.compile(r'AGENTS\.md\s*"Finding Presentation"')
@@ -40,8 +52,67 @@ TRAILING_CONTEXT_RE = re.compile(r',\s+(?:with |followed )|;\s|\*\*')
 PAREN_SUFFIX_RE = re.compile(r'\s*\([^)]*\)\s*$')
 
 
-def parse_agents_md() -> dict[str, str]:
-    """Parse AGENTS.md into named sections keyed by heading text."""
+def _extract_summary(body: str) -> str | None:
+    """Extract the `**Summary:** ...` block from a protocol body.
+
+    Returns the prose between `**Summary:**` and the next blank-line-followed-by
+    a structural marker (bold heading, `**Referenced by:**`, fenced code block,
+    or H2/H3 heading). The summary is normalized to start with `**Summary:**`
+    so consumers can render it unchanged. Returns None if no summary is found.
+    """
+    lines = body.splitlines()
+    start_idx = None
+    for i, line in enumerate(lines):
+        if line.lstrip().startswith(SUMMARY_PREFIX):
+            start_idx = i
+            break
+    if start_idx is None:
+        return None
+
+    end_idx = len(lines)
+    # Walk forward until we hit a blank line followed by a new structural
+    # element (bold prose marker like `**Foo:**`, fenced code, or another
+    # H2/H3). We tolerate a single blank line inside the summary itself when
+    # the next non-blank line continues plain prose.
+    i = start_idx + 1
+    while i < len(lines):
+        stripped = lines[i].lstrip()
+        if not stripped:
+            # blank — peek next non-blank line
+            j = i + 1
+            while j < len(lines) and not lines[j].lstrip():
+                j += 1
+            if j >= len(lines):
+                end_idx = i
+                break
+            nxt = lines[j].lstrip()
+            if (
+                nxt.startswith("**")
+                or nxt.startswith("```")
+                or H2_OR_H3_RE.match(lines[j])
+            ):
+                end_idx = i
+                break
+            # otherwise continue — summary spans the blank
+            i = j + 1
+            continue
+        if H2_OR_H3_RE.match(lines[i]):
+            end_idx = i
+            break
+        i += 1
+
+    summary = "\n".join(lines[start_idx:end_idx]).rstrip()
+    return summary or None
+
+
+def parse_agents_md() -> tuple[dict[str, str], dict[str, str]]:
+    """Parse AGENTS.md into named sections keyed by heading text.
+
+    Returns a `(sections, summaries)` pair:
+      * `sections[heading] = full body` for every H2/H3 heading.
+      * `summaries[heading] = summary text` only for protocols carrying the
+        `<!-- inline-mode: summarize -->` marker AND a `**Summary:**` block.
+    """
     if not AGENTS_MD.exists():
         print(f"ERROR: {AGENTS_MD} not found. Run from repo root.", file=sys.stderr)
         sys.exit(1)
@@ -54,6 +125,7 @@ def parse_agents_md() -> dict[str, str]:
         sys.exit(1)
     lines = AGENTS_MD.read_text().splitlines()
     sections: dict[str, str] = {}
+    summaries: dict[str, str] = {}
     seen: set[str] = set()
     current_key = None
     current_lines: list[str] = []
@@ -70,7 +142,28 @@ def parse_agents_md() -> dict[str, str]:
                 file=sys.stderr,
             )
         seen.add(key)
-        sections[key] = "\n".join(body_lines)
+        body = "\n".join(body_lines)
+        sections[key] = body
+        # Detect summarize mode: the marker MUST appear on a line by itself
+        # (after whitespace strip). Prose mentions in backticks/inline-code
+        # don't count — that prevents the meta-doc in `## Editing Rules`
+        # from accidentally marking itself.
+        marker_present = any(
+            line.strip() == SUMMARIZE_MARKER for line in body_lines
+        )
+        # Missing summary while marker is present (and we're sure the
+        # marker is a real marker) is a SOURCE-OF-TRUTH bug — warn.
+        if marker_present:
+            summary = _extract_summary(body)
+            if summary is None:
+                print(
+                    f"  WARNING: '{key}' carries {SUMMARIZE_MARKER} but "
+                    "no **Summary:** subsection found — falling back to "
+                    "full-body inlining for this protocol",
+                    file=sys.stderr,
+                )
+            else:
+                summaries[key] = summary
 
     for line in lines:
         heading_match = HEADING_RE.match(line)
@@ -86,7 +179,7 @@ def parse_agents_md() -> dict[str, str]:
     if current_key:
         _flush(current_key, current_lines)
 
-    return sections
+    return sections, summaries
 
 
 def extract_refs_from_content(content: str) -> set[str]:
@@ -225,10 +318,44 @@ def strip_existing_inline(content: str) -> str:
     return content[:start_idx].rstrip() + after
 
 
-def inline_protocols() -> None:
-    """Main: inline referenced protocols into each SKILL.md."""
-    sections = parse_agents_md()
-    print(f"Parsed {len(sections)} sections from AGENTS.md")
+def _build_summary_stub(key: str, summary: str) -> str:
+    """Render the inlined stub for a summarize-marked protocol."""
+    lines: list[str] = []
+    lines.append(f"### {key} (summarized)")
+    lines.append("")
+    lines.append(
+        f"> **Summary inlined here. Full recipe at "
+        f"`AGENTS.md -> {key}`.**"
+    )
+    lines.append("")
+    lines.append(summary)
+    return "\n".join(lines)
+
+
+def inline_protocols(
+    *,
+    summarize: bool = True,
+    stats_only: bool = False,
+) -> dict | None:
+    """Main: inline referenced protocols into each SKILL.md.
+
+    Parameters
+    ----------
+    summarize:
+        When True (default), protocols carrying `<!-- inline-mode: summarize -->`
+        propagate as their `**Summary:**` stub instead of the full body.
+    stats_only:
+        When True, no files are written. Returns a stats dict for callers
+        (e.g., `make inline-stats`) to render a table.
+    """
+    sections, summaries = parse_agents_md()
+    print(f"Parsed {len(sections)} sections from AGENTS.md", file=sys.stderr)
+    if summaries:
+        print(
+            f"  {len(summaries)} carry summarize markers: "
+            f"{sorted(summaries)}",
+            file=sys.stderr,
+        )
 
     # Also include some foundational sections that provide context
     # for protocol references (e.g., State Management references state.json format)
@@ -242,7 +369,14 @@ def inline_protocols() -> None:
 
     # Find all SKILL.md files
     skill_files = sorted(REPO_ROOT.glob("*/skills/*/SKILL.md"))
-    print(f"Found {len(skill_files)} SKILL.md files\n")
+    print(f"Found {len(skill_files)} SKILL.md files\n", file=sys.stderr)
+
+    # Stats accumulators for `--stats-only` mode.
+    per_skill: list[dict] = []
+    protocol_consumers: dict[str, list[str]] = {}
+    protocol_lines: dict[str, int] = {}
+    pre_summarize_total = 0
+    post_summarize_total = 0
 
     total_inlined = 0
 
@@ -370,20 +504,77 @@ def inline_protocols() -> None:
         inline_parts.append("extracted from the Optimus AGENTS.md to make this plugin self-contained.")
         inline_parts.append("")
 
+        # Track which protocols got summarized vs full-bodied for this skill,
+        # plus the lines saved by summarization (for both stats and the
+        # per-skill log line below).
+        summarized_count = 0
+        full_count = 0
+        lines_saved = 0
+
+        def _emit(key: str, full_text: str) -> None:
+            """Append either summary stub or full body for `key`."""
+            nonlocal summarized_count, full_count, lines_saved
+            if summarize and key in summaries:
+                stub = _build_summary_stub(key, summaries[key])
+                inline_parts.append(stub)
+                summarized_count += 1
+                full_lines = full_text.count("\n") + 1
+                stub_lines = stub.count("\n") + 1
+                lines_saved += max(full_lines - stub_lines, 0)
+            else:
+                inline_parts.append(full_text)
+                full_count += 1
+            inline_parts.append("")
+
         # Add foundational context first
         for key, text in extra.items():
             if key not in sections_to_inline:
-                inline_parts.append(text)
-                inline_parts.append("")
+                _emit(key, text)
 
         # Add referenced protocols/patterns
         for key, text in sections_to_inline.items():
-            inline_parts.append(text)
-            inline_parts.append("")
+            _emit(key, text)
 
         inline_parts.append(MARKER_END)
 
         new_content = content + "\n".join(inline_parts) + "\n"
+
+        # Update accumulators that are needed by both write and stats-only paths.
+        # `inlined_keys` is the union of sections_to_inline + extra (foundational).
+        inlined_keys = set(sections_to_inline) | {
+            k for k in extra if k not in sections_to_inline
+        }
+        for key in inlined_keys:
+            protocol_consumers.setdefault(key, []).append(plugin_name)
+            full_text = sections_to_inline.get(key) or extra.get(key) or ""
+            protocol_lines.setdefault(
+                key, full_text.count("\n") + 1 if full_text else 0
+            )
+        # Per-skill stats: count lines in inlined block (full vs stub).
+        inlined_block_lines = sum(part.count("\n") + 1 for part in inline_parts)
+        skill_total_lines = new_content.count("\n") + 1
+        body_lines = content.count("\n") + 1
+        per_skill.append({
+            "plugin": plugin_name,
+            "total": skill_total_lines,
+            "inlined": inlined_block_lines,
+            "body": body_lines,
+            "summarized": summarized_count,
+            "full": full_count,
+            "lines_saved": lines_saved,
+        })
+        # The "before summarize" estimate sums full-body line counts for ALL
+        # inlined keys; "after" sums summary lines for keys with a summary
+        # plus full lines for the rest (= what the skill currently emits).
+        for key in inlined_keys:
+            full_text = sections_to_inline.get(key) or extra.get(key) or ""
+            full_len = full_text.count("\n") + 1 if full_text else 0
+            pre_summarize_total += full_len
+            if summarize and key in summaries:
+                stub_text = _build_summary_stub(key, summaries[key])
+                post_summarize_total += stub_text.count("\n") + 1
+            else:
+                post_summarize_total += full_len
 
         # F14e: Skip the write when the inlined output is byte-identical to
         # what's already on disk. Keeps mtime stable on no-op runs, which
@@ -391,13 +582,25 @@ def inline_protocols() -> None:
         # spurious git diffs. The matched/unmatched accounting is still
         # printed below so reviewers see the full picture.
         if new_content == raw_content:
+            if not stats_only:
+                print(
+                    f"  {plugin_name}: no changes (already up to date) "
+                    f"({len(refs)} refs, {len(unmatched)} unmatched)"
+                )
+                if unmatched:
+                    for u in unmatched:
+                        print(f"    WARNING: unmatched ref: {u}", file=sys.stderr)
+            continue
+
+        # In stats-only mode, never write. Still log per-skill summary so
+        # callers can verify the dry-run path is producing sensible numbers.
+        if stats_only:
             print(
-                f"  {plugin_name}: no changes (already up to date) "
-                f"({len(refs)} refs, {len(unmatched)} unmatched)"
+                f"  [stats-only] {plugin_name}: would inline "
+                f"{len(sections_to_inline)} protocols "
+                f"({summarized_count} summarized, {full_count} full) + "
+                f"{len(extra)} foundational, {lines_saved} lines saved via summarize"
             )
-            if unmatched:
-                for u in unmatched:
-                    print(f"    WARNING: unmatched ref: {u}", file=sys.stderr)
             continue
 
         # F3.3d: Refuse to write through a symlink. Defense-in-depth against
@@ -429,13 +632,110 @@ def inline_protocols() -> None:
             continue
 
         total_inlined += 1
-        print(f"  {plugin_name}: inlined {len(sections_to_inline)} protocols + {len(extra)} foundational ({len(refs)} refs, {len(unmatched)} unmatched)")
+        print(
+            f"  {plugin_name}: inlined {len(sections_to_inline)} protocols "
+            f"({summarized_count} summarized, {full_count} full) + "
+            f"{len(extra)} foundational, {lines_saved} lines saved via "
+            f"summarize ({len(refs)} refs, {len(unmatched)} unmatched)"
+        )
         if unmatched:
             for u in unmatched:
                 print(f"    WARNING: unmatched ref: {u}", file=sys.stderr)
 
+    if stats_only:
+        _render_stats(per_skill, protocol_consumers, protocol_lines,
+                      pre_summarize_total, post_summarize_total, summarize)
+        return {
+            "per_skill": per_skill,
+            "protocol_consumers": protocol_consumers,
+            "protocol_lines": protocol_lines,
+            "pre_summarize_total": pre_summarize_total,
+            "post_summarize_total": post_summarize_total,
+        }
+
     print(f"\nDone. Inlined protocols into {total_inlined} SKILL.md files.")
+    return None
+
+
+def _render_stats(
+    per_skill: list[dict],
+    protocol_consumers: dict[str, list[str]],
+    protocol_lines: dict[str, int],
+    pre_summarize_total: int,
+    post_summarize_total: int,
+    summarize: bool,
+) -> None:
+    """Pretty-print the stats table to stdout (for `make inline-stats`)."""
+    print()
+    print("Per-skill inlining stats")
+    print("-" * 72)
+    header = f"{'Skill':<24} {'Total LOC':>10} {'Inlined LOC':>12} {'Body LOC':>10} {'Inline %':>9}"
+    print(header)
+    print("-" * 72)
+    for row in sorted(per_skill, key=lambda r: -r["inlined"]):
+        pct = (row["inlined"] / row["total"] * 100) if row["total"] else 0
+        print(
+            f"{row['plugin']:<24} {row['total']:>10} "
+            f"{row['inlined']:>12} {row['body']:>10} {pct:>8.0f}%"
+        )
+    print()
+    print("Duplication summary (by protocol)")
+    print("-" * 72)
+    print(f"{'Protocol':<48} {'Consumers':>10} {'Lines/copy':>11}")
+    print("-" * 72)
+    rows = []
+    for key, consumers in protocol_consumers.items():
+        rows.append((key, len(consumers), protocol_lines.get(key, 0)))
+    for key, n, lines in sorted(rows, key=lambda r: -(r[1] * r[2])):
+        total = n * lines
+        label = key
+        if len(label) > 47:
+            label = label[:44] + "..."
+        print(f"{label:<48} {n:>10} {lines:>11}  (total {total})")
+    print()
+    print("Estimated total inlined LOC")
+    print("-" * 72)
+    print(f"  Before summarize: {pre_summarize_total} LOC across {len(per_skill)} SKILLs")
+    if summarize and pre_summarize_total:
+        delta = pre_summarize_total - post_summarize_total
+        pct = delta / pre_summarize_total * 100
+        print(
+            f"  After summarize : {post_summarize_total} LOC "
+            f"(-{delta} LOC, -{pct:.0f}%)"
+        )
+    else:
+        print(
+            "  Summarize disabled (--no-summarize) — using full-body inlining"
+        )
+
+
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Inline AGENTS.md protocols into each SKILL.md."
+    )
+    parser.add_argument(
+        "--no-summarize",
+        action="store_true",
+        help=(
+            "Disable summarize mode. Protocols carrying "
+            f"{SUMMARIZE_MARKER!r} will inline their full body instead of "
+            "the summary stub. Useful for diagnostic or full-rebuild runs."
+        ),
+    )
+    parser.add_argument(
+        "--stats-only",
+        action="store_true",
+        help=(
+            "Don't write any files. Print a per-skill / per-protocol table "
+            "and a before/after summarize-mode estimate to stdout."
+        ),
+    )
+    return parser.parse_args(argv)
 
 
 if __name__ == "__main__":
-    inline_protocols()
+    args = _parse_args()
+    inline_protocols(
+        summarize=not args.no_summarize,
+        stats_only=args.stats_only,
+    )

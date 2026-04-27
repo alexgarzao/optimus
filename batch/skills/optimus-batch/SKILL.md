@@ -599,54 +599,11 @@ project repo). `tasks_git push` pushes the tasks repo. The project repo is unaff
 Skills reference this as: "Resolve tasks git scope — see AGENTS.md Protocol: Resolve Tasks Git Scope."
 
 
-### Protocol: Resolve Main Worktree Path
+### Protocol: Resolve Main Worktree Path (summarized)
 
-**Referenced by:** all skills that read or write `.optimus/` operational files (state.json, stats.json, sessions, reports, logs, and checkpoint markers).
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Resolve Main Worktree Path`.**
 
-**Why:** `.optimus/` is gitignored. Git does NOT propagate ignored files across linked worktrees (`git worktree add` creates a sibling working tree but does not share gitignored files). When a skill runs from a linked worktree (the common case for `/optimus-build`, `/optimus-review`, `/optimus-done` which default to the task's worktree), reads and writes against `.optimus/state.json` resolve to the worktree's isolated copy. Updates never reach the main worktree. When the linked worktree is later removed (e.g., by `/optimus-done` cleanup), the writes are lost — silent data loss.
-
-**Recipe:**
-
-```bash
-MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
-if [ -z "$MAIN_WORKTREE" ]; then
-  echo "ERROR: Cannot determine main worktree — not in a git repository." >&2
-  exit 1
-fi
-```
-
-The first `worktree` line in `git worktree list --porcelain` is always the main worktree (where the bare `.git/` directory or the repo's HEAD lives), regardless of where the command is run from.
-
-**Path resolution pattern:**
-
-After resolving `MAIN_WORKTREE`, every `.optimus/` path MUST be prefixed:
-
-```bash
-# RIGHT (works from any worktree):
-STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
-SESSION_FILE="${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
-STATS_FILE="${MAIN_WORKTREE}/.optimus/stats.json"
-mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" \
-         "${MAIN_WORKTREE}/.optimus/reports" \
-         "${MAIN_WORKTREE}/.optimus/logs"
-
-# WRONG (resolves against PWD, breaks in linked worktrees):
-STATE_FILE=".optimus/state.json"
-SESSION_FILE=".optimus/sessions/session-${TASK_ID}.json"
-STATS_FILE=".optimus/stats.json"
-mkdir -p .optimus/sessions .optimus/reports .optimus/logs
-```
-
-**What does NOT need this protocol:**
-
-- `<tasksDir>/optimus-tasks.md` and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/` — versioned content, propagated by git across worktrees automatically.
-- `.optimus/config.json` — when **versioned** (legacy projects), it propagates via git; when **gitignored** (current default), it suffers the same isolation as state.json. **Treat `.optimus/config.json` as gitignored and resolve via `$MAIN_WORKTREE` for safety in current projects** — the cost is a single `git worktree list` call.
-- `.gitignore` itself — versioned, propagated via git.
-
-**Idempotency:** the resolution is read-only against git metadata; safe to call multiple times in the same skill execution. Cache `MAIN_WORKTREE` in a local variable rather than re-running `git worktree list` for each path.
-
-Skills reference this as: "Resolve main worktree — see AGENTS.md Protocol: Resolve Main Worktree Path."
-
+**Summary:** Resolve `MAIN_WORKTREE` once via `git worktree list --porcelain | awk '/^worktree / {print $2; exit}'` with `${MAIN_WORKTREE:?…}` defensive guard. Use `${MAIN_WORKTREE}/.optimus/...` for ALL `.optimus/` paths (gitignored, so doesn't propagate across linked worktrees). See full recipe in AGENTS.md.
 
 ### Protocol: All-Dependencies-Cancelled Resolution
 

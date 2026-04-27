@@ -1968,54 +1968,11 @@ applied fixes are correct and checks for any issues introduced by the fixes.
 Skills reference this as: "Execute re-run guard — see AGENTS.md Protocol: Re-run Guard."
 
 
-### Protocol: Resolve Main Worktree Path
+### Protocol: Resolve Main Worktree Path (summarized)
 
-**Referenced by:** all skills that read or write `.optimus/` operational files (state.json, stats.json, sessions, reports, logs, and checkpoint markers).
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Resolve Main Worktree Path`.**
 
-**Why:** `.optimus/` is gitignored. Git does NOT propagate ignored files across linked worktrees (`git worktree add` creates a sibling working tree but does not share gitignored files). When a skill runs from a linked worktree (the common case for `/optimus:build`, `/optimus:review`, `/optimus:done` which default to the task's worktree), reads and writes against `.optimus/state.json` resolve to the worktree's isolated copy. Updates never reach the main worktree. When the linked worktree is later removed (e.g., by `/optimus:done` cleanup), the writes are lost — silent data loss.
-
-**Recipe:**
-
-```bash
-MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
-if [ -z "$MAIN_WORKTREE" ]; then
-  echo "ERROR: Cannot determine main worktree — not in a git repository." >&2
-  exit 1
-fi
-```
-
-The first `worktree` line in `git worktree list --porcelain` is always the main worktree (where the bare `.git/` directory or the repo's HEAD lives), regardless of where the command is run from.
-
-**Path resolution pattern:**
-
-After resolving `MAIN_WORKTREE`, every `.optimus/` path MUST be prefixed:
-
-```bash
-# RIGHT (works from any worktree):
-STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
-SESSION_FILE="${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
-STATS_FILE="${MAIN_WORKTREE}/.optimus/stats.json"
-mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" \
-         "${MAIN_WORKTREE}/.optimus/reports" \
-         "${MAIN_WORKTREE}/.optimus/logs"
-
-# WRONG (resolves against PWD, breaks in linked worktrees):
-STATE_FILE=".optimus/state.json"
-SESSION_FILE=".optimus/sessions/session-${TASK_ID}.json"
-STATS_FILE=".optimus/stats.json"
-mkdir -p .optimus/sessions .optimus/reports .optimus/logs
-```
-
-**What does NOT need this protocol:**
-
-- `<tasksDir>/optimus:tasks.md` and `<tasksDir>/tasks/`, `<tasksDir>/subtasks/` — versioned content, propagated by git across worktrees automatically.
-- `.optimus/config.json` — when **versioned** (legacy projects), it propagates via git; when **gitignored** (current default), it suffers the same isolation as state.json. **Treat `.optimus/config.json` as gitignored and resolve via `$MAIN_WORKTREE` for safety in current projects** — the cost is a single `git worktree list` call.
-- `.gitignore` itself — versioned, propagated via git.
-
-**Idempotency:** the resolution is read-only against git metadata; safe to call multiple times in the same skill execution. Cache `MAIN_WORKTREE` in a local variable rather than re-running `git worktree list` for each path.
-
-Skills reference this as: "Resolve main worktree — see AGENTS.md Protocol: Resolve Main Worktree Path."
-
+**Summary:** Resolve `MAIN_WORKTREE` once via `git worktree list --porcelain | awk '/^worktree / {print $2; exit}'` with `${MAIN_WORKTREE:?…}` defensive guard. Use `${MAIN_WORKTREE}/.optimus/...` for ALL `.optimus/` paths (gitignored, so doesn't propagate across linked worktrees). See full recipe in AGENTS.md.
 
 ### Protocol: Ring Droid Requirement Check
 
@@ -2057,172 +2014,11 @@ droid is not installed, **STOP** and list missing droids.
 Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check."
 
 
-### Protocol: Session State
+### Protocol: Session State (summarized)
 
-**Referenced by:** all stage agents (1-4)
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Session State`.**
 
-Stage agents write a session state file to track progress. This enables resumption
-when a session is interrupted (agent crash, user closes terminal, context window limit).
-
-**IMPORTANT — Write timing:** The session file MUST be written **immediately after the
-status change in state.json** (before any work begins). This ensures crash recovery has
-a record even if the agent fails before producing any output. Do NOT wait until
-"key phase transitions" to write the initial session file.
-
-**Session file location:** `${MAIN_WORKTREE}/.optimus/sessions/session-<task-id>.json` (gitignored).
-Each task gets its own file (e.g., `${MAIN_WORKTREE}/.optimus/sessions/session-T-003.json`).
-The `$MAIN_WORKTREE` prefix is REQUIRED — see Protocol: Resolve Main Worktree Path.
-
-```json
-{
-  "task_id": "T-003",
-  "stage": "<stage-name>",
-  "status": "<stage-output-status>",
-  "branch": "feat/t-003-user-auth",
-  "started_at": "2025-01-15T10:30:00Z",
-  "updated_at": "2025-01-15T11:45:00Z",
-  "phase": "Phase 1: Implementation",
-  "convergence_round": 0,
-  "convergence_status": null,
-  "findings_count": 0,
-  "notes": "Implementation in progress"
-}
-```
-
-**Convergence checkpoint:** During the convergence loop, update `convergence_round`,
-`convergence_status`, and `findings_count` after each round completes (and after each
-user gate decision). The `convergence_status` field MUST be persisted **before**
-proceeding past any user gate so crash recovery does not re-prompt an already-answered
-gate. Valid values: `null` (loop not entered yet, or round 1 not complete),
-`"IN_PROGRESS"` (a round was dispatched and the orchestrator has not yet recorded the
-exit status), `"CONVERGED"`, `"USER_STOPPED"`, `"SKIPPED"`, `"HARD_LIMIT"`,
-`"DISPATCH_FAILED_ABORTED"`. On resume, the orchestrator reads `convergence_status`
-to decide whether to skip the remainder of the loop (terminal status set), continue
-with the next gate (still `IN_PROGRESS`), or re-show the entry gate (`null`).
-
-**On stage start (after task ID is known):**
-
-```bash
-# Requires Protocol: Resolve Main Worktree Path to have run first
-# (or resolve inline; see that protocol).
-MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
-MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
-SESSION_FILE="${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
-if [ -f "$SESSION_FILE" ]; then
-  if ! jq empty "$SESSION_FILE" 2>/dev/null; then
-    echo "WARNING: Session file is corrupted. Deleting and proceeding fresh."
-    rm -f "$SESSION_FILE"
-  else
-    cat "$SESSION_FILE"
-  fi
-fi
-```
-
-- If the file exists AND the task's status in `state.json` matches the session's `status`:
-  - Present via `AskUser`:
-    ```
-    Previous session found:
-      Task: T-XXX — [title]
-      Stage: <stage-name>
-      Last active: <time since updated_at>
-      Progress: <phase from session>
-    Resume this session?
-    ```
-    Options: Resume / Start fresh (delete session) / Continue (keep session file)
-  - If **Resume**: skip to the phase indicated in the session file
-  - If **Start fresh (delete session)**: delete the session file and proceed from the beginning
-  - If **Continue (keep session file)**: proceed from the beginning without deleting the session file
-- If the file is stale (>24h) or the task status has changed → delete and proceed normally.
-  **Staleness check example:**
-  ```bash
-  UPDATED=$(jq -r '.updated_at // empty' "$SESSION_FILE" 2>/dev/null)
-  if [ -z "$UPDATED" ]; then
-    # Session file has no updated_at (corrupted or incomplete write) — treat as
-    # stale to prevent orphan session files from accumulating.
-    echo "WARNING: Session file has no updated_at. Deleting as stale."
-    rm -f "$SESSION_FILE"
-  else
-    NOW_EPOCH=$(date +%s)
-    if [ "$(uname)" = "Darwin" ]; then
-      UPDATED_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$UPDATED" +%s 2>/dev/null || echo 0)
-    else
-      UPDATED_EPOCH=$(date -d "$UPDATED" +%s 2>/dev/null || echo 0)
-    fi
-    AGE=$(( NOW_EPOCH - UPDATED_EPOCH ))
-    if [ "$AGE" -gt 86400 ]; then
-      echo "Session file is stale (>24h). Deleting."
-      rm -f "$SESSION_FILE"
-    fi
-  fi
-  ```
-- **External status change detection:** If the session file exists AND the task's status
-  does NOT match the session's `status`, check if the difference is explainable by normal
-  stage progression (e.g., session says `Em Andamento` but task is now `Validando Impl` —
-  the task was advanced externally via `/optimus:tasks`). If the status change is NOT
-  explainable by forward progression, treat the session as stale and delete it.
-- If no file exists → proceed normally
-
-**On stage progress (at key phase transitions):**
-
-```bash
-# Requires Protocol: Resolve Main Worktree Path to have run first
-# (or resolve inline; see that protocol).
-MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
-MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
-# Mirror Protocol: Initialize .optimus Directory (mkdir + gitignore) so stage
-# agents — which call Session State but not Initialize Directory — also create
-# the dirs and update .gitignore on first phase transition.
-mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports" "${MAIN_WORKTREE}/.optimus/logs"
-# Refuse symlinked .gitignore (defense against link-following file-write).
-# Hoisted ABOVE the operational-files write so the first append is also protected.
-if [ -L "${MAIN_WORKTREE}/.gitignore" ]; then
-  echo "ERROR: ${MAIN_WORKTREE}/.gitignore is a symlink — refusing to append (potential symlink attack)." >&2
-  exit 1
-fi
-if ! grep -q '^# optimus-operational-files' "${MAIN_WORKTREE}/.gitignore" 2>/dev/null; then
-  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> "${MAIN_WORKTREE}/.gitignore"
-fi
-# Linked worktrees managed by Optimus live at ${MAIN_WORKTREE}/.worktrees/
-# (see Protocol: Worktree Location). Add a separate marker so existing
-# projects whose .gitignore already carries the operational-files block
-# still get the worktree exclusion idempotently.
-if ! grep -q '^# optimus-operational-worktrees' "${MAIN_WORKTREE}/.gitignore" 2>/dev/null; then
-  printf '\n# optimus-operational-worktrees\n.worktrees/\n' >> "${MAIN_WORKTREE}/.gitignore"
-fi
-# Log retention (idempotent — runs every phase transition): age-based + count-cap
-# prune. Stage agents are the heaviest log producers, so placing prune here
-# ensures it fires for build/review/plan/done (which call Session State but not
-# Initialize .optimus Directory).
-find "${MAIN_WORKTREE}/.optimus/logs" -type f -name '*.log' -mtime +30 -delete 2>/dev/null
-# Count-cap: keep at most 500 most-recent log files. Uses `while read -r` (not
-# `xargs`) for portability across GNU/BSD (`xargs -r` is GNU-only). Filename
-# safety: `_optimus_quiet_run` sanitizes labels to `[:alnum:]-_`, so log
-# filenames cannot contain spaces or newlines.
-if [ -d "${MAIN_WORKTREE}/.optimus/logs" ]; then
-  ls -1t "${MAIN_WORKTREE}/.optimus/logs"/*.log 2>/dev/null | tail -n +501 \
-    | while IFS= read -r _log_to_rm; do rm -f -- "$_log_to_rm"; done
-fi
-BRANCH_NAME=$(git branch --show-current 2>/dev/null)
-# `git branch --show-current` exits 0 with empty stdout on detached HEAD; the
-# `|| echo "detached"` fallback was dead code. Use an explicit check instead.
-[ -z "$BRANCH_NAME" ] && BRANCH_NAME="detached"
-jq -n \
-  --arg task_id "${TASK_ID}" --arg stage "<stage-name>" --arg status "<status>" \
-  --arg branch "${BRANCH_NAME}" --arg started "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-  --arg updated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg phase "<current-phase>" \
-  --arg notes "<progress>" \
-  '{task_id: $task_id, stage: $stage, status: $status, branch: $branch,
-    started_at: $started, updated_at: $updated, phase: $phase, notes: $notes}' \
-  > "${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
-```
-
-**On stage completion:** Delete the session file:
-```bash
-rm -f "${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
-```
-
-Skills reference this as: "Execute session state protocol from AGENTS.md using stage=`<name>`, status=`<status>`."
-
+**Summary:** Session lifecycle state at `${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json` tracks `task_id`, `branch`, `phase`, `convergence_status`, `started_at`. Update at every phase transition. Initialize `.optimus/` directory + auto-prune `.optimus/logs/` (30-day, 500-file cap) on transition. See full recipe in AGENTS.md.
 
 ### Protocol: Shell Safety Guidelines
 

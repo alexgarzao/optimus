@@ -139,6 +139,14 @@ SKILL or an alias to keep the Claude side in sync. Tests in
 `scripts/test_skill_consistency.py` (class `TestClaudeCommandsSync`) enforce
 that the script was run before commit.
 
+**Phase 1 of inline-protocol bloat reduction (issue #34):** The top three
+most-duplicated protocols (`Resolve Main Worktree Path`, `Session State`,
+`Initialize .optimus Directory`) now propagate as terse summaries instead
+of full-body inlines. SKILL.md sizes are reduced significantly across all
+stage skills. Run `make inline-stats` for current numbers, or pass
+`--no-summarize` to `scripts/inline-protocols.py` for full-body inlining
+during diagnostics.
+
 Future improvements are tracked in `docs/future-improvements.md`.
 
 ## Worktree layout

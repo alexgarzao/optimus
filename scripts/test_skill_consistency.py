@@ -3089,7 +3089,7 @@ class TestSpecSelfHeal:
         finally:
             sys.path.pop(0)
 
-        agents_sections = inline_protocols.parse_agents_md()
+        agents_sections, _summaries = inline_protocols.parse_agents_md()
         violations = []
         for path in _all_skill_files():
             # Use the inliner's body-only extraction to skip the inlined block.
@@ -3235,3 +3235,54 @@ class TestWorktreeLocationConvention:
             if not pattern.search(body):
                 violations.append(f"{path.relative_to(REPO_ROOT)}: missing case-stmt traversal guard")
         assert violations == [], "\n".join(violations)
+
+
+# --- Phase 1 of issue #34: top-3 most-duplicated protocols carry the
+# `<!-- inline-mode: summarize -->` marker AND a `**Summary:**` subsection
+# in AGENTS.md. The inliner reads both at runtime; this test guards the
+# source-of-truth so the marker can't be dropped without flipping a test.
+
+class TestProtocolSummarizeMarker:
+    """Phase 1 of issue #34: Verify the 3 top-duplicated protocols carry
+    the <!-- inline-mode: summarize --> marker in AGENTS.md."""
+
+    SUMMARIZED_PROTOCOLS = [
+        "Resolve Main Worktree Path",
+        "Session State",
+        "Initialize .optimus Directory",
+    ]
+
+    def test_summarize_marker_present_for_top_protocols(self):
+        content = AGENTS_MD.read_text()
+        for proto in self.SUMMARIZED_PROTOCOLS:
+            heading = f"### Protocol: {proto}"
+            idx = content.find(heading)
+            assert idx >= 0, f"{heading} missing from AGENTS.md"
+            # Check the next 600 chars for the marker AND a Summary subsection.
+            window = content[idx: idx + 600]
+            assert "<!-- inline-mode: summarize -->" in window, (
+                f"{proto}: missing <!-- inline-mode: summarize --> marker "
+                "(must be placed immediately under the heading)"
+            )
+            assert "**Summary:**" in window, (
+                f"{proto}: missing **Summary:** subsection "
+                "(must follow the summarize marker)"
+            )
+
+    def test_summarize_marker_implies_marker_appears_first(self):
+        """Marker must precede any other prose in the protocol body so
+        parse_agents_md sees it before falling through to full-body
+        inlining heuristics."""
+        content = AGENTS_MD.read_text()
+        for proto in self.SUMMARIZED_PROTOCOLS:
+            heading = f"### Protocol: {proto}"
+            idx = content.find(heading)
+            window = content[idx: idx + 600]
+            # The marker MUST appear before the first `**Summary:**` (and
+            # also before the first `**Referenced by:**` if present).
+            marker_idx = window.find("<!-- inline-mode: summarize -->")
+            summary_idx = window.find("**Summary:**")
+            assert marker_idx < summary_idx, (
+                f"{proto}: marker must come before **Summary:** "
+                f"(marker={marker_idx}, summary={summary_idx})"
+            )

@@ -23,7 +23,7 @@ class TestParseAgentsMd:
         agents = tmp_path / "AGENTS.md"
         agents.write_text("## Section A\nContent A\n### Section B\nContent B\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        sections = ip.parse_agents_md()
+        sections, _summaries = ip.parse_agents_md()
         assert "Section A" in sections
         assert "Section B" in sections
         assert "Content A" in sections["Section A"]
@@ -33,7 +33,7 @@ class TestParseAgentsMd:
         agents = tmp_path / "AGENTS.md"
         agents.write_text("# H1\nIgnored\n## H2\nKept\n#### H4\nAlso kept in H2\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        sections = ip.parse_agents_md()
+        sections, _summaries = ip.parse_agents_md()
         assert "H1" not in sections
         assert "H4" not in sections
         assert "H2" in sections
@@ -43,7 +43,9 @@ class TestParseAgentsMd:
         agents = tmp_path / "AGENTS.md"
         agents.write_text("")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        assert ip.parse_agents_md() == {}
+        sections, summaries = ip.parse_agents_md()
+        assert sections == {}
+        assert summaries == {}
 
     def test_missing_file_exits(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.setattr(ip, "AGENTS_MD", tmp_path / "nonexistent.md")
@@ -404,7 +406,7 @@ class TestCriticalPaths:
         agents = tmp_path / "AGENTS.md"
         agents.write_text("## Same\nFirst content\n## Same\nSecond content\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        sections = ip.parse_agents_md()
+        sections, _summaries = ip.parse_agents_md()
         assert "Second content" in sections["Same"]
         assert "First content" not in sections["Same"]
         captured = capsys.readouterr()
@@ -424,7 +426,7 @@ class TestCriticalPaths:
         agents = tmp_path / "AGENTS.md"
         agents.write_text("## Dup\nA\n## Dup\nB\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        sections = ip.parse_agents_md()
+        sections, _summaries = ip.parse_agents_md()
         assert "Dup" in sections
         captured = capsys.readouterr()
         assert "WARNING" in captured.err
@@ -502,7 +504,7 @@ class TestEdgeCases:
         agents = tmp_path / "AGENTS.md"
         agents.write_text("## Protocol: optimus-tasks.md Validation (HARD BLOCK)\nValidation content\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        sections = ip.parse_agents_md()
+        sections, _summaries = ip.parse_agents_md()
         assert "Protocol: optimus-tasks.md Validation (HARD BLOCK)" in sections
 
     def test_protocol_with_trailing_paren(self, tmp_path: Path):
@@ -515,7 +517,7 @@ class TestEdgeCases:
         agents = tmp_path / "AGENTS.md"
         agents.write_text("## Protocol: Notifica\u00e7\u00e3o de Status\nContent\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        sections = ip.parse_agents_md()
+        sections, _summaries = ip.parse_agents_md()
         assert "Protocol: Notifica\u00e7\u00e3o de Status" in sections
 
     def test_includes_foundational_for_taskspec(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -884,3 +886,176 @@ fi
         body = gitignore.read_text()
         assert "# optimus-operational-files" in body
         assert "# optimus-operational-worktrees" in body
+
+
+# --- Phase 1 of issue #34: inline-protocol bloat reduction (summarize mode) ---
+
+
+class TestSummarizeMode:
+    """Phase 1 of issue #34: protocols marked <!-- inline-mode: summarize -->
+    inline only their Summary block in consumer skills, not the full body."""
+
+    def _setup_summarize_repo(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        *,
+        skill_body: str = "see AGENTS.md Protocol: Foo.\n",
+        plugin: str = "fooplug",
+    ) -> tuple[Path, Path]:
+        """Build a tmp repo with one summarize-marked protocol + one consumer."""
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text(
+            "# Test\n\n"
+            "## Reusable Protocols\n\n"
+            "### Protocol: Foo\n\n"
+            f"{ip.SUMMARIZE_MARKER}\n\n"
+            "**Summary:** Foo summary line one. See AGENTS.md.\n\n"
+            "**Referenced by:** test consumers.\n\n"
+            "Full body of Foo with lots of bash:\n\n"
+            "```bash\n"
+            "echo full body line 1\n"
+            "echo full body line 2\n"
+            "echo full body line 3\n"
+            "echo full body line 4\n"
+            "echo full body line 5\n"
+            "```\n"
+            "\n"
+            "More prose for Foo.\n"
+        )
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+
+        skill_dir = tmp_path / plugin / "skills" / f"optimus-{plugin}"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_text(skill_body)
+        return agents, skill
+
+    def test_summarize_marker_recognized_in_parse(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """parse_agents_md() returns (sections, summaries); summaries
+        contains an entry for the marked protocol."""
+        agents, _skill = self._setup_summarize_repo(tmp_path, monkeypatch)
+        sections, summaries = ip.parse_agents_md()
+        assert "Protocol: Foo" in sections
+        assert "Protocol: Foo" in summaries
+        assert "Foo summary" in summaries["Protocol: Foo"]
+        # Summary must NOT include the full body.
+        assert "echo full body" not in summaries["Protocol: Foo"]
+
+    def test_summarized_protocol_emits_stub_in_skill(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Default summarize mode: consumer SKILL.md gets the stub, not the
+        full body."""
+        _agents, skill = self._setup_summarize_repo(tmp_path, monkeypatch)
+        ip.inline_protocols()  # default summarize=True
+        out = skill.read_text()
+        # Stub heading present:
+        assert "### Protocol: Foo (summarized)" in out
+        # Summary line present:
+        assert "Foo summary" in out
+        # Full body bash MUST NOT propagate:
+        assert "echo full body line 1" not in out
+
+    def test_no_summarize_flag_emits_full_body(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """With summarize=False, summarize-marked protocols inline the full
+        body (legacy behavior, used by --no-summarize CLI flag)."""
+        _agents, skill = self._setup_summarize_repo(tmp_path, monkeypatch)
+        ip.inline_protocols(summarize=False)
+        out = skill.read_text()
+        # Stub MUST NOT appear:
+        assert "### Protocol: Foo (summarized)" not in out
+        # Full body MUST appear:
+        assert "echo full body line 1" in out
+        assert "More prose for Foo" in out
+
+    def test_stats_only_mode_does_not_write(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        """--stats-only emits the table to stdout but doesn't modify any
+        SKILL.md files."""
+        _agents, skill = self._setup_summarize_repo(tmp_path, monkeypatch)
+        before = skill.read_text()
+        result = ip.inline_protocols(stats_only=True)
+        after = skill.read_text()
+        assert before == after, "stats-only must not write to SKILL.md"
+        # Stats payload shape:
+        assert isinstance(result, dict)
+        assert "per_skill" in result
+        assert "protocol_consumers" in result
+        assert "pre_summarize_total" in result
+        # Stdout has rendered table headers:
+        captured = capsys.readouterr()
+        assert "Per-skill inlining stats" in captured.out
+        assert "Duplication summary" in captured.out
+        assert "Estimated total inlined LOC" in captured.out
+
+    def test_summary_extraction_skips_referenced_by_block(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """The summary parser must end at the next `**Referenced by:**` (or
+        any bold marker after a blank line), NOT include it as part of the
+        summary."""
+        _agents, _skill = self._setup_summarize_repo(tmp_path, monkeypatch)
+        _sections, summaries = ip.parse_agents_md()
+        summary = summaries["Protocol: Foo"]
+        assert "**Referenced by:**" not in summary, (
+            f"Summary leaked into Referenced-by block: {summary!r}"
+        )
+
+    def test_summarize_marker_without_summary_falls_back_to_full(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        """Source-of-truth bug: marker present but no Summary subsection.
+        Inliner warns and falls back to full-body inlining."""
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text(
+            "## Reusable Protocols\n\n"
+            "### Protocol: Bar\n\n"
+            f"{ip.SUMMARIZE_MARKER}\n\n"
+            "Body without a Summary subsection.\n"
+        )
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+        skill_dir = tmp_path / "barplug" / "skills" / "optimus-barplug"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_text("see AGENTS.md Protocol: Bar.\n")
+
+        sections, summaries = ip.parse_agents_md()
+        assert "Protocol: Bar" in sections
+        # Summary missing -> protocol does NOT enter `summaries`.
+        assert "Protocol: Bar" not in summaries
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "no **Summary:** subsection" in captured.err
+
+        # And the inlined output uses the full body since the protocol
+        # doesn't enter `summaries`.
+        ip.inline_protocols()
+        out = skill.read_text()
+        assert "Body without a Summary subsection" in out
+        assert "(summarized)" not in out
+
+    def test_cli_flag_no_summarize_disables_summarize(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """The argparse layer translates --no-summarize into summarize=False."""
+        args = ip._parse_args(["--no-summarize"])
+        assert args.no_summarize is True
+        assert args.stats_only is False
+
+    def test_cli_flag_stats_only_disables_writes(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        """The argparse layer accepts --stats-only."""
+        args = ip._parse_args(["--stats-only"])
+        assert args.stats_only is True
+        assert args.no_summarize is False
