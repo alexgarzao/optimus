@@ -7,10 +7,9 @@ trigger: >
   - Before invoking optimus-build for a task
 skip_when: >
   - Task is already implemented (use optimus-review instead)
-  - No task spec exists yet (use pre-dev workflow to create it first)
   - Task is pure research with no implementation deliverables
 prerequisite: >
-  - Task spec exists (user provides ID or skill auto-detects next pending task)
+  - Task exists in optimus-tasks.md (user provides ID or skill auto-detects next pending task). If TaskSpec is `-`, plan offers to generate it via ring:pre-dev-feature in Step 1.0.4.5 (self-heal).
   - Reference docs exist (PRD, TRD, API design, data model)
   - Coding standards / project rules file exists
 NOT_skip_when: >
