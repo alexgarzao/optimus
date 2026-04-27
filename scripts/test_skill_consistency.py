@@ -3082,7 +3082,6 @@ class TestSpecSelfHeal:
         ``extract_refs_from_content`` there) so that references resolved by the
         inliner are also resolved here, and references it warns about as
         unmatched are also surfaced as test failures."""
-        import re
         import sys
         sys.path.insert(0, str(REPO_ROOT / "scripts"))
         try:
@@ -3129,3 +3128,69 @@ class TestSpecSelfHeal:
             assert "symlink" in link_section.lower(), (
                 f"{skill_path.parent.parent.name} 'Link existing spec' must explicitly mention symlinks"
             )
+
+
+class TestWorktreeLocationConvention:
+    """F-worktrees: All worktree-creation sites use ${MAIN_WORKTREE}/.worktrees/<branch>
+    pattern; .gitignore auto-inject uses post-F1 ${MAIN_WORKTREE}/.gitignore contract."""
+
+    CREATOR_FILES = [
+        ("AGENTS.md", None),  # Workspace Auto-Navigation
+        ("plan", "Step 1.0.5"),
+        ("resume", "Step 3.3"),
+    ]
+
+    def test_no_sibling_worktree_path_pattern(self):
+        """No `../${REPO_NAME}-...` or `../<repo>-...` worktree-add invocations should remain."""
+        violations = []
+        for skill in ["plan", "resume"]:
+            path = REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md"
+            content = path.read_text()
+            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            for lineno, line in enumerate(body.splitlines(), start=1):
+                if "git worktree add" in line and "../" in line:
+                    violations.append(f"{path.relative_to(REPO_ROOT)}:{lineno}: sibling pattern: {line.strip()}")
+        assert violations == [], "\n".join(violations)
+
+    def test_worktree_paths_use_dot_worktrees(self):
+        """plan and resume creation sites use ${MAIN_WORKTREE}/.worktrees/."""
+        for skill in ["plan", "resume"]:
+            path = REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md"
+            content = path.read_text()
+            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            assert "${MAIN_WORKTREE}/.worktrees/" in body, (
+                f"{path.relative_to(REPO_ROOT)}: missing ${{MAIN_WORKTREE}}/.worktrees/ pattern"
+            )
+
+    def test_agents_md_documents_worktree_convention(self):
+        content = (REPO_ROOT / "AGENTS.md").read_text()
+        assert "## Worktree Location Convention" in content
+
+    def test_gitignore_auto_inject_uses_main_worktree_path(self):
+        """Post-F1 contract: gitignore auto-inject must use ${MAIN_WORKTREE}/.gitignore,
+        NOT bare .gitignore (which would write to the linked worktree's .gitignore
+        when run from a linked worktree)."""
+        content = (REPO_ROOT / "AGENTS.md").read_text()
+        # The auto-inject block for worktrees must reference ${MAIN_WORKTREE}/.gitignore
+        # (find the optimus-operational-worktrees marker context)
+        idx = content.find("optimus-operational-worktrees")
+        assert idx >= 0, "AGENTS.md must add .worktrees/ to .gitignore via auto-inject"
+        window = content[max(0, idx - 200):idx + 500]
+        # The block must use prefixed .gitignore, not bare
+        assert '"${MAIN_WORKTREE}/.gitignore"' in window or "${MAIN_WORKTREE}/.gitignore" in window, (
+            "gitignore auto-inject for .worktrees/ must use ${MAIN_WORKTREE}/.gitignore (post-F1 contract)"
+        )
+
+    def test_branch_traversal_guard_in_creator_sites(self):
+        """All worktree-creator sites must guard against path-traversal in branch names."""
+        violations = []
+        for skill in ["plan", "resume"]:
+            path = REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md"
+            content = path.read_text()
+            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            # Must contain `*..*|/*)` or equivalent traversal guard
+            if "*..*" not in body or "git worktree add" not in body:
+                # Only flag if the file actually creates a worktree
+                if "git worktree add" in body and "*..*" not in body:
+                    violations.append(f"{path.relative_to(REPO_ROOT)}: missing path-traversal guard")
+        assert violations == [], "\n".join(violations)
