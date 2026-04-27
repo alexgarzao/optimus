@@ -375,10 +375,14 @@ the worktree being removed, `cd` to the main repository first:
 
 ### Step 4.2: Check for Task Branch
 
-Identify the task's branch:
+Identify the task's branch (resolve `MAIN_WORKTREE` first so `state.json` is
+read from the main worktree, not from a linked worktree's isolated copy):
 
 ```bash
-TASK_BRANCH=$(jq -r --arg id "$TASK_ID" '.[$id].branch // ""' .optimus/state.json 2>/dev/null)
+# Resolve main worktree — see AGENTS.md Protocol: Resolve Main Worktree Path.
+MAIN_WORKTREE="${MAIN_WORKTREE:-$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')}"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
+TASK_BRANCH=$(jq -r --arg id "$TASK_ID" '.[$id].branch // ""' "${MAIN_WORKTREE}/.optimus/state.json" 2>/dev/null)
 if [ -z "$TASK_BRANCH" ]; then
   TASK_BRANCH=$(git branch --list "*$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')*" 2>/dev/null | head -1 | tr -d ' *')
 fi

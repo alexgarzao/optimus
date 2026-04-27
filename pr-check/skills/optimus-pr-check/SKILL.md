@@ -1407,8 +1407,8 @@ When the loop exits (any status), proceed to Phase 11 (integration tests).
 ## Phase 11: Integration Tests (before push)
 
 **Before pushing**, run integration tests. These are slow and expensive, so they
-run ONCE here — not during the fix/convergence cycle. Run quietly — see AGENTS.md
-Protocol: Quiet Command Execution:
+run ONCE here — not during the fix/convergence cycle. Run quietly —
+see AGENTS.md Protocol: Quiet Command Execution:
 
 ```bash
 _optimus_quiet_run "make-test-integration" make test-integration   # Optional target — SKIP if missing

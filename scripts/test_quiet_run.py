@@ -112,7 +112,11 @@ class TestQuietRunHelper:
         rc, out, _ = _run_helper(tmp_path, '_optimus_quiet_run "ok" echo hi')
         assert rc == 0, f"expected exit 0, got {rc}; out={out}"
         assert out.startswith("PASS: ok "), f"unexpected output: {out}"
-        assert "log: .optimus/logs/" in out
+        # Path is now resolved against ${MAIN_WORKTREE}/. In tmp_path (no git
+        # repo), MAIN_WORKTREE falls back to "." so the log path is
+        # `./.optimus/logs/...`. Accept either the legacy bare prefix or the
+        # PWD-relative fallback.
+        assert ".optimus/logs/" in out
         log_files = list((tmp_path / ".optimus" / "logs").glob("*-ok-*.log"))
         assert len(log_files) == 1, f"expected 1 log file, got {len(log_files)}"
         assert "hi" in log_files[0].read_text()

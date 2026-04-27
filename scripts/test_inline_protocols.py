@@ -163,6 +163,33 @@ class TestMatchRefToSection:
         result = ip.match_ref_to_section("Protocol: Task", sections)
         assert result == "Protocol: Task"
 
+    def test_startswith_prefers_longest_match_with_warning(
+        self, capsys: pytest.CaptureFixture[str]
+    ):
+        """F3.3a: When 2+ keys share the same prefix, prefer the LONGEST match
+        (most specific) and emit a WARNING to stderr about the ambiguity.
+
+        Without this guard, the resolver returned the first key in dict-iteration
+        order — fragile and silently mis-routed refs.
+        """
+        # Use a prefix `Foo` that matches both `Foo` and `Foo Bar Resolution`.
+        # The reference `Protocol: Foo` should resolve to the LONGER key
+        # because the resolver collects all startswith candidates and picks
+        # the longest, with a stderr warning.
+        sections = {
+            "Protocol: Foo Bar Resolution": "long",
+            "Protocol: Foo Bar": "medium",
+        }
+        # Ref `Protocol: Foo Ba` matches BOTH startswith targets;
+        # the longest one (Foo Bar Resolution) must win.
+        result = ip.match_ref_to_section("Protocol: Foo Ba", sections)
+        assert result == "Protocol: Foo Bar Resolution"
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "ambiguous ref" in captured.err
+        assert "Protocol: Foo Bar Resolution" in captured.err
+        assert "Protocol: Foo Bar" in captured.err
+
     def test_convergence_loop_resolves_against_live_agents_md(self):
         """Regression guard: the live AGENTS.md heading must resolve via the parser.
 
@@ -238,10 +265,13 @@ class TestStripExistingInline:
         result = ip.strip_existing_inline(content)
         assert "Trailing" in result
 
-    def test_missing_end_marker_returns_unchanged(self):
+    def test_missing_end_marker_returns_unchanged(self, capsys: pytest.CaptureFixture[str]):
         content = f"Before\n{ip.MARKER_START}\nOrphaned"
         result = ip.strip_existing_inline(content)
         assert result == content
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "MARKER_START found but MARKER_END missing" in captured.err
 
 
 # --- idempotency integration test ---
@@ -293,7 +323,8 @@ class TestIdempotency:
         skill.write_text("see AGENTS.md Protocol: Nonexistent.\n")
 
         ip.inline_protocols()
-        assert "unmatched" in capsys.readouterr().out.lower()
+        captured = capsys.readouterr()
+        assert "WARNING: unmatched ref" in captured.err
 
     def test_includes_foundational_for_state_management(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         agents = tmp_path / "AGENTS.md"
@@ -360,13 +391,36 @@ class TestIdempotency:
 # --- F3: Critical path tests ---
 
 class TestCriticalPaths:
-    def test_duplicate_heading_keeps_last(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_duplicate_heading_keeps_last(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
         agents = tmp_path / "AGENTS.md"
         agents.write_text("## Same\nFirst content\n## Same\nSecond content\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
         sections = ip.parse_agents_md()
         assert "Second content" in sections["Same"]
         assert "First content" not in sections["Same"]
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "Duplicate heading" in captured.err
+
+    def test_duplicate_heading_warns_on_second_occurrence(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        """Regression guard: warning must fire on the SECOND duplicate, not the third.
+
+        With the bug fixed, exactly two `## Dup` headings produce a WARNING.
+        """
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("## Dup\nA\n## Dup\nB\n")
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        sections = ip.parse_agents_md()
+        assert "Dup" in sections
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "Duplicate heading" in captured.err
+        assert "'Dup'" in captured.err
 
     def test_multiple_mixed_refs_in_single_file(self, tmp_path: Path):
         content = (
@@ -394,7 +448,11 @@ class TestCriticalPaths:
         skill_dir.mkdir(parents=True)
         skill = skill_dir / "SKILL.md"
         skill.write_text("see AGENTS.md Protocol: Y.\n")
-        skill.chmod(0o444)
+        # F3.3c: atomic write uses tmp.replace(), so file permissions on
+        # the target don't block the write — the parent dir must be
+        # write-protected to force OSError. Strip write+execute from the
+        # parent so creating the .tmp sibling fails.
+        skill_dir.chmod(0o555)
 
         try:
             ip.inline_protocols()
@@ -402,7 +460,7 @@ class TestCriticalPaths:
             output = captured.out + captured.err
             assert "ERROR" in output or "Failed to write" in output
         finally:
-            skill.chmod(0o644)
+            skill_dir.chmod(0o755)
 
 
 # --- F4: Edge case tests ---
@@ -478,3 +536,258 @@ class TestEdgeCases:
         captured = capsys.readouterr()
         output = captured.out + captured.err
         assert "ERROR" in output and "skipping" in output.lower()
+
+
+# --- F3.3d: Symlink-write defense ---
+
+class TestSymlinkWrite:
+    def test_refuses_to_write_through_symlink(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        """F3.3d: A SKILL.md that is a symlink must NOT be overwritten.
+
+        Defense-in-depth: a malicious commit could replace SKILL.md with a
+        symlink to ~/.bashrc and we'd otherwise clobber the target.
+        """
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("## Protocol: Sym\nSym content\n")
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+
+        # Create the real target file outside the SKILL path
+        target = tmp_path / "real_target.md"
+        target.write_text("ORIGINAL TARGET CONTENT — must not be overwritten\n")
+
+        # Create the SKILL dir + symlink-as-SKILL.md
+        skill_dir = tmp_path / "linked" / "skills" / "optimus-linked"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        # Stage refs by writing through the symlink target, then convert to symlink
+        target.write_text("see AGENTS.md Protocol: Sym.\n")
+        skill.symlink_to(target)
+
+        ip.inline_protocols()
+        captured = capsys.readouterr()
+        assert "ERROR" in captured.err
+        assert "refusing to write through symlink" in captured.err
+        # Target must remain unchanged.
+        assert target.read_text() == "see AGENTS.md Protocol: Sym.\n"
+        # MARKER_START must NOT appear in target (proves no write happened).
+        assert ip.MARKER_START not in target.read_text()
+
+
+# --- F3.3e: Body-level paste detection ---
+
+class TestBodyLevelInlineGuard:
+    def _setup(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str):
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("## Protocol: Echo\nEcho content\n")
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+        skill_dir = tmp_path / "echo" / "skills" / "optimus-echo"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_text(body)
+        return skill
+
+    def test_warns_on_quiet_run_in_body(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        body = (
+            "see AGENTS.md Protocol: Echo.\n"
+            "```bash\n"
+            "_optimus_quiet_run() {\n"
+            "  echo manual\n"
+            "}\n"
+            "```\n"
+        )
+        self._setup(tmp_path, monkeypatch, body)
+        ip.inline_protocols()
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "_optimus_quiet_run" in captured.err
+        assert "manual definition" in captured.err
+
+    def test_warns_on_set_title_in_body(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        body = (
+            "see AGENTS.md Protocol: Echo.\n"
+            "_optimus_set_title() {\n"
+            "  printf '\\033]0;%s\\007' \"$1\"\n"
+            "}\n"
+        )
+        self._setup(tmp_path, monkeypatch, body)
+        ip.inline_protocols()
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "_optimus_set_title" in captured.err
+
+    def test_warns_on_sanitize_regression(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        # _optimus_sanitize was removed in F2; this is a future regression guard.
+        body = (
+            "see AGENTS.md Protocol: Echo.\n"
+            "_optimus_sanitize() {\n"
+            "  echo regression\n"
+            "}\n"
+        )
+        self._setup(tmp_path, monkeypatch, body)
+        ip.inline_protocols()
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "_optimus_sanitize" in captured.err
+
+
+# --- F3.3f: Canonical reference phrasing in skills ---
+
+class TestCanonicalReferencePhrasing:
+    """Scan every SKILL.md and assert AGENTS.md Protocol: refs use canonical form."""
+
+    def test_no_unanchored_protocol_references(self):
+        """F3.3f: Every `AGENTS.md Protocol:` mention in a SKILL body must
+        either follow canonical phrasing or live in a code/quote block.
+
+        Canonical form: `AGENTS.md Protocol: <Heading>` (the regex anchor
+        used by the inliner). Deviations (e.g. `AGENTS.md "Protocol: X"`)
+        cause silent unmatched refs.
+        """
+        repo_root = Path(__file__).parent.parent
+        skill_files = sorted(repo_root.glob("*/skills/*/SKILL.md"))
+        assert skill_files, "No SKILL.md files found — fixture broken"
+
+        offenders: list[str] = []
+        # Canonical: literally "AGENTS.md Protocol: <Heading>"
+        # The inliner regex is PROTOCOL_RE = r'AGENTS\.md Protocol:\s*([^\n"]+)'
+        canonical_re = re.compile(r'AGENTS\.md\s+Protocol:\s*[^\n"]+')
+        # Suspicious: an unanchored mention of `Protocol:` adjacent to AGENTS.md
+        # but not matching the canonical form. Examples we'd flag:
+        #   `AGENTS.md "Protocol: X"`           (quoted)
+        #   `AGENTS.md\nProtocol: X`            (newline-separated)
+        suspicious_re = re.compile(r'AGENTS\.md["\s]+Protocol:')
+
+        for skill in skill_files:
+            content = skill.read_text()
+            # Strip out the inlined block — those refs are not authoritative.
+            content = ip.strip_existing_inline(content)
+            # Strip fenced code blocks and block-quotes to avoid false positives.
+            content_no_fences = re.sub(r"```[\s\S]*?```", "", content)
+            content_no_quotes = "\n".join(
+                line for line in content_no_fences.splitlines()
+                if not line.lstrip().startswith(">")
+            )
+            for m in suspicious_re.finditer(content_no_quotes):
+                # Verify it's not actually canonical (the canonical form
+                # also matches the suspicious regex if there's a single space).
+                snippet = content_no_quotes[m.start(): m.start() + 80]
+                # Canonical form has exactly one space and no quote between
+                # `AGENTS.md` and `Protocol:`.
+                head = snippet[: snippet.index("Protocol:")]
+                # Strip "AGENTS.md" prefix.
+                between = head[len("AGENTS.md"):]
+                # Canonical: " " (one space). Anything else (multiple
+                # whitespace, quotes, newlines) is non-canonical.
+                if between != " ":
+                    offenders.append(f"{skill}: {snippet!r}")
+
+        # Cross-check: for every canonical mention we found, drop into the
+        # offender list only if the previous regex did not catch it. (The
+        # canonical regex is a sanity check and not used for offender output.)
+        _ = canonical_re  # kept for future tightening; not used to fail here.
+
+        assert not offenders, (
+            "Non-canonical AGENTS.md Protocol references found:\n"
+            + "\n".join(offenders)
+        )
+
+
+# --- F3.3h: MAX_FILE_SIZE boundary ---
+
+class TestMaxFileSize:
+    def test_oversized_agents_md_exits(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ):
+        agents = tmp_path / "AGENTS.md"
+        agents.write_bytes(
+            b"# header\n\n## Protocol: X\n\n" + b"x" * (5 * 1024 * 1024)
+        )
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        with pytest.raises(SystemExit):
+            ip.parse_agents_md()
+
+    def test_oversized_skill_md_skipped_with_warning(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("## Protocol: Big\nBig content\n")
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+
+        skill_dir = tmp_path / "big" / "skills" / "optimus-big"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        # Write a payload that exceeds MAX_FILE_SIZE (5 MB).
+        payload = b"see AGENTS.md Protocol: Big.\n" + b"x" * (5 * 1024 * 1024)
+        skill.write_bytes(payload)
+
+        ip.inline_protocols()
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "exceeds" in captured.err
+        assert "skipping" in captured.err
+        # MARKER_START must NOT have been added (file was skipped).
+        assert ip.MARKER_START not in skill.read_bytes().decode(
+            "utf-8", errors="ignore"
+        )
+
+
+# --- F3.3i: Ref-alias collision INFO line ---
+
+class TestRefAliasCollision:
+    def test_emits_info_when_two_refs_collapse_to_one_key(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        """F3.3i: When 2+ distinct refs map to the same section key, emit
+        an INFO line so reviewers can decide if the aliasing is intentional.
+        """
+        agents = tmp_path / "AGENTS.md"
+        # One heading. Two ways to reference it from the SKILL body:
+        #   1. Exact: `Protocol: Foo Bar Resolution`
+        #   2. Prefix that resolves via startswith: `Protocol: Foo Bar`
+        # Both will map to `Protocol: Foo Bar Resolution`.
+        agents.write_text("## Protocol: Foo Bar Resolution\nFoo content\n")
+        monkeypatch.setattr(ip, "AGENTS_MD", agents)
+        monkeypatch.setattr(ip, "REPO_ROOT", tmp_path)
+
+        skill_dir = tmp_path / "alias" / "skills" / "optimus-alias"
+        skill_dir.mkdir(parents=True)
+        skill = skill_dir / "SKILL.md"
+        skill.write_text(
+            "see AGENTS.md Protocol: Foo Bar Resolution.\n"
+            "also AGENTS.md Protocol: Foo Bar.\n"
+        )
+
+        ip.inline_protocols()
+        captured = capsys.readouterr()
+        assert "INFO" in captured.err
+        assert "ref alias collapsed" in captured.err
+        assert "Protocol: Foo Bar Resolution" in captured.err

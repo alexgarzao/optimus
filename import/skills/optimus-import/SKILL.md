@@ -335,13 +335,17 @@ step — skills resolve the default automatically:
 ```bash
 if [ "$TASKS_DIR" != "docs/pre-dev" ]; then
   # Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
-  if [ ! -f .optimus/config.json ]; then
-    echo '{}' > .optimus/config.json
+  # MAIN_WORKTREE was resolved in Step 1.3 (see line ~195); re-assert here so config.json
+  # writes always land in the main worktree, not in a linked worktree's isolated copy.
+  MAIN_WORKTREE="${MAIN_WORKTREE:-$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')}"
+  MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
+  if [ ! -f "${MAIN_WORKTREE}/.optimus/config.json" ]; then
+    echo '{}' > "${MAIN_WORKTREE}/.optimus/config.json"
   fi
-  if jq --arg dir "$TASKS_DIR" '.tasksDir = $dir' .optimus/config.json > .optimus/config.json.tmp; then
-    mv .optimus/config.json.tmp .optimus/config.json
+  if jq --arg dir "$TASKS_DIR" '.tasksDir = $dir' "${MAIN_WORKTREE}/.optimus/config.json" > "${MAIN_WORKTREE}/.optimus/config.json.tmp"; then
+    mv "${MAIN_WORKTREE}/.optimus/config.json.tmp" "${MAIN_WORKTREE}/.optimus/config.json"
   else
-    rm -f .optimus/config.json.tmp
+    rm -f "${MAIN_WORKTREE}/.optimus/config.json.tmp"
     echo "ERROR: Failed to update config.json"
   fi
 fi

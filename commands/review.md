@@ -196,10 +196,10 @@ This determines which specialist agents to dispatch in Phase 3.
 
 ### Step 2.1: Run Static Analysis (parallel)
 
-Run ALL applicable checks simultaneously via `_optimus_quiet_run` — see AGENTS.md
-Protocol: Quiet Command Execution. The helper redirects each command's output to
-`.optimus/logs/` and prints only a PASS/FAIL line (plus last 50 lines on failure),
-so only the failing checks consume agent context.
+Run ALL applicable checks simultaneously via `_optimus_quiet_run` —
+see AGENTS.md Protocol: Quiet Command Execution. The helper redirects each
+command's output to `.optimus/logs/` and prints only a PASS/FAIL line (plus
+last 50 lines on failure), so only the failing checks consume agent context.
 
 Run `make lint` for lint checks. Optional static analysis tools (vet, imports, format, docs) are auto-detected from the project stack.
 

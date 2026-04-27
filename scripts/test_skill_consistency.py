@@ -2096,3 +2096,27 @@ class TestWorkspaceValidationHardening:
             "Stage-specific overrides must point at done/SKILL.md Step 1.0.2 for "
             "the full strict-mode rule."
         )
+
+
+class TestSanitizeCharsetUniformity:
+    """No SKILL body may redefine _optimus_sanitize with a non-canonical charset.
+
+    Path-traversal defense: AGENTS.md canonical _optimus_sanitize forbids '.' and '/'.
+    Body-level overrides that allow them are a security regression.
+    """
+
+    CANONICAL_CHARSET = "[:alnum:][:space:]-_:"
+
+    def test_no_body_redefinition_of_sanitize(self):
+        violations = []
+        for skill_path in REPO_ROOT.glob("*/skills/*/SKILL.md"):
+            content = skill_path.read_text()
+            # Strip inlined block — only check body code
+            marker = "<!-- INLINE-PROTOCOLS:START -->"
+            body = content.split(marker, 1)[0]
+            if "_optimus_sanitize()" in body:
+                violations.append(str(skill_path.relative_to(REPO_ROOT)))
+        assert violations == [], (
+            f"Body-level redefinition of _optimus_sanitize() found in: {violations}. "
+            f"Use the inlined canonical helper from Protocol: Notification Hooks."
+        )

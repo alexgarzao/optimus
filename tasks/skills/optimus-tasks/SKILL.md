@@ -518,9 +518,8 @@ Show the new table order.
 
 1. Update the status to `Cancelado` in state.json — see AGENTS.md Protocol: State Management.
 2. Remove the `branch` field from the task's entry in state.json (if branch was deleted in Step 6.1).
-4. **Invoke notification hooks (if present):**
+4. **Invoke notification hooks (if present)** — see AGENTS.md Protocol: Notification Hooks:
    ```bash
-   _optimus_sanitize() { printf '%s' "$1" | tr -cd '[:alnum:][:space:]-_./:'; }
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
      "$HOOKS_FILE" task-cancelled "$(_optimus_sanitize "T-XXX")" "$(_optimus_sanitize "<old status>")" "$(_optimus_sanitize "Cancelado")" 2>/dev/null &
@@ -622,9 +621,8 @@ To resolve, run `/optimus-tasks`:
 2. If reopening from `Cancelado`, also remove the `branch` field from state.json (any previous
    branch is stale and should not be reused)
 3. Clean stale session state: `rm -f ".optimus/sessions/session-${TASK_ID}.json"`
-4. **Invoke notification hooks (if present):**
+4. **Invoke notification hooks (if present)** — see AGENTS.md Protocol: Notification Hooks:
    ```bash
-   _optimus_sanitize() { printf '%s' "$1" | tr -cd '[:alnum:][:space:]-_./:'; }
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
      "$HOOKS_FILE" status-change "$(_optimus_sanitize "T-XXX")" "$(_optimus_sanitize "DONE")" "$(_optimus_sanitize "<target status>")" 2>/dev/null &
@@ -704,9 +702,8 @@ code manually without using stage-2).
 ### Step 8.2: Apply Advance
 
 1. Update the status in state.json to the target status — see AGENTS.md Protocol: State Management.
-2. **Invoke notification hooks (if present):**
+2. **Invoke notification hooks (if present)** — see AGENTS.md Protocol: Notification Hooks:
    ```bash
-   _optimus_sanitize() { printf '%s' "$1" | tr -cd '[:alnum:][:space:]-_./:'; }
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
      "$HOOKS_FILE" status-change "$(_optimus_sanitize "T-XXX")" "$(_optimus_sanitize "<old status>")" "$(_optimus_sanitize "<target status>")" 2>/dev/null &
@@ -761,9 +758,8 @@ that significant rework is needed and the task should go back to implementation)
 ### Step 9.2: Apply Demotion
 
 1. Update the status in state.json to the target status — see AGENTS.md Protocol: State Management.
-3. **Invoke notification hooks (if present):**
+3. **Invoke notification hooks (if present)** — see AGENTS.md Protocol: Notification Hooks:
    ```bash
-   _optimus_sanitize() { printf '%s' "$1" | tr -cd '[:alnum:][:space:]-_./:'; }
    HOOKS_FILE=$(test -f ./tasks-hooks.sh && echo ./tasks-hooks.sh || (test -f ./docs/tasks-hooks.sh && echo ./docs/tasks-hooks.sh))
    if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
      "$HOOKS_FILE" status-change "$(_optimus_sanitize "T-XXX")" "$(_optimus_sanitize "<old status>")" "$(_optimus_sanitize "<target status>")" 2>/dev/null &
