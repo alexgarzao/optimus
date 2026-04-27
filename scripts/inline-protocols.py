@@ -54,30 +54,37 @@ def parse_agents_md() -> dict[str, str]:
         sys.exit(1)
     lines = AGENTS_MD.read_text().splitlines()
     sections: dict[str, str] = {}
+    seen: set[str] = set()
     current_key = None
     current_lines: list[str] = []
+
+    def _flush(key: str, body_lines: list[str]) -> None:
+        # Warn on duplicate headings — last one wins, which can silently
+        # hide a misnamed protocol if two sections share a title. Track via
+        # `seen` (not `sections`) so the warning fires on the SECOND
+        # occurrence, not the third.
+        if key in seen:
+            print(
+                f"  WARNING: Duplicate heading '{key}' — later "
+                "definition wins",
+                file=sys.stderr,
+            )
+        seen.add(key)
+        sections[key] = "\n".join(body_lines)
 
     for line in lines:
         heading_match = HEADING_RE.match(line)
         if heading_match:
             title = heading_match.group(1).strip()
             if current_key:
-                # Warn on duplicate headings — last one wins, which can silently
-                # hide a misnamed protocol if two sections share a title.
-                if current_key in sections:
-                    print(
-                        f"  WARNING: Duplicate heading '{current_key}' — later "
-                        "definition wins",
-                        file=sys.stderr,
-                    )
-                sections[current_key] = "\n".join(current_lines)
+                _flush(current_key, current_lines)
             current_key = title
             current_lines = [line]
         elif current_key:
             current_lines.append(line)
 
     if current_key:
-        sections[current_key] = "\n".join(current_lines)
+        _flush(current_key, current_lines)
 
     return sections
 
@@ -123,6 +130,31 @@ def _normalize_key(key: str) -> str:
     return PAREN_SUFFIX_RE.sub('', key).strip().lower()
 
 
+def _pick_longest_with_warning(
+    ref: str, candidates: list[str]
+) -> str | None:
+    """Pick the longest candidate from a startswith match list.
+
+    When 2+ keys match the same prefix, prefer the LONGEST match (most specific),
+    and warn to stderr about the ambiguity so the drift is visible.
+    """
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+    # Sort by length DESC, then lexicographically for deterministic tie-break.
+    ordered = sorted(candidates, key=lambda k: (-len(k), k))
+    chosen = ordered[0]
+    losers = ordered[1:]
+    for loser in losers:
+        print(
+            f"  WARNING: ambiguous ref {ref!r} resolved to {chosen!r} "
+            f"over {loser!r}",
+            file=sys.stderr,
+        )
+    return chosen
+
+
 def match_ref_to_section(ref: str, sections: dict[str, str]) -> str | None:
     """Match a reference name to a section key in AGENTS.md."""
     if ref.startswith("Protocol: "):
@@ -134,12 +166,15 @@ def match_ref_to_section(ref: str, sections: dict[str, str]) -> str | None:
                 key_base = _normalize_key(key[len("Protocol: "):])
                 if key_base == proto_lower:
                     return key
-        # Try startswith match for partial names
+        # Try startswith match for partial names — collect ALL candidates
+        # and prefer the LONGEST match. Warn on ambiguity.
+        candidates: list[str] = []
         for key in sections:
             if key.startswith("Protocol: "):
                 key_base = _normalize_key(key[len("Protocol: "):])
                 if key_base.startswith(proto_lower):
-                    return key
+                    candidates.append(key)
+        return _pick_longest_with_warning(ref, candidates)
     elif ref.startswith("Common: "):
         pattern_name = ref[len("Common: "):]
         pattern_normalized = _normalize_key(pattern_name)
@@ -147,10 +182,12 @@ def match_ref_to_section(ref: str, sections: dict[str, str]) -> str | None:
         for key in sections:
             if _normalize_key(key) == pattern_normalized:
                 return key
-        # Try startswith match
+        # Try startswith match — collect ALL candidates and prefer LONGEST.
+        candidates = []
         for key in sections:
             if _normalize_key(key).startswith(pattern_normalized):
-                return key
+                candidates.append(key)
+        return _pick_longest_with_warning(ref, candidates)
     return None
 
 
@@ -161,7 +198,11 @@ def strip_existing_inline(content: str) -> str:
         return content
     end_idx = content.find(MARKER_END)
     if end_idx == -1:
-        print("  WARNING: MARKER_START found but MARKER_END missing — skipping strip to avoid data loss")
+        print(
+            "  WARNING: MARKER_START found but MARKER_END missing — "
+            "skipping strip to avoid data loss",
+            file=sys.stderr,
+        )
         return content
     after = content[end_idx + len(MARKER_END):]
     return content[:start_idx].rstrip() + after
@@ -218,6 +259,20 @@ def inline_protocols() -> None:
             else:
                 unmatched.append(ref)
 
+        # F3.3i: Detect ref-alias collisions — when 2+ refs map to the same
+        # section key, surface it via INFO so reviewers can decide if the
+        # aliasing is intentional or if a SKILL.md uses inconsistent phrasing.
+        key_to_refs: dict[str, list[str]] = {}
+        for ref, key in matched.items():
+            key_to_refs.setdefault(key, []).append(ref)
+        for key, alias_refs in key_to_refs.items():
+            if len(alias_refs) > 1:
+                print(
+                    f"  INFO: {plugin_name}: ref alias collapsed: "
+                    f"{sorted(alias_refs)} all -> {key!r}",
+                    file=sys.stderr,
+                )
+
         # Collect the sections to inline (deduplicated, ordered)
         sections_to_inline: dict[str, str] = {}
         for ref, key in sorted(matched.items(), key=lambda x: x[1]):
@@ -267,7 +322,28 @@ def inline_protocols() -> None:
                 and MAIN_WORKTREE_PROTOCOL_KEY not in sections_to_inline:
             extra[MAIN_WORKTREE_PROTOCOL_KEY] = foundational[MAIN_WORKTREE_PROTOCOL_KEY]
 
-        content = strip_existing_inline(raw_content).rstrip() + "\n"
+        body_only = strip_existing_inline(raw_content)
+
+        # F3.3e: Detect manual paste of inlined helper functions in the body.
+        # The inliner appends these as part of shared protocols; if a SKILL
+        # body also defines them, output ends up with duplicate definitions
+        # (and drift risk if one copy diverges). _optimus_sanitize is checked
+        # as a future-regression guard — it was removed in F2.
+        body_function_guards = (
+            "_optimus_quiet_run() {",
+            "_optimus_set_title() {",
+            "_optimus_sanitize() {",
+        )
+        for fn_marker in body_function_guards:
+            if fn_marker in body_only:
+                fn_name = fn_marker.split("()", 1)[0]
+                print(
+                    f"  WARNING: {plugin_name}: body contains manual definition "
+                    f"of {fn_name}() — should use inlined protocol",
+                    file=sys.stderr,
+                )
+
+        content = body_only.rstrip() + "\n"
 
         inline_parts = []
         inline_parts.append(f"\n{MARKER_START}")
@@ -291,10 +367,33 @@ def inline_protocols() -> None:
         inline_parts.append(MARKER_END)
 
         new_content = content + "\n".join(inline_parts) + "\n"
+
+        # F3.3d: Refuse to write through a symlink. Defense-in-depth against
+        # a malicious commit that replaces SKILL.md with a symlink to e.g.
+        # ~/.bashrc — the inliner would otherwise overwrite the target.
+        if skill_path.is_symlink():
+            print(
+                f"  ERROR: refusing to write through symlink: {skill_path}",
+                file=sys.stderr,
+            )
+            continue
+
+        # F3.3c: Atomic write. A direct write_text() interrupted mid-write
+        # leaves the file truncated without MARKER_END; on the next run
+        # strip_existing_inline silently degrades. Write to a temp sibling
+        # and atomically replace.
+        tmp = skill_path.with_suffix(skill_path.suffix + ".tmp")
         try:
-            skill_path.write_text(new_content)
+            tmp.write_text(new_content)
+            tmp.replace(skill_path)
         except OSError as e:
             print(f"  ERROR: Failed to write {skill_path}: {e}", file=sys.stderr)
+            # Best-effort cleanup of the temp file if it was created.
+            try:
+                if tmp.exists():
+                    tmp.unlink()
+            except OSError:
+                pass
             continue
 
         total_inlined += 1

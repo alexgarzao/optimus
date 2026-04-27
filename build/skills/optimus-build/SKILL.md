@@ -1224,6 +1224,7 @@ same-repo and separate-repo scopes.
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 if [ -z "$TASKS_DEFAULT_BRANCH" ]; then
   echo "WARNING: Cannot determine default branch for tasks repo. Skipping divergence check."
   # Skip — this is a warning, not a HARD BLOCK
@@ -1580,10 +1581,12 @@ output lines. Capturing that output in the agent's context wastes tokens and slo
 down every turn, even when the command passes cleanly.
 
 This protocol defines `_optimus_quiet_run`, a bash helper that runs a command with
-stdout/stderr redirected to a log file under `.optimus/logs/` and emits **a single
-verdict line** based on the exit code. On failure it also prints the last 50 lines of
-the log so the agent can diagnose without ingesting the full output. The exit code
-is preserved, so downstream control flow (`if ...; then ... fi`) keeps working.
+stdout/stderr redirected to a log file under `${MAIN_WORKTREE}/.optimus/logs/`
+(the **main worktree** copy, so logs survive linked-worktree cleanup) and emits
+**a single verdict line** based on the exit code. On failure it also prints the
+last 50 lines of the log so the agent can diagnose without ingesting the full
+output. The exit code is preserved, so downstream control flow
+(`if ...; then ... fi`) keeps working.
 
 **Helper (auto-inlined — do NOT manually copy):**
 
@@ -1596,9 +1599,10 @@ source of truth is enough.
 _optimus_quiet_run() {
   # Usage: _optimus_quiet_run <label> <command> [args...]
   # Runs <command> with stdout+stderr redirected to
-  # .optimus/logs/<timestamp>-<label>-<pid>.log. Prints a single PASS/FAIL line;
-  # on FAIL also prints last 50 lines of the log (terminal escapes stripped).
-  # Returns the command's exit code unchanged.
+  # ${MAIN_WORKTREE}/.optimus/logs/<timestamp>-<label>-<pid>.log (under the main
+  # worktree, so logs survive linked-worktree cleanup). Prints a single
+  # PASS/FAIL line; on FAIL also prints last 50 lines of the log (terminal
+  # escapes stripped). Returns the command's exit code unchanged.
   local label="$1"; shift
   if [ -z "$label" ] || [ $# -eq 0 ]; then
     echo "ERROR: _optimus_quiet_run requires <label> and <command>" >&2
@@ -1609,8 +1613,18 @@ _optimus_quiet_run() {
   [ -z "$safe" ] && safe="run"
   local ts
   ts=$(date +%Y%m%d-%H%M%S)
+  # Resolve MAIN_WORKTREE if not already set by caller. Helper may be invoked
+  # in unusual contexts (e.g., outside the standard Resolve-Main-Worktree
+  # invocation chain), so fall back to PWD with a WARNING rather than crash.
+  if [ -z "${MAIN_WORKTREE:-}" ]; then
+    MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+  fi
+  if [ -z "$MAIN_WORKTREE" ]; then
+    echo "WARNING: _optimus_quiet_run could not resolve MAIN_WORKTREE; logging to PWD-relative path" >&2
+    MAIN_WORKTREE="."
+  fi
   # PID suffix prevents same-second same-label collisions (parallel or fast sequential).
-  local log=".optimus/logs/${ts}-${safe}-$$.log"
+  local log="${MAIN_WORKTREE}/.optimus/logs/${ts}-${safe}-$$.log"
   if ! mkdir -p "$(dirname "$log")" 2>/dev/null; then
     echo "ERROR: _optimus_quiet_run cannot create $(dirname "$log") (permission denied, disk full, or read-only FS)" >&2
     return 3
@@ -1777,6 +1791,7 @@ with the next gate (still `IN_PROGRESS`), or re-show the entry gate (`null`).
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 SESSION_FILE="${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json"
 if [ -f "$SESSION_FILE" ]; then
   if ! jq empty "$SESSION_FILE" 2>/dev/null; then
@@ -1838,12 +1853,13 @@ fi
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 # Mirror Protocol: Initialize .optimus Directory (mkdir + gitignore) so stage
 # agents — which call Session State but not Initialize Directory — also create
 # the dirs and update .gitignore on first phase transition.
 mkdir -p "${MAIN_WORKTREE}/.optimus/sessions" "${MAIN_WORKTREE}/.optimus/reports" "${MAIN_WORKTREE}/.optimus/logs"
-if ! grep -q '^# optimus-operational-files' .gitignore 2>/dev/null; then
-  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> .gitignore
+if ! grep -q '^# optimus-operational-files' "${MAIN_WORKTREE}/.gitignore" 2>/dev/null; then
+  printf '\n# optimus-operational-files\n.optimus/config.json\n.optimus/state.json\n.optimus/stats.json\n.optimus/sessions/\n.optimus/reports/\n.optimus/logs/\n' >> "${MAIN_WORKTREE}/.gitignore"
 fi
 # Log retention (idempotent — runs every phase transition): age-based + count-cap
 # prune. Stage agents are the heaviest log producers, so placing prune here
@@ -1901,6 +1917,7 @@ fi
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 if [ -f "$STATE_FILE" ]; then
   # Validate JSON integrity before reading
@@ -1927,6 +1944,7 @@ A task with no entry in state.json is implicitly `Pendente`.
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 # Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
 STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 if [ ! -f "$STATE_FILE" ]; then
@@ -1959,6 +1977,7 @@ fi
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 if [ ! -f "$STATE_FILE" ]; then
   echo "state.json does not exist — task is already implicitly Pendente."
@@ -1978,6 +1997,7 @@ fi
 # Requires Protocol: Resolve Main Worktree Path to have run first
 # (or resolve inline; see that protocol).
 MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
+MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 STATE_FILE="${MAIN_WORKTREE}/.optimus/state.json"
 # TASKS_FILE is resolved via Protocol: Resolve Tasks Git Scope (<tasksDir>/optimus-tasks.md).
 # Validate state.json if it exists

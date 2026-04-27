@@ -378,6 +378,135 @@ class TestResolverIntegration:
         assert "T-001" in main_state.read_text()
 
 
+class TestSkillBodiesUseMainWorktrePrefixForReadsAndAppends:
+    """Bodies of SKILL.md files (above INLINE-PROTOCOLS:START), AGENTS.md, and
+    `scripts/inline-protocols.py` must NOT contain unprefixed `.optimus/` reads
+    nor unprefixed `.gitignore` mutations. These caught the F1 incident
+    (worktree-isolation, T-037 — silent state.json data loss).
+
+    Each test method targets one source-class:
+      - F1.1a — `local log=".optimus/...` patterns inside helpers.
+      - F1.1b — `.gitignore` mutations (`>> .gitignore` and
+        `grep -q ... .gitignore`) without `${MAIN_WORKTREE}/` prefix.
+      - F1.1c/1d — inline `jq` reads and `[ -f` checks against `.optimus/<file>.json`
+        without `${MAIN_WORKTREE}/` prefix.
+
+    Detection skips fenced bash blocks that ARE the documented `# WRONG` example
+    of the resolver protocol (see `_strip_wrong_example_block`).
+    """
+
+    # `local <var>=".optimus/...` — caught the F1 1a (_optimus_quiet_run helper).
+    LOCAL_LOG_OPTIMUS_RE = re.compile(
+        r'^\s*local\s+\w+\s*=\s*"\.optimus/',
+        re.MULTILINE,
+    )
+    # `.gitignore` mutations without `${MAIN_WORKTREE}/` (or `$MAIN_WORKTREE/`) prefix.
+    # Catches:  printf '...' >> .gitignore   and   grep -q '...' .gitignore
+    # Skips:    printf '...' >> "${MAIN_WORKTREE}/.gitignore"
+    GITIGNORE_BARE_APPEND_RE = re.compile(
+        r'>>\s*(?!"?\$\{?MAIN_WORKTREE)(?:"\s*)?\.gitignore\b',
+    )
+    GITIGNORE_BARE_GREP_RE = re.compile(
+        r'\bgrep\s+-q\b[^\n]*?\s(?!"?\$\{?MAIN_WORKTREE)(?:"\s*)?\.gitignore\b',
+    )
+    # Inline jq/[ -f reads against bare `.optimus/<file>.json` (no `${MAIN_WORKTREE}/`).
+    # Targets the F1 1c (done state.json read) and F1 1d (import config.json read)
+    # classes. Excludes:
+    #   - LHS assignments (handled by RELATIVE_PATH_ASSIGN_RE)
+    #   - lines mentioning `${MAIN_WORKTREE}` already (the `>` redirection target
+    #     would still match the read on the same line of mv).
+    JQ_READ_BARE_OPTIMUS_RE = re.compile(
+        r'(?:\bjq\b[^\n]*?|\[\s+-f\s+|\bcat\s+|\bmv\s+)(?:"\s*)?\.optimus/(?:state|stats|config|sessions|reports)(?:\.json|/)',
+    )
+
+    def _scan_targets(self) -> list[tuple[str, str]]:
+        """Return [(label, content), ...] for every source we scan.
+
+        - SKILL.md bodies (above INLINE-PROTOCOLS:START)
+        - AGENTS.md (full, minus the documented `# WRONG` example)
+        - scripts/inline-protocols.py (full)
+        """
+        targets: list[tuple[str, str]] = []
+        for skill_path in _all_skill_files():
+            rel = skill_path.relative_to(REPO_ROOT)
+            targets.append((str(rel), _strip_inlined_block(_read(skill_path))))
+        targets.append(
+            ("AGENTS.md", _strip_wrong_example_block(_read(AGENTS_MD)))
+        )
+        inliner = REPO_ROOT / "scripts" / "inline-protocols.py"
+        if inliner.exists():
+            targets.append(("scripts/inline-protocols.py", _read(inliner)))
+        return targets
+
+    def test_no_local_optimus_log_paths(self):
+        """`local log=".optimus/..."` (and similar `local <var>=".optimus/...")
+        leaks PWD-relative paths inside helpers (F1 1a — _optimus_quiet_run
+        was logging to the linked worktree's .optimus/logs/)."""
+        violations: list[str] = []
+        for label, content in self._scan_targets():
+            for m in self.LOCAL_LOG_OPTIMUS_RE.finditer(content):
+                line_no = content[: m.start()].count("\n") + 1
+                ctx = content.splitlines()[line_no - 1].strip()
+                violations.append(f"{label}:{line_no}: {ctx}")
+        assert violations == [], (
+            "Found `local <var>=\".optimus/...\"` patterns. These resolve "
+            "against PWD and write to the linked-worktree's isolated .optimus/, "
+            "losing data on `git worktree remove`:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+            + "\n\nFix: build the path from ${MAIN_WORKTREE}/.optimus/... after "
+            "invoking AGENTS.md Protocol: Resolve Main Worktree Path."
+        )
+
+    def test_no_bare_gitignore_mutations(self):
+        """`>> .gitignore` and `grep -q ... .gitignore` without
+        `${MAIN_WORKTREE}/` prefix (F1 1b — Initialize .optimus Directory and
+        Session State were appending to the linked worktree's .gitignore)."""
+        violations: list[str] = []
+        for label, content in self._scan_targets():
+            for regex, kind in (
+                (self.GITIGNORE_BARE_APPEND_RE, "append"),
+                (self.GITIGNORE_BARE_GREP_RE, "grep"),
+            ):
+                for m in regex.finditer(content):
+                    line_no = content[: m.start()].count("\n") + 1
+                    ctx = content.splitlines()[line_no - 1].strip()
+                    violations.append(f"{label}:{line_no} [{kind}]: {ctx}")
+        assert violations == [], (
+            "Found bare `.gitignore` mutations (no ${MAIN_WORKTREE}/ prefix). "
+            "When run from a linked worktree, these update only the linked "
+            "worktree's .gitignore — the main worktree never gets the "
+            "operational-files block:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+            + "\n\nFix: use \"${MAIN_WORKTREE}/.gitignore\" after invoking "
+            "AGENTS.md Protocol: Resolve Main Worktree Path."
+        )
+
+    def test_no_inline_optimus_json_reads_without_prefix(self):
+        """Inline `jq ... .optimus/<file>.json` and `[ -f .optimus/<file>.json ]`
+        reads must use ${MAIN_WORKTREE}/ (F1 1c — done was reading state.json
+        from the linked worktree; F1 1d — import was writing config.json to
+        the linked worktree)."""
+        violations: list[str] = []
+        for label, content in self._scan_targets():
+            for m in self.JQ_READ_BARE_OPTIMUS_RE.finditer(content):
+                line_no = content[: m.start()].count("\n") + 1
+                ctx = content.splitlines()[line_no - 1].strip()
+                # Skip if the line ALSO uses ${MAIN_WORKTREE} elsewhere (e.g.,
+                # `mv "${MAIN_WORKTREE}/.optimus/config.json.tmp" "${MAIN_WORKTREE}/.optimus/config.json"`
+                # has only-prefixed references).
+                if "${MAIN_WORKTREE}" in ctx or "$MAIN_WORKTREE" in ctx:
+                    continue
+                violations.append(f"{label}:{line_no}: {ctx}")
+        assert violations == [], (
+            "Found inline reads against bare `.optimus/<file>.json` paths. "
+            "These resolve to the linked worktree's isolated copy, which is "
+            "lost on `git worktree remove` (T-037 silent data-loss class):\n"
+            + "\n".join(f"  - {v}" for v in violations)
+            + "\n\nFix: prefix the path with \"${MAIN_WORKTREE}/\", e.g. "
+            "`jq ... \"${MAIN_WORKTREE}/.optimus/state.json\"`."
+        )
+
+
 class TestInlineProtocolsInjectsMainWorktree:
     """The propagation script must inject Protocol: Resolve Main Worktree Path
     as a foundational dependency for any skill that touches .optimus/ files."""
