@@ -464,7 +464,7 @@ CI Status:
 - DeepSource analyzers (Go, JavaScript, Docker, Shell, etc.)
 - Any other external check
 
-**Do NOT rationalize away failing checks.** Common mistakes to avoid:
+**Do NOT rationalize away failing checks.** Anti-rationalization (excuses the agent MUST NOT use):
 - "Codacy/DeepSource failures are already covered by the review threads" — NO. The failing CHECK is a separate problem from individual comments. The check failing means the PR cannot be merged.
 - "Merge Gate failed because of Codacy/DeepSource" — YES, but it's still a failing check that must be reported as a finding with root cause.
 - "These are external tools, not CI" — ALL checks shown by `gh pr checks` are CI checks regardless of their source.
@@ -2610,7 +2610,7 @@ that dispatch review droids MUST include the applicable checklists in agent prom
 - i18n readiness: no hardcoded user-facing strings, date/number formatting locale-aware
 - Performance: no unnecessary re-renders, large lists virtualized, images optimized
 
-**Backend specialist** (`ring-dev-team-backend-engineer-golang` or TS equivalent) must additionally verify:
+**Backend specialist** (`ring-dev-team-backend-engineer-golang` or `ring-dev-team-backend-engineer-typescript`) must additionally verify:
 - Language idiomaticity: follows official style guide conventions
 - Graceful shutdown: SIGTERM handling, in-flight request draining
 - Connection pool sizing: appropriate for expected load

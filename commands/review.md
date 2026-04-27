@@ -897,15 +897,17 @@ When agents identify a missing test (from QA analyst, spec compliance, or any ot
 - Within a dispatched round, present every finding regardless of severity. Whether to run another round is gated by user prompt.
 
 ### Dry-Run Mode
-If the user requests a dry-run (e.g., "dry-run review T-012", "preview review"):
-- Run ALL analysis phases (Phase 2, Phase 3, Phase 4, Phase 5) normally
-- Present ALL findings in Phase 6 (interactive resolution)
-- **Do NOT apply any fixes** — skip Phase 7 (batch apply) entirely
-- **Do NOT change task status** — skip the status update in Step 1.0.8
-- **Do NOT increment stats** — skip Step 1.0.9 (stage stats)
-- **Do NOT enter the convergence loop (rounds 2+)** — round 1 (primary review pass) is sufficient for estimation
-- Present a summary showing: total findings, severity breakdown, estimated fix effort
-- This allows the user to see what would happen before committing to a full review
+
+Follow AGENTS.md Protocol: Dry-Run Mode. The canonical rules apply uniformly
+to plan/build/review/done — see the inlined Protocol: Dry-Run Mode block below.
+
+**Stage-3 (review) specifics:**
+- The "no status change" rule means skip the status update in Step 1.0.8.
+- The "no stats" rule means skip Step 1.0.9 (Increment Stage Stats).
+- The "no fix application" rule means skip Phase 7 (batch apply) entirely.
+- The "skip convergence rounds 2+" rule means stop after Phase 6 round 1.
+- Present a summary showing: total findings, severity breakdown, estimated
+  fix effort.
 
 ### Communication
 - Be specific: "line 42 of file.tsx uses X, but coding standards section Y requires Z"
@@ -1790,6 +1792,10 @@ else
   SHOULD_FETCH=1
   if [ -f "$FETCH_MARKER" ]; then
     LAST_EPOCH=$(cat "$FETCH_MARKER" 2>/dev/null || echo 0)
+    # Defense-in-depth: ensure marker contents are numeric before arithmetic.
+    # A corrupted/manually-edited marker file would otherwise crash the
+    # `$((NOW_EPOCH - LAST_EPOCH))` expression under `set -euo pipefail`.
+    [[ "$LAST_EPOCH" =~ ^[0-9]+$ ]] || LAST_EPOCH=0
     if [ -n "$LAST_EPOCH" ] && [ "$((NOW_EPOCH - LAST_EPOCH))" -lt 300 ]; then
       SHOULD_FETCH=0
     fi
@@ -1820,6 +1826,32 @@ fi
   not the project code branches.
 
 Skills reference this as: "Check optimus-tasks.md divergence — see AGENTS.md Protocol: Divergence Warning."
+
+
+## Protocol: Dry-Run Mode
+
+**Referenced by:** plan, build, review, done (all stage agents 1-4).
+
+All stage agents support **dry-run mode**. When the user includes "dry-run" or
+"preview" in their invocation (e.g., "dry-run spec T-003", "preview review T-012"),
+the agent MUST:
+
+1. **Run all analysis/validation phases normally** — agent dispatch, findings, etc.
+2. **Do NOT change task status** — skip the status update step in state.json.
+3. **Do NOT commit or push anything** — no git operations that modify state.
+4. **Do NOT create workspaces** — skip branch/worktree creation (stage-1 only).
+5. **Do NOT apply fixes** — skip batch-apply phases.
+6. **Do NOT increment stage stats** — skip the Increment Stage Stats protocol.
+7. **Do NOT write session files** — session state is for crash recovery of real
+   executions, not previews.
+8. **Skip convergence rounds 2+** — round 1 (primary review pass) is sufficient
+   for preview; do NOT enter the convergence loop.
+9. **Present results as informational** — phrase the summary as "what would happen"
+   without implying any side effects occurred.
+
+Stage agents may add stage-specific dry-run notes (e.g., which phase numbers
+to skip), but MUST NOT relax any of the rules above. The point of dry-run is
+to give the user a reliable preview with zero state mutation.
 
 
 ### Protocol: GitHub CLI Check (HARD BLOCK)
@@ -1923,14 +1955,14 @@ Events and their parameter signatures:
 | `status-change` | `event task_id old_status new_status` | Any status transition |
 | `task-done` | `event task_id old_status "DONE"` | Task marked as done |
 | `task-cancelled` | `event task_id old_status "Cancelado"` | Task cancelled |
-| `task-blocked` | `event task_id current_status current_status reason` | Dependency check failed (5 args — includes reason) |
+| `task-blocked` | `event task_id current_status reason` | Dependency check failed (4 args — includes reason) |
 
 When a dependency check fails (provide defaults so hook payload is never malformed):
 ```bash
 : "${dep_id:=unknown}"
 : "${dep_status:=unknown}"
 if [ -n "$HOOKS_FILE" ] && [ -x "$HOOKS_FILE" ]; then
-  "$HOOKS_FILE" "task-blocked" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "blocked by $dep_id ($dep_status)")" 2>/dev/null &
+  "$HOOKS_FILE" "task-blocked" "$(_optimus_sanitize "$task_id")" "$(_optimus_sanitize "$current_status")" "$(_optimus_sanitize "blocked by $dep_id ($dep_status)")" 2>/dev/null &
 fi
 ```
 
@@ -2038,7 +2070,7 @@ that dispatch review droids MUST include the applicable checklists in agent prom
 - i18n readiness: no hardcoded user-facing strings, date/number formatting locale-aware
 - Performance: no unnecessary re-renders, large lists virtualized, images optimized
 
-**Backend specialist** (`ring-dev-team-backend-engineer-golang` or TS equivalent) must additionally verify:
+**Backend specialist** (`ring-dev-team-backend-engineer-golang` or `ring-dev-team-backend-engineer-typescript`) must additionally verify:
 - Language idiomaticity: follows official style guide conventions
 - Graceful shutdown: SIGTERM handling, in-flight request draining
 - Connection pool sizing: appropriate for expected load
@@ -2676,6 +2708,14 @@ for TASK_ID in $TASK_IDS; do
   echo "$TASK_ID: $STATUS"
 done
 ```
+
+**Cancelado state.json shape contract:**
+When a task transitions to status `Cancelado`, the `branch` field MUST remain present
+in the state.json entry but MAY be set to empty string `""` (NOT removed) if the
+underlying branch was deleted by the cancel flow. Readers MUST treat `"branch": ""`
+as a valid Cancelado-state sentinel; they MUST NOT treat absence of the `branch`
+field as a meaningful state difference. The State Management writer ALWAYS produces
+the full `{status, branch, updated_at}` triple.
 
 **state.json is NEVER committed.** It is gitignored. No `git add` or `git commit`
 for state changes.

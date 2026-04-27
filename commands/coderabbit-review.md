@@ -1093,7 +1093,7 @@ that dispatch review droids MUST include the applicable checklists in agent prom
 - i18n readiness: no hardcoded user-facing strings, date/number formatting locale-aware
 - Performance: no unnecessary re-renders, large lists virtualized, images optimized
 
-**Backend specialist** (`ring-dev-team-backend-engineer-golang` or TS equivalent) must additionally verify:
+**Backend specialist** (`ring-dev-team-backend-engineer-golang` or `ring-dev-team-backend-engineer-typescript`) must additionally verify:
 - Language idiomaticity: follows official style guide conventions
 - Graceful shutdown: SIGTERM handling, in-flight request draining
 - Connection pool sizing: appropriate for expected load
