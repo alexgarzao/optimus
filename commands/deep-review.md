@@ -500,7 +500,12 @@ extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
 **Summary:** Resolve `MAIN_WORKTREE` once via `git worktree list --porcelain | awk '/^worktree / {print $2; exit}'` with `${MAIN_WORKTREE:?…}` defensive guard. Use `${MAIN_WORKTREE}/.optimus/...` for ALL `.optimus/` paths (gitignored, so doesn't propagate across linked worktrees). See full recipe in AGENTS.md.
 
-### Finding Presentation (Unified Model)
+### Finding Presentation (Unified Model) (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Finding Presentation (Unified Model)`.**
+
+**Summary:** Common pattern for cycle review skills (plan, build, review, pr-check, deep-review, deep-doc-review, coderabbit-review): collect findings, dedup, group same-nature, present ONE-AT-A-TIME via AskUser with strict `[topic]/[option]` template, collect ALL decisions before applying ANY fixes. Mandatory: `(X/N)` progress prefix per finding; ALL findings presented (no auto-skip by severity); HARD BLOCK on "Tell me more" or free-text response — STOP and answer immediately, never defer to end of loop. Anti-rationalization defenses listed inline ("I'll address questions at end" — NO). Scope of structured template: finding-decision AskUsers in cycle review skills only; admin AskUsers MAY use prose. See full pattern + anti-rationalization examples in AGENTS.md.
+
 All cycle review skills follow this pattern:
 1. Collect findings from agents/tools
 2. Consolidate and deduplicate
@@ -524,128 +529,17 @@ All cycle review skills follow this pattern:
    - Skip — no action
    - Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
 
-   **AskUser template (MANDATORY — follow this exact structure for every finding):**
-   ```
-   1. [question] (X/N) SEVERITY — Finding title summary
-   [topic] (X/N) F#-Category
-   [option] Option A: recommended fix
-   [option] Option B: alternative approach
-   [option] Skip
-   [option] Tell me more
-   ```
-
-   **Scope of the structured AskUser template:**
-
-   The `[topic]/[option]` structured template applies ONLY to **AskUser calls that present
-   findings/decisions inside cycle review skills** (plan, build, review, pr-check,
-   deep-review, deep-doc-review, coderabbit-review). Each finding presentation must use
-   the template so the user gets consistent UX and the test suite can verify the contract.
-
-   Other AskUser calls — status confirmations, scope choosers, file-presence prompts,
-   admin operations like task creation/cancellation, resume reset confirmations, etc. —
-   MAY use prose. Authors should still aim for clarity and explicit option labels, but
-   the structured template is not required outside finding loops.
-
-   This scope is enforced by `TestStructuredAskUserScope` in `scripts/test_skill_consistency.py`.
-
-9. **HARD BLOCK — IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds
-   with free text (a question, disagreement, or request for clarification):**
-   **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
-   Research the user's concern RIGHT NOW using `WebSearch`, codebase analysis, or both.
-   Provide a thorough answer with evidence (links, code references, best practice citations).
-   Only AFTER the user is satisfied, re-present the SAME finding's options and ask for
-   their decision again. This may go back and forth multiple times — that is expected.
-   **NEVER defer the response to the end of the findings loop.**
-
-   **Anti-rationalization (excuses the agent MUST NOT use to skip immediate response):**
-   - "I'll address all questions after presenting the remaining findings" — NO
-   - "Let me continue with the next finding and come back to this" — NO
-   - "I'll research this after the findings loop" — NO
-   - "This is noted, moving to the next finding" — NO
-10. After ALL N decisions collected: apply ALL approved fixes (see below)
-11. Run verification (see Verification Timing below)
-12. Present final summary
-
-
 ### Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated) (summarized)
 
 > **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)`.**
 
 **Summary:** Multi-round review pattern for plan, build, review, pr-check, coderabbit-review, deep-review, deep-doc-review. Round 1 is mandatory (the skill's primary dispatch). Rounds 2-5 are gated behind explicit `AskUser` prompts (entry gate before round 2, per-round gate before 3/4/5). Each gated round dispatches the SAME droid roster as round 1 in parallel via `Task` tool with zero prior context — agents read files fresh from disk. Convergence detection (zero new findings, strict `same file + ±5 lines + same category` matching) exits silently with status `CONVERGED` — never asks for another round. Hard limit at round 5. Exit statuses: `CONVERGED`, `USER_STOPPED`, `SKIPPED`, `HARD_LIMIT`, `DISPATCH_FAILED_ABORTED` (build has a single-slot carve-out). See full recipe in AGENTS.md.
 
-### Protocol: Coverage Measurement
+### Protocol: Coverage Measurement (summarized)
 
-**Referenced by:** review, pr-check, coderabbit-review, deep-review, build
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Coverage Measurement`.**
 
-Measure test coverage using Makefile targets with stack-specific fallbacks.
-
-**Run coverage quietly.** Coverage commands are the single biggest source of
-verbose output (N packages × per-file coverage lines). Wrap them with
-`_optimus_quiet_run` (see Protocol: Quiet Command Execution) so the full output
-lands on disk and only a PASS/FAIL line reaches the agent. Then read only the
-"total" summary line to extract the percentage.
-
-**Unit coverage command resolution order:**
-1. `make test-coverage` (if Makefile target exists), run via `_optimus_quiet_run`
-2. Stack-specific fallback:
-   - Go: `go test -coverprofile=coverage-unit.out ./...` (wrapped) then `go tool cover -func=coverage-unit.out`
-   - Node: `npm test -- --coverage` (wrapped)
-   - Python: `pytest --cov=. --cov-report=term` (wrapped)
-
-If no unit coverage command is available, mark as **SKIP** — do not fail the verification.
-
-**Integration coverage command resolution order:**
-1. `make test-integration-coverage` (if Makefile target exists), run via `_optimus_quiet_run`
-2. Stack-specific fallback:
-   - Go: `go test -tags=integration -coverprofile=coverage-integration.out ./...` (wrapped) then `go tool cover -func=coverage-integration.out`
-   - Node: `npm run test:integration -- --coverage` (wrapped)
-   - Python: `pytest -m integration --cov=. --cov-report=term` (wrapped)
-
-If no integration coverage command is available, mark as **SKIP** — do not fail the verification.
-
-**Extracting the percentage (agent-visible output):** after the wrapped run, emit
-only the total line. Examples:
-
-```bash
-# Go
-_optimus_quiet_run "make-test-coverage" make test-coverage
-if [ -f coverage-unit.out ]; then
-  go tool cover -func=coverage-unit.out | awk '/^total:/ {print "Unit coverage: " $NF}'
-fi
-
-# Node (Istanbul JSON/text-summary)
-_optimus_quiet_run "npm-test-coverage" npm test -- --coverage
-if [ -f coverage/coverage-summary.json ]; then
-  jq -r '.total.lines.pct | "Unit coverage: \(.)%"' coverage/coverage-summary.json
-fi
-
-# Python (pytest-cov)
-_optimus_quiet_run "pytest-cov" pytest --cov=. --cov-report=term --cov-report=json:coverage.json
-if [ -f coverage.json ]; then
-  jq -r '.totals.percent_covered_display | "Unit coverage: \(.)%"' coverage.json
-fi
-```
-
-The agent sees ~2 lines total (PASS verdict + "Unit coverage: 87.4%"). The full
-per-file breakdown stays in `.optimus/logs/` and in the native coverage files.
-
-**Thresholds:**
-
-| Test Type | Threshold | Verdict if Below |
-|-----------|-----------|-----------------|
-| Unit tests | 85% | NEEDS_FIX / HIGH finding |
-| Integration tests | 70% | NEEDS_FIX / HIGH finding |
-
-**Coverage gap analysis:** When scanning for untested functions/methods (0% coverage),
-read the coverage output file (not the agent turn stdout) — either the native
-`coverage-*.out` / `coverage-summary.json` / `coverage.json` file, or the
-`.optimus/logs/<timestamp>-*-coverage-*.log` file produced by `_optimus_quiet_run`
-(the trailing `-<pid>` segment is part of every helper-produced log filename).
-Flag business-logic functions with 0% as HIGH, infrastructure/generated code with
-0% as SKIP.
-
-Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage Measurement."
-
+**Summary:** Measure unit + integration test coverage via Makefile targets with stack-specific fallbacks (Go: `go test -coverprofile`; Node: `npm test -- --coverage`; Python: `pytest --cov=. --cov-report=term`). Run wrapped in `_optimus_quiet_run` (Protocol: Quiet Command Execution) to keep agent context clean — the agent sees only PASS/FAIL + extracted total percentage; full per-file breakdown stays in `.optimus/logs/` and native coverage files. Thresholds: unit 85%, integration 70% (NEEDS_FIX/HIGH finding below). When scanning untested functions, read coverage output FILE (not stdout) — flag business-logic functions at 0% as HIGH; infrastructure/generated code as SKIP. If no coverage command resolves, mark SKIP — do not fail verification. See full extraction recipes in AGENTS.md.
 
 ### Protocol: Discover Review Droids
 

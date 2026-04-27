@@ -3281,12 +3281,12 @@ class TestWorktreeLocationConvention:
 # source-of-truth so the marker can't be dropped without flipping a test.
 
 class TestProtocolSummarizeMarker:
-    """Phases 1+2+3 of issue #34: Verify the top-duplicated protocols carry
+    """Phases 1+2+3+4 of issue #34: Verify the top-duplicated protocols carry
     the <!-- inline-mode: summarize --> marker in AGENTS.md."""
 
     # Protocols carrying the standard `### Protocol: <name>` heading.
-    # File Location is a non-`Protocol:` H3 section; tested separately
-    # via test_summarize_marker_present_for_file_location_section.
+    # File Location, Format Validation, and Finding Presentation are
+    # non-`Protocol:` H3 sections; tested separately via dedicated methods.
     SUMMARIZED_PROTOCOLS = [
         # Phase 1:
         "Resolve Main Worktree Path",
@@ -3300,6 +3300,9 @@ class TestProtocolSummarizeMarker:
         # Phase 3:
         "Terminal Identification",
         "Per-Droid Quality Checklists",
+        # Phase 4:
+        "Coverage Measurement",
+        "Notification Hooks",
     ]
 
     def test_summarize_marker_present_for_top_protocols(self):
@@ -3361,5 +3364,57 @@ class TestProtocolSummarizeMarker:
         )
         assert marker_idx < summary_idx, (
             "File Location: marker must come before **Summary:** "
+            f"(marker={marker_idx}, summary={summary_idx})"
+        )
+
+    def test_summarize_marker_present_for_format_validation_section(self):
+        """Phase 4: the `### Format Validation` section (a non-`Protocol:` H3
+        nested under `## optimus-tasks.md Format Specification`) also carries
+        the summarize marker. Same rationale as File Location — the inliner
+        accepts any H2/H3 but the SUMMARIZED_PROTOCOLS list only enumerates
+        `Protocol: <name>` headings, so this section is guarded explicitly."""
+        content = AGENTS_MD.read_text()
+        heading = "### Format Validation"
+        idx = content.find(heading)
+        assert idx >= 0, f"{heading} missing from AGENTS.md"
+        window = content[idx: idx + 1500]
+        marker_idx = window.find("<!-- inline-mode: summarize -->")
+        summary_idx = window.find("**Summary:**")
+        assert marker_idx >= 0, (
+            "Format Validation: missing <!-- inline-mode: summarize --> marker "
+            "(must be placed immediately under the heading)"
+        )
+        assert summary_idx >= 0, (
+            "Format Validation: missing **Summary:** subsection "
+            "(must follow the summarize marker)"
+        )
+        assert marker_idx < summary_idx, (
+            "Format Validation: marker must come before **Summary:** "
+            f"(marker={marker_idx}, summary={summary_idx})"
+        )
+
+    def test_summarize_marker_present_for_finding_presentation_section(self):
+        """Phase 4: the `### Finding Presentation (Unified Model)` section (a
+        non-`Protocol:` H3) also carries the summarize marker. Same rationale
+        as File Location and Format Validation — the inliner accepts any H2/H3
+        but the SUMMARIZED_PROTOCOLS list is keyed by `Protocol: <name>` form,
+        so this section is guarded explicitly."""
+        content = AGENTS_MD.read_text()
+        heading = "### Finding Presentation (Unified Model)"
+        idx = content.find(heading)
+        assert idx >= 0, f"{heading} missing from AGENTS.md"
+        window = content[idx: idx + 1500]
+        marker_idx = window.find("<!-- inline-mode: summarize -->")
+        summary_idx = window.find("**Summary:**")
+        assert marker_idx >= 0, (
+            "Finding Presentation: missing <!-- inline-mode: summarize --> "
+            "marker (must be placed immediately under the heading)"
+        )
+        assert summary_idx >= 0, (
+            "Finding Presentation: missing **Summary:** subsection "
+            "(must follow the summarize marker)"
+        )
+        assert marker_idx < summary_idx, (
+            "Finding Presentation: marker must come before **Summary:** "
             f"(marker={marker_idx}, summary={summary_idx})"
         )
