@@ -779,85 +779,11 @@ for coding standards and must be passed to every dispatched sub-agent.
 Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Project Rules Discovery."
 
 
-### Protocol: Push Commits (optional)
+### Protocol: Push Commits (optional) (summarized)
 
-**Referenced by:** plan, build, review, coderabbit-review. Note: done handles pushing inline in its own cleanup phase. pr-check and deep-review have their own push phases.
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Push Commits (optional)`.**
 
-After stage work is complete, offer to push all local commits:
-
-**Step 1 — Check if upstream tracking exists:**
-
-```bash
-git rev-parse --abbrev-ref @{u} 2>/dev/null
-```
-
-- **If command fails (no upstream):** The branch was never pushed. All local commits are unpushed.
-  Ask via `AskUser`:
-  ```
-  Branch has no upstream (never pushed). Push now?
-  ```
-  Options:
-  - **Push now** — `git push -u origin "$(git branch --show-current)"`
-  - **Skip** — I'll push manually later
-
-- **If command succeeds (upstream exists):** Check for unpushed commits:
-  ```bash
-  git log @{u}..HEAD --oneline 2>/dev/null
-  ```
-  If there are unpushed commits, ask via `AskUser`:
-  ```
-  There are N unpushed commits on this branch. Push now?
-  ```
-  Options:
-  - **Push now** — `git push`
-  - **Skip** — I'll push manually later
-
-**Why check upstream first:** `git log @{u}..HEAD` silently produces empty output when no
-upstream exists, making it appear there's nothing to push. Without this check, the push step
-would be silently skipped even though ALL local commits are unpushed.
-
-**Step 2 — Check tasks repo in separate-repo mode:**
-
-If `$TASKS_GIT_SCOPE = "separate-repo"`, the tasks repo is independent from the project
-repo. Commits made via `tasks_git commit` (e.g., Active Version Guard) land in the tasks
-repo and must be pushed separately. Skipping this makes team members pull project main
-without seeing version/task changes.
-
-```bash
-if [ "$TASKS_GIT_SCOPE" = "separate-repo" ]; then
-  # Check if tasks-repo current branch has upstream
-  if ! tasks_git rev-parse --abbrev-ref @{u} >/dev/null 2>&1; then
-    TASKS_BRANCH=$(tasks_git branch --show-current 2>/dev/null)
-    # AskUser: "Tasks repo branch '$TASKS_BRANCH' has no upstream. Push now?"
-    # Options: Push now — `tasks_git push -u origin "$TASKS_BRANCH"` / Skip
-  else
-    TASKS_UNPUSHED=$(tasks_git log @{u}..HEAD --oneline 2>/dev/null)
-    if [ -n "$TASKS_UNPUSHED" ]; then
-      TASKS_UNPUSHED_COUNT=$(printf '%s\n' "$TASKS_UNPUSHED" | wc -l | tr -d ' ')
-      # AskUser: "Tasks repo has $TASKS_UNPUSHED_COUNT unpushed commits. Push now?"
-      # Options: Push now — `tasks_git push` / Skip
-    fi
-  fi
-fi
-```
-
-**After a successful push**, check if the current repo is the Optimus plugin repository
-and update installed plugins to pick up the changes just pushed:
-
-```bash
-if jq -e '.name == "optimus"' .factory-plugin/marketplace.json >/dev/null 2>&1; then
-  echo "Optimus repo detected — updating installed plugins..."
-  for skill in $(droid plugin list 2>/dev/null | grep optimus | awk '{print $1}'); do
-    droid plugin update "$skill" 2>/dev/null
-  done
-fi
-```
-
-This ensures that agents running in the Optimus repo itself always use the latest
-skill versions after pushing changes.
-
-Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Push Commits."
-
+**Summary:** Optional commit-push pattern for stage skills (plan, build, review, coderabbit-review). After committing locally, offer to push via `AskUser`. Step 1: detect upstream with `git rev-parse --abbrev-ref @{u}` — if missing, all local commits are unpushed and `git push -u origin <branch>` sets upstream; if present, count unpushed via `git log @{u}..HEAD`. Step 2: in `separate-repo` tasks scope, repeat the same upstream/unpushed dance against the tasks repo via `tasks_git`. After successful push, if the current repo is the Optimus plugin repo, run `droid plugin update` for each installed optimus skill so agents pick up the latest version. See full recipe in AGENTS.md.
 
 ### Protocol: Quiet Command Execution (summarized)
 

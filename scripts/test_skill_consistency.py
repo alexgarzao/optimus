@@ -3281,7 +3281,7 @@ class TestWorktreeLocationConvention:
 # source-of-truth so the marker can't be dropped without flipping a test.
 
 class TestProtocolSummarizeMarker:
-    """Phases 1+2+3+4 of issue #34: Verify the top-duplicated protocols carry
+    """Phases 1+2+3+4+5 of issue #34: Verify the top-duplicated protocols carry
     the <!-- inline-mode: summarize --> marker in AGENTS.md."""
 
     # Protocols carrying the standard `### Protocol: <name>` heading.
@@ -3303,6 +3303,11 @@ class TestProtocolSummarizeMarker:
         # Phase 4:
         "Coverage Measurement",
         "Notification Hooks",
+        # Phase 5:
+        "Push Commits (optional)",
+        "Divergence Warning",
+        "TaskSpec Resolution",
+        "All-Dependencies-Cancelled Resolution",
     ]
 
     def test_summarize_marker_present_for_top_protocols(self):

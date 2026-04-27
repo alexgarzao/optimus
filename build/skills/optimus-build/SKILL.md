@@ -732,46 +732,11 @@ to the `Ativa` version. If not, present options before proceeding.
 Skills reference this as: "Check active version guard — see AGENTS.md Protocol: Active Version Guard."
 
 
-### Protocol: All-Dependencies-Cancelled Resolution
+### Protocol: All-Dependencies-Cancelled Resolution (summarized)
 
-**Referenced by:** plan, build, review, done, batch
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: All-Dependencies-Cancelled Resolution`.**
 
-When all dependencies of a task are status `Cancelado`, emit a multi-option resolution
-message AFTER the per-dependency status check (i.e., after detecting that every dep is
-`Cancelado`, before the per-dep error-and-exit). The check supplements the per-dep loop;
-it does not replace it.
-
-**Variable contract:** the caller's dep-check loop populates an array `DEP_STATUSES`
-with one status string per dependency (the same status read from `state.json` for each
-dep ID listed in the Depends column). If the existing skill code uses a different
-variable name, adapt the recipe below to match — the contract is "an iterable of
-dependency status strings".
-
-**Bash recipe:**
-
-```bash
-# Assumes DEP_STATUSES is an array of dependency status strings,
-# already populated by the caller's dep-check loop.
-ALL_CANCELLED=true
-for dep_status in "${DEP_STATUSES[@]}"; do
-  if [ "$dep_status" != "Cancelado" ]; then
-    ALL_CANCELLED=false
-    break
-  fi
-done
-
-if [ "$ALL_CANCELLED" = true ] && [ "${#DEP_STATUSES[@]}" -gt 0 ]; then
-  echo "All dependencies of $TASK_ID are cancelled. To unblock:" >&2
-  echo "  (a) remove all dependencies: /optimus-tasks edit $TASK_ID" >&2
-  echo "  (b) replace with alternative task IDs: /optimus-tasks edit $TASK_ID" >&2
-  echo "  (c) cancel $TASK_ID: /optimus-tasks cancel $TASK_ID" >&2
-  exit 1
-fi
-# Per-dep message follows here (existing logic).
-```
-
-Skills reference this as: "Check all-deps-cancelled — see AGENTS.md Protocol: All-Dependencies-Cancelled Resolution."
-
+**Summary:** When every dependency in a task's `Depends:` column has status `Cancelado`, emit a multi-option resolution message AFTER the per-dep status check loop populates the `DEP_STATUSES` array. Recipe: iterate `DEP_STATUSES`, set `ALL_CANCELLED=true` if every entry equals `Cancelado`; when `ALL_CANCELLED=true` AND the array is non-empty, print three options to stderr — (a) remove all dependencies, (b) replace with alternative task IDs, (c) cancel the task itself — each with the corresponding `/optimus-tasks` invocation, then `exit 1`. If the array is empty or any dep is non-Cancelado, fall through to per-dep error. Variable contract: `DEP_STATUSES` is the canonical name; adapt if existing skill code uses another. See full recipe in AGENTS.md.
 
 ### Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated) (summarized)
 
@@ -819,71 +784,11 @@ status transition.
 Skills reference this as: "Refuse to run on default branch (HARD BLOCK) — see AGENTS.md Protocol: Default Branch Refusal."
 
 
-### Protocol: Divergence Warning
+### Protocol: Divergence Warning (summarized)
 
-**Referenced by:** all stage agents (1-4)
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Divergence Warning`.**
 
-Since status and branch data live in state.json (gitignored), optimus-tasks.md rarely changes
-on feature branches. This protocol detects the uncommon case where optimus-tasks.md WAS modified
-(e.g., Active Version Guard moved a task). It uses `tasks_git` so it works in both
-same-repo and separate-repo scopes.
-
-**Prerequisite:** Protocol: Resolve Tasks Git Scope must have been executed so
-`TASKS_FILE`, `TASKS_GIT_REL`, `TASKS_GIT_SCOPE`, `TASKS_DEFAULT_BRANCH`, and
-`tasks_git` are defined.
-
-```bash
-# Requires Protocol: Resolve Main Worktree Path to have run first
-# (or resolve inline; see that protocol).
-MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
-MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
-if [ -z "$TASKS_DEFAULT_BRANCH" ]; then
-  echo "WARNING: Cannot determine default branch for tasks repo. Skipping divergence check."
-  # Skip — this is a warning, not a HARD BLOCK
-else
-  # Throttle fetch: only re-fetch if the cached timestamp is older than 5 minutes.
-  # Each stage skill would otherwise pay ~2s network latency per invocation.
-  # The cache lives in the PROJECT repo's .optimus/ (always present, gitignored).
-  FETCH_MARKER="${MAIN_WORKTREE}/.optimus/.last-tasks-fetch"
-  NOW_EPOCH=$(date +%s)
-  SHOULD_FETCH=1
-  if [ -f "$FETCH_MARKER" ]; then
-    LAST_EPOCH=$(cat "$FETCH_MARKER" 2>/dev/null || echo 0)
-    # Defense-in-depth: ensure marker contents are numeric before arithmetic.
-    # A corrupted/manually-edited marker file would otherwise crash the
-    # `$((NOW_EPOCH - LAST_EPOCH))` expression under `set -euo pipefail`.
-    [[ "$LAST_EPOCH" =~ ^[0-9]+$ ]] || LAST_EPOCH=0
-    if [ -n "$LAST_EPOCH" ] && [ "$((NOW_EPOCH - LAST_EPOCH))" -lt 300 ]; then
-      SHOULD_FETCH=0
-    fi
-  fi
-  if [ "$SHOULD_FETCH" = "1" ]; then
-    if tasks_git fetch origin "$TASKS_DEFAULT_BRANCH" --quiet 2>/dev/null; then
-      mkdir -p "${MAIN_WORKTREE}/.optimus"
-      printf '%s' "$NOW_EPOCH" > "$FETCH_MARKER"
-    else
-      echo "WARNING: Could not fetch from origin. Divergence check may use stale data."
-    fi
-  fi
-  tasks_git diff "origin/$TASKS_DEFAULT_BRANCH" -- "$TASKS_GIT_REL" 2>/dev/null | head -20
-fi
-```
-
-- If diff output is non-empty → warn via `AskUser`:
-  ```
-  optimus-tasks.md has diverged between your branch and <default_branch>.
-  This may cause merge conflicts when the PR is merged.
-  ```
-  Options:
-  - **Sync now** — run `tasks_git merge origin/<default_branch>` to incorporate changes
-  - **Continue without syncing** — I'll handle conflicts later
-- If diff output is empty → proceed silently (files are in sync)
-- **NOTE:** This is a warning, not a HARD BLOCK. The user may choose to continue.
-- **NOTE:** In separate-repo scope, "diverged" means the tasks repo branches diverge —
-  not the project code branches.
-
-Skills reference this as: "Check optimus-tasks.md divergence — see AGENTS.md Protocol: Divergence Warning."
-
+**Summary:** Detects when `optimus-tasks.md` has diverged between the current branch and the tasks repo's default branch. Uses `tasks_git` so it works in both same-repo and separate-repo scopes. Throttles `tasks_git fetch` via a 5-minute cache marker at `${MAIN_WORKTREE}/.optimus/.last-tasks-fetch` (defense-in-depth: validates marker contents are numeric before arithmetic to survive corrupted marker files under `set -euo pipefail`). Compares against `origin/$TASKS_DEFAULT_BRANCH` via `tasks_git diff` limited to `$TASKS_GIT_REL`. On non-empty diff, warns via `AskUser` with options to **Sync now** (merge `origin/<default>`) or **Continue without syncing**. NOT a HARD BLOCK — divergence is a soft warning. Skipped silently when `TASKS_DEFAULT_BRANCH` is unresolved. See full recipe in AGENTS.md.
 
 ## Protocol: Dry-Run Mode
 
@@ -988,85 +893,11 @@ for coding standards and must be passed to every dispatched sub-agent.
 Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Project Rules Discovery."
 
 
-### Protocol: Push Commits (optional)
+### Protocol: Push Commits (optional) (summarized)
 
-**Referenced by:** plan, build, review, coderabbit-review. Note: done handles pushing inline in its own cleanup phase. pr-check and deep-review have their own push phases.
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Push Commits (optional)`.**
 
-After stage work is complete, offer to push all local commits:
-
-**Step 1 — Check if upstream tracking exists:**
-
-```bash
-git rev-parse --abbrev-ref @{u} 2>/dev/null
-```
-
-- **If command fails (no upstream):** The branch was never pushed. All local commits are unpushed.
-  Ask via `AskUser`:
-  ```
-  Branch has no upstream (never pushed). Push now?
-  ```
-  Options:
-  - **Push now** — `git push -u origin "$(git branch --show-current)"`
-  - **Skip** — I'll push manually later
-
-- **If command succeeds (upstream exists):** Check for unpushed commits:
-  ```bash
-  git log @{u}..HEAD --oneline 2>/dev/null
-  ```
-  If there are unpushed commits, ask via `AskUser`:
-  ```
-  There are N unpushed commits on this branch. Push now?
-  ```
-  Options:
-  - **Push now** — `git push`
-  - **Skip** — I'll push manually later
-
-**Why check upstream first:** `git log @{u}..HEAD` silently produces empty output when no
-upstream exists, making it appear there's nothing to push. Without this check, the push step
-would be silently skipped even though ALL local commits are unpushed.
-
-**Step 2 — Check tasks repo in separate-repo mode:**
-
-If `$TASKS_GIT_SCOPE = "separate-repo"`, the tasks repo is independent from the project
-repo. Commits made via `tasks_git commit` (e.g., Active Version Guard) land in the tasks
-repo and must be pushed separately. Skipping this makes team members pull project main
-without seeing version/task changes.
-
-```bash
-if [ "$TASKS_GIT_SCOPE" = "separate-repo" ]; then
-  # Check if tasks-repo current branch has upstream
-  if ! tasks_git rev-parse --abbrev-ref @{u} >/dev/null 2>&1; then
-    TASKS_BRANCH=$(tasks_git branch --show-current 2>/dev/null)
-    # AskUser: "Tasks repo branch '$TASKS_BRANCH' has no upstream. Push now?"
-    # Options: Push now — `tasks_git push -u origin "$TASKS_BRANCH"` / Skip
-  else
-    TASKS_UNPUSHED=$(tasks_git log @{u}..HEAD --oneline 2>/dev/null)
-    if [ -n "$TASKS_UNPUSHED" ]; then
-      TASKS_UNPUSHED_COUNT=$(printf '%s\n' "$TASKS_UNPUSHED" | wc -l | tr -d ' ')
-      # AskUser: "Tasks repo has $TASKS_UNPUSHED_COUNT unpushed commits. Push now?"
-      # Options: Push now — `tasks_git push` / Skip
-    fi
-  fi
-fi
-```
-
-**After a successful push**, check if the current repo is the Optimus plugin repository
-and update installed plugins to pick up the changes just pushed:
-
-```bash
-if jq -e '.name == "optimus"' .factory-plugin/marketplace.json >/dev/null 2>&1; then
-  echo "Optimus repo detected — updating installed plugins..."
-  for skill in $(droid plugin list 2>/dev/null | grep optimus | awk '{print $1}'); do
-    droid plugin update "$skill" 2>/dev/null
-  done
-fi
-```
-
-This ensures that agents running in the Optimus repo itself always use the latest
-skill versions after pushing changes.
-
-Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Push Commits."
-
+**Summary:** Optional commit-push pattern for stage skills (plan, build, review, coderabbit-review). After committing locally, offer to push via `AskUser`. Step 1: detect upstream with `git rev-parse --abbrev-ref @{u}` — if missing, all local commits are unpushed and `git push -u origin <branch>` sets upstream; if present, count unpushed via `git log @{u}..HEAD`. Step 2: in `separate-repo` tasks scope, repeat the same upstream/unpushed dance against the tasks repo via `tasks_git`. After successful push, if the current repo is the Optimus plugin repo, run `droid plugin update` for each installed optimus skill so agents pick up the latest version. See full recipe in AGENTS.md.
 
 ### Protocol: Quiet Command Execution (summarized)
 
@@ -1126,56 +957,11 @@ Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring D
 
 **Summary:** Read/write/delete entries in `${MAIN_WORKTREE}/.optimus/state.json` with `jq`. Schema: `{task_id: {status, branch, updated_at}}`. Status values: `Pendente | Validando Spec | Em Andamento | Validando Impl | DONE | Cancelado`. All writes use `jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" '.[$id] = {...}'` (injection-safe), with a tmp-file + `jq empty` validation step before `mv` to guarantee atomicity. Cancelado entries keep `branch: ""` (empty string, NOT absent — readers must treat both as Cancelado-state). Corrupted state.json is removed and treated as empty (reconciliation via worktree scan). state.json is gitignored; never committed. See full recipe in AGENTS.md for jq templates and reconciliation steps.
 
-### Protocol: TaskSpec Resolution
+### Protocol: TaskSpec Resolution (summarized)
 
-**Referenced by:** plan, build, review
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: TaskSpec Resolution`.**
 
-Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
-
-1. Read the task's `TaskSpec` column from `optimus-tasks.md`
-2. If `TaskSpec` is `-` → **STOP**: "Task T-XXX has no Ring pre-dev spec. Run `/optimus-plan T-XXX` to generate one (it will offer to invoke `ring:pre-dev-feature` interactively)."
-3. Resolve full path: `TASK_SPEC_PATH = <TASKS_DIR>/<TaskSpec>`
-4. **Path traversal validation (HARD BLOCK):** `TaskSpec` must resolve to a file **inside `TASKS_DIR`**.
-   This prevents a malicious TaskSpec value like `../../../etc/passwd` from escaping the
-   Ring pre-dev tree. Also rejects symlinks to prevent symlink-bypass TOCTOU attacks:
-   ```bash
-   TASKS_DIR_ABS=$(cd "$TASKS_DIR" 2>/dev/null && pwd) || { echo "ERROR: tasksDir does not exist." >&2; exit 1; }
-   RESOLVED_PATH=$(cd "$TASKS_DIR_ABS" && realpath -m "$TASK_SPEC" 2>/dev/null \
-     || python3 -c "import os,sys; print(os.path.realpath(os.path.join(sys.argv[1], sys.argv[2])))" "$TASKS_DIR_ABS" "$TASK_SPEC" 2>/dev/null)
-   if [ -z "$RESOLVED_PATH" ]; then
-     echo "ERROR: Cannot resolve TaskSpec path — realpath and python3 both unavailable." >&2
-     exit 1
-   fi
-   case "$RESOLVED_PATH" in
-     "$TASKS_DIR_ABS"/*) ;; # OK — within tasksDir
-     *) echo "ERROR: TaskSpec path traversal detected — resolved path is outside tasksDir." >&2; exit 1 ;;
-   esac
-   # Reject symlinks: if TASK_SPEC itself or any intermediate component is a
-   # symlink, a TOCTOU attacker could swap the target between validation and
-   # read. realpath -m resolves symlinks transparently; this post-check ensures
-   # no symlink is present in the final path.
-   if [ -L "$RESOLVED_PATH" ]; then
-     echo "ERROR: TaskSpec resolves to a symlink — refusing to read." >&2
-     exit 1
-   fi
-   ```
-
-   **Validate `TASKS_DIR` itself:** `TASKS_DIR` must be inside a valid git repository
-   (same repo as project, OR a separate repo — both are allowed). Resolution of
-   `TASKS_GIT_SCOPE` (Protocol: Resolve Tasks Git Scope) already enforces this by
-   running `git -C "$TASKS_DIR" rev-parse --show-toplevel`. If that call fails,
-   `TASKS_DIR` is not a git repository and skills STOP.
-
-   **NOTE:** `TASKS_DIR` is NO LONGER required to be inside `PROJECT_ROOT`. Teams using
-   separate-repo scope (e.g., `tasksDir: ../tasks-repo/project-alfa`) are supported.
-   The security guarantee is that the **TaskSpec value** cannot escape `TASKS_DIR`.
-
-5. Read the task spec file at `TASK_SPEC_PATH`
-6. Derive subtasks directory: if TaskSpec is `tasks/task_001.md`, subtasks are at `<TASKS_DIR>/subtasks/T-001/`
-7. If subtasks directory exists, read all `.md` files inside it
-
-Skills reference this as: "Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution."
-
+**Summary:** Resolves the full path to a task's Ring pre-dev spec file by combining `<TASKS_DIR>` with the task's `TaskSpec` column from `optimus-tasks.md`. If `TaskSpec` is `-`, STOPs with a hint to run `/optimus-plan T-XXX`. HARD BLOCK on path traversal: resolves via `realpath -m` (or python3 `os.path.realpath` fallback) and rejects any result outside `$TASKS_DIR_ABS`. Also rejects symlinks (TOCTOU defence: realpath dereferences transparently, so a post-`-L` check guarantees no symlink in the final path). `TASKS_DIR` itself must be a valid git repo (enforced upstream by Resolve Tasks Git Scope) but is no longer required to live under `PROJECT_ROOT` — separate-repo scope is supported. Subtasks live at `<TASKS_DIR>/subtasks/T-NNN/`. See full recipe in AGENTS.md.
 
 ### Protocol: Terminal Identification (summarized)
 

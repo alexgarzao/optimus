@@ -1080,56 +1080,11 @@ to import from Ring pre-dev." Do NOT proceed to task identification with an empt
 
 **Summary:** Read/write/delete entries in `${MAIN_WORKTREE}/.optimus/state.json` with `jq`. Schema: `{task_id: {status, branch, updated_at}}`. Status values: `Pendente | Validando Spec | Em Andamento | Validando Impl | DONE | Cancelado`. All writes use `jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" '.[$id] = {...}'` (injection-safe), with a tmp-file + `jq empty` validation step before `mv` to guarantee atomicity. Cancelado entries keep `branch: ""` (empty string, NOT absent — readers must treat both as Cancelado-state). Corrupted state.json is removed and treated as empty (reconciliation via worktree scan). state.json is gitignored; never committed. See full recipe in AGENTS.md for jq templates and reconciliation steps.
 
-### Protocol: TaskSpec Resolution
+### Protocol: TaskSpec Resolution (summarized)
 
-**Referenced by:** plan, build, review
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: TaskSpec Resolution`.**
 
-Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
-
-1. Read the task's `TaskSpec` column from `optimus-tasks.md`
-2. If `TaskSpec` is `-` → **STOP**: "Task T-XXX has no Ring pre-dev spec. Run `/optimus:plan T-XXX` to generate one (it will offer to invoke `ring:pre-dev-feature` interactively)."
-3. Resolve full path: `TASK_SPEC_PATH = <TASKS_DIR>/<TaskSpec>`
-4. **Path traversal validation (HARD BLOCK):** `TaskSpec` must resolve to a file **inside `TASKS_DIR`**.
-   This prevents a malicious TaskSpec value like `../../../etc/passwd` from escaping the
-   Ring pre-dev tree. Also rejects symlinks to prevent symlink-bypass TOCTOU attacks:
-   ```bash
-   TASKS_DIR_ABS=$(cd "$TASKS_DIR" 2>/dev/null && pwd) || { echo "ERROR: tasksDir does not exist." >&2; exit 1; }
-   RESOLVED_PATH=$(cd "$TASKS_DIR_ABS" && realpath -m "$TASK_SPEC" 2>/dev/null \
-     || python3 -c "import os,sys; print(os.path.realpath(os.path.join(sys.argv[1], sys.argv[2])))" "$TASKS_DIR_ABS" "$TASK_SPEC" 2>/dev/null)
-   if [ -z "$RESOLVED_PATH" ]; then
-     echo "ERROR: Cannot resolve TaskSpec path — realpath and python3 both unavailable." >&2
-     exit 1
-   fi
-   case "$RESOLVED_PATH" in
-     "$TASKS_DIR_ABS"/*) ;; # OK — within tasksDir
-     *) echo "ERROR: TaskSpec path traversal detected — resolved path is outside tasksDir." >&2; exit 1 ;;
-   esac
-   # Reject symlinks: if TASK_SPEC itself or any intermediate component is a
-   # symlink, a TOCTOU attacker could swap the target between validation and
-   # read. realpath -m resolves symlinks transparently; this post-check ensures
-   # no symlink is present in the final path.
-   if [ -L "$RESOLVED_PATH" ]; then
-     echo "ERROR: TaskSpec resolves to a symlink — refusing to read." >&2
-     exit 1
-   fi
-   ```
-
-   **Validate `TASKS_DIR` itself:** `TASKS_DIR` must be inside a valid git repository
-   (same repo as project, OR a separate repo — both are allowed). Resolution of
-   `TASKS_GIT_SCOPE` (Protocol: Resolve Tasks Git Scope) already enforces this by
-   running `git -C "$TASKS_DIR" rev-parse --show-toplevel`. If that call fails,
-   `TASKS_DIR` is not a git repository and skills STOP.
-
-   **NOTE:** `TASKS_DIR` is NO LONGER required to be inside `PROJECT_ROOT`. Teams using
-   separate-repo scope (e.g., `tasksDir: ../tasks-repo/project-alfa`) are supported.
-   The security guarantee is that the **TaskSpec value** cannot escape `TASKS_DIR`.
-
-5. Read the task spec file at `TASK_SPEC_PATH`
-6. Derive subtasks directory: if TaskSpec is `tasks/task_001.md`, subtasks are at `<TASKS_DIR>/subtasks/T-001/`
-7. If subtasks directory exists, read all `.md` files inside it
-
-Skills reference this as: "Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution."
-
+**Summary:** Resolves the full path to a task's Ring pre-dev spec file by combining `<TASKS_DIR>` with the task's `TaskSpec` column from `optimus-tasks.md`. If `TaskSpec` is `-`, STOPs with a hint to run `/optimus:plan T-XXX`. HARD BLOCK on path traversal: resolves via `realpath -m` (or python3 `os.path.realpath` fallback) and rejects any result outside `$TASKS_DIR_ABS`. Also rejects symlinks (TOCTOU defence: realpath dereferences transparently, so a post-`-L` check guarantees no symlink in the final path). `TASKS_DIR` itself must be a valid git repo (enforced upstream by Resolve Tasks Git Scope) but is no longer required to live under `PROJECT_ROOT` — separate-repo scope is supported. Subtasks live at `<TASKS_DIR>/subtasks/T-NNN/`. See full recipe in AGENTS.md.
 
 ### Protocol: optimus-tasks.md Validation (HARD BLOCK)
 
