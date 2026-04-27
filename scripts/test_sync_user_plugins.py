@@ -660,7 +660,14 @@ class TestClaudeCodeSync:
 
     def test_updates_existing_optimus_plugin(self, tmp_path: Path) -> None:
         """When `optimus@optimus` is already installed, the script issues
-        `plugin update` instead of `plugin install`."""
+        `plugin uninstall` + `plugin install` to force-refresh the cache.
+
+        Rationale: `claude plugin update` is a no-op when marketplace.json's
+        `version` field hasn't changed, even if the underlying source files
+        have. Optimus ships SKILL changes without bumping the marketplace
+        version on every PR, so update would leave users on stale cached
+        SKILL.md. Uninstall + reinstall guarantees a fresh fetch.
+        """
         installed = [
             {"id": "optimus@optimus", "version": "2.0.0", "scope": "user",
              "enabled": True},
@@ -671,10 +678,16 @@ class TestClaudeCodeSync:
                            env_extra=self._claude_only_env(tmp_path))
         assert result.returncode == 0
         assert "Updated: 1" in result.stdout
-        assert "* optimus ... OK" in result.stdout
+        assert "* optimus ... OK (refreshed)" in result.stdout
         log_content = log.read_text()
-        assert "plugin update optimus@optimus" in log_content
-        assert "plugin install optimus@optimus" not in log_content
+        assert "plugin uninstall optimus@optimus" in log_content
+        assert "plugin install optimus@optimus" in log_content
+        # Confirm uninstall happens BEFORE install in the call order.
+        assert log_content.find("plugin uninstall optimus@optimus") < log_content.find(
+            "plugin install optimus@optimus"
+        )
+        # Update is no longer used for refresh.
+        assert "plugin update optimus@optimus" not in log_content
 
     def test_uninstalls_legacy_per_skill_plugins(self, tmp_path: Path) -> None:
         """Pre-2.0 `optimus-<name>@optimus` installs are pruned as legacy.
@@ -717,18 +730,23 @@ class TestClaudeCodeSync:
         assert "plugin install optimus@optimus" in log.read_text()
 
     def test_update_failure_increments_failed_count(self, tmp_path: Path) -> None:
-        """A failing `claude plugin update optimus@optimus` is reported as FAIL."""
+        """A failing reinstall (during the force-refresh path) is reported as FAIL.
+
+        The Claude branch refreshes via uninstall + install (see
+        test_updates_existing_optimus_plugin). When the install half fails,
+        the summary surfaces it as FAIL on the optimus line.
+        """
         installed = [
             {"id": "optimus@optimus", "version": "2.0.0", "scope": "user",
              "enabled": True},
         ]
-        _install_claude_mock(tmp_path, installed_plugins=installed, update_exit=1)
+        _install_claude_mock(tmp_path, installed_plugins=installed, install_exit=1)
         _create_claude_marketplace_cache(tmp_path, ["alpha"])
         result = _run_sync(tmp_path, exclude_droid=True,
                            env_extra=self._claude_only_env(tmp_path))
         assert result.returncode == 1
         assert "Failed: 1" in result.stdout
-        assert "* optimus ... FAIL" in result.stdout
+        assert "* optimus ... FAIL (reinstall)" in result.stdout
 
     def test_uninstall_failure_increments_failed_count(self, tmp_path: Path) -> None:
         """A failing `claude plugin uninstall <legacy>@optimus` is reported as FAIL."""
