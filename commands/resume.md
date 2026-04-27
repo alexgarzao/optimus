@@ -298,19 +298,24 @@ if [ -z "$TASK_ID" ] || ! [[ "$TASK_ID" =~ ^T-[0-9]+$ ]]; then
   # STOP
 fi
 
-# Use awk's literal index() (not regex ~) so a future relaxation of the TASK_ID format
-# (e.g., alphanumeric suffix) does not suddenly change semantics through regex metachars.
+# Anchor the match on the kebab-cased task ID (e.g., `-t-1-`) so substrings like
+# `t-1` cannot match `t-10`/`t-100`. Worktree paths follow the convention
+# `<parent>/<repo>-<id>-<keywords>`, and feature branches follow
+# `<tipo>/<id>-<keywords>` — both surround the lowercased ID with hyphens.
+TASK_KEBAB="-$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')-"
 WORKTREE_PATH=$(git worktree list --porcelain 2>/dev/null \
-  | awk -v id="$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')" '
-      BEGIN { if (id == "") exit 1 }
+  | awk -v anchor="$TASK_KEBAB" '
+      BEGIN { if (anchor == "--") exit 1 }
       /^worktree / { wt=$2 }
-      /^branch /   { if (index(tolower(wt), id) > 0 || index(tolower($2), id) > 0) print wt }
-    ' | head -1)
+      /^branch /   { if (index(tolower(wt), anchor) > 0 || index(tolower($2), anchor) > 0) { print wt; exit } }
+    ')
 
 if [ -z "$WORKTREE_PATH" ]; then
-  # Fallback: literal task-ID search. The Step 3.2 hard guard above already refused empty
-  # TASK_ID, so grep -F has a non-empty pattern here.
-  WORKTREE_PATH=$(git worktree list | grep -iF "$TASK_ID" | awk '{print $1}' | head -1)
+  # Fallback: anchored kebab match against the path field only. NEVER use a bare
+  # `grep -iF "$TASK_ID"` — that produces false positives for short IDs
+  # (e.g., `T-1` matching `T-10`, `T-100`).
+  WORKTREE_PATH=$(git worktree list --porcelain 2>/dev/null \
+    | awk -v anchor="$TASK_KEBAB" '/^worktree / { path=$2; if (index(tolower(path), anchor) > 0) { print path; exit } }')
 fi
 ```
 
@@ -457,41 +462,6 @@ If the user invoked a dry-run (e.g., "dry-run resume T-XXX", "preview resume"):
 Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage label `RESUME`:
 
 ```bash
-_optimus_set_title() {
-  local title="$1"
-  local pid="$PPID" tty=""
-  for _ in 1 2 3 4; do
-    [ -z "$pid" ] || [ "$pid" = "1" ] && break
-    tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
-    case "$tty" in
-      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') ;;
-      *) break ;;
-    esac
-  done
-  if { [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ]; } \
-     && command -v osascript >/dev/null 2>&1 && [ -n "$tty" ] \
-     && [ "$tty" != "?" ] && [ "$tty" != "??" ]; then
-    osascript \
-      -e 'on run argv' \
-      -e '  set targetTty to "/dev/" & item 1 of argv' \
-      -e '  set newName to item 2 of argv' \
-      -e '  tell application "iTerm2"' \
-      -e '    repeat with w in windows' \
-      -e '      repeat with t in tabs of w' \
-      -e '        repeat with s in sessions of t' \
-      -e '          if (tty of s as string) is targetTty then' \
-      -e '            try' \
-      -e '              set name of s to newName' \
-      -e '            end try' \
-      -e '          end if' \
-      -e '        end repeat' \
-      -e '      end repeat' \
-      -e '    end repeat' \
-      -e '  end tell' \
-      -e 'end run' \
-      -- "$tty" "$title" >/dev/null 2>&1 || true
-  fi
-}
 _optimus_set_title "optimus: RESUME $TASK_ID — $TASK_TITLE"
 ```
 
@@ -938,9 +908,16 @@ Where:
 - T-015 "User Auth: JWT/OAuth2 Support" (Feature) → `feat/t-015-user-auth-jwt-oauth2-support`
 
 **Resolution order when looking for a task's branch:**
-1. Read `branch` from state.json (fastest)
-2. Search by task ID: `git branch --list "*<task-id>*"` or `git worktree list | grep -iF "<task-id>"`
-3. Derive from Tipo + ID + Title (always works)
+1. Read `branch` from state.json (fastest, source-of-truth).
+2. Search by task ID using the kebab-anchored fallback (NEVER an unanchored
+   `grep -iF "$TASK_ID"`, which matches `T-1` against `T-10`/`T-100`):
+   ```bash
+   TASK_KEBAB="-$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')-"
+   git branch --list "*${TASK_KEBAB#-}*" 2>/dev/null
+   git worktree list --porcelain 2>/dev/null \
+     | awk -v anchor="$TASK_KEBAB" '/^worktree / { path=$2; if (index(tolower(path), anchor) > 0) print path }'
+   ```
+3. Derive from Tipo + ID + Title (always works).
 
 Skills reference this as: "Derive branch name — see AGENTS.md Protocol: Branch Name Derivation."
 

@@ -2451,3 +2451,237 @@ class TestStructuredAskUserScope:
         assert "Scope of the structured AskUser template" in content, (
             "AGENTS.md must document the scope of the AskUser structured template."
         )
+
+
+# --- F11: done skill robustness regression tests ---
+
+
+class TestDoneRobustness:
+    """F11 regression tests: done skill must handle push-failure modes
+    explicitly and use deterministic resolutions."""
+
+    def test_done_classifies_remote_delete_failures(self):
+        """done/SKILL.md must distinguish network/protection/already-deleted
+        on `git push origin --delete` failure."""
+        path = REPO_ROOT / "done" / "skills" / "optimus-done" / "SKILL.md"
+        content = path.read_text()
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        # At minimum the body must mention these failure-cause keywords
+        # near a `git push origin --delete` block.
+        assert "remote ref does not exist" in body or "already deleted" in body, (
+            "done must classify 'remote ref does not exist' as benign"
+        )
+        assert "protected" in body, "done must distinguish protected-branch failures"
+        assert "Network" in body or "connection" in body or "timeout" in body, (
+            "done must distinguish network/transient failures"
+        )
+
+    def test_done_uses_deterministic_default_branch(self):
+        """done/SKILL.md must use show-ref --verify (or symbolic-ref) for
+        default branch resolution — NOT 'git branch --list main master | head -1'."""
+        path = REPO_ROOT / "done" / "skills" / "optimus-done" / "SKILL.md"
+        content = path.read_text()
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        forbidden = "git branch --list main master | head"
+        assert forbidden not in body, (
+            f"done body contains non-deterministic default-branch resolution: {forbidden!r}"
+        )
+        assert "show-ref --verify" in body or "symbolic-ref" in body or (
+            "AGENTS.md Protocol: Default Branch Resolution" in body
+        ) or (
+            "AGENTS.md Protocol: Workspace Auto-Navigation" in body
+        ), "done must use deterministic resolution (or reference canonical protocol)"
+
+
+class TestStageSkillsParseTaskTitleEarly:
+    """F11d regression: stage skills must parse TASK_TITLE before
+    interpolating it into the terminal title."""
+
+    STAGE_SKILLS = ["plan", "build", "review", "done"]
+
+    def test_stage_skills_parse_task_title_from_tasks_file(self):
+        violations = []
+        for skill in self.STAGE_SKILLS:
+            path = REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md"
+            content = path.read_text()
+            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            # The terminal title interpolates $TASK_TITLE; before that line,
+            # the skill must have an awk/grep against optimus-tasks.md or a
+            # documented metadata-extraction step.
+            if "TASK_TITLE" in body:
+                # Must parse it from somewhere
+                if not any(
+                    p in body
+                    for p in (
+                        "awk",
+                        "grep",
+                        "TASK_TITLE=$(",
+                        'TASK_TITLE="$(',
+                        "Read task metadata",
+                    )
+                ):
+                    violations.append(
+                        f"{path.relative_to(REPO_ROOT)}: TASK_TITLE used but never parsed"
+                    )
+        assert violations == [], "\n".join(violations)
+
+
+class TestTaskIdMatchUsesAnchoredPattern:
+    """F11c regression: searches for a worktree by TASK_ID must NOT use
+    `grep -iF` (substring) which produces false positives for short IDs."""
+
+    def test_no_unanchored_taskid_grep(self):
+        violations = []
+        targets = [REPO_ROOT / "AGENTS.md", *REPO_ROOT.glob("*/skills/*/SKILL.md")]
+        for path in targets:
+            content = path.read_text()
+            body = (
+                content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+                if "skills/" in str(path)
+                else content
+            )
+            for lineno, line in enumerate(body.splitlines(), start=1):
+                # Match `git worktree list ... | grep -iF "$TASK_ID"` patterns
+                if (
+                    "git worktree list" in line
+                    and "grep -iF" in line
+                    and "TASK_ID" in line
+                ):
+                    violations.append(
+                        f"{path.relative_to(REPO_ROOT)}:{lineno}: unanchored grep"
+                    )
+        assert violations == [], (
+            "Unanchored TASK_ID greps allow false positives (T-1 matches T-10):\n"
+            + "\n".join(violations)
+        )
+
+
+class TestReRunGuardResetSemantics:
+    """F12b: Re-run Guard must explicitly reset convergence_status and phase
+    to prevent phantom convergence on subsequent runs."""
+
+    def test_agents_md_documents_rerun_reset_semantics(self):
+        content = (REPO_ROOT / "AGENTS.md").read_text()
+        assert "Re-run reset semantics" in content
+        assert "convergence_status" in content
+        assert "MUST" in content  # mandatory marker
+
+
+class TestPrCheckHardBlocksAreUncompromising:
+    """F12c: pr-check HARD BLOCK markers must not be paired with an AskUser
+    that lets the user opt out of the block."""
+
+    def test_no_askuser_immediately_after_hard_block_in_pr_check(self):
+        path = REPO_ROOT / "pr-check" / "skills" / "optimus-pr-check" / "SKILL.md"
+        content = path.read_text()
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        # Find each "HARD BLOCK" mention and inspect the next ~40 lines for AskUser
+        violations = []
+        lines = body.splitlines()
+        for i, line in enumerate(lines):
+            if "HARD BLOCK" in line:
+                window = "\n".join(lines[i:i + 40])
+                if "Proceed with partial" in window or "proceed with the partial" in window:
+                    violations.append(
+                        f"line {i+1}: HARD BLOCK followed by partial-set AskUser"
+                    )
+        assert violations == [], "\n".join(violations)
+
+
+class TestSharedCodeRabbitParserProtocol:
+    """F12d: Both pr-check and coderabbit-review must reference the shared
+    AGENTS.md `Protocol: Parse CodeRabbit Review Body` instead of carrying
+    their own divergent copies of the algorithm."""
+
+    def test_agents_md_defines_shared_protocol(self):
+        content = (REPO_ROOT / "AGENTS.md").read_text()
+        assert "### Protocol: Parse CodeRabbit Review Body" in content, (
+            "AGENTS.md must define the shared CodeRabbit parser protocol"
+        )
+
+    def test_pr_check_references_shared_protocol(self):
+        path = REPO_ROOT / "pr-check" / "skills" / "optimus-pr-check" / "SKILL.md"
+        content = path.read_text()
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "Protocol: Parse CodeRabbit Review Body" in body, (
+            "pr-check SKILL body must reference the shared protocol"
+        )
+
+    def test_coderabbit_review_references_shared_protocol(self):
+        path = (
+            REPO_ROOT
+            / "coderabbit-review"
+            / "skills"
+            / "optimus-coderabbit-review"
+            / "SKILL.md"
+        )
+        content = path.read_text()
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        assert "Protocol: Parse CodeRabbit Review Body" in body, (
+            "coderabbit-review SKILL body must reference the shared protocol"
+        )
+
+
+class TestDiscoverReviewDroidsDenyList:
+    """F12e: Protocol: Discover Review Droids must apply a deny-list filter
+    (architecture/design/planning/process/workflow/strategy) AFTER the
+    inclusion regex to prevent meta-level reviewers from being dispatched
+    against actual code."""
+
+    def test_agents_md_defines_deny_list(self):
+        content = (REPO_ROOT / "AGENTS.md").read_text()
+        # Locate the Discover Review Droids section
+        start = content.find("### Protocol: Discover Review Droids")
+        assert start != -1
+        # Find the next protocol section
+        end = content.find("\n### Protocol: ", start + 1)
+        section = content[start:end if end != -1 else len(content)]
+        assert "Deny-list filter" in section, (
+            "Discover Review Droids must define a Deny-list filter section"
+        )
+        # Required deny-regex words
+        for term in (
+            "architecture",
+            "design",
+            "planning",
+            "process",
+            "workflow",
+            "strategy",
+        ):
+            assert term in section, f"Deny-list must mention {term!r}"
+
+    def test_deny_list_does_not_block_known_good_droids(self):
+        """Sanity check: the deny-list applies AFTER the inclusion regex,
+        so genuine reviewers like `ring-default-code-reviewer` whose
+        descriptions do NOT contain deny terms remain dispatchable.
+
+        We assert this structurally by verifying the protocol documents the
+        explicit ordering: inclusion regex -> deny-list -> final selection.
+        """
+        content = (REPO_ROOT / "AGENTS.md").read_text()
+        start = content.find("### Protocol: Discover Review Droids")
+        end = content.find("\n### Protocol: ", start + 1)
+        section = content[start:end if end != -1 else len(content)]
+        # Order semantics MUST be made explicit
+        assert "AFTER inclusion regex" in section or "applied AFTER" in section
+        assert "BEFORE final selection" in section or "BEFORE final" in section
+
+
+class TestTerminalIdentificationNotPastedInBody:
+    """F12f: After consolidating `_optimus_set_title`, no SKILL body should
+    contain a manual definition. The function comes from the inlined block
+    via the `AGENTS.md Protocol: Terminal Identification` reference."""
+
+    def test_no_set_title_definition_in_skill_bodies(self):
+        violations = []
+        for skill_path in _all_skill_files():
+            content = skill_path.read_text()
+            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            if "_optimus_set_title() {" in body:
+                violations.append(str(skill_path.relative_to(REPO_ROOT)))
+        assert violations == [], (
+            "These SKILL.md files still contain a body-level "
+            "`_optimus_set_title()` definition; move it to the inlined "
+            "`Protocol: Terminal Identification` block:\n"
+            + "\n".join(violations)
+        )
