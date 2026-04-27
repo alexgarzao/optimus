@@ -2236,7 +2236,7 @@ Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Titl
 Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
 
 1. Read the task's `TaskSpec` column from `optimus-tasks.md`
-2. If `TaskSpec` is `-` → **STOP**: "Task T-XXX has no Ring pre-dev spec. Link one via `/optimus-tasks` or `/optimus-import`."
+2. If `TaskSpec` is `-` → **STOP**: "Task T-XXX has no Ring pre-dev spec. Run `/optimus-plan T-XXX` to generate one (it will offer to invoke `ring:pre-dev-feature` interactively)."
 3. Resolve full path: `TASK_SPEC_PATH = <TASKS_DIR>/<TaskSpec>`
 4. **Path traversal validation (HARD BLOCK):** `TaskSpec` must resolve to a file **inside `TASKS_DIR`**.
    This prevents a malicious TaskSpec value like `../../../etc/passwd` from escaping the

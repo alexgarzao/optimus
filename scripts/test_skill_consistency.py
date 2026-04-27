@@ -1836,10 +1836,11 @@ class TestDualPlatformParity:
             f"Claude marketplace plugin must be named `optimus`, got "
             f"{plugins[0]['name']!r}."
         )
-        assert plugins[0]["source"] == ".", (
-            f"Claude `optimus` plugin source must be `.` (repo root) so the "
-            f"top-level `commands/` directory is discovered, got "
-            f"{plugins[0]['source']!r}."
+        assert plugins[0]["source"] == "./", (
+            f"Claude `optimus` plugin source must be `./` (repo root) so the "
+            f"top-level `commands/` directory is discovered. Note: the leading "
+            f"`./` is required by the marketplace schema validator (bare `.` "
+            f"fails). Got {plugins[0]['source']!r}."
         )
 
     def test_every_plugin_has_both_platform_surfaces(self):
@@ -2960,3 +2961,63 @@ class TestTasksReValidatesAfterMutation:
         assert violations == [], (
             "Mutating operations must re-validate after edits:\n" + "\n".join(violations)
         )
+
+
+# --- TaskSpec self-heal in /optimus:plan ---
+
+
+class TestSpecSelfHeal:
+    """plan auto-heals missing TaskSpec via ring:pre-dev-feature; build/review redirect to plan."""
+
+    def test_plan_has_resolve_missing_spec_step(self):
+        """plan SKILL.md must declare a self-heal step that runs before TaskSpec Resolution."""
+        plan_md = (REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md").read_text()
+        assert "Resolve Missing Spec" in plan_md, (
+            "plan SKILL.md must contain a 'Resolve Missing Spec' step that handles TaskSpec=-"
+        )
+        assert "ring:pre-dev-feature" in plan_md, (
+            "plan SKILL.md must delegate to ring:pre-dev-feature for spec generation"
+        )
+        assert "Link existing spec" in plan_md, (
+            "plan SKILL.md must offer 'Link existing spec' as a fallback when Ring unavailable"
+        )
+
+    def test_plan_self_heal_runs_before_taskspec_resolution(self):
+        """The self-heal step must appear textually before the TaskSpec Resolution call."""
+        plan_md = (REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md").read_text()
+        heal_idx = plan_md.find("Resolve Missing Spec")
+        resolve_idx = plan_md.find("Protocol: TaskSpec Resolution")
+        assert heal_idx > 0 and resolve_idx > 0, (
+            "Both 'Resolve Missing Spec' and 'Protocol: TaskSpec Resolution' must be present"
+        )
+        assert heal_idx < resolve_idx, (
+            "'Resolve Missing Spec' must appear BEFORE 'Protocol: TaskSpec Resolution' "
+            "so the spec is guaranteed valid by the time Resolution runs"
+        )
+
+    def test_protocol_redirects_to_plan(self):
+        """AGENTS.md Protocol: TaskSpec Resolution STOP message must redirect to /optimus-plan."""
+        agents_md = AGENTS_MD.read_text()
+        # New message redirects to plan
+        assert "Run `/optimus-plan T-XXX`" in agents_md, (
+            "Protocol: TaskSpec Resolution STOP message must redirect users to /optimus-plan"
+        )
+        assert "ring:pre-dev-feature" in agents_md, (
+            "Protocol message must mention ring:pre-dev-feature so users know what to expect"
+        )
+        # Old message removed (the specific phrasing that pointed at tasks/import)
+        assert "Link one via `/optimus-tasks` or `/optimus-import`" not in agents_md, (
+            "Old TaskSpec Resolution STOP message must be removed"
+        )
+
+    def test_build_review_dont_self_heal(self):
+        """build and review SKILL.md bodies must not introduce their own self-heal logic."""
+        for skill in ("build", "review"):
+            content = (REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md").read_text()
+            # Body = everything after the second `---` (closing frontmatter delimiter)
+            parts = content.split("---", 2)
+            body = parts[2] if len(parts) >= 3 else content
+            assert "ring:pre-dev-feature" not in body, (
+                f"{skill} SKILL.md body must not invoke ring:pre-dev-feature — "
+                "only plan self-heals; build/review delegate via TaskSpec Resolution protocol"
+            )

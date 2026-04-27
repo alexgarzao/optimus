@@ -246,6 +246,41 @@ Before loading docs, discover the project's structure:
 4. **Identify reference docs:** Look for task specs, API design, data model, architecture docs, business requirements, and dependency maps.
 5. **Identify doc hierarchy:** Determine the source-of-truth ordering for conflicting docs (typically: project rules/AI instructions > API design > data model > architecture > business requirements > task specs).
 
+### Step 1.2.0: Resolve Missing Spec
+
+Before invoking TaskSpec Resolution, detect and self-heal a missing spec.
+
+1. Parse `optimus-tasks.md` and read the task row's `TaskSpec` column.
+2. If `TaskSpec` is NOT `-`, skip this step (proceed to Step 1.2).
+3. If `TaskSpec` is `-`, ask via `AskUser`:
+
+   ```
+   [topic] (1/1) Task T-XXX has no Ring pre-dev spec. How should I proceed?
+   ```
+
+   Options:
+   - **Generate via Ring** (default) — invoke `ring:pre-dev-feature`
+   - **Link existing spec** — search `<TASKS_DIR>/tasks/*.md`
+   - **Cancel** — abort plan
+
+4. **If "Generate via Ring":**
+   1. Verify `ring:pre-dev-feature` is available. If unavailable → fall back to "Link existing spec" automatically and warn the user.
+   2. Invoke `ring:pre-dev-feature` via `Skill` tool, passing the task title and tipo (mirror `optimus-tasks` Step 2.3.1).
+   3. After Ring completes, capture the generated spec file path (relative to `<TASKS_DIR>`).
+   4. Update the task's `TaskSpec` column in `optimus-tasks.md`.
+   5. Re-validate optimus-tasks.md — see AGENTS.md Protocol: optimus-tasks.md Validation. If validation fails, abort and revert the in-memory edit; do not commit.
+   6. Commit the TaskSpec update via `tasks_git` — see AGENTS.md Protocol: tasks_git commit.
+
+5. **If "Link existing spec":**
+   1. Glob `<TASKS_DIR>/tasks/*.md`. Rank candidates by keyword overlap with the task title.
+   2. Present the top 5 matches via `AskUser`; user picks one or types a custom relative path under `<TASKS_DIR>/tasks/`.
+   3. Validate the chosen path exists and resolves inside `<TASKS_DIR>` (path-traversal protection — same rules as `Protocol: TaskSpec Resolution`).
+   4. Update the task's `TaskSpec` column. Re-validate and commit (steps 4.5 and 4.6 above).
+
+6. **If "Cancel":** **STOP** — "Plan cancelled — task spec required."
+
+7. Post-condition: `TaskSpec` is now a valid relative path (not `-`). Proceed to Step 1.2.
+
 ### Step 1.2: Load Documents
 
 Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution. Load the Ring pre-dev
