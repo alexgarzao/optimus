@@ -3308,6 +3308,10 @@ class TestProtocolSummarizeMarker:
         "Divergence Warning",
         "TaskSpec Resolution",
         "All-Dependencies-Cancelled Resolution",
+        # Phase 6:
+        "Workspace Auto-Navigation (HARD BLOCK)",
+        "Discover Review Droids",
+        "Parse CodeRabbit Review Body",
     ]
 
     def test_summarize_marker_present_for_top_protocols(self):
