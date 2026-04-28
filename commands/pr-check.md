@@ -193,6 +193,7 @@ gh api graphql -f query='
                 author { login }
                 body
                 createdAt
+                pullRequestReview { id author { login } }
               }
             }
           }
@@ -247,9 +248,13 @@ Store each thread as:
   is_outdated: true | false,
   path: "<file>",
   line: <number>,
-  body: "<first comment body>"
+  body: "<first comment body>",
+  review_node_id: "<PullRequestReview node ID, or null if thread is not part of a review>",
+  review_author: "<login, e.g. coderabbitai[bot]>"
 }
 ```
+
+`review_node_id` and `review_author` come from the first comment's `pullRequestReview { id author { login } }` selection in the GraphQL query above. They are consumed by Step 13.5 to group threads by their parent review and decide which review summaries (e.g. CodeRabbit's `#pullrequestreview-<id>` entries) are fully resolved and therefore eligible to be hidden via `minimizeComment`.
 
 #### Step 1.3.1.5: Fetch ALL PR Review Bodies (MANDATORY)
 
@@ -1525,17 +1530,90 @@ After all threads are processed (BOTH the active threads from Steps 13.1-13.3 AN
 
 ### Step 13.5: Hide Fully-Resolved Reviews
 
-After all threads are resolved, minimize fully-resolved review sections:
+**Goal:** collapse review summaries (e.g. CodeRabbit's `https://github.com/<owner>/<repo>/pull/<n>#pullrequestreview-<id>` entries) once all of their threads are resolved — mirroring what a human does manually by clicking "Resolve conversation" on a review summary. Without this step, CodeRabbit's review summary panels stay expanded on the PR forever, even when every underlying thread is resolved, which is exactly what users complain about.
+
+**HARD BLOCK:** Step 13.5 MUST run after Step 13.4 confirms zero unresolved threads. Do NOT skip it — the Completion Checklist and Phase 14 summary verify it ran. Idempotency (Step 13.5.d) makes it safe to re-run, so when in doubt, run it.
+
+#### Step 13.5.a: Enumerate ALL reviews on the PR
 
 ```bash
 gh api graphql -f query='
-  mutation {
-    minimizeComment(input: {subjectId: "<review_node_id>", classifier: RESOLVED}) {
-      minimizedComment { isMinimized }
+  query($cursor: String) {
+    repository(owner: "<owner>", name: "<repo>") {
+      pullRequest(number: <number>) {
+        reviews(first: 100, after: $cursor) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            id
+            author { login }
+            state
+            body
+            isMinimized
+          }
+        }
+      }
     }
   }
 '
 ```
+
+If `pageInfo.hasNextPage` is `true`, re-run with `-f cursor="<endCursor>"` until all pages are fetched. Merge all nodes into a single `reviews[]` list.
+
+#### Step 13.5.b: Compute per-review resolution status
+
+Using the thread map from Step 13.2 (which now carries `review_node_id` and `review_author` per Step 1.3.1), for EACH `review` in `reviews[]`:
+
+1. `threads_for_review = [t for t in (active_threads ∪ outdated_threads) if t.review_node_id == review.id]`
+2. `is_fully_resolved = all(t.is_resolved == true for t in threads_for_review)` — vacuously `true` for reviews with zero inline threads (e.g. CodeRabbit summary-only reviews).
+3. `eligible = is_fully_resolved AND review.isMinimized == false`
+4. **Eligibility filter (which authors get auto-hidden):**
+   - Always eligible (when `is_fully_resolved` and not yet minimized): `coderabbitai[bot]`, `deepsource-io`, `codacy-production`, `github-actions[bot]`, `copilot`, `github-advanced-security[bot]`.
+   - Skip `state: PENDING` regardless of author.
+   - Skip human-authored reviews unless `state: APPROVED` AND `body` is empty — humans typically want their summary visible, so default to leaving theirs alone.
+
+#### Step 13.5.c: Minimize each eligible review (atomically: act → confirm → next)
+
+For EACH eligible review, in order, do not batch:
+
+```bash
+gh api graphql -f query='
+  mutation($id: ID!) {
+    minimizeComment(input: {subjectId: $id, classifier: RESOLVED}) {
+      minimizedComment { isMinimized }
+    }
+  }
+' -F id="<review_node_id>"
+```
+
+Confirm `isMinimized: true` in the response before moving to the next review. If `false` returns or the mutation errors (e.g. permission, already-minimized race), log the failure with the review URL and continue — do NOT abort the run; Step 13.4 already guaranteed thread resolution, which is the user-visible blocker. Hiding is hygiene.
+
+**Example — CodeRabbit review (matching the user's reported surface):**
+```bash
+# review_node_id = "PRR_kwDOABCDEF4gXyZ_" (from Step 13.5.a, author=coderabbitai[bot])
+# corresponds to https://github.com/<owner>/<repo>/pull/<n>#pullrequestreview-4192419317
+
+gh api graphql -f query='
+  mutation($id: ID!) {
+    minimizeComment(input: {subjectId: $id, classifier: RESOLVED}) {
+      minimizedComment { isMinimized }
+    }
+  }
+' -F id="PRR_kwDOABCDEF4gXyZ_"
+```
+
+#### Step 13.5.d: Idempotency
+
+`review.isMinimized == true` from Step 13.5.a is the dedupe key — skip without calling the mutation. This makes Step 13.5 safe to re-run after a crash, after a partial Phase 13, or on subsequent pr-check invocations against the same PR. The expected steady-state log on a re-run is `"Hidden 0 fully-resolved reviews (already minimized)"`.
+
+#### Step 13.5.e: Log line (MANDATORY — surface to user)
+
+After processing all eligible reviews, emit ONE log line with per-author counts:
+
+```
+Hidden K fully-resolved reviews (CodeRabbit: X, DeepSource: Y, Codacy: Z, other bots: W).
+```
+
+This line is what the user sees in chat output to confirm the hide-on-resolve behavior actually ran. Phase 14 echoes the same number under "Sources Analyzed".
 
 ### Step 13.6: Reply Summary
 
@@ -1560,6 +1638,12 @@ Render TWO tables. The "Active threads" table is omitted entirely in `diff` mode
 |---|--------|--------|-------|--------|
 | 1 | file.go:120 | CodeRabbit | Outdated — code changed in subsequent commits | Resolved |
 | 2 | file.go:88 | Codacy | Outdated — code changed in subsequent commits | Resolved |
+
+#### Reviews hidden (Step 13.5 — render only when ≥1 review was hidden)
+| # | Review URL | Author | Threads | Status |
+|---|------------|--------|---------|--------|
+| 1 | https://github.com/<owner>/<repo>/pull/<n>#pullrequestreview-<id> | coderabbitai[bot] | 4/4 resolved | Hidden |
+| 2 | https://github.com/<owner>/<repo>/pull/<n>#pullrequestreview-<id> | deepsource-io | 2/2 resolved | Hidden |
 ```
 
 ---
@@ -1619,6 +1703,7 @@ Render the standard summary below.
 - Human reviewers: X comments (Y validated, Z contested)
 - New agent findings: X
 - **Outdated threads auto-resolved (Step 13.0): M** — pure hygiene; required for CodeRabbit / approval-gate compliance
+- **Reviews hidden (Step 13.5): K** (CodeRabbit: X, DeepSource: Y, Codacy: Z, other bots: W) — fully-resolved review summaries collapsed via `minimizeComment`
   [render this aside ONLY when M is non-trivially large, e.g. M >= 10:]
   (NOTE: on the first pr-check run after this skill was upgraded, M may be unexpectedly large because previously-discarded outdated threads from prior runs accumulate on the PR. Subsequent runs will see steady-state values.)
 
@@ -1678,7 +1763,7 @@ Render the standard summary below.
 - [ ] Push completed or explicitly skipped
 - [ ] ALL comment threads replied AND resolved atomically (reply → resolve → next, never batch separately)
 - [ ] Verification query confirms zero `isResolved: false` threads remain
-- [ ] Fully-resolved reviews hidden via `minimizeComment`
+- [ ] Fully-resolved reviews hidden via `minimizeComment` — Step 13.5.a confirms `isMinimized: true` for every previously-eligible review (or zero eligible)
 - [ ] Reply summary presented — every row MUST show "Resolved" status
 - [ ] Final summary with verdict presented
 
