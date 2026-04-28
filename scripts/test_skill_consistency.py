@@ -3281,12 +3281,13 @@ class TestWorktreeLocationConvention:
 # source-of-truth so the marker can't be dropped without flipping a test.
 
 class TestProtocolSummarizeMarker:
-    """Phases 1+2+3+4+5 of issue #34: Verify the top-duplicated protocols carry
-    the <!-- inline-mode: summarize --> marker in AGENTS.md."""
+    """Phases 1+2+3+4+5+6+7 of issue #34: Verify the top-duplicated protocols
+    carry the <!-- inline-mode: summarize --> marker in AGENTS.md."""
 
     # Protocols carrying the standard `### Protocol: <name>` heading.
-    # File Location, Format Validation, and Finding Presentation are
-    # non-`Protocol:` H3 sections; tested separately via dedicated methods.
+    # File Location, Format Validation, Finding Presentation, and Valid
+    # Status Values are non-`Protocol:` H3 sections; tested separately via
+    # dedicated methods.
     SUMMARIZED_PROTOCOLS = [
         # Phase 1:
         "Resolve Main Worktree Path",
@@ -3312,6 +3313,11 @@ class TestProtocolSummarizeMarker:
         "Workspace Auto-Navigation (HARD BLOCK)",
         "Discover Review Droids",
         "Parse CodeRabbit Review Body",
+        # Phase 7:
+        "optimus-tasks.md Validation (HARD BLOCK)",
+        "Project Rules Discovery",
+        "Ring Droid Requirement Check",
+        "Active Version Guard",
     ]
 
     def test_summarize_marker_present_for_top_protocols(self):
@@ -3425,5 +3431,32 @@ class TestProtocolSummarizeMarker:
         )
         assert marker_idx < summary_idx, (
             "Finding Presentation: marker must come before **Summary:** "
+            f"(marker={marker_idx}, summary={summary_idx})"
+        )
+
+    def test_summarize_marker_present_for_valid_status_values_section(self):
+        """Phase 7: the `### Valid Status Values (stored in state.json)`
+        section (a non-`Protocol:` H3 nested under the Status section) also
+        carries the summarize marker. Same rationale as File Location, Format
+        Validation, and Finding Presentation — the inliner accepts any H2/H3
+        but the SUMMARIZED_PROTOCOLS list is keyed by `Protocol: <name>` form,
+        so this section is guarded explicitly."""
+        content = AGENTS_MD.read_text()
+        heading = "### Valid Status Values (stored in state.json)"
+        idx = content.find(heading)
+        assert idx >= 0, f"{heading} missing from AGENTS.md"
+        window = content[idx: idx + 1500]
+        marker_idx = window.find("<!-- inline-mode: summarize -->")
+        summary_idx = window.find("**Summary:**")
+        assert marker_idx >= 0, (
+            "Valid Status Values: missing <!-- inline-mode: summarize --> "
+            "marker (must be placed immediately under the heading)"
+        )
+        assert summary_idx >= 0, (
+            "Valid Status Values: missing **Summary:** subsection "
+            "(must follow the summarize marker)"
+        )
+        assert marker_idx < summary_idx, (
+            "Valid Status Values: marker must come before **Summary:** "
             f"(marker={marker_idx}, summary={summary_idx})"
         )

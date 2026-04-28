@@ -568,7 +568,11 @@ extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
 Optimus splits its files into two trees:
 
-### Valid Status Values (stored in state.json)
+### Valid Status Values (stored in state.json) (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Valid Status Values (stored in state.json)`.**
+
+**Summary:** state.json status values: `Pendente` (implicit, no entry), `Validando Spec` (plan), `Em Andamento` (build), `Validando Impl` (review), `DONE` (done), `Cancelado` (tasks/done). Administrative ops (Reopen, Advance, Demote, Cancel) require explicit user confirmation. See full table + transitions in AGENTS.md.
 
 Status lives in `.optimus/state.json`, NOT in optimus-tasks.md. A task with no entry in
 state.json is implicitly `Pendente`.
@@ -581,15 +585,6 @@ state.json is implicitly `Pendente`.
 | `Validando Impl` | review | Implementation being reviewed |
 | `DONE` | done | Completed |
 | `Cancelado` | tasks, done | Task abandoned, will not be implemented |
-
-**Administrative status operations** (managed by tasks, not by stage agents):
-- **Reopen:** `DONE` → `Pendente` (remove entry from state.json) or `Em Andamento` (if worktree exists) — when a bug is found after close. Also accepts `Cancelado` → `Pendente` — when a cancellation decision is reversed.
-- **Advance:** move forward one stage — when work was done manually outside the pipeline
-- **Demote:** move backward one stage — when rework is needed after review
-- **Cancel:** any non-terminal → `Cancelado` — task will not be implemented
-
-These operations require explicit user confirmation.
-
 
 ### Format Validation (summarized)
 
@@ -628,45 +623,11 @@ to import from Ring pre-dev." Do NOT proceed to task identification with an empt
 
 **Summary:** Resolves `TASKS_DIR` (from `.optimus/config.json` `tasksDir` key, default `docs/pre-dev`) and `TASKS_FILE` (`<tasksDir>/optimus-tasks.md`), then detects whether tasksDir lives inside the project repo (`same-repo`) or a separate git repo (`separate-repo`). Sets `TASKS_REPO_ROOT`, `TASKS_GIT_REL`, `TASKS_DEFAULT_BRANCH`, and exposes a `tasks_git()` helper that wraps `git -C "$TASKS_DIR"` in separate-repo mode. Hard guards: reject `tasksDir` starting with `-` (git-option injection), require `python3` for separate-repo path computation, validate `TASKS_DEFAULT_BRANCH` against `^[a-zA-Z0-9._/-]+$`. Skills MUST use `tasks_git` (never raw `git`) on `$TASKS_FILE`. See full recipe in AGENTS.md.
 
-### Protocol: Active Version Guard
+### Protocol: Active Version Guard (summarized)
 
-**Referenced by:** all stage agents (1-4)
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Active Version Guard`.**
 
-After the task ID is confirmed and dependencies are validated, check if the task belongs
-to the `Ativa` version. If not, present options before proceeding.
-
-1. Read the task's **Version** column from `optimus-tasks.md`
-2. Read the **Versions** table and find the version with Status `Ativa`
-   - **If no version has Status `Ativa`** → **STOP**: "No active version found in the Versions table. Run `/optimus-tasks` to set a version as Ativa before proceeding."
-3. **If the task's version matches the `Ativa` version** → proceed silently
-4. **If the task's version does NOT match the `Ativa` version** → present via `AskUser`:
-   ```
-   Task T-XXX is in version '<task_version>' (<version_status>),
-   but the active version is '<active_version>'.
-   To execute this task, it must be moved to the active version first.
-   ```
-   Options:
-   - **Move to active version and continue** — updates the Version column to the active version, commits, and proceeds
-   - **Cancel** — stops execution
-
-5. **If "Move to active version and continue":**
-   - Update the task's Version column in `optimus-tasks.md` to the `Ativa` version name
-   - Commit using `tasks_git` so the change lands in the correct repo (same-repo or
-     separate-repo, as resolved by Protocol: Resolve Tasks Git Scope):
-     ```bash
-     tasks_git add "$TASKS_GIT_REL"
-     COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
-     chmod 600 "$COMMIT_MSG_FILE"
-     printf '%s' "chore(tasks): move T-XXX to active version <active_version>" > "$COMMIT_MSG_FILE"
-     tasks_git commit -F "$COMMIT_MSG_FILE"
-     rm -f "$COMMIT_MSG_FILE"
-     ```
-   - Proceed with the stage
-
-6. **If "Cancel":** **STOP** — do not proceed with the stage
-
-Skills reference this as: "Check active version guard — see AGENTS.md Protocol: Active Version Guard."
-
+**Summary:** After task ID/deps confirmed, check the task's Version against the Versions table. If no version is `Ativa` → STOP. If task version matches `Ativa` → proceed silently. Otherwise present `AskUser` with two options: "Move to active version and continue" (updates Version column, commits via `tasks_git`) or "Cancel" (STOP). HARD BLOCK forces explicit version transition before mutating optimus-tasks.md. See full commit recipe in AGENTS.md.
 
 ### Protocol: All-Dependencies-Cancelled Resolution (summarized)
 
@@ -836,25 +797,10 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 
 **Summary:** `_optimus_set_title <text>` updates the terminal title for iTerm2-on-macOS via AppleScript (`osascript ... set name of s to newName`) — the only channel that reliably mutates `session.name` in "divorced" iTerm2 sessions where OSC 0/1/2 and SetUserVar are ineffective. Used by stage skills to surface task context (e.g., `optimus: PLAN T-007 — User auth`) so users running multiple Optimus sessions can identify them at a glance. The function is auto-inlined into 6 SKILLs by `inline-protocols.py` (do NOT manually paste the body in SKILL.md — F12f rule). Title is informational; failure to set it is non-fatal (silent no-op outside iTerm2/macOS, in Docker/CI without TTY, or when osascript denied). See full bash function in AGENTS.md.
 
-### Protocol: optimus-tasks.md Validation (HARD BLOCK)
+### Protocol: optimus-tasks.md Validation (HARD BLOCK) (summarized)
 
-**Referenced by:** all stage agents (1-4), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: optimus-tasks.md Validation (HARD BLOCK)`.**
 
-Every stage agent MUST validate optimus-tasks.md before operating. The full validation rules are
-defined in the "Format Validation" section above (items 1-15). This protocol is the
-executable version:
-
-1. **Resolve paths and git scope:** Execute Protocol: Resolve Tasks Git Scope (below) to
-   resolve `TASKS_DIR`, `TASKS_FILE`, `TASKS_GIT_SCOPE`, and the `tasks_git` helper.
-2. **Find optimus-tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus-import`.
-3. **Validate format:** Execute all 15 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-import`.
-
-**All subsequent references to `optimus-tasks.md` in the skill use the resolved `TASKS_FILE` path.
-All references to Ring pre-dev artifacts use `TASKS_DIR` as the root** — never hardcoded paths.
-**All git operations on optimus-tasks.md use the `tasks_git` helper** (which handles both same-repo
-and separate-repo scopes).
-
-Skills reference this as: "Find and validate optimus-tasks.md (HARD BLOCK) — see AGENTS.md Protocol: optimus-tasks.md Validation."
-
+**Summary:** At Step 1.0.1 of every stage agent: (1) resolve paths via Protocol: Resolve Tasks Git Scope; (2) check `TASKS_FILE` exists, else STOP and suggest `/optimus-import`; (3) run all 15 Format Validation rules, else STOP and suggest `/optimus-import`. HARD BLOCK on any failure. All subsequent skill steps use the resolved `TASKS_FILE` and `tasks_git` helper. See full enumeration in AGENTS.md.
 
 <!-- INLINE-PROTOCOLS:END -->

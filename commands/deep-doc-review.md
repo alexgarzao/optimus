@@ -318,44 +318,10 @@ extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
 **Summary:** Multi-round review pattern for plan, build, review, pr-check, coderabbit-review, deep-review, deep-doc-review. Round 1 is mandatory (the skill's primary dispatch). Rounds 2-5 are gated behind explicit `AskUser` prompts (entry gate before round 2, per-round gate before 3/4/5). Each gated round dispatches the SAME droid roster as round 1 in parallel via `Task` tool with zero prior context — agents read files fresh from disk. Convergence detection (zero new findings, strict `same file + ±5 lines + same category` matching) exits silently with status `CONVERGED` — never asks for another round. Hard limit at round 5. Exit statuses: `CONVERGED`, `USER_STOPPED`, `SKIPPED`, `HARD_LIMIT`, `DISPATCH_FAILED_ABORTED` (build has a single-slot carve-out). See full recipe in AGENTS.md.
 
-### Protocol: Ring Droid Requirement Check
+### Protocol: Ring Droid Requirement Check (summarized)
 
-**Referenced by:** review, deep-doc-review, coderabbit-review, plan, build
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Ring Droid Requirement Check`.**
 
-Before dispatching ring droids, verify the required droids are available. If any required
-droid is not installed, **STOP** and list missing droids.
-
-**Core review droids** (required by review, pr-check, deep-review, coderabbit-review):
-- `ring-default-code-reviewer`
-- `ring-default-business-logic-reviewer`
-- `ring-default-security-reviewer`
-- `ring-default-ring-test-reviewer`
-
-**Extended review droids** (required by review, pr-check, deep-review, coderabbit-review):
-- `ring-default-ring-nil-safety-reviewer`
-- `ring-default-ring-consequences-reviewer`
-- `ring-default-ring-dead-code-reviewer`
-
-**QA droids** (required by review, deep-review, build):
-- `ring-dev-team-qa-analyst`
-
-**Documentation droids** (required by deep-doc-review):
-- `ring-tw-team-docs-reviewer`
-- `ring-default-business-logic-reviewer`
-- `ring-default-code-reviewer`
-
-**Implementation droids** (required by build):
-- `ring-dev-team-backend-engineer-golang` (Go)
-- `ring-dev-team-backend-engineer-typescript` (TypeScript)
-- `ring-dev-team-frontend-engineer` (React/Next.js)
-
-**Spec validation droids** (required by plan):
-- `ring-default-business-logic-reviewer`
-- `ring-default-security-reviewer`
-- `ring-dev-team-qa-analyst`
-- `ring-default-code-reviewer`
-
-Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check."
-
+**Summary:** Before dispatching, verify required ring droids are installed; if any missing, STOP and list them. Roster requirements vary by skill: Core review (`code-reviewer`, `business-logic-reviewer`, `security-reviewer`, `ring-test-reviewer`); Extended review (`nil-safety-reviewer`, `consequences-reviewer`, `dead-code-reviewer`); QA (`qa-analyst`); Docs (`docs-reviewer`); Implementation (`backend-engineer-golang`/`-typescript`, `frontend-engineer`); Spec validation droids for plan. See full per-skill roster in AGENTS.md.
 
 <!-- INLINE-PROTOCOLS:END -->

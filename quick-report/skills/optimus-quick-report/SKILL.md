@@ -284,7 +284,11 @@ extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
 Optimus splits its files into two trees:
 
-### Valid Status Values (stored in state.json)
+### Valid Status Values (stored in state.json) (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Valid Status Values (stored in state.json)`.**
+
+**Summary:** state.json status values: `Pendente` (implicit, no entry), `Validando Spec` (plan), `Em Andamento` (build), `Validando Impl` (review), `DONE` (done), `Cancelado` (tasks/done). Administrative ops (Reopen, Advance, Demote, Cancel) require explicit user confirmation. See full table + transitions in AGENTS.md.
 
 Status lives in `.optimus/state.json`, NOT in optimus-tasks.md. A task with no entry in
 state.json is implicitly `Pendente`.
@@ -297,15 +301,6 @@ state.json is implicitly `Pendente`.
 | `Validando Impl` | review | Implementation being reviewed |
 | `DONE` | done | Completed |
 | `Cancelado` | tasks, done | Task abandoned, will not be implemented |
-
-**Administrative status operations** (managed by tasks, not by stage agents):
-- **Reopen:** `DONE` → `Pendente` (remove entry from state.json) or `Em Andamento` (if worktree exists) — when a bug is found after close. Also accepts `Cancelado` → `Pendente` — when a cancellation decision is reversed.
-- **Advance:** move forward one stage — when work was done manually outside the pipeline
-- **Demote:** move backward one stage — when rework is needed after review
-- **Cancel:** any non-terminal → `Cancelado` — task will not be implemented
-
-These operations require explicit user confirmation.
-
 
 ### Protocol: Resolve Main Worktree Path (summarized)
 

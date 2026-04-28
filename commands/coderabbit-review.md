@@ -619,37 +619,11 @@ All cycle review skills follow this pattern:
 
 **Summary:** Per-droid quality dimensions that review/pr-check/deep-review/coderabbit-review/plan/build skills MUST include in their agent prompts beyond the core review domain. Examples: code-reviewer adds resilience/concurrency/cognitive-complexity/error-handling checks; security-reviewer adds PII/error-response-leakage/rate-limiting/secrets; test-reviewer adds effectiveness/false-positive-risk/spec-traceability; nil-safety adds channel/map/slice safety; consequences adds backward-compat/migration-path/event-contract; dead-code adds zombie test infrastructure and stale feature flags; qa-analyst adds testability/operational-readiness; frontend adds UX states/accessibility/i18n; backend adds graceful-shutdown/context-propagation/structured-logging. Skills reference this when building specialist droid prompts so agents review uniformly. See full per-droid lists in AGENTS.md.
 
-### Protocol: Project Rules Discovery
+### Protocol: Project Rules Discovery (summarized)
 
-**Referenced by:** stages 1-4, deep-review, coderabbit-review
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Project Rules Discovery`.**
 
-Every skill that reviews, validates, or generates code MUST search for project rules
-and AI instruction files before starting. Search for these files in order and read ALL
-that exist:
-
-```
-AGENTS.md                    # Primary agent instructions
-CLAUDE.md                    # Claude-specific rules
-DROIDS.md                    # Droid-specific rules
-.cursorrules                 # Cursor-specific rules
-PROJECT_RULES.md             # Coding standards (root or docs/)
-docs/PROJECT_RULES.md
-.editorconfig                # Editor formatting rules
-docs/coding-standards.md     # Explicit coding conventions
-docs/conventions.md
-.github/CONTRIBUTING.md      # Contribution guidelines
-CONTRIBUTING.md
-.eslintrc*                   # Linter configs (implicit rules)
-biome.json
-.golangci.yml
-.prettierrc*
-```
-
-If NONE exist, warn the user. If any are found, they become the source of truth
-for coding standards and must be passed to every dispatched sub-agent.
-
-Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Project Rules Discovery."
-
+**Summary:** Every reviewing/validating/generating skill MUST scan for project conventions before starting. Search the canonical list (AGENTS.md, CLAUDE.md, DROIDS.md, .cursorrules, PROJECT_RULES.md, .editorconfig, coding-standards.md, CONTRIBUTING.md, linter configs like .eslintrc/biome.json/.golangci.yml/.prettierrc) and read ALL that exist. If none exist, warn the user. Discovered files become the authoritative source of truth and MUST be passed to every dispatched sub-agent. See full file list in AGENTS.md.
 
 ### Protocol: Push Commits (optional) (summarized)
 
@@ -663,44 +637,10 @@ Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Pr
 
 **Summary:** `_optimus_quiet_run <label> <command>` redirects stdout+stderr to `${MAIN_WORKTREE}/.optimus/logs/<ts>-<label>-<pid>.log`, emits a single `PASS`/`FAIL` line, and on failure dumps the last 50 lines (with `cat -v` to neutralize ANSI/OSC escape sequences). Uses `umask 0077` on the log file (output may contain credentials/stack traces). Exit code preserved so `if _optimus_quiet_run ...; then ... fi` works. Reserved exit codes: `2` = missing label/command; `3` = cannot create logs dir. Log retention (30-day age cap + 500-file count cap) is pruned at every Initialize Directory + Session State call. Use for verification commands only; never for output the agent must parse turn-by-turn. See full recipe in AGENTS.md.
 
-### Protocol: Ring Droid Requirement Check
+### Protocol: Ring Droid Requirement Check (summarized)
 
-**Referenced by:** review, deep-doc-review, coderabbit-review, plan, build
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Ring Droid Requirement Check`.**
 
-Before dispatching ring droids, verify the required droids are available. If any required
-droid is not installed, **STOP** and list missing droids.
-
-**Core review droids** (required by review, pr-check, deep-review, coderabbit-review):
-- `ring-default-code-reviewer`
-- `ring-default-business-logic-reviewer`
-- `ring-default-security-reviewer`
-- `ring-default-ring-test-reviewer`
-
-**Extended review droids** (required by review, pr-check, deep-review, coderabbit-review):
-- `ring-default-ring-nil-safety-reviewer`
-- `ring-default-ring-consequences-reviewer`
-- `ring-default-ring-dead-code-reviewer`
-
-**QA droids** (required by review, deep-review, build):
-- `ring-dev-team-qa-analyst`
-
-**Documentation droids** (required by deep-doc-review):
-- `ring-tw-team-docs-reviewer`
-- `ring-default-business-logic-reviewer`
-- `ring-default-code-reviewer`
-
-**Implementation droids** (required by build):
-- `ring-dev-team-backend-engineer-golang` (Go)
-- `ring-dev-team-backend-engineer-typescript` (TypeScript)
-- `ring-dev-team-frontend-engineer` (React/Next.js)
-
-**Spec validation droids** (required by plan):
-- `ring-default-business-logic-reviewer`
-- `ring-default-security-reviewer`
-- `ring-dev-team-qa-analyst`
-- `ring-default-code-reviewer`
-
-Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check."
-
+**Summary:** Before dispatching, verify required ring droids are installed; if any missing, STOP and list them. Roster requirements vary by skill: Core review (`code-reviewer`, `business-logic-reviewer`, `security-reviewer`, `ring-test-reviewer`); Extended review (`nil-safety-reviewer`, `consequences-reviewer`, `dead-code-reviewer`); QA (`qa-analyst`); Docs (`docs-reviewer`); Implementation (`backend-engineer-golang`/`-typescript`, `frontend-engineer`); Spec validation droids for plan. See full per-skill roster in AGENTS.md.
 
 <!-- INLINE-PROTOCOLS:END -->
