@@ -284,47 +284,4 @@ Run `/optimus-report` to verify the dashboard looks correct.
 The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
-### Format Validation (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Format Validation`.**
-
-**Summary:** 15-rule validation for `<tasksDir>/optimus-tasks.md` enforced at Step 1.0.1 of every stage agent (1-4): format marker `<!-- optimus:tasks-v1 -->` present; `## Versions` table with valid columns; all Version Status values valid (`Ativa`/`Próxima`/`Planejada`/`Backlog`/`Concluída`); exactly one `Ativa`, at most one `Próxima`; tasks table columns correct (Status/Branch live in state.json, NOT here); IDs match `T-NNN`; Tipo ∈ {Feature, Fix, Refactor, Chore, Docs, Test}; Priority ∈ {Alta, Media, Baixa}; Depends resolves to existing task rows; Version cells reference existing version rows; no duplicate IDs; no circular dependencies; no unescaped pipes; empty-table guard. HARD BLOCK on any failure — STOP and suggest `/optimus-import`. See full 15-item enumeration in AGENTS.md.
-
-Every stage agent (1-4) MUST validate the optimus-tasks.md format before operating:
-1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
-2. A `## Versions` section exists with a table containing columns: Version, Status, Description
-3. All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
-4. Exactly one version has Status `Ativa`
-5. At most one version has Status `Próxima`
-6. A markdown table exists with columns: ID, Title, Tipo, Depends, Priority, Version (Estimate and TaskSpec are optional — tables without them are still valid). **Status and Branch columns are NOT expected** — they live in state.json.
-7. All task IDs follow the `T-NNN` pattern
-8. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
-9. All Depends values are either `-` or comma-separated valid task IDs that exist as rows in the tasks table (not just matching `T-NNN` pattern — the referenced task must actually exist)
-10. All Priority values are one of: `Alta`, `Media`, `Baixa`
-11. All Version values reference a version name that exists in the Versions table
-12. No duplicate task IDs
-13. No circular dependencies in the dependency graph (e.g., T-001 → T-002 → T-001)
-
-If the format marker is missing or validation fails, the agent must **STOP** and suggest
-running `/optimus-import` to fix the format. Do NOT attempt to interpret malformed data.
-
-14. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
-15. **Empty table handling:** If the tasks table exists but has zero data rows (only headers),
-format validation PASSES. Stage agents (1-4) MUST check for this condition immediately after
-format validation and before task identification. If zero data rows: **STOP** and inform the
-user: "No tasks found in optimus-tasks.md. Use `/optimus-tasks` to create a task or `/optimus-import`
-to import from Ring pre-dev." Do NOT proceed to task identification with an empty table.
-
-### Protocol: Resolve Tasks Git Scope (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Resolve Tasks Git Scope`.**
-
-**Summary:** Resolves `TASKS_DIR` (from `.optimus/config.json` `tasksDir` key, default `docs/pre-dev`) and `TASKS_FILE` (`<tasksDir>/optimus-tasks.md`), then detects whether tasksDir lives inside the project repo (`same-repo`) or a separate git repo (`separate-repo`). Sets `TASKS_REPO_ROOT`, `TASKS_GIT_REL`, `TASKS_DEFAULT_BRANCH`, and exposes a `tasks_git()` helper that wraps `git -C "$TASKS_DIR"` in separate-repo mode. Hard guards: reject `tasksDir` starting with `-` (git-option injection), require `python3` for separate-repo path computation, validate `TASKS_DEFAULT_BRANCH` against `^[a-zA-Z0-9._/-]+$`. Skills MUST use `tasks_git` (never raw `git`) on `$TASKS_FILE`. See full recipe in AGENTS.md.
-
-### Protocol: optimus-tasks.md Validation (HARD BLOCK) (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: optimus-tasks.md Validation (HARD BLOCK)`.**
-
-**Summary:** At Step 1.0.1 of every stage agent: (1) resolve paths via Protocol: Resolve Tasks Git Scope; (2) check `TASKS_FILE` exists, else STOP and suggest `/optimus-import`; (3) run all 15 Format Validation rules, else STOP and suggest `/optimus-import`. HARD BLOCK on any failure. All subsequent skill steps use the resolved `TASKS_FILE` and `tasks_git` helper. See full enumeration in AGENTS.md.
-
 <!-- INLINE-PROTOCOLS:END -->

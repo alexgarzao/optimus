@@ -290,81 +290,6 @@ After all tasks are processed (or the user stops), restore the terminal title vi
 The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
-### File Location (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> File Location`.**
-
-**Summary:** Defines where Optimus operational files live: `${MAIN_WORKTREE}/.optimus/{state.json, stats.json, sessions/, reports/, logs/}` (gitignored, per-user) vs `<tasksDir>/optimus-tasks.md` + `<tasksDir>/{tasks,subtasks}/` (versioned, project-team-shared, propagated by git). Also: `${MAIN_WORKTREE}/.gitignore` (versioned), `${MAIN_WORKTREE}/.worktrees/` (gitignored linked-worktree dir). Critical contract: `.optimus/*` paths NEVER propagate across linked worktrees (gitignored = not shared by `git worktree add`); use `${MAIN_WORKTREE}/` prefix consistently. See full table in AGENTS.md.
-
-Optimus splits its files into two trees:
-
-### Valid Status Values (stored in state.json) (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Valid Status Values (stored in state.json)`.**
-
-**Summary:** state.json status values: `Pendente` (implicit, no entry), `Validando Spec` (plan), `Em Andamento` (build), `Validando Impl` (review), `DONE` (done), `Cancelado` (tasks/done). Administrative ops (Reopen, Advance, Demote, Cancel) require explicit user confirmation. See full table + transitions in AGENTS.md.
-
-Status lives in `.optimus/state.json`, NOT in optimus-tasks.md. A task with no entry in
-state.json is implicitly `Pendente`.
-
-| Status | Set by | Meaning |
-|--------|--------|---------|
-| `Pendente` | Initial (implicit) | Not started — no entry in state.json |
-| `Validando Spec` | plan | Spec being validated |
-| `Em Andamento` | build | Implementation in progress |
-| `Validando Impl` | review | Implementation being reviewed |
-| `DONE` | done | Completed |
-| `Cancelado` | tasks, done | Task abandoned, will not be implemented |
-
-### Format Validation (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Format Validation`.**
-
-**Summary:** 15-rule validation for `<tasksDir>/optimus-tasks.md` enforced at Step 1.0.1 of every stage agent (1-4): format marker `<!-- optimus:tasks-v1 -->` present; `## Versions` table with valid columns; all Version Status values valid (`Ativa`/`Próxima`/`Planejada`/`Backlog`/`Concluída`); exactly one `Ativa`, at most one `Próxima`; tasks table columns correct (Status/Branch live in state.json, NOT here); IDs match `T-NNN`; Tipo ∈ {Feature, Fix, Refactor, Chore, Docs, Test}; Priority ∈ {Alta, Media, Baixa}; Depends resolves to existing task rows; Version cells reference existing version rows; no duplicate IDs; no circular dependencies; no unescaped pipes; empty-table guard. HARD BLOCK on any failure — STOP and suggest `/optimus-import`. See full 15-item enumeration in AGENTS.md.
-
-Every stage agent (1-4) MUST validate the optimus-tasks.md format before operating:
-1. **First line** is `<!-- optimus:tasks-v1 -->` (format marker)
-2. A `## Versions` section exists with a table containing columns: Version, Status, Description
-3. All Version Status values are valid (`Ativa`, `Próxima`, `Planejada`, `Backlog`, `Concluída`)
-4. Exactly one version has Status `Ativa`
-5. At most one version has Status `Próxima`
-6. A markdown table exists with columns: ID, Title, Tipo, Depends, Priority, Version (Estimate and TaskSpec are optional — tables without them are still valid). **Status and Branch columns are NOT expected** — they live in state.json.
-7. All task IDs follow the `T-NNN` pattern
-8. All Tipo values are one of: `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, `Test`
-9. All Depends values are either `-` or comma-separated valid task IDs that exist as rows in the tasks table (not just matching `T-NNN` pattern — the referenced task must actually exist)
-10. All Priority values are one of: `Alta`, `Media`, `Baixa`
-11. All Version values reference a version name that exists in the Versions table
-12. No duplicate task IDs
-13. No circular dependencies in the dependency graph (e.g., T-001 → T-002 → T-001)
-
-If the format marker is missing or validation fails, the agent must **STOP** and suggest
-running `/optimus-import` to fix the format. Do NOT attempt to interpret malformed data.
-
-14. No unescaped pipe characters (`|`) in task titles (breaks markdown table parsing)
-15. **Empty table handling:** If the tasks table exists but has zero data rows (only headers),
-format validation PASSES. Stage agents (1-4) MUST check for this condition immediately after
-format validation and before task identification. If zero data rows: **STOP** and inform the
-user: "No tasks found in optimus-tasks.md. Use `/optimus-tasks` to create a task or `/optimus-import`
-to import from Ring pre-dev." Do NOT proceed to task identification with an empty table.
-
-### Protocol: Resolve Tasks Git Scope (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Resolve Tasks Git Scope`.**
-
-**Summary:** Resolves `TASKS_DIR` (from `.optimus/config.json` `tasksDir` key, default `docs/pre-dev`) and `TASKS_FILE` (`<tasksDir>/optimus-tasks.md`), then detects whether tasksDir lives inside the project repo (`same-repo`) or a separate git repo (`separate-repo`). Sets `TASKS_REPO_ROOT`, `TASKS_GIT_REL`, `TASKS_DEFAULT_BRANCH`, and exposes a `tasks_git()` helper that wraps `git -C "$TASKS_DIR"` in separate-repo mode. Hard guards: reject `tasksDir` starting with `-` (git-option injection), require `python3` for separate-repo path computation, validate `TASKS_DEFAULT_BRANCH` against `^[a-zA-Z0-9._/-]+$`. Skills MUST use `tasks_git` (never raw `git`) on `$TASKS_FILE`. See full recipe in AGENTS.md.
-
-### Protocol: Resolve Main Worktree Path (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Resolve Main Worktree Path`.**
-
-**Summary:** Resolve `MAIN_WORKTREE` once via `git worktree list --porcelain | awk '/^worktree / {print $2; exit}'` with `${MAIN_WORKTREE:?…}` defensive guard. Use `${MAIN_WORKTREE}/.optimus/...` for ALL `.optimus/` paths (gitignored, so doesn't propagate across linked worktrees). See full recipe in AGENTS.md.
-
-### Protocol: All-Dependencies-Cancelled Resolution (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: All-Dependencies-Cancelled Resolution`.**
-
-**Summary:** When every dependency in a task's `Depends:` column has status `Cancelado`, emit a multi-option resolution message AFTER the per-dep status check loop populates the `DEP_STATUSES` array. Recipe: iterate `DEP_STATUSES`, set `ALL_CANCELLED=true` if every entry equals `Cancelado`; when `ALL_CANCELLED=true` AND the array is non-empty, print three options to stderr — (a) remove all dependencies, (b) replace with alternative task IDs, (c) cancel the task itself — each with the corresponding `/optimus-tasks` invocation, then `exit 1`. If the array is empty or any dep is non-Cancelado, fall through to per-dep error. Variable contract: `DEP_STATUSES` is the canonical name; adapt if existing skill code uses another. See full recipe in AGENTS.md.
-
 ### Protocol: GitHub CLI Check (HARD BLOCK)
 
 **Referenced by:** all stage agents (1-4), tasks, batch
@@ -378,29 +303,5 @@ If this command fails (exit code != 0), **STOP** immediately:
 GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
 ```
 
-
-### Protocol: Shell Safety Guidelines (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Shell Safety Guidelines`.**
-
-**Summary:** All bash examples in AGENTS.md/SKILL.md are templates executed literally — follow these rules to prevent injection and silent failures: (1) always quote variables (`"$VAR"`); (2) check exit codes for critical commands; (3) never interpolate user-derived values directly into shell; (4) use `grep -F` for fixed-string matching of branch names/task IDs; (5) match task rows with anchored regex `grep -E '^\| T-NNN \|'`; (6) `command -v jq` before use; (7) `jq empty "$FILE"` before parse; (8) for commit messages with user content, write to `mktemp` file and use `git commit -F` (avoids all expansion). See full anti-pattern list + sanitization recipes in AGENTS.md.
-
-### Protocol: State Management (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: State Management`.**
-
-**Summary:** Read/write/delete entries in `${MAIN_WORKTREE}/.optimus/state.json` with `jq`. Schema: `{task_id: {status, branch, updated_at}}`. Status values: `Pendente | Validando Spec | Em Andamento | Validando Impl | DONE | Cancelado`. All writes use `jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" '.[$id] = {...}'` (injection-safe), with a tmp-file + `jq empty` validation step before `mv` to guarantee atomicity. Cancelado entries keep `branch: ""` (empty string, NOT absent — readers must treat both as Cancelado-state). Corrupted state.json is removed and treated as empty (reconciliation via worktree scan). state.json is gitignored; never committed. See full recipe in AGENTS.md for jq templates and reconciliation steps.
-
-### Protocol: Terminal Identification (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Terminal Identification`.**
-
-**Summary:** `_optimus_set_title <text>` updates the terminal title for iTerm2-on-macOS via AppleScript (`osascript ... set name of s to newName`) — the only channel that reliably mutates `session.name` in "divorced" iTerm2 sessions where OSC 0/1/2 and SetUserVar are ineffective. Used by stage skills to surface task context (e.g., `optimus: PLAN T-007 — User auth`) so users running multiple Optimus sessions can identify them at a glance. The function is auto-inlined into 6 SKILLs by `inline-protocols.py` (do NOT manually paste the body in SKILL.md — F12f rule). Title is informational; failure to set it is non-fatal (silent no-op outside iTerm2/macOS, in Docker/CI without TTY, or when osascript denied). See full bash function in AGENTS.md.
-
-### Protocol: optimus-tasks.md Validation (HARD BLOCK) (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: optimus-tasks.md Validation (HARD BLOCK)`.**
-
-**Summary:** At Step 1.0.1 of every stage agent: (1) resolve paths via Protocol: Resolve Tasks Git Scope; (2) check `TASKS_FILE` exists, else STOP and suggest `/optimus-import`; (3) run all 15 Format Validation rules, else STOP and suggest `/optimus-import`. HARD BLOCK on any failure. All subsequent skill steps use the resolved `TASKS_FILE` and `tasks_git` helper. See full enumeration in AGENTS.md.
 
 <!-- INLINE-PROTOCOLS:END -->

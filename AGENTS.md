@@ -95,6 +95,7 @@ rationalize these away.
 - **Canonical protocol reference phrasing:** Skills MUST reference protocols using the exact form `see AGENTS.md Protocol: <Exact Heading>` (with optional verb prefix like `Execute`, `Verify`, etc.). Variants like `AGENTS.md "Common Patterns > X"` are tolerated only for Common Patterns. The inliner regex is anchored on these forms; deviations cause silent unmatched refs.
 - **Bash code-block contract:** Bash code blocks in SKILL.md (between triple-backtick `bash` fences) execute in an environment where `set -euo pipefail` MUST be assumed active. The harness or invoking shell is responsible for setting these flags before executing block content. Authors may add `set -euo pipefail` explicitly at the top of a block to be defensive in copy-paste contexts. The Quiet Command Execution helper and other shared protocols rely on this contract — disabling these flags inside a block (e.g., `set +u`, `set +e`, `set +o pipefail`) is forbidden and enforced by `scripts/test_skill_consistency.py::TestBashBlockHygiene`.
 - **Summarize mode for high-fan-out protocols:** Protocols inlined into >=5 skills MAY carry an `<!-- inline-mode: summarize -->` marker. When present, the inliner emits only a terse 5-10 line stub in consumers (keeping the full body only in AGENTS.md). Each protocol's `**Summary:**` subsection (placed immediately after the marker) is the canonical stub content. This reduces SKILL.md token cost without losing correctness — agents reading the stub know to consult AGENTS.md for the full recipe when they need bash details. Phase 1 of issue #34 applies this to the top three most-duplicated protocols (`Resolve Main Worktree Path`, `Session State`, `Initialize .optimus Directory`). Run `make inline-stats` to see current bloat metrics; the inliner respects `--no-summarize` to fall back to full-body inlining for diagnostic runs.
+- **Omit mode for fully-decoupled protocols:** Protocols may carry an `<!-- inline-mode: omit -->` marker. When present, the inliner emits NOTHING in consumer SKILLs (no body, no stub, no header). Consumer SKILLs reference the protocol via body code (e.g., `see AGENTS.md Protocol: X`); the agent reads AGENTS.md on demand. Most aggressive token-reduction mode — use when the protocol's body is large enough that even a stub is overhead, OR when the protocol is invoked rarely enough that paying a Read call per invocation is preferable to paying prompt tokens per skill load. Phase 9 (issue #34) converted all 36 summarize-marked protocols to omit. Authors who want to revert a single protocol to summarize mode can swap the marker back — the `**Summary:**` block under each marker is preserved in AGENTS.md precisely so a revert requires no content rewrite. The inliner's `--no-omit` flag falls back to summarize mode (or full body if the protocol has no `**Summary:**`) for diagnostic runs without changing source-of-truth.
 
 ### SKILL.md Files
 - Preserve YAML frontmatter structure (---, name, description, trigger, skip_when, etc.)
@@ -272,7 +273,7 @@ source of truth for task tracking.
 
 ### File Location
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Defines where Optimus operational files live: `${MAIN_WORKTREE}/.optimus/{state.json, stats.json, sessions/, reports/, logs/}` (gitignored, per-user) vs `<tasksDir>/optimus-tasks.md` + `<tasksDir>/{tasks,subtasks}/` (versioned, project-team-shared, propagated by git). Also: `${MAIN_WORKTREE}/.gitignore` (versioned), `${MAIN_WORKTREE}/.worktrees/` (gitignored linked-worktree dir). Critical contract: `.optimus/*` paths NEVER propagate across linked worktrees (gitignored = not shared by `git worktree add`); use `${MAIN_WORKTREE}/` prefix consistently. See full table in AGENTS.md.
 
@@ -368,7 +369,7 @@ repo, it is committed there.
 
 ### Protocol: Resolve Main Worktree Path
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Resolve `MAIN_WORKTREE` once via `git worktree list --porcelain | awk '/^worktree / {print $2; exit}'` with `${MAIN_WORKTREE:?…}` defensive guard. Use `${MAIN_WORKTREE}/.optimus/...` for ALL `.optimus/` paths (gitignored, so doesn't propagate across linked worktrees). See full recipe in AGENTS.md.
 
@@ -503,7 +504,7 @@ Two project-specific conventions on top of the spec:
 
 ### Valid Status Values (stored in state.json)
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** state.json status values: `Pendente` (implicit, no entry), `Validando Spec` (plan), `Em Andamento` (build), `Validando Impl` (review), `DONE` (done), `Cancelado` (tasks/done). Administrative ops (Reopen, Advance, Demote, Cancel) require explicit user confirmation. See full table + transitions in AGENTS.md.
 
@@ -599,7 +600,7 @@ The `## Versions` section in optimus-tasks.md is **mandatory** and defines the a
 
 ### Format Validation
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** 15-rule validation for `<tasksDir>/optimus-tasks.md` enforced at Step 1.0.1 of every stage agent (1-4): format marker `<!-- optimus:tasks-v1 -->` present; `## Versions` table with valid columns; all Version Status values valid (`Ativa`/`Próxima`/`Planejada`/`Backlog`/`Concluída`); exactly one `Ativa`, at most one `Próxima`; tasks table columns correct (Status/Branch live in state.json, NOT here); IDs match `T-NNN`; Tipo ∈ {Feature, Fix, Refactor, Chore, Docs, Test}; Priority ∈ {Alta, Media, Baixa}; Depends resolves to existing task rows; Version cells reference existing version rows; no duplicate IDs; no circular dependencies; no unescaped pipes; empty-table guard. HARD BLOCK on any failure — STOP and suggest `/optimus-import`. See full 15-item enumeration in AGENTS.md.
 
@@ -770,7 +771,7 @@ If any gate fails, done stops immediately and status in state.json stays unchang
 
 ## Protocol: Dry-Run Mode
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** All stage skills (plan, build, review, done) support dry-run mode — triggered when the invocation contains `dry-run` or `preview`. Run analysis/validation phases normally but: do NOT change task status in state.json, do NOT git commit/push, do NOT create branches/worktrees (stage-1), do NOT batch-apply fixes, do NOT increment stage stats, do NOT write session files, skip convergence rounds 2+. Present results as informational ("what would happen") with zero side effects. Stage skills may add per-stage dry-run notes but MUST NOT relax these rules. See full per-stage dry-run rules in AGENTS.md.
 
@@ -806,7 +807,7 @@ in every SKILL.md.
 
 ### Protocol: optimus-tasks.md Validation (HARD BLOCK)
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** At Step 1.0.1 of every stage agent: (1) resolve paths via Protocol: Resolve Tasks Git Scope; (2) check `TASKS_FILE` exists, else STOP and suggest `/optimus-import`; (3) run all 15 Format Validation rules, else STOP and suggest `/optimus-import`. HARD BLOCK on any failure. All subsequent skill steps use the resolved `TASKS_FILE` and `tasks_git` helper. See full enumeration in AGENTS.md.
 
@@ -830,7 +831,7 @@ Skills reference this as: "Find and validate optimus-tasks.md (HARD BLOCK) — s
 
 ### Protocol: Resolve Tasks Git Scope
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Resolves `TASKS_DIR` (from `.optimus/config.json` `tasksDir` key, default `docs/pre-dev`) and `TASKS_FILE` (`<tasksDir>/optimus-tasks.md`), then detects whether tasksDir lives inside the project repo (`same-repo`) or a separate git repo (`separate-repo`). Sets `TASKS_REPO_ROOT`, `TASKS_GIT_REL`, `TASKS_DEFAULT_BRANCH`, and exposes a `tasks_git()` helper that wraps `git -C "$TASKS_DIR"` in separate-repo mode. Hard guards: reject `tasksDir` starting with `-` (git-option injection), require `python3` for separate-repo path computation, validate `TASKS_DEFAULT_BRANCH` against `^[a-zA-Z0-9._/-]+$`. Skills MUST use `tasks_git` (never raw `git`) on `$TASKS_FILE`. See full recipe in AGENTS.md.
 
@@ -994,7 +995,7 @@ Skills reference this as: "Resolve tasks git scope — see AGENTS.md Protocol: R
 
 ### Protocol: All-Dependencies-Cancelled Resolution
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** When every dependency in a task's `Depends:` column has status `Cancelado`, emit a multi-option resolution message AFTER the per-dep status check loop populates the `DEP_STATUSES` array. Recipe: iterate `DEP_STATUSES`, set `ALL_CANCELLED=true` if every entry equals `Cancelado`; when `ALL_CANCELLED=true` AND the array is non-empty, print three options to stderr — (a) remove all dependencies, (b) replace with alternative task IDs, (c) cancel the task itself — each with the corresponding `/optimus-tasks` invocation, then `exit 1`. If the array is empty or any dep is non-Cancelado, fall through to per-dep error. Variable contract: `DEP_STATUSES` is the canonical name; adapt if existing skill code uses another. See full recipe in AGENTS.md.
 
@@ -1051,7 +1052,7 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 
 ### Protocol: Initialize .optimus Directory
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Create `${MAIN_WORKTREE}/.optimus/{sessions,reports,logs}/` with `mkdir -p`. Add `# optimus-operational-files` and `# optimus-operational-worktrees` markers to `${MAIN_WORKTREE}/.gitignore` idempotently (grep-anchor before append). Refuse symlinked `.gitignore`. Auto-prune `.optimus/logs/` (30 days, 500 files). See full recipe in AGENTS.md.
 
@@ -1112,7 +1113,7 @@ Skills reference this as: "Initialize .optimus directory — see AGENTS.md Proto
 
 ### Protocol: Quiet Command Execution
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** `_optimus_quiet_run <label> <command>` redirects stdout+stderr to `${MAIN_WORKTREE}/.optimus/logs/<ts>-<label>-<pid>.log`, emits a single `PASS`/`FAIL` line, and on failure dumps the last 50 lines (with `cat -v` to neutralize ANSI/OSC escape sequences). Uses `umask 0077` on the log file (output may contain credentials/stack traces). Exit code preserved so `if _optimus_quiet_run ...; then ... fi` works. Reserved exit codes: `2` = missing label/command; `3` = cannot create logs dir. Log retention (30-day age cap + 500-file count cap) is pruned at every Initialize Directory + Session State call. Use for verification commands only; never for output the agent must parse turn-by-turn. See full recipe in AGENTS.md.
 
@@ -1246,7 +1247,7 @@ Skills reference this as: "Run quietly — see AGENTS.md Protocol: Quiet Command
 
 ### Protocol: Increment Stage Stats
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Plan and review increment per-task execution counters in `${MAIN_WORKTREE}/.optimus/stats.json` immediately after the status change (BEFORE analysis starts). Skip in dry-run mode. Recipe: read stats.json (start `{}` if missing); reset to `{}` if corrupted (`jq empty` fails) with WARNING; init task key `{ "plan_runs": 0, "review_runs": 0 }` if absent; increment matching counter; set `last_plan` / `last_review` to UTC ISO 8601; write back pretty-printed with sorted keys. stats.json is gitignored — no commit. See full recipe in AGENTS.md.
 
@@ -1285,7 +1286,7 @@ Skills reference this as: "Increment stage stats — see AGENTS.md Protocol: Inc
 
 ### Protocol: Shell Safety Guidelines
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** All bash examples in AGENTS.md/SKILL.md are templates executed literally — follow these rules to prevent injection and silent failures: (1) always quote variables (`"$VAR"`); (2) check exit codes for critical commands; (3) never interpolate user-derived values directly into shell; (4) use `grep -F` for fixed-string matching of branch names/task IDs; (5) match task rows with anchored regex `grep -E '^\| T-NNN \|'`; (6) `command -v jq` before use; (7) `jq empty "$FILE"` before parse; (8) for commit messages with user content, write to `mktemp` file and use `git commit -F` (avoids all expansion). See full anti-pattern list + sanitization recipes in AGENTS.md.
 
@@ -1331,7 +1332,7 @@ Skills reference this as: "Follow shell safety guidelines — see AGENTS.md Prot
 
 ### Protocol: Session State
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Session lifecycle state at `${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json` tracks `task_id`, `branch`, `phase`, `convergence_status`, `started_at`. Update at every phase transition. Initialize `.optimus/` directory + auto-prune `.optimus/logs/` (30-day, 500-file cap) on transition. See full recipe in AGENTS.md.
 
@@ -1501,7 +1502,7 @@ Skills reference this as: "Execute session state protocol from AGENTS.md using s
 
 ### Protocol: Terminal Identification
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** `_optimus_set_title <text>` updates the terminal title for iTerm2-on-macOS via AppleScript (`osascript ... set name of s to newName`) — the only channel that reliably mutates `session.name` in "divorced" iTerm2 sessions where OSC 0/1/2 and SetUserVar are ineffective. Used by stage skills to surface task context (e.g., `optimus: PLAN T-007 — User auth`) so users running multiple Optimus sessions can identify them at a glance. The function is auto-inlined into 6 SKILLs by `inline-protocols.py` (do NOT manually paste the body in SKILL.md — F12f rule). Title is informational; failure to set it is non-fatal (silent no-op outside iTerm2/macOS, in Docker/CI without TTY, or when osascript denied). See full bash function in AGENTS.md.
 
@@ -1599,7 +1600,7 @@ Skills reference this as: "Set terminal title — see AGENTS.md Protocol: Termin
 
 ### Protocol: Workspace Auto-Navigation (HARD BLOCK)
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** When an Optimus stage skill (build, review, done) is invoked from the default branch (main/master) instead of from the task's linked worktree, automatically detect the correct workspace and navigate there before any mutation. Resolution order: (1) state.json `branch` field for the task; (2) match against `git worktree list` by branch ref; (3) fallback path-segment match by anchored kebab task-ID (`-t-NNN-`); (4) recovery: if branch exists but worktree is missing, create at `${MAIN_WORKTREE}/.worktrees/<branch-name>` per Protocol: Worktree Location. HARD BLOCK on default branch — refuses to mutate from main/master regardless of resolution outcome. See full recipe + Default Branch Refusal cross-reference in AGENTS.md.
 
@@ -1730,7 +1731,7 @@ Skills reference this as: "Resolve workspace (HARD BLOCK) — see AGENTS.md Prot
 
 ### Protocol: Default Branch Refusal (HARD BLOCK)
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Mutating stage skills (build, review, done) MUST refuse to run on the project's default branch (main/master). Defense-in-depth even after Workspace Auto-Navigation. Resolves DEFAULT_BRANCH via `git symbolic-ref refs/remotes/origin/HEAD` with main→master fallback; compares to `git branch --show-current`; STOP with explicit error message if equal. Invoke immediately after Workspace Auto-Navigation, before any state.json write, git commit, worktree mutation, or status transition. See full recipe in AGENTS.md.
 
@@ -1824,7 +1825,7 @@ Skills reference this as: "Resolve default branch — see AGENTS.md Protocol: De
 
 ### Protocol: Discover Review Droids
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Single source of truth for review-droid roster discovery. Discovers installed `~/.factory/droids/ring-*.md` (or all `*.md` if `INCLUDE_NON_RING=true`), applies permanent exclusion list (codebase-explorer, write-plan, review-slicer, devops/ui/sre engineers, finance/finops/ops/pm/pmm/pmo/tw teams — none are code reviewers), then description-based relevance filter (Core: `code review|security|testing|safety|reviewer|audit`; Stack: language-specific only if project uses it; Domain: technology-specific only if relevant). Plus deny-list filter (`architecture|design|planning|process|workflow|strategy` excluded even if matched). Returns categorized roster (Ring Core / Ring Stack / Ring Domain / Non-Ring) or `MIN_NOT_MET` if `code-reviewer` AND `security-reviewer` aren't both present. See full filter cascade in AGENTS.md.
 
@@ -1947,7 +1948,7 @@ Skills reference this as: "Execute Protocol: Discover Review Droids — see AGEN
 
 ### Protocol: Parse CodeRabbit Review Body
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Deterministic algorithm for extracting actionable findings from a CodeRabbit GraphQL review-body response. Both pr-check and coderabbit-review consume the same source format; this protocol is the single source of truth. Steps: fetch GraphQL payload (review body + comment thread URLs); per-comment fix-block extraction (`[Minimal fix]` and `[Suggested refactor]` markers, with surrounding code-fence boundaries); count-parity HARD BLOCK (parsed N must equal expected M from header); outdated-thread partitioning (separate from active findings); origin tagging (CodeRabbit vs Codacy vs DeepSource vs human). On count mismatch: STOP with diagnostic ("parsed N, expected M, missing/extra IDs") — never offer opt-out (silent partial-set continuation is the failure mode this gate prevents). See full algorithm in AGENTS.md.
 
@@ -2084,7 +2085,7 @@ Skills reference this as: "Parse CodeRabbit review body — see AGENTS.md Protoc
 
 ### Protocol: Divergence Warning
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Detects when `optimus-tasks.md` has diverged between the current branch and the tasks repo's default branch. Uses `tasks_git` so it works in both same-repo and separate-repo scopes. Throttles `tasks_git fetch` via a 5-minute cache marker at `${MAIN_WORKTREE}/.optimus/.last-tasks-fetch` (defense-in-depth: validates marker contents are numeric before arithmetic to survive corrupted marker files under `set -euo pipefail`). Compares against `origin/$TASKS_DEFAULT_BRANCH` via `tasks_git diff` limited to `$TASKS_GIT_REL`. On non-empty diff, warns via `AskUser` with options to **Sync now** (merge `origin/<default>`) or **Continue without syncing**. NOT a HARD BLOCK — divergence is a soft warning. Skipped silently when `TASKS_DEFAULT_BRANCH` is unresolved. See full recipe in AGENTS.md.
 
@@ -2153,7 +2154,7 @@ Skills reference this as: "Check optimus-tasks.md divergence — see AGENTS.md P
 
 ### Protocol: Notification Hooks
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Optional hook system: stages emit events (`status-change`, `task-blocked`, `task-done`, `task-cancelled`) by invoking `<repo>/tasks-hooks.sh <event> <task_id> <args...>` (or `<repo>/docs/tasks-hooks.sh`) if the file exists and is executable. Hook receives sanitized args (alphanumeric + space + `-_:` only — does NOT allow `.` or `/` to prevent path-traversal if hook authors interpolate args into file paths). Argument shape: 4 args for `status-change`/`task-done`/`task-cancelled` (`event task_id old_status new_status`); 4 args for `task-blocked` (`event task_id current_status reason`). Hooks run in background (`&`) — failures NEVER block the pipeline. Capture `OLD_STATUS` BEFORE writing the new status. See full event signatures + sanitization recipe in AGENTS.md.
 
@@ -2224,7 +2225,7 @@ Skills reference this as: "Invoke notification hooks — see AGENTS.md Protocol:
 
 ### Protocol: Ring Droid Requirement Check
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Before dispatching, verify required ring droids are installed; if any missing, STOP and list them. Roster requirements vary by skill: Core review (`code-reviewer`, `business-logic-reviewer`, `security-reviewer`, `ring-test-reviewer`); Extended review (`nil-safety-reviewer`, `consequences-reviewer`, `dead-code-reviewer`); QA (`qa-analyst`); Docs (`docs-reviewer`); Implementation (`backend-engineer-golang`/`-typescript`, `frontend-engineer`); Spec validation droids for plan. See full per-skill roster in AGENTS.md.
 
@@ -2267,7 +2268,7 @@ Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring D
 
 ### Protocol: Coverage Measurement
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Measure unit + integration test coverage via Makefile targets with stack-specific fallbacks (Go: `go test -coverprofile`; Node: `npm test -- --coverage`; Python: `pytest --cov=. --cov-report=term`). Run wrapped in `_optimus_quiet_run` (Protocol: Quiet Command Execution) to keep agent context clean — the agent sees only PASS/FAIL + extracted total percentage; full per-file breakdown stays in `.optimus/logs/` and native coverage files. Thresholds: unit 85%, integration 70% (NEEDS_FIX/HIGH finding below). When scanning untested functions, read coverage output FILE (not stdout) — flag business-logic functions at 0% as HIGH; infrastructure/generated code as SKIP. If no coverage command resolves, mark SKIP — do not fail verification. See full extraction recipes in AGENTS.md.
 
@@ -2362,7 +2363,7 @@ Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Titl
 
 ### Protocol: TaskSpec Resolution
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Resolves the full path to a task's Ring pre-dev spec file by combining `<TASKS_DIR>` with the task's `TaskSpec` column from `optimus-tasks.md`. If `TaskSpec` is `-`, STOPs with a hint to run `/optimus-plan T-XXX`. HARD BLOCK on path traversal: resolves via `realpath -m` (or python3 `os.path.realpath` fallback) and rejects any result outside `$TASKS_DIR_ABS`. Also rejects symlinks (TOCTOU defence: realpath dereferences transparently, so a post-`-L` check guarantees no symlink in the final path). `TASKS_DIR` itself must be a valid git repo (enforced upstream by Resolve Tasks Git Scope) but is no longer required to live under `PROJECT_ROOT` — separate-repo scope is supported. Subtasks live at `<TASKS_DIR>/subtasks/T-NNN/`. See full recipe in AGENTS.md.
 
@@ -2416,7 +2417,7 @@ Skills reference this as: "Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec
 
 ### Protocol: Project Rules Discovery
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Every reviewing/validating/generating skill MUST scan for project conventions before starting. Search the canonical list (AGENTS.md, CLAUDE.md, DROIDS.md, .cursorrules, PROJECT_RULES.md, .editorconfig, coding-standards.md, CONTRIBUTING.md, linter configs like .eslintrc/biome.json/.golangci.yml/.prettierrc) and read ALL that exist. If none exist, warn the user. Discovered files become the authoritative source of truth and MUST be passed to every dispatched sub-agent. See full file list in AGENTS.md.
 
@@ -2451,7 +2452,7 @@ Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Pr
 
 ### Protocol: Re-run Guard
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Replaces the static "next step" suggestion in plan and review. Counts `total_findings` from this execution (grouped entries count as 1). If 0 → suggest next stage (build for plan, done for review). If >0 → `AskUser` offering "Re-run with clean context" (re-dispatches ALL agents with no memory of prior decisions — skipped findings will reappear) or "Advance to next stage". Re-run reset semantics (MANDATORY): reset `convergence_status` to `null`, `phase` to entry, overwrite `started_at`; preserve identity fields. Skip GitHub CLI/tasks validation/workspace/divergence checks; re-execute discovery + dispatch. No re-run limit. See full reset checklist in AGENTS.md.
 
@@ -2524,7 +2525,7 @@ Skills reference this as: "Execute re-run guard — see AGENTS.md Protocol: Re-r
 
 ### Protocol: Push Commits (optional)
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Optional commit-push pattern for stage skills (plan, build, review, coderabbit-review). After committing locally, offer to push via `AskUser`. Step 1: detect upstream with `git rev-parse --abbrev-ref @{u}` — if missing, all local commits are unpushed and `git push -u origin <branch>` sets upstream; if present, count unpushed via `git log @{u}..HEAD`. Step 2: in `separate-repo` tasks scope, repeat the same upstream/unpushed dance against the tasks repo via `tasks_git`. After successful push, if the current repo is the Optimus plugin repo, run `droid plugin update` for each installed optimus skill so agents pick up the latest version. See full recipe in AGENTS.md.
 
@@ -2607,7 +2608,7 @@ Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Pus
 
 ### Protocol: State Management
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Read/write/delete entries in `${MAIN_WORKTREE}/.optimus/state.json` with `jq`. Schema: `{task_id: {status, branch, updated_at}}`. Status values: `Pendente | Validando Spec | Em Andamento | Validando Impl | DONE | Cancelado`. All writes use `jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" '.[$id] = {...}'` (injection-safe), with a tmp-file + `jq empty` validation step before `mv` to guarantee atomicity. Cancelado entries keep `branch: ""` (empty string, NOT absent — readers must treat both as Cancelado-state). Corrupted state.json is removed and treated as empty (reconciliation via worktree scan). state.json is gitignored; never committed. See full recipe in AGENTS.md for jq templates and reconciliation steps.
 
@@ -2758,7 +2759,7 @@ Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: Sta
 
 ### Protocol: Branch Name Derivation
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Branch names derived deterministically from task structural data — NOT stored in optimus-tasks.md, only cached in state.json. Format: `<tipo-prefix>/<task-id-lowercase>-<keywords>`. Tipo→prefix: Feature→feat, Fix→fix, Refactor→refactor, Chore→chore, Docs→docs, Test→test. Keywords: 2-4 lowercase title words, articles/prepositions/generic verbs (implement/add/create/update) stripped. Sanitization: lowercase → non-alphanumeric to hyphens → collapse hyphens → strip leading/trailing → 100-char cap. Resolution order: state.json `branch` field → kebab-anchored search (`-t-003-` to avoid T-1/T-10 collision via `git branch --list "*${KEBAB#-}*"`) → derive from Tipo+ID+Title. See full sanitization + Tipo table + examples in AGENTS.md.
 
@@ -2810,7 +2811,7 @@ Skills reference this as: "Derive branch name — see AGENTS.md Protocol: Branch
 
 ### Protocol: Default Scope Resolution
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Read-only skills (report, quick-report) resolve a version scope filter (`ativa`, `upcoming`, `all`, or specific version name). Resolution order: (1) invocation argument wins, with `ask`/`menu` keywords forcing the prompt; (2) fall back to `defaultScope` in `${MAIN_WORKTREE}/.optimus/config.json` (validated against versions table — warn + reprompt if invalid); (3) `AskUser` with Ativa/Upcoming/All/Specific options; (4) offer to persist the choice to config.json (atomic jq write to tmp + mv). Scope names case-insensitive for keywords; case-preserved for version names. See full recipe in AGENTS.md.
 
@@ -2896,7 +2897,7 @@ Skills reference this as: "Resolve default scope — see AGENTS.md Protocol: Def
 
 ### Protocol: Active Version Guard
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** After task ID/deps confirmed, check the task's Version against the Versions table. If no version is `Ativa` → STOP. If task version matches `Ativa` → proceed silently. Otherwise present `AskUser` with two options: "Move to active version and continue" (updates Version column, commits via `tasks_git`) or "Cancel" (STOP). HARD BLOCK forces explicit version transition before mutating optimus-tasks.md. See full commit recipe in AGENTS.md.
 
@@ -2939,7 +2940,7 @@ Skills reference this as: "Check active version guard — see AGENTS.md Protocol
 
 ### Protocol: Worktree Location
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Linked worktrees created by plan / resume / Workspace Auto-Navigation / done-cleanup live at the canonical path `${MAIN_WORKTREE}/.worktrees/<branch-name>` — gitignored (auto-injected by Initialize .optimus Directory + Session State protocols), project-rooted, resolved via Resolve Main Worktree Path so paths stay correct from any linked worktree. Branch names contain `/` (per Branch Name Derivation), creating intermediate `feat/`, `fix/` directories under `.worktrees/` automatically. Worktrees ALWAYS belong to the project repo, never the tasks repo (separate-repo `tasksDir` doesn't affect location). Recommend IDE exclusion (`.vscode/settings.json` `search.exclude`, IntelliJ Excluded). Backwards compat: legacy sibling paths still work via worktree metadata; no forced migration. See full convention + IDE config in AGENTS.md.
 
@@ -3014,7 +3015,7 @@ but applies fixes directly rather than via ring droid TDD cycle.
 
 ### Finding Presentation (Unified Model)
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Common pattern for cycle review skills (plan, build, review, pr-check, deep-review, deep-doc-review, coderabbit-review): collect findings, dedup, group same-nature, present ONE-AT-A-TIME via AskUser with strict `[topic]/[option]` template, collect ALL decisions before applying ANY fixes. Mandatory: `(X/N)` progress prefix per finding; ALL findings presented (no auto-skip by severity); HARD BLOCK on "Tell me more" or free-text response — STOP and answer immediately, never defer to end of loop. Anti-rationalization defenses listed inline ("I'll address questions at end" — NO). Scope of structured template: finding-decision AskUsers in cycle review skills only; admin AskUsers MAY use prose. See full pattern + anti-rationalization examples in AGENTS.md.
 
@@ -3106,7 +3107,7 @@ exit?") preserves user authority while keeping the gate honest.
 
 ### Fix Implementation (Complexity-Based Dispatch)
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Cycle review skills classify each approved fix before applying. **Simple** (single file, localized, exact code provided, obvious resolution: typo / missing nil guard / import / log line / dead code removal): orchestrator applies directly via Edit/MultiEdit, runs unit tests; on failure, reverts and escalates. **Complex** (multi-file, architectural impact, security-sensitive, schema/API/config changes, new tests needed, or unsure): dispatch ring droid. Code fixes use TDD cycle (RED-GREEN-REFACTOR) via `ring-dev-team-backend-engineer-golang`/`-typescript`, `ring-dev-team-frontend-engineer`, `ring-dev-team-qa-analyst`. Documentation fixes: `ring-tw-team-functional-writer`/`-api-writer`/`-docs-reviewer` (no TDD). When in doubt → dispatch. Ring droids are REQUIRED for complex fixes — STOP if missing. See full classification + dispatch templates in AGENTS.md.
 
@@ -3186,7 +3187,7 @@ be generated (command fails or tool missing), report as SKIP — do not fail the
 
 ### Deep Research Before Presenting (MANDATORY for cycle review skills)
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Before presenting ANY finding, cycle review skills (plan, review, pr-check, coderabbit-review) MUST research silently across 12 dimensions: project patterns + similar cases, architectural decisions (AGENTS.md/TRD/ADRs), existing codebase precedent, current task focus, user/consumer use cases, UX impact, API best practices, engineering best practices (SOLID/DRY/observability), language idioms (`WebSearch`), correctness over convenience, production resilience (timeouts, retries, leaks), data integrity + privacy (LGPD/GDPR). Recommendation Option A MUST be evidence-backed (not generic). NOT optional — prevents false-positive findings. See full 12-item checklist in AGENTS.md.
 
@@ -3258,7 +3259,7 @@ Every finding must present 2-3 options with this structure:
 
 ### Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Multi-round review pattern for plan, build, review, pr-check, coderabbit-review, deep-review, deep-doc-review. Round 1 is mandatory (the skill's primary dispatch). Rounds 2-5 are gated behind explicit `AskUser` prompts (entry gate before round 2, per-round gate before 3/4/5). Each gated round dispatches the SAME droid roster as round 1 in parallel via `Task` tool with zero prior context — agents read files fresh from disk. Convergence detection (zero new findings, strict `same file + ±5 lines + same category` matching) exits silently with status `CONVERGED` — never asks for another round. Hard limit at round 5. Exit statuses: `CONVERGED`, `USER_STOPPED`, `SKIPPED`, `HARD_LIMIT`, `DISPATCH_FAILED_ABORTED` (build has a single-slot carve-out). See full recipe in AGENTS.md.
 
@@ -3380,7 +3381,7 @@ section:
 
 ### Protocol: Per-Droid Quality Checklists
 
-<!-- inline-mode: summarize -->
+<!-- inline-mode: omit -->
 
 **Summary:** Per-droid quality dimensions that review/pr-check/deep-review/coderabbit-review/plan/build skills MUST include in their agent prompts beyond the core review domain. Examples: code-reviewer adds resilience/concurrency/cognitive-complexity/error-handling checks; security-reviewer adds PII/error-response-leakage/rate-limiting/secrets; test-reviewer adds effectiveness/false-positive-risk/spec-traceability; nil-safety adds channel/map/slice safety; consequences adds backward-compat/migration-path/event-contract; dead-code adds zombie test infrastructure and stale feature flags; qa-analyst adds testability/operational-readiness; frontend adds UX states/accessibility/i18n; backend adds graceful-shutdown/context-propagation/structured-logging. Skills reference this when building specialist droid prompts so agents review uniformly. See full per-droid lists in AGENTS.md.
 
