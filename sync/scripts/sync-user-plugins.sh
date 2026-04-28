@@ -258,13 +258,21 @@ _sync_droid() {
   echo "── Droid (Factory) ──"
   echo ""
 
-  # Get installed optimus plugins. Single awk pass: filter to lines starting
-  # with [a-z0-9] whose first field ends with @MARKETPLACE_NAME, then strip
-  # that suffix and emit the bare name.
+  # Get installed optimus plugins. Single awk pass: filter to lines whose
+  # first non-whitespace token ends with @MARKETPLACE_NAME, then strip that
+  # suffix and emit the bare name.
+  #
+  # NOTE: real `droid plugin list` output indents plugin lines with leading
+  # whitespace (e.g. "  build@optimus  [user]  bb5b60e"). The previous regex
+  # `/^[a-z0-9]/` required the line to START with a letter/digit, which
+  # silently dropped every plugin and made `installed` empty — causing the
+  # whole sync to misclassify all plugins as NEW and fail with
+  # "already installed at user scope" on every install. The leading
+  # `[[:space:]]*` prefix makes the parser tolerant of indentation.
   local installed
   installed=$(_droid plugin list 2>/dev/null \
     | awk -v mp="@${MARKETPLACE_NAME}" '
-        /^[a-z0-9]/ && index($1, mp) == length($1) - length(mp) + 1 {
+        /^[[:space:]]*[a-z0-9]/ && index($1, mp) == length($1) - length(mp) + 1 {
           sub(mp"$", "", $1)
           print $1
         }

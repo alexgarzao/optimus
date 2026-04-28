@@ -335,6 +335,40 @@ class TestUpdateWithExisting:
         assert result.returncode == 0
         assert "Updated: 1" in result.stdout
 
+    def test_parses_real_droid_list_format_with_leading_whitespace(
+        self, tmp_path: Path
+    ) -> None:
+        """Real `droid plugin list` output indents plugin lines with leading
+        whitespace (e.g. '  build@optimus  [user]  bb5b60e'). The awk parser
+        must be tolerant of that. Regression: an earlier version used
+        `/^[a-z0-9]/` which silently dropped every plugin and made all of
+        them be classified as NEW (causing 17/17 install failures with
+        'already installed at user scope').
+        """
+        log = tmp_path / "droid.log"
+        # Mimic real Droid CLI output: header line + indented plugin lines.
+        list_output = (
+            "Installed plugins:\n"
+            "  alpha@optimus  [user]  abc1234\n"
+            "  core@factory-plugins  [project]  def5678"
+        )
+        _create_mock_bin(tmp_path, "droid", _droid_script(
+            log, list_output=list_output))
+        _create_marketplace(tmp_path, ["alpha"])
+        result = _run_sync(tmp_path, exclude_claude=True)
+        assert result.returncode == 0, result.stderr
+        # Plugin should be classified as EXISTING (not NEW), so the refresh
+        # path runs (* alpha ... OK (refreshed)) — not the install path
+        # (+ alpha ... OK or FAIL).
+        assert "Updated: 1" in result.stdout, (
+            "alpha@optimus must be detected as installed when the mock emits "
+            "indented Droid CLI format. Got stdout:\n" + result.stdout
+        )
+        assert "(refreshed)" in result.stdout
+        # The unrelated `core@factory-plugins` line must NOT match (different
+        # marketplace) — the awk filter is anchored on @MARKETPLACE_NAME.
+        assert "core" not in result.stdout.lower().split("droid")[1]
+
 
 class TestOrphanRemoval:
     def test_removes_orphaned_plugins(self, tmp_path: Path) -> None:
