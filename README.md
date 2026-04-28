@@ -173,6 +173,29 @@ ALL marked protocols), `--no-omit` (treat omit as summarize for that run).
 
 Future improvements are tracked in `docs/future-improvements.md`.
 
+## Where tasks live (`tasksDir`)
+
+Ring pre-dev artifacts (`optimus-tasks.md`, `tasks/`, `subtasks/`) live under the path
+configured as `tasksDir` in `.optimus/config.json`. Three layouts are supported:
+
+| Layout | `tasksDir` value | Result |
+|--------|------------------|--------|
+| Default | unset | `<project-repo>/docs/pre-dev/` (same repo as code) |
+| Project-internal alias | `"internal-docs"` (or any folder) | `<project-repo>/internal-docs/` (same repo, custom folder) |
+| Cross-repo | `"../tasks-repo/project-alfa"` | A separate git repo |
+
+Example — co-locate Ring artifacts with other internal docs at `internal-docs/`:
+
+```json
+// .optimus/config.json
+{
+  "tasksDir": "internal-docs"
+}
+```
+
+For full details, layout trees, and the cross-repo helper contract, see
+[AGENTS.md — tasksDir Configuration](AGENTS.md#tasksdir-configuration).
+
 ## Worktree layout
 
 Optimus creates linked git worktrees under `<repo>/.worktrees/<branch-name>/` (gitignored). For project setup, configure your editor to exclude `.worktrees/` from search and indexing:
