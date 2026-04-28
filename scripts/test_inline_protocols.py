@@ -669,6 +669,42 @@ class TestBodyLevelInlineGuard:
         assert "WARNING" in captured.err
         assert "_optimus_sanitize" in captured.err
 
+    def test_warns_on_mark_session_in_body(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        body = (
+            "see AGENTS.md Protocol: Echo.\n"
+            "_optimus_mark_session() {\n"
+            "  printf '\\e]1337;SetBadgeFormat=%s\\a' \"$1\"\n"
+            "}\n"
+        )
+        self._setup(tmp_path, monkeypatch, body)
+        ip.inline_protocols()
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "_optimus_mark_session" in captured.err
+
+    def test_warns_on_clear_session_in_body(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ):
+        body = (
+            "see AGENTS.md Protocol: Echo.\n"
+            "_optimus_clear_session() {\n"
+            "  printf '\\e]1337;SetBadgeFormat=\\a'\n"
+            "}\n"
+        )
+        self._setup(tmp_path, monkeypatch, body)
+        ip.inline_protocols()
+        captured = capsys.readouterr()
+        assert "WARNING" in captured.err
+        assert "_optimus_clear_session" in captured.err
+
 
 # --- F3.3f: Canonical reference phrasing in skills ---
 

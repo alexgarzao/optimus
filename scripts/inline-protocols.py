@@ -534,10 +534,14 @@ def inline_protocols(
         # F3.3e: Detect manual paste of inlined helper functions in the body.
         # The inliner appends these as part of shared protocols; if a SKILL
         # body also defines them, output ends up with duplicate definitions
-        # (and drift risk if one copy diverges). _optimus_sanitize is checked
-        # as a future-regression guard — it was removed in F2.
+        # (and drift risk if one copy diverges). _optimus_sanitize and
+        # _optimus_set_title are checked as future-regression guards —
+        # _optimus_sanitize was removed in F2 and _optimus_set_title was
+        # replaced by _optimus_mark_session / _optimus_clear_session.
         body_function_guards = (
             "_optimus_quiet_run() {",
+            "_optimus_mark_session() {",
+            "_optimus_clear_session() {",
             "_optimus_set_title() {",
             "_optimus_sanitize() {",
         )

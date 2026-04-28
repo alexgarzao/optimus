@@ -517,16 +517,16 @@ If the user invoked a dry-run (e.g., "dry-run resume T-XXX", "preview resume"):
 
 ### Step 4.1: Set Terminal Title
 
-Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage label `RESUME`:
+Mark terminal session — see AGENTS.md Protocol: Terminal Identification. Use stage label `RESUME`:
 
 ```bash
-_optimus_set_title "optimus: RESUME $TASK_ID — $TASK_TITLE"
+_optimus_mark_session RESUME "$TASK_ID" "$TASK_TITLE"
 ```
 
 **On exit or after Phase 5 delegates to another stage skill**, restore the title:
 
 ```bash
-_optimus_set_title ""
+_optimus_clear_session
 ```
 
 ### Step 4.2: Collect Worktree Telemetry

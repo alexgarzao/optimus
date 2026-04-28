@@ -272,12 +272,12 @@ class TestStageRenameConsistency:
 OLD_TITLE_FORMAT = re.compile(
     r"printf.*optimus:.*%s\s*\|\s*%s"
 )
-# Matches the title literal used by either `printf` OR `_optimus_set_title`,
-# in the form `optimus: STAGE $TASK_ID — $TASK_TITLE` (or %s placeholders,
-# or `<STAGE>` placeholder used in protocol templates, or a concrete example
-# like `optimus: BATCH T-003 — User Auth JWT`).
+# Matches a `_optimus_mark_session` invocation passing stage label, task id,
+# and task title (positional args). Accepts the literal stage names used
+# across skills, the `<STAGE>` placeholder used in the AGENTS.md protocol
+# template, or a concrete example like `_optimus_mark_session BATCH "T-003" "User Auth JWT"`.
 NEW_TITLE_FORMAT = re.compile(
-    r'optimus:\s*(?:%s|[A-Z]+|<\w+>)\s+(?:%s|\$TASK_ID|T-\d+)\s*—\s*(?:%s|\$TASK_TITLE|[\w][\w ]*)'
+    r'_optimus_mark_session\s+(?:"<STAGE>"|[A-Z]+)\s+(?:"\$TASK_ID"|"T-\d+")\s+(?:"\$TASK_TITLE"|"[^"]+")'
 )
 TITLE_SKILLS = ["plan", "build", "review", "done", "batch"]
 
@@ -312,22 +312,27 @@ class TestTerminalTitleFormat:
         )
 
     def test_all_stage_skills_have_terminal_title_step(self):
-        """All stage/batch skills must have a Set Terminal Title step."""
+        """All stage/batch skills must have a Mark/Set Terminal Session step."""
         missing = []
         for skill in TITLE_SKILLS:
             content = _read_skill(skill)
-            if "Set Terminal Title" not in content and "Set terminal title" not in content:
+            if (
+                "Set Terminal Title" not in content
+                and "Set terminal title" not in content
+                and "Mark Terminal Session" not in content
+                and "Mark terminal session" not in content
+            ):
                 missing.append(skill)
         assert missing == [], (
-            "Skills missing 'Set Terminal Title' step:\n"
+            "Skills missing 'Mark Terminal Session' step:\n"
             + "\n".join(f"  - {v}" for v in missing)
         )
 
     def test_all_title_skills_have_restore_title(self):
         """All title skills must have a restore terminal title command
-        via the `_optimus_set_title ""` helper call.
+        via the `_optimus_clear_session` helper call.
         """
-        restore_helper = re.compile(r'_optimus_set_title\s+""')
+        restore_helper = re.compile(r'_optimus_clear_session\b')
         missing = []
         for skill in TITLE_SKILLS:
             content = _read_skill(skill)
@@ -339,11 +344,14 @@ class TestTerminalTitleFormat:
         )
 
     def test_helper_has_applescript_layer(self):
-        """Layer A (AppleScript) must be present in every TITLE_SKILLS helper.
+        """Terminal Identification helper coverage must be present in every
+        TITLE_SKILLS file.
 
-        iTerm2 profiles with "Terminal may set window title" disabled silently
-        discard OSC 0/1/2 title updates. AppleScript `set name of session` is
-        the only channel that reliably mutates session.name in that scenario.
+        The protocol body lives in AGENTS.md and now uses iTerm2 escape
+        sequences (Badge OSC 1337 + Tab Color OSC 6) via
+        `_optimus_mark_session` / `_optimus_clear_session`, replacing the
+        previous AppleScript title approach (which only worked with focus
+        and required TCC permission).
 
         Phase 3 of issue #34 marked `Protocol: Terminal Identification` as
         summarize-mode (stub pointer in consumers). Phase 9 promoted it to
@@ -351,7 +359,7 @@ class TestTerminalTitleFormat:
         directly). This test detects the active mode and asserts the
         appropriate invariant for each:
 
-          * full-body mode (no marker): osascript body must appear verbatim.
+          * full-body mode (no marker): mark/clear-session body must appear verbatim.
           * summarize mode: stub pointer `(summarized)` must appear.
           * omit mode (Phase 9+): SKILL body must reference the protocol via
             `AGENTS.md Protocol: Terminal Identification` so the agent knows
@@ -391,14 +399,14 @@ class TestTerminalTitleFormat:
             else:
                 # Pre-Phase-3 invariant: full helper body inlined verbatim.
                 if (
-                    "osascript" not in content
-                    or "set name of s to" not in content
+                    "_optimus_mark_session" not in content
+                    or "SetBadgeFormat" not in content
                 ):
                     missing.append(skill)
         label = {
             "omit": "AGENTS.md back-reference (Phase 9 omit mode)",
             "summarize": "summarized stub pointer",
-            None: "AppleScript Layer A (osascript set name of s)",
+            None: "iTerm2 Badge/Tab-Color helper (_optimus_mark_session)",
         }[mode]
         assert missing == [], (
             f"Skills missing Terminal Identification {label}:\n"
@@ -1457,14 +1465,11 @@ class TestResumeAdmin:
         )
 
     def test_resume_sets_terminal_title(self):
-        """resume must set the terminal title per AGENTS.md Protocol: Terminal Identification."""
+        """resume must mark the terminal session per AGENTS.md Protocol: Terminal Identification."""
         content = _read_skill("resume")
         body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
-        assert re.search(r'optimus:\s+RESUME\s+\$TASK_ID', body), (
-            "resume must set terminal title with RESUME label"
-        )
-        assert re.search(r'_optimus_set_title\s+"optimus:\s+RESUME', body), (
-            "resume must invoke the _optimus_set_title helper with the RESUME label"
+        assert re.search(r'_optimus_mark_session\s+RESUME\s+"\$TASK_ID"\s+"\$TASK_TITLE"', body), (
+            "resume must invoke the _optimus_mark_session helper with the RESUME label"
         )
 
     # --- Round 2 regression tests ---
@@ -2855,21 +2860,26 @@ class TestDiscoverReviewDroidsDenyList:
 
 
 class TestTerminalIdentificationNotPastedInBody:
-    """F12f: After consolidating `_optimus_set_title`, no SKILL body should
-    contain a manual definition. The function comes from the inlined block
-    via the `AGENTS.md Protocol: Terminal Identification` reference."""
+    """F12f: After consolidating `_optimus_mark_session` / `_optimus_clear_session`,
+    no SKILL body should contain a manual definition. The functions come from
+    the inlined block via the `AGENTS.md Protocol: Terminal Identification`
+    reference."""
 
     def test_no_set_title_definition_in_skill_bodies(self):
         violations = []
         for skill_path in _all_skill_files():
             content = skill_path.read_text()
             body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
-            if "_optimus_set_title() {" in body:
+            if (
+                "_optimus_mark_session() {" in body
+                or "_optimus_clear_session() {" in body
+            ):
                 violations.append(str(skill_path.relative_to(REPO_ROOT)))
         assert violations == [], (
             "These SKILL.md files still contain a body-level "
-            "`_optimus_set_title()` definition; move it to the inlined "
-            "`Protocol: Terminal Identification` block:\n"
+            "`_optimus_mark_session()` or `_optimus_clear_session()` "
+            "definition; move it to the inlined `Protocol: Terminal "
+            "Identification` block:\n"
             + "\n".join(violations)
         )
 
