@@ -274,21 +274,66 @@ workspace, no `Validando Spec` status leak).
    - **Cancel** — abort plan
 
 4. **If "Generate via Ring":**
-   1. Verify `ring:pre-dev-feature` is available. If unavailable → fall back to "Link existing spec" automatically and warn the user.
-   2. Invoke `ring:pre-dev-feature` via the `Skill` tool. The Skill tool has no argument channel — state the task title and tipo in conversation context immediately before the invocation (e.g., "Generating spec for T-XXX: <title> (Tipo: <tipo>)"). Ring will read these from context.
-   3. **If Ring fails or returns no spec path:**
+   1. **Choose the Ring track.** Read the task's `Estimate` column and apply the auto-suggestion rule below to pick the recommended default. Ask via `AskUser`:
+
+      ```
+      [topic] (1/1) Which Ring track for T-XXX? (Estimate: <estimate>)
+      ```
+
+      Options (mark the auto-suggested one with " (recommended)"):
+      - **Lightweight** (`ring:pre-dev-feature`) — 4 gates, for tasks <2 days
+      - **Full** (`ring:pre-dev-full`) — 9 gates, for tasks ≥2 days or multi-component features
+
+      Save the user's choice as `RING_TRACK` ∈ {`feature`, `full`}. The selected skill name is `ring:pre-dev-feature` (when `feature`) or `ring:pre-dev-full` (when `full`).
+
+      **Auto-suggestion rule** (suggest the matching option as "(recommended)"; the user can always override):
+
+      | Estimate value | Suggested default |
+      |----------------|-------------------|
+      | `S`, `M` | Lightweight |
+      | `L`, `XL` | Full |
+      | Hour-based (e.g. `2h`, `8h`) | Lightweight |
+      | `1d` | Lightweight |
+      | Multi-day (`2d`, `3d`, `1w`, etc.) | Full |
+      | `-` or unknown | Lightweight |
+
+   2. Verify the chosen Ring skill (`ring:pre-dev-feature` OR `ring:pre-dev-full`) is available. If unavailable → fall back to the OTHER track if it is available; if neither is available → fall back to "Link existing spec" automatically and warn the user.
+   3. Invoke the chosen Ring skill via the `Skill` tool. The Skill tool has no argument channel — state the task title and tipo in conversation context immediately before the invocation (e.g., "Generating spec for T-XXX: <title> (Tipo: <tipo>)"). Ring will read these from context.
+   4. **If Ring fails or returns no spec path:**
       - Warn the user: "Ring failed to generate the spec: <error>."
       - Re-prompt with `Link existing spec` / `Cancel`. Do NOT silently fall through.
       - If user picks Cancel → STOP — "Plan cancelled — task spec required."
-   4. **If Ring succeeds:**
+   5. **If Ring succeeds:**
       - Capture the generated spec file path (relative to `<TASKS_DIR>`). Save in a variable `SPEC_PATH`.
       - Update the task's `TaskSpec` column in `optimus-tasks.md`.
-   5. **Re-validate** optimus-tasks.md — see AGENTS.md Protocol: optimus-tasks.md Validation.
+   6. **Re-validate** optimus-tasks.md — see AGENTS.md Protocol: optimus-tasks.md Validation.
       - If validation fails:
         a. Revert the in-memory edit to the TaskSpec column.
         b. Remove the spec file Ring just created at `<TASKS_DIR>/<SPEC_PATH>` (rollback Ring's side effect).
         c. STOP and report the validation error.
-   6. Commit the TaskSpec update:
+   7. **Record the chosen Ring track in state.json** — see AGENTS.md Protocol: State Management. The snippet below performs an idempotent merge into the task's existing record (preserving `status`, `branch`, `updated_at`):
+
+      ```bash
+      # Record the chosen Ring track (idempotent merge into existing record)
+      if [ ! -f "$STATE_FILE" ]; then echo '{}' > "$STATE_FILE"; fi
+      UPDATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+      if jq --arg id "$TASK_ID" --arg track "$RING_TRACK" --arg ts "$UPDATED_AT" \
+        '.[$id] = ((.[$id] // {}) + {ring_track: $track, ring_track_recorded_at: $ts})' \
+        "$STATE_FILE" > "${STATE_FILE}.tmp"; then
+        if jq empty "${STATE_FILE}.tmp" 2>/dev/null; then
+          mv "${STATE_FILE}.tmp" "$STATE_FILE"
+        else
+          rm -f "${STATE_FILE}.tmp"
+          echo "ERROR: jq produced invalid JSON — state.json unchanged" >&2
+          exit 1
+        fi
+      else
+        rm -f "${STATE_FILE}.tmp"
+        echo "ERROR: jq failed to update state.json" >&2
+        exit 1
+      fi
+      ```
+   8. Commit the TaskSpec update:
       ```bash
       tasks_git add "$TASKS_GIT_REL"
       COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }

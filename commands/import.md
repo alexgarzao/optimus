@@ -236,12 +236,40 @@ without Ring pre-dev specs):
    N tasks have no Ring pre-dev spec. How should I proceed?
    ```
    Options:
-   - **Generate all via Ring** — invoke `ring:pre-dev-feature` for each task
+   - **Generate all via Ring** — invoke a Ring pre-dev skill for each task (track chosen per task — see below)
    - **Generate selectively** — for each task, ask Generate via Ring / Link existing spec / Defer (per-task choice)
    - **Skip all** — keep TaskSpec as `-` for all; the next `/optimus:plan T-XXX` will offer to resolve
+
+   **Whenever a Ring skill is about to be invoked (in either "Generate all via Ring"
+   or the "Generate via Ring" branch of "Generate selectively"), first prompt for
+   the Ring track per task:**
+
+   ```
+   [topic] (X/N) Which Ring track for T-XXX? (Estimate: <estimate>)
+   ```
+
+   Options (mark the auto-suggested one with " (recommended)"):
+   - **Lightweight** (`ring:pre-dev-feature`) — 4 gates, for tasks <2 days
+   - **Full** (`ring:pre-dev-full`) — 9 gates, for tasks ≥2 days or multi-component features
+
+   Save the user's choice for the current task as `RING_TRACK` ∈ {`feature`, `full`}. The selected skill name is `ring:pre-dev-feature` (when `feature`) or `ring:pre-dev-full` (when `full`).
+
+   **Auto-suggestion rule** (read the task's `Estimate` column; suggest the matching option as "(recommended)"; the user can always override):
+
+   | Estimate value | Suggested default |
+   |----------------|-------------------|
+   | `S`, `M` | Lightweight |
+   | `L`, `XL` | Full |
+   | Hour-based (e.g. `2h`, `8h`) | Lightweight |
+   | `1d` | Lightweight |
+   | Multi-day (`2d`, `3d`, `1w`, etc.) | Full |
+   | `-` or unknown | Lightweight |
+
+   Verify the chosen Ring skill is available. If unavailable → fall back to the OTHER track if it is available; if neither is available → fall back to "Link existing spec" (or "Defer", in the "Generate all via Ring" path) and warn the user.
+
 3. If "Generate all via Ring":
-   - For each task, invoke `ring:pre-dev-feature` via the `Skill` tool. The Skill tool has no argument channel — state the task title and tipo in conversation context immediately before the invocation (e.g., "Generating spec for T-XXX: <title> (Tipo: <tipo>)"). Ring will read these from context.
-   - After Ring generates the spec, update the task's TaskSpec value.
+   - For each task, run the per-task track prompt above to pick `RING_TRACK`, then invoke the chosen Ring skill (`ring:pre-dev-feature` OR `ring:pre-dev-full`) via the `Skill` tool. The Skill tool has no argument channel — state the task title and tipo in conversation context immediately before the invocation (e.g., "Generating spec for T-XXX: <title> (Tipo: <tipo>)"). Ring will read these from context.
+   - After Ring generates the spec, update the task's TaskSpec value AND record the chosen track in state.json (see step 7 below).
    - If Ring fails for a task, warn the user and keep that task's TaskSpec as `-` (the next `/optimus:plan T-XXX` will offer to resolve).
 4. If "Generate selectively":
    - For each task with `TaskSpec = -`, ask via `AskUser`:
@@ -249,12 +277,34 @@ without Ring pre-dev specs):
      [topic] (X/N) Task T-XXX (<title>) — how should I handle the spec?
      ```
      Options:
-     - **Generate via Ring** (recommended) — invoke `ring:pre-dev-feature`
+     - **Generate via Ring** (recommended) — run the per-task track prompt above to pick `RING_TRACK`, then invoke the chosen Ring skill (`ring:pre-dev-feature` OR `ring:pre-dev-full`).
      - **Link existing spec** — search `<TASKS_DIR>/tasks/*.md`; pick from top 5 matches; **HARD BLOCK** validate the chosen path: (a) exists, (b) is a regular file (NOT a symlink), (c) resolves inside `<TASKS_DIR>` with no intermediate symlink components, (d) contains no pipe (`|`), control characters, newlines. Apply the realpath/case-glob/symlink rejection block from AGENTS.md Protocol: TaskSpec Resolution.
      - **Defer** — keep TaskSpec as `-`; the next `/optimus:plan T-XXX` will offer to resolve.
 5. If "Skip all":
    - Keep TaskSpec as `-` for every task; inform the user that `/optimus:plan T-XXX` will offer to generate or link a spec when they next plan that task.
 6. If Ring is not available at any point, warn and keep TaskSpec as `-` for the affected tasks.
+7. **Record the chosen Ring track in state.json (per task that successfully ran Ring)** — see AGENTS.md Protocol: State Management. If `.optimus/` does not yet exist, see AGENTS.md Protocol: Initialize .optimus Directory first. The snippet below performs an idempotent merge into the task's existing record (preserving any `status`, `branch`, `updated_at` fields):
+
+   ```bash
+   # Record the chosen Ring track for the current task (idempotent merge)
+   if [ ! -f "$STATE_FILE" ]; then echo '{}' > "$STATE_FILE"; fi
+   UPDATED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+   if jq --arg id "$TASK_ID" --arg track "$RING_TRACK" --arg ts "$UPDATED_AT" \
+     '.[$id] = ((.[$id] // {}) + {ring_track: $track, ring_track_recorded_at: $ts})' \
+     "$STATE_FILE" > "${STATE_FILE}.tmp"; then
+     if jq empty "${STATE_FILE}.tmp" 2>/dev/null; then
+       mv "${STATE_FILE}.tmp" "$STATE_FILE"
+     else
+       rm -f "${STATE_FILE}.tmp"
+       echo "ERROR: jq produced invalid JSON — state.json unchanged" >&2
+       exit 1
+     fi
+   else
+     rm -f "${STATE_FILE}.tmp"
+     echo "ERROR: jq failed to update state.json" >&2
+     exit 1
+   fi
+   ```
 
 ---
 
