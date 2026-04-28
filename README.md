@@ -38,6 +38,23 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
 | `review` | 3 | Validates completed task implementation against spec, coding standards, and best practices using parallel specialist agents | `/optimus-review` |
 | `done` | 4 | Requires PR in final state (merged or closed) before marking task done. Cleans up worktree and branch interactively | `/optimus-done` |
 
+## Conventions
+
+Optimus uses **Conventional Commits 1.0.0** end-to-end — derived automatically from each task's `Tipo` column:
+
+| Tipo | Prefix | Branch | Commit / PR title |
+|------|--------|--------|-------------------|
+| `Feature` | `feat` | `feat/t-003-user-auth` | `feat(T-003): add login API` |
+| `Fix` | `fix` | `fix/t-007-duplicate-login` | `fix(T-007): debounce submit` |
+| `Refactor` | `refactor` | `refactor/t-012-...` | `refactor(T-012): ...` |
+| `Chore` | `chore` | `chore/t-015-...` | `chore(T-015): ...` |
+| `Docs` | `docs` | `docs/t-018-...` | `docs(T-018): ...` |
+| `Test` | `test` | `test/t-021-...` | `test(T-021): ...` |
+
+Branch names, commit messages, and PR titles are all derived from the same `Tipo` — no manual mapping needed. `build` validates PR titles against the Conventional Commits regex and offers to fix non-conforming titles via `gh pr edit`. Structural edits to `optimus-tasks.md` (new task, dependency edit, version move) always use `chore(tasks):` regardless of the affected tasks' Tipo.
+
+Full spec: [AGENTS.md — Conventional Commits](AGENTS.md#conventional-commits-pr-titles-and-commit-messages) and [Branch Name Derivation](AGENTS.md#protocol-branch-name-derivation).
+
 ## Review & Verification Skills
 
 | Skill | Description | Command |

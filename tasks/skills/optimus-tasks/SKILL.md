@@ -187,7 +187,7 @@ The user can then modify any field before confirming.
 **Option B: From scratch.** Ask the user for task details using `AskUser` (one question at a time or batch if info provided):
 
 1. **Title** (required): Short description of the task
-2. **Tipo** (required): `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, or `Test`
+2. **Tipo** (required): `Feature`, `Fix`, `Refactor`, `Chore`, `Docs`, or `Test`. The Tipo determines the Conventional Commits prefix used downstream by `plan` (branch name), `build` (commit messages), and `review` (PR title) — see AGENTS.md "Valid Tipo Values" table for the full mapping.
 3. **Priority** (required): `Alta`, `Media`, or `Baixa`
 4. **Estimate** (optional): Task size estimate (`S`, `M`, `L`, `XL`, `2h`, `1d`, etc.). Default: `-`
 5. **Version** (required): Must match a version in the Versions table. Default: the version with Status `Ativa`
