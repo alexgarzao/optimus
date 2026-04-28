@@ -770,6 +770,10 @@ If any gate fails, done stops immediately and status in state.json stays unchang
 
 ## Protocol: Dry-Run Mode
 
+<!-- inline-mode: summarize -->
+
+**Summary:** All stage skills (plan, build, review, done) support dry-run mode — triggered when the invocation contains `dry-run` or `preview`. Run analysis/validation phases normally but: do NOT change task status in state.json, do NOT git commit/push, do NOT create branches/worktrees (stage-1), do NOT batch-apply fixes, do NOT increment stage stats, do NOT write session files, skip convergence rounds 2+. Present results as informational ("what would happen") with zero side effects. Stage skills may add per-stage dry-run notes but MUST NOT relax these rules. See full per-stage dry-run rules in AGENTS.md.
+
 **Referenced by:** plan, build, review, done (all stage agents 1-4).
 
 All stage agents support **dry-run mode**. When the user includes "dry-run" or
@@ -1242,6 +1246,10 @@ Skills reference this as: "Run quietly — see AGENTS.md Protocol: Quiet Command
 
 ### Protocol: Increment Stage Stats
 
+<!-- inline-mode: summarize -->
+
+**Summary:** Plan and review increment per-task execution counters in `${MAIN_WORKTREE}/.optimus/stats.json` immediately after the status change (BEFORE analysis starts). Skip in dry-run mode. Recipe: read stats.json (start `{}` if missing); reset to `{}` if corrupted (`jq empty` fails) with WARNING; init task key `{ "plan_runs": 0, "review_runs": 0 }` if absent; increment matching counter; set `last_plan` / `last_review` to UTC ISO 8601; write back pretty-printed with sorted keys. stats.json is gitignored — no commit. See full recipe in AGENTS.md.
+
 **Referenced by:** plan, review
 
 After the status change in state.json (and BEFORE any analysis work begins), increment
@@ -1276,6 +1284,10 @@ times each stage ran on each task — useful for spotting spec churn and review 
 Skills reference this as: "Increment stage stats — see AGENTS.md Protocol: Increment Stage Stats."
 
 ### Protocol: Shell Safety Guidelines
+
+<!-- inline-mode: summarize -->
+
+**Summary:** All bash examples in AGENTS.md/SKILL.md are templates executed literally — follow these rules to prevent injection and silent failures: (1) always quote variables (`"$VAR"`); (2) check exit codes for critical commands; (3) never interpolate user-derived values directly into shell; (4) use `grep -F` for fixed-string matching of branch names/task IDs; (5) match task rows with anchored regex `grep -E '^\| T-NNN \|'`; (6) `command -v jq` before use; (7) `jq empty "$FILE"` before parse; (8) for commit messages with user content, write to `mktemp` file and use `git commit -F` (avoids all expansion). See full anti-pattern list + sanitization recipes in AGENTS.md.
 
 **Referenced by:** plan, batch
 
@@ -1717,6 +1729,10 @@ branch. See **Protocol: Default Branch Refusal** below.
 Skills reference this as: "Resolve workspace (HARD BLOCK) — see AGENTS.md Protocol: Workspace Auto-Navigation."
 
 ### Protocol: Default Branch Refusal (HARD BLOCK)
+
+<!-- inline-mode: summarize -->
+
+**Summary:** Mutating stage skills (build, review, done) MUST refuse to run on the project's default branch (main/master). Defense-in-depth even after Workspace Auto-Navigation. Resolves DEFAULT_BRANCH via `git symbolic-ref refs/remotes/origin/HEAD` with main→master fallback; compares to `git branch --show-current`; STOP with explicit error message if equal. Invoke immediately after Workspace Auto-Navigation, before any state.json write, git commit, worktree mutation, or status transition. See full recipe in AGENTS.md.
 
 **Referenced by:** build, review, done
 
@@ -2435,6 +2451,10 @@ Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Pr
 
 ### Protocol: Re-run Guard
 
+<!-- inline-mode: summarize -->
+
+**Summary:** Replaces the static "next step" suggestion in plan and review. Counts `total_findings` from this execution (grouped entries count as 1). If 0 → suggest next stage (build for plan, done for review). If >0 → `AskUser` offering "Re-run with clean context" (re-dispatches ALL agents with no memory of prior decisions — skipped findings will reappear) or "Advance to next stage". Re-run reset semantics (MANDATORY): reset `convergence_status` to `null`, `phase` to entry, overwrite `started_at`; preserve identity fields. Skip GitHub CLI/tasks validation/workspace/divergence checks; re-execute discovery + dispatch. No re-run limit. See full reset checklist in AGENTS.md.
+
 **Referenced by:** plan, review
 
 After the convergence loop exits and the final report/summary is presented, evaluate
@@ -2738,6 +2758,10 @@ Skills reference this as: "Read/write state.json — see AGENTS.md Protocol: Sta
 
 ### Protocol: Branch Name Derivation
 
+<!-- inline-mode: summarize -->
+
+**Summary:** Branch names derived deterministically from task structural data — NOT stored in optimus-tasks.md, only cached in state.json. Format: `<tipo-prefix>/<task-id-lowercase>-<keywords>`. Tipo→prefix: Feature→feat, Fix→fix, Refactor→refactor, Chore→chore, Docs→docs, Test→test. Keywords: 2-4 lowercase title words, articles/prepositions/generic verbs (implement/add/create/update) stripped. Sanitization: lowercase → non-alphanumeric to hyphens → collapse hyphens → strip leading/trailing → 100-char cap. Resolution order: state.json `branch` field → kebab-anchored search (`-t-003-` to avoid T-1/T-10 collision via `git branch --list "*${KEBAB#-}*"`) → derive from Tipo+ID+Title. See full sanitization + Tipo table + examples in AGENTS.md.
+
 **Referenced by:** plan, build, review, pr-check, done (workspace auto-navigation)
 
 Branch names are derived deterministically from the task's structural data in optimus-tasks.md.
@@ -2785,6 +2809,10 @@ Where:
 Skills reference this as: "Derive branch name — see AGENTS.md Protocol: Branch Name Derivation."
 
 ### Protocol: Default Scope Resolution
+
+<!-- inline-mode: summarize -->
+
+**Summary:** Read-only skills (report, quick-report) resolve a version scope filter (`ativa`, `upcoming`, `all`, or specific version name). Resolution order: (1) invocation argument wins, with `ask`/`menu` keywords forcing the prompt; (2) fall back to `defaultScope` in `${MAIN_WORKTREE}/.optimus/config.json` (validated against versions table — warn + reprompt if invalid); (3) `AskUser` with Ativa/Upcoming/All/Specific options; (4) offer to persist the choice to config.json (atomic jq write to tmp + mv). Scope names case-insensitive for keywords; case-preserved for version names. See full recipe in AGENTS.md.
 
 **Referenced by:** report, quick-report
 
@@ -2910,6 +2938,10 @@ to the `Ativa` version. If not, present options before proceeding.
 Skills reference this as: "Check active version guard — see AGENTS.md Protocol: Active Version Guard."
 
 ### Protocol: Worktree Location
+
+<!-- inline-mode: summarize -->
+
+**Summary:** Linked worktrees created by plan / resume / Workspace Auto-Navigation / done-cleanup live at the canonical path `${MAIN_WORKTREE}/.worktrees/<branch-name>` — gitignored (auto-injected by Initialize .optimus Directory + Session State protocols), project-rooted, resolved via Resolve Main Worktree Path so paths stay correct from any linked worktree. Branch names contain `/` (per Branch Name Derivation), creating intermediate `feat/`, `fix/` directories under `.worktrees/` automatically. Worktrees ALWAYS belong to the project repo, never the tasks repo (separate-repo `tasksDir` doesn't affect location). Recommend IDE exclusion (`.vscode/settings.json` `search.exclude`, IntelliJ Excluded). Backwards compat: legacy sibling paths still work via worktree metadata; no forced migration. See full convention + IDE config in AGENTS.md.
 
 **Referenced by:** plan (Step 1.0.5), resume (Step 3.3 Case 2), Protocol: Workspace Auto-Navigation (see Reusable Protocols), done (Phase 4.1 cleanup)
 
@@ -3074,6 +3106,10 @@ exit?") preserves user authority while keeping the gate honest.
 
 ### Fix Implementation (Complexity-Based Dispatch)
 
+<!-- inline-mode: summarize -->
+
+**Summary:** Cycle review skills classify each approved fix before applying. **Simple** (single file, localized, exact code provided, obvious resolution: typo / missing nil guard / import / log line / dead code removal): orchestrator applies directly via Edit/MultiEdit, runs unit tests; on failure, reverts and escalates. **Complex** (multi-file, architectural impact, security-sensitive, schema/API/config changes, new tests needed, or unsure): dispatch ring droid. Code fixes use TDD cycle (RED-GREEN-REFACTOR) via `ring-dev-team-backend-engineer-golang`/`-typescript`, `ring-dev-team-frontend-engineer`, `ring-dev-team-qa-analyst`. Documentation fixes: `ring-tw-team-functional-writer`/`-api-writer`/`-docs-reviewer` (no TDD). When in doubt → dispatch. Ring droids are REQUIRED for complex fixes — STOP if missing. See full classification + dispatch templates in AGENTS.md.
+
 Fixes are classified by complexity. **Simple fixes** are applied directly by the
 orchestrator. **Complex fixes** (or fixes whose complexity cannot be determined) are
 delegated to specialist ring droids.
@@ -3149,6 +3185,11 @@ All skills that measure coverage MUST use these thresholds. If coverage profiles
 be generated (command fails or tool missing), report as SKIP — do not fail the verification.
 
 ### Deep Research Before Presenting (MANDATORY for cycle review skills)
+
+<!-- inline-mode: summarize -->
+
+**Summary:** Before presenting ANY finding, cycle review skills (plan, review, pr-check, coderabbit-review) MUST research silently across 12 dimensions: project patterns + similar cases, architectural decisions (AGENTS.md/TRD/ADRs), existing codebase precedent, current task focus, user/consumer use cases, UX impact, API best practices, engineering best practices (SOLID/DRY/observability), language idioms (`WebSearch`), correctness over convenience, production resilience (timeouts, retries, leaks), data integrity + privacy (LGPD/GDPR). Recommendation Option A MUST be evidence-backed (not generic). NOT optional — prevents false-positive findings. See full 12-item checklist in AGENTS.md.
+
 Applies to: plan, review, pr-check, coderabbit-review
 
 **BEFORE presenting any finding to the user, the agent MUST research it deeply.** This

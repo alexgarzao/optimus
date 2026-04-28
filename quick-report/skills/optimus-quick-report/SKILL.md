@@ -308,88 +308,11 @@ state.json is implicitly `Pendente`.
 
 **Summary:** Resolve `MAIN_WORKTREE` once via `git worktree list --porcelain | awk '/^worktree / {print $2; exit}'` with `${MAIN_WORKTREE:?…}` defensive guard. Use `${MAIN_WORKTREE}/.optimus/...` for ALL `.optimus/` paths (gitignored, so doesn't propagate across linked worktrees). See full recipe in AGENTS.md.
 
-### Protocol: Default Scope Resolution
+### Protocol: Default Scope Resolution (summarized)
 
-**Referenced by:** report, quick-report
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Default Scope Resolution`.**
 
-Both `report` and `quick-report` support a version scope filter (`ativa`, `upcoming`,
-`all`, or a specific version name). Resolve the effective scope in this order:
-
-1. **Invocation wins.** If the user specified a scope in the invocation (e.g.,
-   "quick report all", "report v2", "report upcoming"), use that scope directly.
-   Skip steps 2-3.
-
-   **Force-ask keywords:** If the invocation contains `ask` or `menu`
-   (e.g., "quick report ask", "report menu"), skip step 2 and go straight to step 3
-   (the AskUser prompt). This lets the user override the saved default for a single run
-   and optionally overwrite it.
-
-2. **Config fallback.** If `.optimus/config.json` has a `defaultScope` key, use it:
-   ```bash
-   CONFIG_FILE="${MAIN_WORKTREE}/.optimus/config.json"
-   if [ -f "$CONFIG_FILE" ] && jq -e '.defaultScope' "$CONFIG_FILE" >/dev/null 2>&1; then
-     SCOPE=$(jq -r '.defaultScope' "$CONFIG_FILE")
-   fi
-   ```
-   **Validation:** `SCOPE` must be `ativa`, `upcoming`, `all`, or match a version name in
-   the `## Versions` table of `optimus-tasks.md`. If invalid (empty, unknown keyword, or a version
-   name that no longer exists), warn the user and fall through to step 3.
-   ```
-   WARNING: .optimus/config.json has defaultScope="<value>" but it is not valid
-   (must be ativa/upcoming/all or an existing version name). Falling back to prompt.
-   ```
-
-3. **Ask user.** Present the standard AskUser prompt:
-   ```
-   Which version scope do you want to see?
-   ```
-   Options:
-   - **Ativa** — only tasks from the active version (`<active_version_name>`)
-   - **Upcoming** — active + planned (Ativa, Próxima, Planejada — excludes Backlog and Concluída)
-   - **All** — all tasks across all versions
-   - **Specific version** — pick one version by name (follow-up AskUser lists versions)
-
-4. **Offer to persist (only when step 3 ran).** After the user picks a scope in step 3,
-   ask a follow-up via AskUser:
-   ```
-   Save "<chosen_scope>" as the default in .optimus/config.json?
-   You can still override per-invocation (e.g., "quick report all") or
-   use "quick report ask" to be prompted again.
-   ```
-   Options:
-   - **Save as default** — write `defaultScope` to `.optimus/config.json`
-   - **Just this time** — do not persist
-
-5. **Persist the scope (if user chose to save):**
-   ```bash
-   # Initialize .optimus directory — see AGENTS.md Protocol: Initialize .optimus Directory.
-   CONFIG_FILE="${MAIN_WORKTREE}/.optimus/config.json"
-   if [ ! -f "$CONFIG_FILE" ]; then
-     echo '{}' > "$CONFIG_FILE"
-   fi
-   if jq --arg s "$SCOPE" '.defaultScope = $s' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp"; then
-     if jq empty "${CONFIG_FILE}.tmp" 2>/dev/null; then
-       mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
-     else
-       rm -f "${CONFIG_FILE}.tmp"
-       echo "ERROR: jq produced invalid JSON — config.json unchanged"
-     fi
-   else
-     rm -f "${CONFIG_FILE}.tmp"
-     echo "ERROR: jq failed to update config.json"
-   fi
-   ```
-   **NOTE:** `config.json` is gitignored (per-user preference). The saved `defaultScope`
-   affects only the local environment — each user can choose their own default. These
-   skills are read-only for code/tasks — writing to `config.json` is the single allowed
-   side-effect, and only when the user explicitly agrees.
-
-**NOTE:** Scope names are case-insensitive for user input. Normalize to lowercase for
-`ativa`/`upcoming`/`all`, but preserve the original casing when the scope is a specific
-version name (version names are case-sensitive to match the Versions table).
-
-Skills reference this as: "Resolve default scope — see AGENTS.md Protocol: Default Scope Resolution."
-
+**Summary:** Read-only skills (report, quick-report) resolve a version scope filter (`ativa`, `upcoming`, `all`, or specific version name). Resolution order: (1) invocation argument wins, with `ask`/`menu` keywords forcing the prompt; (2) fall back to `defaultScope` in `${MAIN_WORKTREE}/.optimus/config.json` (validated against versions table — warn + reprompt if invalid); (3) `AskUser` with Ativa/Upcoming/All/Specific options; (4) offer to persist the choice to config.json (atomic jq write to tmp + mv). Scope names case-insensitive for keywords; case-preserved for version names. See full recipe in AGENTS.md.
 
 ### Protocol: Resolve Tasks Git Scope (summarized)
 

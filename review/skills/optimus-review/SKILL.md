@@ -1072,48 +1072,13 @@ to import from Ring pre-dev." Do NOT proceed to task identification with an empt
 
 **Summary:** Resolve `MAIN_WORKTREE` once via `git worktree list --porcelain | awk '/^worktree / {print $2; exit}'` with `${MAIN_WORKTREE:?…}` defensive guard. Use `${MAIN_WORKTREE}/.optimus/...` for ALL `.optimus/` paths (gitignored, so doesn't propagate across linked worktrees). See full recipe in AGENTS.md.
 
-### Deep Research Before Presenting (MANDATORY for cycle review skills)
+### Deep Research Before Presenting (MANDATORY for cycle review skills) (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Deep Research Before Presenting (MANDATORY for cycle review skills)`.**
+
+**Summary:** Before presenting ANY finding, cycle review skills (plan, review, pr-check, coderabbit-review) MUST research silently across 12 dimensions: project patterns + similar cases, architectural decisions (AGENTS.md/TRD/ADRs), existing codebase precedent, current task focus, user/consumer use cases, UX impact, API best practices, engineering best practices (SOLID/DRY/observability), language idioms (`WebSearch`), correctness over convenience, production resilience (timeouts, retries, leaks), data integrity + privacy (LGPD/GDPR). Recommendation Option A MUST be evidence-backed (not generic). NOT optional — prevents false-positive findings. See full 12-item checklist in AGENTS.md.
+
 Applies to: plan, review, pr-check, coderabbit-review
-
-**BEFORE presenting any finding to the user, the agent MUST research it deeply.** This
-research is done SILENTLY — do not show the research process. Present only the conclusions.
-
-**Research checklist (ALL items, every finding):**
-
-1. **Project patterns:** Read the affected file(s) fully. Check how similar cases are handled
-   elsewhere in the codebase. Identify existing conventions the finding might violate or follow.
-2. **Architectural decisions:** Review project rules (AGENTS.md, PROJECT_RULES.md, etc.) and
-   architecture docs (TRD, ADRs). Understand WHY the project is structured this way before
-   suggesting changes.
-3. **Existing codebase:** Search for precedent. If the codebase already does the same thing
-   in 10 other places without issue, that context changes the finding's weight.
-4. **Current task focus:** Is this finding within the scope of the task being worked on?
-   Tangential findings should be flagged as such (not dismissed, but contextualized).
-5. **User/consumer use cases:** Who consumes this code — end users, other services, internal
-   modules? How does the finding affect them? Trace the impact to real user scenarios.
-6. **UX impact:** For user-facing changes, evaluate usability, accessibility, error messaging,
-   and workflows. Would the user notice? Would it block their work?
-7. **API best practices:** For API changes, check REST conventions, error handling patterns,
-   idempotency, status codes, pagination, versioning, and backward compatibility.
-8. **Engineering best practices:** SOLID principles, DRY, separation of concerns, error
-   handling, resilience patterns, observability, testability.
-9. **Language-specific best practices:** Use `WebSearch` to research idioms and conventions
-   for the specific language (Go, TypeScript, Python, etc.). Check official style guides,
-   common linter rules, and community-accepted patterns.
-10. **Correctness over convenience:** Always recommend the correct approach, regardless of
-    effort. The easy option may be presented as an alternative, but Option A must be what
-    the agent believes is right based on all the research above.
-11. **Production resilience:** Would this code survive production conditions? Consider:
-    timeouts on external calls, retry with backoff, circuit breakers, graceful degradation,
-    resource cleanup (connections, handles, goroutines), graceful shutdown, and behavior
-    under load (N+1 queries, unbounded queries, connection pool exhaustion).
-12. **Data integrity and privacy:** Are transaction boundaries correct? Could partial writes
-    occur? Is PII properly handled (not logged, masked in responses)? LGPD/GDPR compliance?
-
-**After research, form the recommendation:** Option A MUST be the approach the agent
-believes is correct based on the research. It must be backed by evidence (project patterns,
-best practice references, official documentation), not just a generic suggestion.
-
 
 ### Finding Option Format (MANDATORY for cycle review skills)
 
@@ -1170,7 +1135,11 @@ All cycle review skills follow this pattern:
    - Skip — no action
    - Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
 
-### Fix Implementation (Complexity-Based Dispatch)
+### Fix Implementation (Complexity-Based Dispatch) (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Fix Implementation (Complexity-Based Dispatch)`.**
+
+**Summary:** Cycle review skills classify each approved fix before applying. **Simple** (single file, localized, exact code provided, obvious resolution: typo / missing nil guard / import / log line / dead code removal): orchestrator applies directly via Edit/MultiEdit, runs unit tests; on failure, reverts and escalates. **Complex** (multi-file, architectural impact, security-sensitive, schema/API/config changes, new tests needed, or unsure): dispatch ring droid. Code fixes use TDD cycle (RED-GREEN-REFACTOR) via `ring-dev-team-backend-engineer-golang`/`-typescript`, `ring-dev-team-frontend-engineer`, `ring-dev-team-qa-analyst`. Documentation fixes: `ring-tw-team-functional-writer`/`-api-writer`/`-docs-reviewer` (no TDD). When in doubt → dispatch. Ring droids are REQUIRED for complex fixes — STOP if missing. See full classification + dispatch templates in AGENTS.md.
 
 Fixes are classified by complexity. **Simple fixes** are applied directly by the
 orchestrator. **Complex fixes** (or fixes whose complexity cannot be determined) are
@@ -1179,46 +1148,6 @@ delegated to specialist ring droids.
 #### Complexity Classification
 
 For each approved fix, assess complexity BEFORE applying:
-
-**Simple fix (apply directly):**
-- The review agent already provided the exact code change needed
-- Single file, localized change (few lines)
-- Obvious resolution: typo, missing error check, wrong variable name, missing nil guard,
-  import fix, formatting, adding a log line, renaming, removing dead code
-- No new logic, no architectural impact, no new test scenarios needed
-
-**Complex fix (dispatch ring droid):**
-- Multiple files affected
-- Requires understanding broader codebase context or architectural decisions
-- New functionality, significant refactoring, or new integration points
-- Requires new test scenarios (not just updating existing ones)
-- Security-sensitive changes (auth, crypto, input validation)
-- Database schema, API contract, or config changes
-- The orchestrator is unsure how to fix it
-
-**When in doubt → dispatch ring droid.** If you cannot confidently classify a fix as
-simple, treat it as complex.
-
-#### Direct Fix (simple findings)
-
-The orchestrator applies the fix directly using Edit/MultiEdit tools. After applying:
-1. Run unit tests to verify no regression
-2. If tests fail, revert and escalate to ring droid dispatch
-
-#### Ring Droid Dispatch (complex findings)
-
-**Code fixes** → dispatch ring backend/frontend/QA droids with **TDD cycle** (RED-GREEN-REFACTOR):
-- `ring-dev-team-backend-engineer-golang` (Go), `ring-dev-team-backend-engineer-typescript` (TS),
-  `ring-dev-team-frontend-engineer` (React/Next.js), `ring-dev-team-qa-analyst` (tests)
-
-**Documentation fixes** → dispatch ring documentation droids **without TDD** (no tests for docs):
-- `ring-tw-team-functional-writer` (guides), `ring-tw-team-api-writer` (API docs),
-  `ring-tw-team-docs-reviewer` (quality fixes)
-
-**Ring droids are REQUIRED for complex fixes** — there is no alternative dispatch mechanism. If the
-required droids are not installed and a complex fix is needed, the skill MUST stop and
-inform the user which droids need to be installed.
-
 
 ### Protocol: Active Version Guard (summarized)
 
@@ -1244,39 +1173,11 @@ inform the user which droids need to be installed.
 
 **Summary:** Measure unit + integration test coverage via Makefile targets with stack-specific fallbacks (Go: `go test -coverprofile`; Node: `npm test -- --coverage`; Python: `pytest --cov=. --cov-report=term`). Run wrapped in `_optimus_quiet_run` (Protocol: Quiet Command Execution) to keep agent context clean — the agent sees only PASS/FAIL + extracted total percentage; full per-file breakdown stays in `.optimus/logs/` and native coverage files. Thresholds: unit 85%, integration 70% (NEEDS_FIX/HIGH finding below). When scanning untested functions, read coverage output FILE (not stdout) — flag business-logic functions at 0% as HIGH; infrastructure/generated code as SKIP. If no coverage command resolves, mark SKIP — do not fail verification. See full extraction recipes in AGENTS.md.
 
-### Protocol: Default Branch Refusal (HARD BLOCK)
+### Protocol: Default Branch Refusal (HARD BLOCK) (summarized)
 
-**Referenced by:** build, review, done
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Default Branch Refusal (HARD BLOCK)`.**
 
-**Why:** Workspace Auto-Navigation is the primary safeguard, but it can be bypassed
-in edge cases (user cancels the AskUser prompt, silent failure, future skill that
-forgets to invoke the protocol). A second, unconditional refusal at the start of any
-mutating stage prevents accidental commits, worktree removals, or status writes on
-the default branch.
-
-```bash
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-if [ -z "$DEFAULT_BRANCH" ]; then
-  if git show-ref --verify refs/remotes/origin/main >/dev/null 2>&1; then
-    DEFAULT_BRANCH="main"
-  elif git show-ref --verify refs/remotes/origin/master >/dev/null 2>&1; then
-    DEFAULT_BRANCH="master"
-  fi
-fi
-CURRENT=$(git branch --show-current 2>/dev/null)
-if [ -n "$DEFAULT_BRANCH" ] && [ "$CURRENT" = "$DEFAULT_BRANCH" ]; then
-  echo "ERROR: refusing to run /optimus-<stage> on default branch '$CURRENT'." >&2
-  echo "       Switch to the task's feature branch (Workspace Auto-Navigation should have handled this)." >&2
-  exit 1
-fi
-```
-
-**Where to invoke:** immediately after Workspace Auto-Navigation completes, before
-the skill performs any state.json write, git commit, git worktree mutation, or
-status transition.
-
-Skills reference this as: "Refuse to run on default branch (HARD BLOCK) — see AGENTS.md Protocol: Default Branch Refusal."
-
+**Summary:** Mutating stage skills (build, review, done) MUST refuse to run on the project's default branch (main/master). Defense-in-depth even after Workspace Auto-Navigation. Resolves DEFAULT_BRANCH via `git symbolic-ref refs/remotes/origin/HEAD` with main→master fallback; compares to `git branch --show-current`; STOP with explicit error message if equal. Invoke immediately after Workspace Auto-Navigation, before any state.json write, git commit, worktree mutation, or status transition. See full recipe in AGENTS.md.
 
 ### Protocol: Divergence Warning (summarized)
 
@@ -1284,31 +1185,11 @@ Skills reference this as: "Refuse to run on default branch (HARD BLOCK) — see 
 
 **Summary:** Detects when `optimus-tasks.md` has diverged between the current branch and the tasks repo's default branch. Uses `tasks_git` so it works in both same-repo and separate-repo scopes. Throttles `tasks_git fetch` via a 5-minute cache marker at `${MAIN_WORKTREE}/.optimus/.last-tasks-fetch` (defense-in-depth: validates marker contents are numeric before arithmetic to survive corrupted marker files under `set -euo pipefail`). Compares against `origin/$TASKS_DEFAULT_BRANCH` via `tasks_git diff` limited to `$TASKS_GIT_REL`. On non-empty diff, warns via `AskUser` with options to **Sync now** (merge `origin/<default>`) or **Continue without syncing**. NOT a HARD BLOCK — divergence is a soft warning. Skipped silently when `TASKS_DEFAULT_BRANCH` is unresolved. See full recipe in AGENTS.md.
 
-## Protocol: Dry-Run Mode
+### Protocol: Dry-Run Mode (summarized)
 
-**Referenced by:** plan, build, review, done (all stage agents 1-4).
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Dry-Run Mode`.**
 
-All stage agents support **dry-run mode**. When the user includes "dry-run" or
-"preview" in their invocation (e.g., "dry-run spec T-003", "preview review T-012"),
-the agent MUST:
-
-1. **Run all analysis/validation phases normally** — agent dispatch, findings, etc.
-2. **Do NOT change task status** — skip the status update step in state.json.
-3. **Do NOT commit or push anything** — no git operations that modify state.
-4. **Do NOT create workspaces** — skip branch/worktree creation (stage-1 only).
-5. **Do NOT apply fixes** — skip batch-apply phases.
-6. **Do NOT increment stage stats** — skip the Increment Stage Stats protocol.
-7. **Do NOT write session files** — session state is for crash recovery of real
-   executions, not previews.
-8. **Skip convergence rounds 2+** — round 1 (primary review pass) is sufficient
-   for preview; do NOT enter the convergence loop.
-9. **Present results as informational** — phrase the summary as "what would happen"
-   without implying any side effects occurred.
-
-Stage agents may add stage-specific dry-run notes (e.g., which phase numbers
-to skip), but MUST NOT relax any of the rules above. The point of dry-run is
-to give the user a reliable preview with zero state mutation.
-
+**Summary:** All stage skills (plan, build, review, done) support dry-run mode — triggered when the invocation contains `dry-run` or `preview`. Run analysis/validation phases normally but: do NOT change task status in state.json, do NOT git commit/push, do NOT create branches/worktrees (stage-1), do NOT batch-apply fixes, do NOT increment stage stats, do NOT write session files, skip convergence rounds 2+. Present results as informational ("what would happen") with zero side effects. Stage skills may add per-stage dry-run notes but MUST NOT relax these rules. See full per-stage dry-run rules in AGENTS.md.
 
 ### Protocol: GitHub CLI Check (HARD BLOCK)
 
@@ -1324,41 +1205,11 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 ```
 
 
-### Protocol: Increment Stage Stats
+### Protocol: Increment Stage Stats (summarized)
 
-**Referenced by:** plan, review
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Increment Stage Stats`.**
 
-After the status change in state.json (and BEFORE any analysis work begins), increment
-the execution counter for the current stage in `.optimus/stats.json`. This tracks how many
-times each stage ran on each task — useful for spotting spec churn and review cycles.
-
-**NOTE:** Only increment when NOT in dry-run mode.
-
-1. Read `.optimus/stats.json`. If the file does not exist, start with an empty object `{}`.
-   If the file exists but is corrupted, reset it:
-   ```bash
-   # Requires Protocol: Resolve Main Worktree Path to have run first
-   # (or resolve inline; see that protocol).
-   MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
-   MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
-   STATS_FILE="${MAIN_WORKTREE}/.optimus/stats.json"
-   if [ -f "$STATS_FILE" ] && ! jq empty "$STATS_FILE" 2>/dev/null; then
-     echo "WARNING: stats.json is corrupted. Resetting counters."
-     echo '{}' > "$STATS_FILE"
-   fi
-   ```
-2. If the task ID key does not exist, initialize it:
-   ```json
-   { "plan_runs": 0, "review_runs": 0 }
-   ```
-3. Increment the appropriate counter (`plan_runs` for plan, `review_runs` for review).
-4. Set the timestamp field (`last_plan` or `last_review`) to the current UTC ISO 8601 time.
-5. Write the updated JSON back to `.optimus/stats.json` (pretty-printed, sorted keys).
-
-**NOTE:** stats.json is gitignored — no commit needed.
-
-Skills reference this as: "Increment stage stats — see AGENTS.md Protocol: Increment Stage Stats."
-
+**Summary:** Plan and review increment per-task execution counters in `${MAIN_WORKTREE}/.optimus/stats.json` immediately after the status change (BEFORE analysis starts). Skip in dry-run mode. Recipe: read stats.json (start `{}` if missing); reset to `{}` if corrupted (`jq empty` fails) with WARNING; init task key `{ "plan_runs": 0, "review_runs": 0 }` if absent; increment matching counter; set `last_plan` / `last_review` to UTC ISO 8601; write back pretty-printed with sorted keys. stats.json is gitignored — no commit. See full recipe in AGENTS.md.
 
 ### Protocol: Notification Hooks (summarized)
 
@@ -1409,75 +1260,11 @@ Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Titl
 
 **Summary:** `_optimus_quiet_run <label> <command>` redirects stdout+stderr to `${MAIN_WORKTREE}/.optimus/logs/<ts>-<label>-<pid>.log`, emits a single `PASS`/`FAIL` line, and on failure dumps the last 50 lines (with `cat -v` to neutralize ANSI/OSC escape sequences). Uses `umask 0077` on the log file (output may contain credentials/stack traces). Exit code preserved so `if _optimus_quiet_run ...; then ... fi` works. Reserved exit codes: `2` = missing label/command; `3` = cannot create logs dir. Log retention (30-day age cap + 500-file count cap) is pruned at every Initialize Directory + Session State call. Use for verification commands only; never for output the agent must parse turn-by-turn. See full recipe in AGENTS.md.
 
-### Protocol: Re-run Guard
+### Protocol: Re-run Guard (summarized)
 
-**Referenced by:** plan, review
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Re-run Guard`.**
 
-After the convergence loop exits and the final report/summary is presented, evaluate
-whether to suggest advancement or offer a re-run. This protocol replaces the static
-"Next step suggestion" in plan and review.
-
-**Logic:**
-
-1. Count `total_findings` produced during this execution (all findings from round 1 AND
-   any convergence rounds that were dispatched — note: with opt-in gating, the user may
-   have skipped them all, in which case only round 1 contributes — from all agents and
-   static analysis, regardless of whether they were fixed or skipped by the user). If
-   findings were grouped (per Finding Presentation item 3), count grouped entries, not
-   individual occurrences.
-2. **If `total_findings == 0`:** The analysis is clean. Suggest the next stage:
-   - plan: "Spec validation clean — 0 findings. Next step: run `/optimus-build` to implement this task."
-   - review: "Implementation review clean — 0 findings. Next step: run `/optimus-done` to close this task."
-3. **If `total_findings > 0`:** Ask via `AskUser`:
-   ```
-   Validation found N findings (X fixed, Y skipped).
-   Re-running dispatches ALL review agents again with clean context (no memory of
-   previous findings — findings you previously skipped will reappear for review).
-   This will consume similar tokens to the initial run. Workspace and status are preserved.
-   ```
-   Options:
-   - **Re-run with clean context** — re-analyze from scratch
-   - **Advance to next stage** — proceed despite findings
-
-4. **If "Re-run with clean context":**
-   - Increment stage stats (new execution)
-   - **Skip:** GitHub CLI check, optimus-tasks.md validation, task identification, session state
-     check, status validation/change, workspace creation, divergence check
-   - **Re-execute:** project structure discovery, document loading, static analysis,
-     coverage profiling, agent dispatch (ALL agents), finding presentation, fix application,
-     convergence loop entry gate (and any rounds the user opts into)
-   - **Session file:** After re-run starts, the session protocol (Protocol: Session State)
-     resumes normal operation — update the session file at each phase transition as usual.
-     This ensures crash recovery during a re-run resumes from the correct phase.
-   - After the re-run completes, apply this protocol again (evaluate findings count)
-   - There is no limit on re-runs — the user controls when to stop
-
-   **Re-run reset semantics (MANDATORY):** When the user chooses "Re-run with clean
-   context", the orchestrator MUST:
-
-   1. Reset `convergence_status` to `null` in the session file (was set to `"CONVERGED"`
-      or another terminal state at the previous run's end).
-   2. Reset `phase` to the entry of the re-executed flow (typically the first phase
-      that performs work, NOT the load-only phases).
-   3. Overwrite `started_at` with the new run's timestamp; preserve `created_at`.
-   4. Preserve `task_id`, `task_branch`, and any other identity fields.
-   5. After reset, normal `Protocol: Session State` updates resume.
-
-   WITHOUT this reset, a previous run's `convergence_status: "CONVERGED"` would
-   short-circuit the re-run's loop, producing a phantom "no findings" result.
-
-5. **If "Advance to next stage":** Proceed to push commits and present the next step suggestion.
-
-**NOTE:** "0 findings" means the analysis produced zero findings — not that all findings
-were resolved. If the user skipped findings in a previous run, they will reappear on
-re-run (clean context has no memory of previous decisions). This is by design.
-
-**NOTE:** Re-run analyzes the current codebase state, including any fixes applied and
-committed during the previous run. It does NOT revert commits. This validates that
-applied fixes are correct and checks for any issues introduced by the fixes.
-
-Skills reference this as: "Execute re-run guard — see AGENTS.md Protocol: Re-run Guard."
-
+**Summary:** Replaces the static "next step" suggestion in plan and review. Counts `total_findings` from this execution (grouped entries count as 1). If 0 → suggest next stage (build for plan, done for review). If >0 → `AskUser` offering "Re-run with clean context" (re-dispatches ALL agents with no memory of prior decisions — skipped findings will reappear) or "Advance to next stage". Re-run reset semantics (MANDATORY): reset `convergence_status` to `null`, `phase` to entry, overwrite `started_at`; preserve identity fields. Skip GitHub CLI/tasks validation/workspace/divergence checks; re-execute discovery + dispatch. No re-run limit. See full reset checklist in AGENTS.md.
 
 ### Protocol: Ring Droid Requirement Check (summarized)
 
