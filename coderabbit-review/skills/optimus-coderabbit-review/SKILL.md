@@ -173,6 +173,8 @@ Categorize ALL findings (regardless of origin) by severity:
 
 **BEFORE presenting the first finding:** Announce total findings count prominently: `"### Total findings to review: N"`
 
+**If N==1, skip any confirmation prompt** — present the single finding directly with header `(1/1) ...`. The user already chose to review by invoking the skill.
+
 Process ONE finding at a time, in severity order (CRITICAL first, LOW last). Collect ALL decisions first — do NOT apply any fix during this phase.
 
 For EACH finding, present with `"(X/N)"` progress prefix in the header, including the origin tag:

@@ -160,6 +160,7 @@ Present the full findings table for a bird's-eye view:
 **BEFORE presenting the first finding, you MUST:**
 1. Count the TOTAL number of findings (N)
 2. Display the total prominently: `"### Total findings to review: N"`
+3. **Skip confirmation when N==1:** Present the single finding directly with header `(1/1) ...`. Do NOT ask "Review 1 finding?" or similar — the user already chose to review.
 
 **For EVERY finding presented, you MUST:**
 1. Include `"(X/N)"` progress prefix in the header

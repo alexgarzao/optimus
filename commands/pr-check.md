@@ -884,7 +884,8 @@ Findings are presented ONE AT A TIME, decisions collected for ALL, then fixes ap
 **BEFORE presenting the first finding, you MUST:**
 1. Count the TOTAL number of findings (N) — sum of genuine findings, validated comments, contested comments, and new agent findings
 2. Display the total prominently: `"### Total findings to review: N"`
-3. This total MUST be visible to the user BEFORE any finding is presented
+3. **Skip confirmation when N==1:** Present the single finding directly with header `(1/1) ...`. Do NOT ask "Review 1 finding?" or similar — the user already chose to review.
+4. This total MUST be visible to the user BEFORE any finding is presented
 
 **For EVERY finding presented, you MUST:**
 1. Include `"(X/N)"` progress prefix in the header — this is NOT optional
@@ -1692,6 +1693,7 @@ Render the standard summary below.
 - Every finding must include source attribution
 - Only review files changed in the PR
 - ALWAYS announce total findings count (N) before presenting the first finding: `"### Total findings to review: N"`
+- **When N==1, skip any gating prompt** — present the single finding directly with header `(1/1) ...`. Do not ask "Review 1 finding?" or similar.
 - Present findings ONE AT A TIME in severity order, ALWAYS showing "(X/N)" progress prefix in EVERY finding header
 - Collect ALL decisions first (Phase 6), then apply ALL approved fixes at once (Phase 8)
 - Coverage verification runs ONLY after all fixes are applied; the convergence loop is opt-in (gated)

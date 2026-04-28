@@ -465,6 +465,8 @@ Security verdict: PASS / FAIL
 
 **BEFORE presenting the first finding:** Announce total findings count prominently: `"### Total findings to review: N"`
 
+**If N==1, skip any confirmation prompt** — present the single finding directly with header `(1/1) ...`. The user already chose to review by invoking the skill.
+
 Process ONE finding at a time, starting from highest severity. Present ALL findings sequentially, collecting the user's decision for each. Do NOT apply any fix during this phase — only collect decisions.
 
 For EACH finding, present with `"(X/N)"` progress prefix in the header:

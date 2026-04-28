@@ -3062,14 +3062,18 @@ All cycle review skills follow this pattern:
    `"(X/N)"` sequence. The user makes ONE decision for the entire group.
 4. Announce total findings count: `"### Total findings to review: N"` (where N reflects
    grouped entries — a group of 5 same-nature findings counts as 1)
-5. Present overview table with severity counts
-6. **Deep research BEFORE presenting each finding** (see research checklist below)
-7. Walk through findings ONE AT A TIME with `"(X/N)"` progress prefix in the header, ordered by severity
+5. **When N==1, skip any confirmation/gating prompt.** Present the single finding immediately
+   with header `(1/1) ...`. Do NOT ask "Review 1 finding?", "Proceed?", "Ready?" or similar —
+   there is no batching/scoping decision to make with a single finding. The user invoked the
+   review skill; presenting the only finding *is* the review.
+6. Present overview table with severity counts
+7. **Deep research BEFORE presenting each finding** (see research checklist below)
+8. Walk through findings ONE AT A TIME with `"(X/N)"` progress prefix in the header, ordered by severity
    (CRITICAL first, then HIGH, MEDIUM, LOW). **ALL findings MUST be presented regardless of
    severity** — the agent NEVER skips, filters, or auto-resolves any finding. The decision to
    fix or skip is ALWAYS the user's. For grouped entries, list all affected files/locations
    within the single presentation.
-8. For each finding: present research-backed analysis + options, collect decision via AskUser.
+9. For each finding: present research-backed analysis + options, collect decision via AskUser.
    **Every AskUser for a finding decision MUST include these options:**
    - One option per proposed solution (Option A, Option B, Option C, etc.)
    - Skip — no action
@@ -3099,7 +3103,7 @@ All cycle review skills follow this pattern:
 
    This scope is enforced by `TestStructuredAskUserScope` in `scripts/test_skill_consistency.py`.
 
-9. **HARD BLOCK — IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds
+10. **HARD BLOCK — IMMEDIATE RESPONSE RULE — If the user selects "Tell me more" OR responds
    with free text (a question, disagreement, or request for clarification):**
    **STOP IMMEDIATELY.** Do NOT continue to the next finding. Do NOT batch the response.
    Research the user's concern RIGHT NOW using `WebSearch`, codebase analysis, or both.
@@ -3113,9 +3117,9 @@ All cycle review skills follow this pattern:
    - "Let me continue with the next finding and come back to this" — NO
    - "I'll research this after the findings loop" — NO
    - "This is noted, moving to the next finding" — NO
-10. After ALL N decisions collected: apply ALL approved fixes (see below)
-11. Run verification (see Verification Timing below)
-12. Present final summary
+11. After ALL N decisions collected: apply ALL approved fixes (see below)
+12. Run verification (see Verification Timing below)
+13. Present final summary
 
 ### Pressure Resistance Patterns
 
