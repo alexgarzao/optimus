@@ -3603,3 +3603,73 @@ class TestProtocolInlineModeMarker:
             "Phase 9 omit-mode violations (inliner did NOT respect omit "
             "for these protocols):\n" + "\n".join(f"  - {v}" for v in violations)
         )
+
+
+# --- Branch name derivation must be inlined as bash, not a placeholder ---
+
+
+class TestBranchNameDerivation:
+    """plan SKILL must inline the canonical Tipo→prefix case statement so
+    runtime agents do not improvise the mapping. Background: a runtime agent
+    that read the prose-only protocol produced `feature/...` worktrees in
+    one run and `feat/...` in another, mixing two paths under .worktrees/."""
+
+    _MAPPING = [
+        ("Feature",  "feat"),
+        ("Fix",      "fix"),
+        ("Refactor", "refactor"),
+        ("Chore",    "chore"),
+        ("Docs",     "docs"),
+        ("Test",     "test"),
+    ]
+
+    def _plan_body(self) -> str:
+        """Return the hand-authored body of plan SKILL.md (without the
+        auto-inlined protocols block)."""
+        content = (REPO_ROOT / "plan" / "skills" / "optimus-plan"
+                   / "SKILL.md").read_text()
+        return content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+
+    def test_plan_inlines_canonical_case_statement(self):
+        """All six Tipo→prefix mappings must appear as bash case-arms in
+        plan SKILL — not just as prose in AGENTS.md."""
+        body = self._plan_body()
+        for tipo, prefix in self._MAPPING:
+            assert f"{tipo})" in body, (
+                f"plan SKILL.md must contain bash case arm '{tipo})' "
+                f"to map Tipo {tipo!r} → prefix {prefix!r}"
+            )
+            assert f'TIPO_PREFIX="{prefix}"' in body, (
+                f"plan SKILL.md must set TIPO_PREFIX={prefix!r} for "
+                f"Tipo {tipo!r}"
+            )
+
+    def test_plan_does_not_use_tipo_prefix_placeholder(self):
+        """The literal '<tipo-prefix>' placeholder must not appear inside
+        a BRANCH_NAME assignment. (It may still appear in the prose
+        description of the branch name format — the guard is specifically
+        about the bash assignment line.)"""
+        body = self._plan_body()
+        for line in body.splitlines():
+            if "BRANCH_NAME=" in line and "<tipo-prefix>" in line:
+                raise AssertionError(
+                    f"plan SKILL.md still has unfilled placeholder "
+                    f"in BRANCH_NAME assignment: {line.strip()!r}"
+                )
+
+    def test_plan_branch_derivation_matches_resume(self):
+        """plan and resume must use the same case statement so worktree
+        paths and resume's branch resolution stay in lockstep."""
+        plan_body = self._plan_body()
+        resume_content = (REPO_ROOT / "resume" / "skills" / "optimus-resume"
+                          / "SKILL.md").read_text()
+        resume_body = resume_content.split(
+            "<!-- INLINE-PROTOCOLS:START -->", 1
+        )[0]
+        # Each (Tipo, prefix) pair must be present in BOTH skills.
+        for tipo, prefix in self._MAPPING:
+            for label, body in (("plan", plan_body), ("resume", resume_body)):
+                assert f"{tipo})" in body and f'TIPO_PREFIX="{prefix}"' in body, (
+                    f"{label} SKILL.md missing canonical case arm "
+                    f"{tipo} → {prefix}"
+                )
