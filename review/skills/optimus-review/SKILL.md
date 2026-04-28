@@ -153,16 +153,16 @@ if [ -z "$TASK_TITLE" ]; then
 fi
 ```
 
-Then execute the title-setter NOW. Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage label `REVIEW`:
+Then execute the title-setter NOW. Mark terminal session — see AGENTS.md Protocol: Terminal Identification. Use stage label `REVIEW`:
 
 ```bash
-_optimus_set_title "optimus: REVIEW $TASK_ID — $TASK_TITLE"
+_optimus_mark_session REVIEW "$TASK_ID" "$TASK_TITLE"
 ```
 
 **On stage completion or exit**, restore the title:
 
 ```bash
-_optimus_set_title ""
+_optimus_clear_session
 ```
 
 ### Step 1.0.8: Validate and Update Task Status

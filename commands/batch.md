@@ -100,7 +100,7 @@ starting the next task.
 
 For each task in the execution order:
 
-Set terminal title — see AGENTS.md Protocol: Terminal Identification. Use stage=`BATCH` and include the current task ID in the title (e.g., `optimus: BATCH T-003 — User Auth JWT`). Update the title each time the task changes.
+Mark terminal session — see AGENTS.md Protocol: Terminal Identification. Use stage=`BATCH` and include the current task ID and title (e.g., `_optimus_mark_session BATCH "T-003" "User Auth JWT"`). Update the marker each time the task changes.
 
 ### Step 2.1: Stage Dispatch
 
@@ -187,7 +187,7 @@ After completing a task (all stages done), re-evaluate the remaining task pool:
 
 ## Phase 3: Batch Summary
 
-After all tasks are processed (or the user stops), restore the terminal title via `_optimus_set_title ""` (see Protocol: Terminal Identification for the function definition):
+After all tasks are processed (or the user stops), restore the terminal session via `_optimus_clear_session` (see Protocol: Terminal Identification for the function definition):
 
 ```markdown
 ## Batch Execution Summary
