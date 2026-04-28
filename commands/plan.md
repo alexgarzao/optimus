@@ -268,7 +268,35 @@ Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelin
 
 **If on the default branch:**
 
-1. **Derive branch name** — see AGENTS.md Protocol: Branch Name Derivation.
+1. **Derive branch name** — see AGENTS.md Protocol: Branch Name Derivation. Apply the canonical case statement below; do NOT improvise from the prose. The mapping is identical to `resume/skills/optimus:resume/SKILL.md:315-326`.
+
+   ```bash
+   # Tipo → branch prefix (canonical mapping, must match resume SKILL).
+   case "$TASK_TIPO" in
+     Feature)   TIPO_PREFIX="feat" ;;
+     Fix)       TIPO_PREFIX="fix" ;;
+     Refactor)  TIPO_PREFIX="refactor" ;;
+     Chore)     TIPO_PREFIX="chore" ;;
+     Docs)      TIPO_PREFIX="docs" ;;
+     Test)      TIPO_PREFIX="test" ;;
+     *)
+       echo "ERROR: Unknown Tipo '$TASK_TIPO' for $TASK_ID — cannot derive branch prefix." >&2
+       exit 1 ;;
+   esac
+   SLUG=$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')
+   KEYWORDS=$(echo "$TASK_TITLE" \
+     | tr '[:upper:]' '[:lower:]' \
+     | tr -c 'a-z0-9-' '-' \
+     | tr -s '-' \
+     | sed 's/^-//; s/-$//')
+   if [ -n "$KEYWORDS" ]; then
+     BRANCH_NAME="${TIPO_PREFIX}/${SLUG}-${KEYWORDS}"
+   else
+     BRANCH_NAME="${TIPO_PREFIX}/${SLUG}"
+   fi
+   # Truncate to 100 chars per AGENTS.md Protocol: Branch Name Derivation.
+   BRANCH_NAME=$(echo "$BRANCH_NAME" | cut -c1-100 | sed 's/-$//')
+   ```
 
 2. **Update state.json:**
    Write status `Validando Spec` and the derived branch name to state.json — see
@@ -285,8 +313,7 @@ Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelin
    fi
    MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
 
-   # BRANCH_NAME must be a real branch name (substituted from Protocol: Branch Name Derivation), not the placeholder.
-   BRANCH_NAME="<tipo-prefix>/<task-id>-<keywords>"
+   # BRANCH_NAME was set above by the canonical case statement (Step 1).
    # Path-traversal guard (defense in depth).
    case "$BRANCH_NAME" in
      *..*|/*) echo "ERROR: refusing unsafe branch '$BRANCH_NAME'." >&2; exit 1 ;;
