@@ -3259,6 +3259,158 @@ class TestSpecSelfHeal:
                 f"{skill_path.parent.parent.name} 'Link existing spec' must explicitly mention symlinks"
             )
 
+    # --- Issue #53: Ring track selection (lightweight vs full) ---
+
+    def test_plan_offers_track_selection(self):
+        """plan SKILL.md must offer BOTH ring:pre-dev-feature AND ring:pre-dev-full
+        inside the Step 1.0.4.5 'Generate via Ring' branch."""
+        body = (REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md").read_text()
+        body = body.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        start = body.find("### Step 1.0.4.5")
+        end = body.find("### Step 1.0.5", start + 1)
+        section = body[start:end] if start >= 0 and end > start else ""
+        assert "ring:pre-dev-feature" in section, (
+            "plan Step 1.0.4.5 must mention ring:pre-dev-feature (lightweight track)"
+        )
+        assert "ring:pre-dev-full" in section, (
+            "plan Step 1.0.4.5 must mention ring:pre-dev-full (full track)"
+        )
+
+    def test_tasks_offers_track_selection(self):
+        """tasks SKILL.md must offer BOTH ring:pre-dev-feature AND ring:pre-dev-full
+        inside the Step 2.3.1 'Generate via Ring' branch."""
+        body = (REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md").read_text()
+        body = body.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        start = body.find("### Step 2.3.1")
+        end = body.find("### Step 2.4", start + 1)
+        section = body[start:end] if start >= 0 and end > start else ""
+        assert "ring:pre-dev-feature" in section, (
+            "tasks Step 2.3.1 must mention ring:pre-dev-feature (lightweight track)"
+        )
+        assert "ring:pre-dev-full" in section, (
+            "tasks Step 2.3.1 must mention ring:pre-dev-full (full track)"
+        )
+
+    def test_import_offers_track_selection(self):
+        """import SKILL.md must offer BOTH ring:pre-dev-feature AND ring:pre-dev-full
+        inside Step 1.6 (covers BOTH 'Generate all via Ring' AND
+        'Generate selectively → Generate via Ring')."""
+        body = (REPO_ROOT / "import" / "skills" / "optimus-import" / "SKILL.md").read_text()
+        body = body.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        start = body.find("### Step 1.6")
+        # Section ends at the next horizontal rule or Phase 2 heading.
+        end_candidates = [
+            body.find("\n---\n", start + 1),
+            body.find("## Phase 2", start + 1),
+        ]
+        end_candidates = [i for i in end_candidates if i > 0]
+        end = min(end_candidates) if end_candidates else -1
+        section = body[start:end] if start >= 0 and end > start else ""
+        assert "ring:pre-dev-feature" in section, (
+            "import Step 1.6 must mention ring:pre-dev-feature (lightweight track)"
+        )
+        assert "ring:pre-dev-full" in section, (
+            "import Step 1.6 must mention ring:pre-dev-full (full track)"
+        )
+
+    def test_track_selection_estimate_table(self):
+        """Each of the 3 SKILLs must mention the Estimate-based default rule
+        (Lightweight + Full + Estimate) within the relevant slice."""
+        slices = [
+            (
+                REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md",
+                "### Step 1.0.4.5",
+                "### Step 1.0.5",
+            ),
+            (
+                REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md",
+                "### Step 2.3.1",
+                "### Step 2.4",
+            ),
+            (
+                REPO_ROOT / "import" / "skills" / "optimus-import" / "SKILL.md",
+                "### Step 1.6",
+                None,  # special: ends at --- or Phase 2
+            ),
+        ]
+        for path, start_marker, end_marker in slices:
+            body = path.read_text().split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            start = body.find(start_marker)
+            if end_marker is None:
+                end_candidates = [
+                    body.find("\n---\n", start + 1),
+                    body.find("## Phase 2", start + 1),
+                ]
+                end_candidates = [i for i in end_candidates if i > 0]
+                end = min(end_candidates) if end_candidates else -1
+            else:
+                end = body.find(end_marker, start + 1)
+            section = body[start:end] if start >= 0 and end > start else ""
+            for needle in ("Lightweight", "Full", "Estimate"):
+                assert needle in section, (
+                    f"{path.parent.parent.name} {start_marker} must mention "
+                    f"'{needle}' as part of the Ring-track Estimate default rule"
+                )
+
+    def test_state_records_ring_track(self):
+        """Each of the 3 SKILLs must reference both `ring_track` AND
+        `Protocol: State Management` within the relevant slice."""
+        slices = [
+            (
+                REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md",
+                "### Step 1.0.4.5",
+                "### Step 1.0.5",
+            ),
+            (
+                REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md",
+                "### Step 2.3.1",
+                "### Step 2.4",
+            ),
+            (
+                REPO_ROOT / "import" / "skills" / "optimus-import" / "SKILL.md",
+                "### Step 1.6",
+                None,
+            ),
+        ]
+        for path, start_marker, end_marker in slices:
+            body = path.read_text().split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            start = body.find(start_marker)
+            if end_marker is None:
+                end_candidates = [
+                    body.find("\n---\n", start + 1),
+                    body.find("## Phase 2", start + 1),
+                ]
+                end_candidates = [i for i in end_candidates if i > 0]
+                end = min(end_candidates) if end_candidates else -1
+            else:
+                end = body.find(end_marker, start + 1)
+            section = body[start:end] if start >= 0 and end > start else ""
+            assert "ring_track" in section, (
+                f"{path.parent.parent.name} {start_marker} must reference 'ring_track' "
+                "(the state.json field for the chosen Ring track)"
+            )
+            assert "Protocol: State Management" in section, (
+                f"{path.parent.parent.name} {start_marker} must reference "
+                "'AGENTS.md Protocol: State Management' for the ring_track write"
+            )
+
+    def test_agents_md_documents_ring_track(self):
+        """AGENTS.md Protocol: State Management section must document `ring_track`
+        and show it in the example JSON."""
+        agents_md = AGENTS_MD.read_text()
+        start = agents_md.find("### Protocol: State Management")
+        assert start > 0, "Protocol: State Management section missing"
+        end = agents_md.find("\n### ", start + 1)
+        section = agents_md[start:end if end > 0 else len(agents_md)]
+        assert "ring_track" in section, (
+            "AGENTS.md Protocol: State Management must document the ring_track field"
+        )
+        # The example JSON must include the field too — assert both the key
+        # and a representative value form (a JSON line like `"ring_track": "feature"`).
+        assert '"ring_track":' in section, (
+            "AGENTS.md Protocol: State Management example JSON must show ring_track"
+        )
+
 
 class TestWorktreeLocationConvention:
     """F-worktrees: All worktree-creation sites use ${MAIN_WORKTREE}/.worktrees/<branch>
