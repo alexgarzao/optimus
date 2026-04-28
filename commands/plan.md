@@ -730,7 +730,7 @@ Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding O
    **AskUser `[topic]` format:** Format: `(X/N) F#-Category`.
    Example: `[topic] (8/12) F8-DeadCode`.
 
-4. Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
+5. Use `AskUser` tool. **BLOCKING**: Do NOT advance to the next finding until the user decides.
    **Every AskUser MUST include these options:**
    - One option per proposed solution (Option A, Option B, Option C, etc.)
    - Skip — no action
@@ -746,7 +746,7 @@ Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding O
    [option] Tell me more
    ```
 
-5. **HARD BLOCK — IMMEDIATE RESPONSE RULE:** If the user selects "Tell me more" or responds
+6. **HARD BLOCK — IMMEDIATE RESPONSE RULE:** If the user selects "Tell me more" or responds
    with free text: **STOP IMMEDIATELY.** Do NOT continue to the next finding. Research and
    answer RIGHT NOW. Only after the user is satisfied, re-present the SAME finding's options.
    **NEVER defer to the end of the findings loop.**
@@ -756,7 +756,7 @@ Present 2-3 options using the format from AGENTS.md "Common Patterns > Finding O
    - "Let me continue with the next finding and come back to this" — NO
    - "I'll research this after the findings loop" — NO
    - "This is noted, moving to the next finding" — NO
-6. **Track all decisions** internally. Do NOT apply any fix yet — all fixes are applied in Phase 4.
+7. **Track all decisions** internally. Do NOT apply any fix yet — all fixes are applied in Phase 4.
 
 ## Phase 4: Apply Approved Corrections
 
