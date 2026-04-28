@@ -367,6 +367,108 @@ the team) — but the repo that versions it depends on `tasksDir`: if `tasksDir`
 the project repo, it is committed alongside the code; if `tasksDir` is in a separate
 repo, it is committed there.
 
+### tasksDir Configuration
+
+`tasksDir` is the root path under which Ring pre-dev artifacts (`optimus-tasks.md`,
+`tasks/`, `subtasks/`) live. It controls **where** the planning tree is found and,
+indirectly, **which git repo** versions it. All stage agents resolve paths via
+`<tasksDir>/<TaskSpec>` — see Protocol: Resolve Tasks Git Scope.
+
+**Three valid layouts** are supported. The same `tasks_git` helper backs all three;
+skills do not need to special-case them.
+
+#### Layout 1 — Same-repo, default path (most common)
+
+`tasksDir` is unset (or set to `docs/pre-dev`). Ring artifacts live inside the project
+repo at `docs/pre-dev/`, are versioned together with the code, and propagate across
+linked worktrees automatically. No `.optimus/config.json` needed.
+
+```
+<project-repo>/
+├── .optimus/                # gitignored — operational state, per-user
+├── docs/
+│   └── pre-dev/             # ← tasksDir (default)
+│       ├── optimus-tasks.md
+│       ├── tasks/
+│       └── subtasks/
+├── src/
+└── README.md
+```
+
+#### Layout 2 — Same-repo, project-internal alias
+
+Use this when a project already has a folder for internal documentation (e.g.
+`internal-docs/`, `planning/`, `_internal/`) and you want Ring artifacts to live
+alongside it instead of under `docs/pre-dev/`. Same versioning semantics as Layout 1
+— the artifacts ship with the project repo. Set `tasksDir` in `.optimus/config.json`:
+
+```json
+{
+  "tasksDir": "internal-docs"
+}
+```
+
+```
+<project-repo>/
+├── .optimus/                # gitignored
+│   └── config.json          # ← {"tasksDir": "internal-docs"}
+├── internal-docs/           # ← tasksDir (project-internal)
+│   ├── optimus-tasks.md
+│   ├── tasks/
+│   ├── subtasks/
+│   └── architecture.md      # other internal docs co-located
+├── src/
+└── README.md
+```
+
+The folder name is unconstrained (any path inside the project repo works). The
+project-internal alias is a pure naming choice: the helper detects it as `same-repo`
+(scope determined by `git rev-parse --show-toplevel` matching the project repo) and
+commits via the project repo's git history.
+
+#### Layout 3 — Cross-repo (separate tasks repo)
+
+Use this when several project repos share a single tasks repo (multi-project portfolio,
+auditing, or compliance separation). `tasksDir` points to a path that resolves into a
+**different** git repo than the project repo. The helper detects `separate-repo` scope
+and runs git commands against the tasks repo via `git -C "$TASKS_DIR"`.
+
+```json
+{
+  "tasksDir": "../tasks-repo/project-alfa"
+}
+```
+
+```
+<workspace>/
+├── project-repo/            # current repo (project code)
+│   ├── .optimus/
+│   │   └── config.json      # ← {"tasksDir": "../tasks-repo/project-alfa"}
+│   ├── src/
+│   └── README.md
+└── tasks-repo/              # separate git repo (Ring artifacts)
+    └── project-alfa/        # ← tasksDir (relative path resolves here)
+        ├── optimus-tasks.md
+        ├── tasks/
+        └── subtasks/
+```
+
+Cross-repo mode requires `python3` (used to compute repo-relative paths during
+`git show origin/<default>:...` operations). The tasks repo's default branch is
+auto-detected; reject any `tasksDir` value beginning with `-` (git option injection).
+
+#### Picking a layout
+
+| Layout | When to use |
+|--------|-------------|
+| 1 — Default same-repo | Default. Simplest. Use unless you have a specific reason. |
+| 2 — Project-internal alias | Project already has a non-`docs/pre-dev/` convention for internal docs. |
+| 3 — Cross-repo | Multiple project repos must share one tasks repo, OR auditing/compliance requires separating task history from code history. |
+
+Renaming the key from `tasksDir` to something domain-specific (e.g. `internalDocsDir`)
+is **out of scope** — the value already accepts any folder name; the key is the same
+across all three layouts to keep tooling simple.
+
 ### Protocol: Resolve Main Worktree Path
 
 <!-- inline-mode: omit -->
