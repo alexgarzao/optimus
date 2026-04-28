@@ -2751,6 +2751,28 @@ as a valid Cancelado-state sentinel; they MUST NOT treat absence of the `branch`
 field as a meaningful state difference. The State Management writer ALWAYS produces
 the full `{status, branch, updated_at}` triple.
 
+**Optional `ring_track` field:**
+Plan, tasks, and import set a `ring_track` field on a task's record when the spec is
+generated via Ring (`ring:pre-dev-feature` → `"feature"`, `ring:pre-dev-full` →
+`"full"`), alongside a `ring_track_recorded_at` timestamp. The field is informational
+only — it is not used to gate any flow today; it preserves the user's track decision
+for future runs and audits. It is set once at spec generation time and is left
+untouched by subsequent state writes. The standard `{status, branch, updated_at}`
+writer does NOT clear it (writes use a merge that preserves unrelated fields when
+the dedicated `ring_track` snippet is used). Example merged record:
+
+```json
+{
+  "T-001": {
+    "status": "Validando Spec",
+    "branch": "feat/t-001-...",
+    "updated_at": "2026-04-28T12:34:56Z",
+    "ring_track": "feature",
+    "ring_track_recorded_at": "2026-04-28T12:30:00Z"
+  }
+}
+```
+
 **state.json is NEVER committed.** It is gitignored. No `git add` or `git commit`
 for state changes.
 
