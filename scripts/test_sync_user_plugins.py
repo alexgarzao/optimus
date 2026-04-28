@@ -349,18 +349,36 @@ class TestOrphanRemoval:
         assert "uninstall orphan@optimus" in log_content
 
 
-class TestScopeConflict:
-    def test_reinstalls_on_scope_conflict(self, tmp_path: Path) -> None:
+class TestForceRefresh:
+    """The Droid branch refreshes existing plugins via uninstall+install.
+
+    Rationale: `droid plugin update` can be a no-op when marketplace.json's
+    `version` field hasn't changed, even when the underlying source files
+    have. Optimus ships SKILL changes without bumping the marketplace version
+    on every PR, so update would leave users on stale cached SKILL.md.
+    Mirrors the fix applied to the Claude branch in PR #44.
+    """
+
+    def test_existing_plugins_are_refreshed_via_uninstall_install(
+        self, tmp_path: Path
+    ) -> None:
         log = tmp_path / "droid.log"
         _create_mock_bin(tmp_path, "droid", _droid_script(
-            log, list_output="alpha@optimus  installed", update_exit=1))
+            log, list_output="alpha@optimus  installed"))
         _create_marketplace(tmp_path, ["alpha"])
         result = _run_sync(tmp_path, exclude_claude=True)
         assert result.returncode == 0
-        assert "reinstalled" in result.stdout.lower()
+        # Output marker confirms refresh path was taken.
+        assert "(refreshed)" in result.stdout.lower()
         log_content = log.read_text()
+        # uninstall happens BEFORE install (force-refresh ordering).
         assert "uninstall alpha@optimus" in log_content
         assert "install alpha@optimus" in log_content
+        assert log_content.find("uninstall alpha@optimus") < log_content.find(
+            "install alpha@optimus"
+        )
+        # `update` is no longer used as the primary path.
+        assert "update alpha@optimus" not in log_content
 
 
 class TestMarketplaceOverride:
@@ -545,7 +563,13 @@ class TestTimeoutWrapper:
 
 
 class TestSerialRetry:
-    def test_retries_transient_update_before_reinstall(self, tmp_path: Path) -> None:
+    def test_retries_transient_install_failure_during_refresh(
+        self, tmp_path: Path
+    ) -> None:
+        """When the parallel uninstall+install pass loses a race for a plugin
+        already in INSTALLED, the serial retry runs the same uninstall+install
+        sequence again. The plugin lands as Updated on success.
+        """
         log = tmp_path / "droid.log"
         state_dir = tmp_path / "state"
         state_dir.mkdir()
@@ -554,16 +578,15 @@ CMD="$1 $2"
 case "$CMD" in
   "plugin marketplace") exit 0 ;;
   "plugin list") echo "alpha@optimus  installed" ;;
-  "plugin update")
-    count_file="{state_dir}/update.count"
+  "plugin uninstall") echo "uninstall $3" >> "{log}"; exit 0 ;;
+  "plugin install")
+    count_file="{state_dir}/install.count"
     count=$(cat "$count_file" 2>/dev/null || echo 0)
     count=$((count + 1))
     echo "$count" > "$count_file"
-    echo "update $3 #$count" >> "{log}"
+    echo "install $3 #$count" >> "{log}"
     if [ "$count" -eq 1 ]; then exit 1; fi
     exit 0 ;;
-  "plugin uninstall") echo "uninstall $3" >> "{log}"; exit 0 ;;
-  "plugin install") echo "install $3" >> "{log}"; exit 0 ;;
   *) echo "unknown: $@" >> "{log}" ;;
 esac
 """
@@ -574,10 +597,11 @@ esac
         assert "Retrying failed plugin operations serially" in result.stdout
         assert "Updated: 1" in result.stdout
         log_content = log.read_text()
-        assert "update alpha@optimus #1" in log_content
-        assert "update alpha@optimus #2" in log_content
-        assert "uninstall alpha@optimus" not in log_content
-        assert "install alpha@optimus" not in log_content
+        # First install attempt (parallel pass) failed; serial retry succeeded.
+        assert "install alpha@optimus #1" in log_content
+        assert "install alpha@optimus #2" in log_content
+        # `update` is no longer part of the refresh path.
+        assert "update alpha@optimus" not in log_content
 
     def test_retries_transient_install_serially(self, tmp_path: Path) -> None:
         log = tmp_path / "droid.log"
