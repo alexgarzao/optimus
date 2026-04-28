@@ -882,25 +882,10 @@ Optimus creates linked git worktrees during the task lifecycle:
 Skills reference this as: "see AGENTS.md Protocol: Worktree Location."
 
 
-### Protocol: optimus-tasks.md Validation (HARD BLOCK)
+### Protocol: optimus-tasks.md Validation (HARD BLOCK) (summarized)
 
-**Referenced by:** all stage agents (1-4), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: optimus-tasks.md Validation (HARD BLOCK)`.**
 
-Every stage agent MUST validate optimus-tasks.md before operating. The full validation rules are
-defined in the "Format Validation" section above (items 1-15). This protocol is the
-executable version:
-
-1. **Resolve paths and git scope:** Execute Protocol: Resolve Tasks Git Scope (below) to
-   resolve `TASKS_DIR`, `TASKS_FILE`, `TASKS_GIT_SCOPE`, and the `tasks_git` helper.
-2. **Find optimus-tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus-import`.
-3. **Validate format:** Execute all 15 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-import`.
-
-**All subsequent references to `optimus-tasks.md` in the skill use the resolved `TASKS_FILE` path.
-All references to Ring pre-dev artifacts use `TASKS_DIR` as the root** — never hardcoded paths.
-**All git operations on optimus-tasks.md use the `tasks_git` helper** (which handles both same-repo
-and separate-repo scopes).
-
-Skills reference this as: "Find and validate optimus-tasks.md (HARD BLOCK) — see AGENTS.md Protocol: optimus-tasks.md Validation."
-
+**Summary:** At Step 1.0.1 of every stage agent: (1) resolve paths via Protocol: Resolve Tasks Git Scope; (2) check `TASKS_FILE` exists, else STOP and suggest `/optimus-import`; (3) run all 15 Format Validation rules, else STOP and suggest `/optimus-import`. HARD BLOCK on any failure. All subsequent skill steps use the resolved `TASKS_FILE` and `tasks_git` helper. See full enumeration in AGENTS.md.
 
 <!-- INLINE-PROTOCOLS:END -->

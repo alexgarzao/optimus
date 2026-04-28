@@ -942,7 +942,11 @@ extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
 Optimus splits its files into two trees:
 
-### Valid Status Values (stored in state.json)
+### Valid Status Values (stored in state.json) (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Valid Status Values (stored in state.json)`.**
+
+**Summary:** state.json status values: `Pendente` (implicit, no entry), `Validando Spec` (plan), `Em Andamento` (build), `Validando Impl` (review), `DONE` (done), `Cancelado` (tasks/done). Administrative ops (Reopen, Advance, Demote, Cancel) require explicit user confirmation. See full table + transitions in AGENTS.md.
 
 Status lives in `.optimus/state.json`, NOT in optimus-tasks.md. A task with no entry in
 state.json is implicitly `Pendente`.
@@ -955,15 +959,6 @@ state.json is implicitly `Pendente`.
 | `Validando Impl` | review | Implementation being reviewed |
 | `DONE` | done | Completed |
 | `Cancelado` | tasks, done | Task abandoned, will not be implemented |
-
-**Administrative status operations** (managed by tasks, not by stage agents):
-- **Reopen:** `DONE` → `Pendente` (remove entry from state.json) or `Em Andamento` (if worktree exists) — when a bug is found after close. Also accepts `Cancelado` → `Pendente` — when a cancellation decision is reversed.
-- **Advance:** move forward one stage — when work was done manually outside the pipeline
-- **Demote:** move backward one stage — when rework is needed after review
-- **Cancel:** any non-terminal → `Cancelado` — task will not be implemented
-
-These operations require explicit user confirmation.
-
 
 ### Task Spec Resolution
 
@@ -1086,45 +1081,11 @@ Every finding must present 2-3 options with this structure:
 - **Very high:** Architectural change, many files, extensive testing, risk of regressions
 
 
-### Protocol: Active Version Guard
+### Protocol: Active Version Guard (summarized)
 
-**Referenced by:** all stage agents (1-4)
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Active Version Guard`.**
 
-After the task ID is confirmed and dependencies are validated, check if the task belongs
-to the `Ativa` version. If not, present options before proceeding.
-
-1. Read the task's **Version** column from `optimus-tasks.md`
-2. Read the **Versions** table and find the version with Status `Ativa`
-   - **If no version has Status `Ativa`** → **STOP**: "No active version found in the Versions table. Run `/optimus-tasks` to set a version as Ativa before proceeding."
-3. **If the task's version matches the `Ativa` version** → proceed silently
-4. **If the task's version does NOT match the `Ativa` version** → present via `AskUser`:
-   ```
-   Task T-XXX is in version '<task_version>' (<version_status>),
-   but the active version is '<active_version>'.
-   To execute this task, it must be moved to the active version first.
-   ```
-   Options:
-   - **Move to active version and continue** — updates the Version column to the active version, commits, and proceeds
-   - **Cancel** — stops execution
-
-5. **If "Move to active version and continue":**
-   - Update the task's Version column in `optimus-tasks.md` to the `Ativa` version name
-   - Commit using `tasks_git` so the change lands in the correct repo (same-repo or
-     separate-repo, as resolved by Protocol: Resolve Tasks Git Scope):
-     ```bash
-     tasks_git add "$TASKS_GIT_REL"
-     COMMIT_MSG_FILE=$(mktemp -t optimus.XXXXXX) || { echo "ERROR: mktemp failed" >&2; exit 1; }
-     chmod 600 "$COMMIT_MSG_FILE"
-     printf '%s' "chore(tasks): move T-XXX to active version <active_version>" > "$COMMIT_MSG_FILE"
-     tasks_git commit -F "$COMMIT_MSG_FILE"
-     rm -f "$COMMIT_MSG_FILE"
-     ```
-   - Proceed with the stage
-
-6. **If "Cancel":** **STOP** — do not proceed with the stage
-
-Skills reference this as: "Check active version guard — see AGENTS.md Protocol: Active Version Guard."
-
+**Summary:** After task ID/deps confirmed, check the task's Version against the Versions table. If no version is `Ativa` → STOP. If task version matches `Ativa` → proceed silently. Otherwise present `AskUser` with two options: "Move to active version and continue" (updates Version column, commits via `tasks_git`) or "Cancel" (STOP). HARD BLOCK forces explicit version transition before mutating optimus-tasks.md. See full commit recipe in AGENTS.md.
 
 ### Protocol: All-Dependencies-Cancelled Resolution (summarized)
 
@@ -1281,37 +1242,11 @@ Skills reference this as: "Increment stage stats — see AGENTS.md Protocol: Inc
 
 **Summary:** Per-droid quality dimensions that review/pr-check/deep-review/coderabbit-review/plan/build skills MUST include in their agent prompts beyond the core review domain. Examples: code-reviewer adds resilience/concurrency/cognitive-complexity/error-handling checks; security-reviewer adds PII/error-response-leakage/rate-limiting/secrets; test-reviewer adds effectiveness/false-positive-risk/spec-traceability; nil-safety adds channel/map/slice safety; consequences adds backward-compat/migration-path/event-contract; dead-code adds zombie test infrastructure and stale feature flags; qa-analyst adds testability/operational-readiness; frontend adds UX states/accessibility/i18n; backend adds graceful-shutdown/context-propagation/structured-logging. Skills reference this when building specialist droid prompts so agents review uniformly. See full per-droid lists in AGENTS.md.
 
-### Protocol: Project Rules Discovery
+### Protocol: Project Rules Discovery (summarized)
 
-**Referenced by:** stages 1-4, deep-review, coderabbit-review
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Project Rules Discovery`.**
 
-Every skill that reviews, validates, or generates code MUST search for project rules
-and AI instruction files before starting. Search for these files in order and read ALL
-that exist:
-
-```
-AGENTS.md                    # Primary agent instructions
-CLAUDE.md                    # Claude-specific rules
-DROIDS.md                    # Droid-specific rules
-.cursorrules                 # Cursor-specific rules
-PROJECT_RULES.md             # Coding standards (root or docs/)
-docs/PROJECT_RULES.md
-.editorconfig                # Editor formatting rules
-docs/coding-standards.md     # Explicit coding conventions
-docs/conventions.md
-.github/CONTRIBUTING.md      # Contribution guidelines
-CONTRIBUTING.md
-.eslintrc*                   # Linter configs (implicit rules)
-biome.json
-.golangci.yml
-.prettierrc*
-```
-
-If NONE exist, warn the user. If any are found, they become the source of truth
-for coding standards and must be passed to every dispatched sub-agent.
-
-Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Project Rules Discovery."
-
+**Summary:** Every reviewing/validating/generating skill MUST scan for project conventions before starting. Search the canonical list (AGENTS.md, CLAUDE.md, DROIDS.md, .cursorrules, PROJECT_RULES.md, .editorconfig, coding-standards.md, CONTRIBUTING.md, linter configs like .eslintrc/biome.json/.golangci.yml/.prettierrc) and read ALL that exist. If none exist, warn the user. Discovered files become the authoritative source of truth and MUST be passed to every dispatched sub-agent. See full file list in AGENTS.md.
 
 ### Protocol: Push Commits (optional) (summarized)
 
@@ -1395,45 +1330,11 @@ Skills reference this as: "Execute re-run guard — see AGENTS.md Protocol: Re-r
 
 **Summary:** Resolve `MAIN_WORKTREE` once via `git worktree list --porcelain | awk '/^worktree / {print $2; exit}'` with `${MAIN_WORKTREE:?…}` defensive guard. Use `${MAIN_WORKTREE}/.optimus/...` for ALL `.optimus/` paths (gitignored, so doesn't propagate across linked worktrees). See full recipe in AGENTS.md.
 
-### Protocol: Ring Droid Requirement Check
+### Protocol: Ring Droid Requirement Check (summarized)
 
-**Referenced by:** review, deep-doc-review, coderabbit-review, plan, build
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Ring Droid Requirement Check`.**
 
-Before dispatching ring droids, verify the required droids are available. If any required
-droid is not installed, **STOP** and list missing droids.
-
-**Core review droids** (required by review, pr-check, deep-review, coderabbit-review):
-- `ring-default-code-reviewer`
-- `ring-default-business-logic-reviewer`
-- `ring-default-security-reviewer`
-- `ring-default-ring-test-reviewer`
-
-**Extended review droids** (required by review, pr-check, deep-review, coderabbit-review):
-- `ring-default-ring-nil-safety-reviewer`
-- `ring-default-ring-consequences-reviewer`
-- `ring-default-ring-dead-code-reviewer`
-
-**QA droids** (required by review, deep-review, build):
-- `ring-dev-team-qa-analyst`
-
-**Documentation droids** (required by deep-doc-review):
-- `ring-tw-team-docs-reviewer`
-- `ring-default-business-logic-reviewer`
-- `ring-default-code-reviewer`
-
-**Implementation droids** (required by build):
-- `ring-dev-team-backend-engineer-golang` (Go)
-- `ring-dev-team-backend-engineer-typescript` (TypeScript)
-- `ring-dev-team-frontend-engineer` (React/Next.js)
-
-**Spec validation droids** (required by plan):
-- `ring-default-business-logic-reviewer`
-- `ring-default-security-reviewer`
-- `ring-dev-team-qa-analyst`
-- `ring-default-code-reviewer`
-
-Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check."
-
+**Summary:** Before dispatching, verify required ring droids are installed; if any missing, STOP and list them. Roster requirements vary by skill: Core review (`code-reviewer`, `business-logic-reviewer`, `security-reviewer`, `ring-test-reviewer`); Extended review (`nil-safety-reviewer`, `consequences-reviewer`, `dead-code-reviewer`); QA (`qa-analyst`); Docs (`docs-reviewer`); Implementation (`backend-engineer-golang`/`-typescript`, `frontend-engineer`); Spec validation droids for plan. See full per-skill roster in AGENTS.md.
 
 ### Protocol: Session State (summarized)
 
@@ -1541,25 +1442,10 @@ Optimus creates linked git worktrees during the task lifecycle:
 Skills reference this as: "see AGENTS.md Protocol: Worktree Location."
 
 
-### Protocol: optimus-tasks.md Validation (HARD BLOCK)
+### Protocol: optimus-tasks.md Validation (HARD BLOCK) (summarized)
 
-**Referenced by:** all stage agents (1-4), tasks, batch. Note: resolve performs inline format validation in its own Step 4.2.
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: optimus-tasks.md Validation (HARD BLOCK)`.**
 
-Every stage agent MUST validate optimus-tasks.md before operating. The full validation rules are
-defined in the "Format Validation" section above (items 1-15). This protocol is the
-executable version:
-
-1. **Resolve paths and git scope:** Execute Protocol: Resolve Tasks Git Scope (below) to
-   resolve `TASKS_DIR`, `TASKS_FILE`, `TASKS_GIT_SCOPE`, and the `tasks_git` helper.
-2. **Find optimus-tasks.md:** Check if `TASKS_FILE` exists. If not found, **STOP** and suggest `/optimus-import`.
-3. **Validate format:** Execute all 15 validation checks from the "Format Validation" section. If the format marker is missing or any check fails, **STOP** and suggest `/optimus-import`.
-
-**All subsequent references to `optimus-tasks.md` in the skill use the resolved `TASKS_FILE` path.
-All references to Ring pre-dev artifacts use `TASKS_DIR` as the root** — never hardcoded paths.
-**All git operations on optimus-tasks.md use the `tasks_git` helper** (which handles both same-repo
-and separate-repo scopes).
-
-Skills reference this as: "Find and validate optimus-tasks.md (HARD BLOCK) — see AGENTS.md Protocol: optimus-tasks.md Validation."
-
+**Summary:** At Step 1.0.1 of every stage agent: (1) resolve paths via Protocol: Resolve Tasks Git Scope; (2) check `TASKS_FILE` exists, else STOP and suggest `/optimus-import`; (3) run all 15 Format Validation rules, else STOP and suggest `/optimus-import`. HARD BLOCK on any failure. All subsequent skill steps use the resolved `TASKS_FILE` and `tasks_git` helper. See full enumeration in AGENTS.md.
 
 <!-- INLINE-PROTOCOLS:END -->
