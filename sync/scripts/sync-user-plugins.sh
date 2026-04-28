@@ -343,13 +343,22 @@ _sync_droid() {
     done <<< "$new_plugins"
   fi
 
-  # Update existing plugins (parallel)
+  # Refresh existing plugins (parallel) via uninstall+install.
+  #
+  # NOTE: We do NOT call `droid plugin update` here. Optimus ships SKILL prose
+  # changes without bumping marketplace.json's `version` field on every PR;
+  # `droid plugin update` can be a no-op in that case (mirrors the bug fixed
+  # for Claude in PR #44). Uninstall + reinstall guarantees a fresh fetch
+  # from the marketplace cache so the user gets the latest committed prose.
+  # Cost: one extra round-trip per plugin (~1s); acceptable since the outer
+  # loop runs in parallel.
   if [ -n "$existing_plugins" ]; then
-    echo "Updating existing plugins..."
+    echo "Refreshing existing plugins..."
     while IFS= read -r plugin; do
       [ -z "$plugin" ] && continue
       (
-        if _droid plugin update "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
+        _droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1 || true
+        if _droid plugin install "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
           echo "OK" > "$results_dir/update-${plugin}"
         else
           echo "RETRY" > "$results_dir/update-${plugin}"
@@ -398,15 +407,14 @@ _sync_droid() {
   fi
 
   if [ -n "$retry_updates" ]; then
+    # Serial retry of the uninstall+install refresh path. The parallel pass
+    # may have lost a race (e.g. plugin daemon contention); doing it serially
+    # gives each plugin a clean shot.
     while IFS= read -r plugin; do
       [ -z "$plugin" ] && continue
-      if _droid plugin update "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
-        echo "OK" > "$results_dir/update-${plugin}"
-        continue
-      fi
       _droid plugin uninstall "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1 || true
       if _droid plugin install "${plugin}@${MARKETPLACE_NAME}" >/dev/null 2>&1; then
-        echo "REINSTALLED" > "$results_dir/update-${plugin}"
+        echo "OK" > "$results_dir/update-${plugin}"
       else
         echo "FAIL" > "$results_dir/update-${plugin}"
       fi
@@ -449,8 +457,7 @@ _sync_droid() {
       [ -z "$plugin" ] && continue
       result=$(_read_result "$results_dir/update-${plugin}")
       case "$result" in
-        OK)          echo "  * $plugin ... OK";            updated=$((updated + 1)) ;;
-        REINSTALLED) echo "  * $plugin ... OK (reinstalled)"; updated=$((updated + 1)) ;;
+        OK)          echo "  * $plugin ... OK (refreshed)"; updated=$((updated + 1)) ;;
         *)           echo "  * $plugin ... FAIL";           failed=$((failed + 1)) ;;
       esac
     done <<< "$existing_plugins"
