@@ -457,32 +457,6 @@ do NOT commit it (it's gitignored).
 The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
-### File Location (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> File Location`.**
-
-**Summary:** Defines where Optimus operational files live: `${MAIN_WORKTREE}/.optimus/{state.json, stats.json, sessions/, reports/, logs/}` (gitignored, per-user) vs `<tasksDir>/optimus:tasks.md` + `<tasksDir>/{tasks,subtasks}/` (versioned, project-team-shared, propagated by git). Also: `${MAIN_WORKTREE}/.gitignore` (versioned), `${MAIN_WORKTREE}/.worktrees/` (gitignored linked-worktree dir). Critical contract: `.optimus/*` paths NEVER propagate across linked worktrees (gitignored = not shared by `git worktree add`); use `${MAIN_WORKTREE}/` prefix consistently. See full table in AGENTS.md.
-
-Optimus splits its files into two trees:
-
-### Valid Status Values (stored in state.json) (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Valid Status Values (stored in state.json)`.**
-
-**Summary:** state.json status values: `Pendente` (implicit, no entry), `Validando Spec` (plan), `Em Andamento` (build), `Validando Impl` (review), `DONE` (done), `Cancelado` (tasks/done). Administrative ops (Reopen, Advance, Demote, Cancel) require explicit user confirmation. See full table + transitions in AGENTS.md.
-
-Status lives in `.optimus/state.json`, NOT in optimus-tasks.md. A task with no entry in
-state.json is implicitly `Pendente`.
-
-| Status | Set by | Meaning |
-|--------|--------|---------|
-| `Pendente` | Initial (implicit) | Not started — no entry in state.json |
-| `Validando Spec` | plan | Spec being validated |
-| `Em Andamento` | build | Implementation in progress |
-| `Validando Impl` | review | Implementation being reviewed |
-| `DONE` | done | Completed |
-| `Cancelado` | tasks, done | Task abandoned, will not be implemented |
-
 ### Task Spec Resolution
 
 Every task SHOULD have a Ring pre-dev reference in the `TaskSpec` column. Tasks may be created with `TaskSpec=-` (deferred); the next `/optimus:plan` run will offer to generate or link a spec. Stage agents
@@ -497,29 +471,5 @@ Agents read objective and acceptance criteria directly from the Ring source file
 The optimus-tasks.md table only tracks structural data (dependencies, versions, priorities)
 — it does NOT duplicate content from Ring.
 
-
-### Protocol: Initialize .optimus Directory (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Initialize .optimus Directory`.**
-
-**Summary:** Create `${MAIN_WORKTREE}/.optimus/{sessions,reports,logs}/` with `mkdir -p`. Add `# optimus-operational-files` and `# optimus-operational-worktrees` markers to `${MAIN_WORKTREE}/.gitignore` idempotently (grep-anchor before append). Refuse symlinked `.gitignore`. Auto-prune `.optimus/logs/` (30 days, 500 files). See full recipe in AGENTS.md.
-
-### Protocol: Resolve Main Worktree Path (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Resolve Main Worktree Path`.**
-
-**Summary:** Resolve `MAIN_WORKTREE` once via `git worktree list --porcelain | awk '/^worktree / {print $2; exit}'` with `${MAIN_WORKTREE:?…}` defensive guard. Use `${MAIN_WORKTREE}/.optimus/...` for ALL `.optimus/` paths (gitignored, so doesn't propagate across linked worktrees). See full recipe in AGENTS.md.
-
-### Protocol: State Management (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: State Management`.**
-
-**Summary:** Read/write/delete entries in `${MAIN_WORKTREE}/.optimus/state.json` with `jq`. Schema: `{task_id: {status, branch, updated_at}}`. Status values: `Pendente | Validando Spec | Em Andamento | Validando Impl | DONE | Cancelado`. All writes use `jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" '.[$id] = {...}'` (injection-safe), with a tmp-file + `jq empty` validation step before `mv` to guarantee atomicity. Cancelado entries keep `branch: ""` (empty string, NOT absent — readers must treat both as Cancelado-state). Corrupted state.json is removed and treated as empty (reconciliation via worktree scan). state.json is gitignored; never committed. See full recipe in AGENTS.md for jq templates and reconciliation steps.
-
-### Protocol: TaskSpec Resolution (summarized)
-
-> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: TaskSpec Resolution`.**
-
-**Summary:** Resolves the full path to a task's Ring pre-dev spec file by combining `<TASKS_DIR>` with the task's `TaskSpec` column from `optimus-tasks.md`. If `TaskSpec` is `-`, STOPs with a hint to run `/optimus:plan T-XXX`. HARD BLOCK on path traversal: resolves via `realpath -m` (or python3 `os.path.realpath` fallback) and rejects any result outside `$TASKS_DIR_ABS`. Also rejects symlinks (TOCTOU defence: realpath dereferences transparently, so a post-`-L` check guarantees no symlink in the final path). `TASKS_DIR` itself must be a valid git repo (enforced upstream by Resolve Tasks Git Scope) but is no longer required to live under `PROJECT_ROOT` — separate-repo scope is supported. Subtasks live at `<TASKS_DIR>/subtasks/T-NNN/`. See full recipe in AGENTS.md.
 
 <!-- INLINE-PROTOCOLS:END -->

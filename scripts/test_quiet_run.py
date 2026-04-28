@@ -423,22 +423,30 @@ class TestQuietRunAdoption:
         )
 
     def test_helper_inlined_into_consumer_skills(self):
-        # Phase 2 of issue #34: Quiet Command Execution carries the
-        # `<!-- inline-mode: summarize -->` marker, so consumers receive a
-        # summary STUB (not the full helper body). The helper body lives
-        # ONLY in AGENTS.md as the single source of truth — agents look it
-        # up via the stub's "Full recipe at AGENTS.md -> ..." pointer.
-        #
-        # Detect the summarize mode at runtime so this test adapts to the
-        # source-of-truth without needing manual updates.
+        # Phase 2 of issue #34 marked Quiet Command Execution as
+        # `<!-- inline-mode: summarize -->` (stub pointer in consumers).
+        # Phase 9 promoted it to `<!-- inline-mode: omit -->` (no inlined
+        # content at all — body code references AGENTS.md directly). Detect
+        # the active mode at runtime so this test adapts without manual
+        # updates as inline modes evolve.
         section = _extract_protocol_section("Protocol: Quiet Command Execution")
-        summarized = "<!-- inline-mode: summarize -->" in section
+        marker_re = re.compile(
+            r"<!--\s*inline-mode:\s*(summarize|omit)\s*-->"
+        )
+        m = marker_re.search(section)
+        mode = m.group(1) if m else None
 
         missing = []
         for skill in HELPER_ADOPTERS:
             content = _read_skill(skill)
-            if summarized:
-                # In summarize mode, require the stub pointer (not the body).
+            if mode == "omit":
+                # Phase 9+: no inlined block; require the body to reference
+                # the protocol so agents can find it on demand.
+                if "AGENTS.md Protocol: Quiet Command Execution" not in content:
+                    # Allow the shorter alias used in older bodies.
+                    if "Protocol: Quiet Command Execution" not in content:
+                        missing.append(skill)
+            elif mode == "summarize":
                 if (
                     "Protocol: Quiet Command Execution (summarized)" not in content
                     and "AGENTS.md -> Protocol: Quiet Command Execution" not in content
@@ -447,18 +455,16 @@ class TestQuietRunAdoption:
             else:
                 if "_optimus_quiet_run()" not in content:
                     missing.append(skill)
-        if summarized:
-            assert missing == [], (
-                "Skills declared as Quiet Command Execution adopters but missing "
-                "the summary stub pointer (run inline-protocols.py):\n"
-                + "\n".join(f"  - {m}" for m in missing)
-            )
-        else:
-            assert missing == [], (
-                "Skills declared as Quiet Command Execution adopters but missing "
-                "_optimus_quiet_run() helper body (run inline-protocols.py):\n"
-                + "\n".join(f"  - {m}" for m in missing)
-            )
+        label = {
+            "omit": "AGENTS.md back-reference (Phase 9 omit mode)",
+            "summarize": "summary stub pointer",
+            None: "_optimus_quiet_run() helper body",
+        }[mode]
+        assert missing == [], (
+            f"Skills declared as Quiet Command Execution adopters but "
+            f"missing {label} (run inline-protocols.py):\n"
+            + "\n".join(f"  - {m}" for m in missing)
+        )
 
     def test_referenced_by_field_lists_all_adopters(self):
         section = _extract_protocol_section("Protocol: Quiet Command Execution")

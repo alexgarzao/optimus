@@ -139,13 +139,20 @@ SKILL or an alias to keep the Claude side in sync. Tests in
 `scripts/test_skill_consistency.py` (class `TestClaudeCommandsSync`) enforce
 that the script was run before commit.
 
-**Phase 1 of inline-protocol bloat reduction (issue #34):** The top three
-most-duplicated protocols (`Resolve Main Worktree Path`, `Session State`,
-`Initialize .optimus Directory`) now propagate as terse summaries instead
-of full-body inlines. SKILL.md sizes are reduced significantly across all
-stage skills. Run `make inline-stats` for current numbers, or pass
-`--no-summarize` to `scripts/inline-protocols.py` for full-body inlining
-during diagnostics.
+**Inline-protocol bloat reduction (issue #34, Phases 1-9):** Most shared
+protocols are now omit-mode — the inliner emits nothing for them in
+consumer SKILLs. AGENTS.md is the runtime reference: skill bodies cite
+protocols via `see AGENTS.md Protocol: X` and the agent reads AGENTS.md
+on demand. Net effect: total inlined LOC across all SKILLs dropped from
+~13,238 (full-body baseline) to a few hundred lines (Phase 9 final state)
+while preserving full protocol depth in AGENTS.md.
+
+The inliner supports three modes per protocol via markers placed
+immediately under the heading: full body (no marker), `<!-- inline-mode:
+summarize -->` (5-10 line stub from a `**Summary:**` block), and
+`<!-- inline-mode: omit -->` (nothing). Run `make inline-stats` for
+current numbers. Diagnostic flags: `--no-summarize` (force full body for
+ALL marked protocols), `--no-omit` (treat omit as summarize for that run).
 
 Future improvements are tracked in `docs/future-improvements.md`.
 

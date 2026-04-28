@@ -49,6 +49,23 @@ def _all_doc_files():
     return [f for f in files if f.exists()]
 
 
+# Mode-agnostic regex for inline-mode markers (issue #34, Phases 1-9).
+# Matches either `<!-- inline-mode: summarize -->` or `<!-- inline-mode: omit -->`.
+# Defined at module level so multiple test classes can share one definition.
+INLINE_MODE_MARKER_RE = re.compile(
+    r"<!--\s*inline-mode:\s*(summarize|omit)\s*-->"
+)
+
+
+def _find_inline_mode_marker(window: str):
+    """Return (start_index, mode) for the first inline-mode marker in the
+    window, or (-1, None) if none. Used by per-section presence tests."""
+    m = INLINE_MODE_MARKER_RE.search(window)
+    if not m:
+        return -1, None
+    return m.start(), m.group(1)
+
+
 # --- AskUser topic format must include (X/N) progress prefix ---
 
 TOPIC_FORMAT_RE = re.compile(
@@ -328,28 +345,42 @@ class TestTerminalTitleFormat:
         discard OSC 0/1/2 title updates. AppleScript `set name of session` is
         the only channel that reliably mutates session.name in that scenario.
 
-        Phase 3 of issue #34 marks `Protocol: Terminal Identification` as
-        summarize-mode, so the AppleScript body no longer appears verbatim in
-        each consuming SKILL.md — only the `**Summary:**` stub does. When the
-        marker is present, we instead assert the inlined block carries the
-        stub pointer ("(summarized)" + the AGENTS.md back-ref); the full body
-        is single-sourced in AGENTS.md and the source-of-truth coverage is
-        provided by TestProtocolSummarizeMarker. Falls back to verbatim
-        assertion if Phase 4+ unmarks the protocol.
+        Phase 3 of issue #34 marked `Protocol: Terminal Identification` as
+        summarize-mode (stub pointer in consumers). Phase 9 promoted it to
+        omit-mode (no inlined content at all — body code references AGENTS.md
+        directly). This test detects the active mode and asserts the
+        appropriate invariant for each:
+
+          * full-body mode (no marker): osascript body must appear verbatim.
+          * summarize mode: stub pointer `(summarized)` must appear.
+          * omit mode (Phase 9+): SKILL body must reference the protocol via
+            `AGENTS.md Protocol: Terminal Identification` so the agent knows
+            to consult AGENTS.md on demand.
+
+        The source-of-truth coverage (marker presence) is handled by
+        TestProtocolInlineModeMarker.
         """
         agents_text = AGENTS_MD.read_text()
-        # Detect summarize-mode by inspecting AGENTS.md (single source of truth).
         proto_idx = agents_text.find("### Protocol: Terminal Identification")
         proto_window = (
             agents_text[proto_idx: proto_idx + 600] if proto_idx >= 0 else ""
         )
-        is_summarized = "<!-- inline-mode: summarize -->" in proto_window
+        marker_match = INLINE_MODE_MARKER_RE.search(proto_window)
+        mode = marker_match.group(1) if marker_match else None
+
         missing = []
         for skill in TITLE_SKILLS:
             content = _read_skill(skill)
-            if is_summarized:
-                # After Phase 3 summarize, expect the stub pointer in the
-                # inlined block instead of the full body.
+            if mode == "omit":
+                # Phase 9+: no inlined block, body must reference AGENTS.md
+                # so the agent can find the protocol on demand.
+                if (
+                    "AGENTS.md Protocol: Terminal Identification"
+                    not in content
+                ):
+                    missing.append(skill)
+            elif mode == "summarize":
+                # Phase 3-8: stub pointer in the inlined block.
                 if (
                     "Protocol: Terminal Identification (summarized)"
                     not in content
@@ -364,17 +395,15 @@ class TestTerminalTitleFormat:
                     or "set name of s to" not in content
                 ):
                     missing.append(skill)
-        if is_summarized:
-            assert missing == [], (
-                "Skills missing summarized Terminal Identification stub "
-                "pointer (expected '(summarized)' + AGENTS.md back-ref):\n"
-                + "\n".join(f"  - {v}" for v in missing)
-            )
-        else:
-            assert missing == [], (
-                "Skills missing AppleScript Layer A (osascript set name of s):\n"
-                + "\n".join(f"  - {v}" for v in missing)
-            )
+        label = {
+            "omit": "AGENTS.md back-reference (Phase 9 omit mode)",
+            "summarize": "summarized stub pointer",
+            None: "AppleScript Layer A (osascript set name of s)",
+        }[mode]
+        assert missing == [], (
+            f"Skills missing Terminal Identification {label}:\n"
+            + "\n".join(f"  - {v}" for v in missing)
+        )
 
 # --- Finding presentation: Tell me more, IMMEDIATE RESPONSE RULE, anti-rationalization ---
 
@@ -1032,24 +1061,45 @@ class TestTasksDirLocation:
 
     def test_all_tasks_touching_skills_resolve_scope(self):
         """Every skill that reads or writes optimus-tasks.md must reference Protocol:
-        Resolve Tasks Git Scope (directly or via optimus-tasks.md Validation)."""
+        Resolve Tasks Git Scope (directly or via optimus-tasks.md Validation).
+
+        Phase 9 of issue #34 made Resolve Tasks Git Scope omit-mode (no
+        inlined body). The body reference (`AGENTS.md Protocol: Resolve
+        Tasks Git Scope` or `AGENTS.md Protocol: optimus-tasks.md Validation`)
+        is the canonical signal — the inliner no longer emits an inlined
+        `### Protocol: Resolve Tasks Git Scope` heading.
+        """
         missing = []
         for skill in SKILLS_THAT_TOUCH_TASKS:
             paths = list(REPO_ROOT.glob(f"{skill}/skills/*/SKILL.md"))
             if not paths:
                 continue
             content = paths[0].read_text()
-            # The inlined block OR body should contain the protocol; check whole file.
-            if "Protocol: Resolve Tasks Git Scope" not in content:
+            # Either direct reference or transitive (Validation depends on
+            # Resolve Tasks Git Scope) is acceptable.
+            if (
+                "Protocol: Resolve Tasks Git Scope" not in content
+                and "Protocol: optimus-tasks.md Validation" not in content
+            ):
                 missing.append(skill)
         assert missing == [], (
-            "Skills missing Resolve Tasks Git Scope reference:\n"
-            + "\n".join(f"  - {v}" for v in missing)
+            "Skills missing Resolve Tasks Git Scope reference (or its "
+            "Validation alias):\n" + "\n".join(f"  - {v}" for v in missing)
         )
 
-    def test_tasks_git_helper_inlined_in_stage_skills(self):
-        """Stage skills (plan, build, review, done) and batch/resolve/tasks MUST
-        have the tasks_git() helper inlined so they can run git commands uniformly."""
+    def test_tasks_git_helper_referenced_in_stage_skills(self):
+        """Stage skills (plan, build, review, done) and batch/resolve/tasks/resume
+        MUST reference the tasks_git() helper.
+
+        Phase 9 of issue #34 made Resolve Tasks Git Scope omit-mode, so the
+        helper's bash definition is no longer inlined into each consumer.
+        The invariant relaxes from "definition appears" to "the helper is
+        referenced by name in body code OR is defined inline" — bodies that
+        invoke `tasks_git <verb> ...` still need to know the helper exists,
+        which they signal by either (a) defining it themselves, (b) calling
+        it (presence of token `tasks_git`), or (c) carrying the protocol
+        reference (`AGENTS.md Protocol: Resolve Tasks Git Scope`).
+        """
         required = ["plan", "build", "review", "done", "batch", "resolve", "tasks", "resume"]
         missing = []
         for skill in required:
@@ -1057,10 +1107,17 @@ class TestTasksDirLocation:
             if not paths:
                 continue
             content = paths[0].read_text()
-            if not TASKS_GIT_HELPER_RE.search(content):
+            has_definition = bool(TASKS_GIT_HELPER_RE.search(content))
+            has_invocation = "tasks_git" in content
+            has_protocol_ref = (
+                "Protocol: Resolve Tasks Git Scope" in content
+                or "Protocol: optimus-tasks.md Validation" in content
+            )
+            if not (has_definition or has_invocation or has_protocol_ref):
                 missing.append(skill)
         assert missing == [], (
-            "Skills missing tasks_git() helper definition:\n"
+            "Skills missing tasks_git() helper signal (definition, "
+            "invocation, or protocol reference):\n"
             + "\n".join(f"  - {v}" for v in missing)
         )
 
@@ -1747,28 +1804,53 @@ class TestInlineProtocolsFoundational:
 
     def test_discover_review_droids_inlined_in_consumers(self):
         """Both pr-check and deep-review must reference Protocol: Discover Review
-        Droids in their body AND have it inlined in their <!-- INLINE-PROTOCOLS -->
-        block. Catches regressions where inline-protocols.py silently fails to
-        sync due to reference-format drift.
+        Droids in their body. The inlined-block check adapts to the protocol's
+        current inline-mode (Phase 9 of issue #34 made it omit-mode, so the
+        heading no longer appears in the consumer's <!-- INLINE-PROTOCOLS -->
+        block).
+
+        Catches regressions where inline-protocols.py silently fails to sync
+        due to reference-format drift (body reference without inliner pickup).
         """
         consumers = [
             "pr-check/skills/optimus-pr-check/SKILL.md",
             "deep-review/skills/optimus-deep-review/SKILL.md",
         ]
+        # Detect the protocol's inline-mode so the assertions adapt.
+        agents = AGENTS_MD.read_text()
+        proto_idx = agents.find("### Protocol: Discover Review Droids")
+        proto_window = agents[proto_idx: proto_idx + 600] if proto_idx >= 0 else ""
+        marker_match = INLINE_MODE_MARKER_RE.search(proto_window)
+        mode = marker_match.group(1) if marker_match else None
+
         missing_body = []
         missing_inlined = []
         for rel in consumers:
             path = REPO_ROOT / rel
             content = path.read_text()
-            # Body reference
+            # Body reference must always be present — the inliner's regex
+            # matches against this exact phrasing.
             if "Protocol: Discover Review Droids" not in content:
                 missing_body.append(rel)
-            # Inlined block (between markers)
+            if mode == "omit":
+                # Phase 9: nothing should be inlined. The body reference
+                # alone is the sync signal.
+                continue
+            # Pre-Phase-9 modes inline either a full body or a stub.
             m = re.search(
                 r"<!-- INLINE-PROTOCOLS:START -->(.*?)<!-- INLINE-PROTOCOLS:END -->",
                 content, re.DOTALL,
             )
-            if not m or "### Protocol: Discover Review Droids" not in m.group(1):
+            if not m:
+                missing_inlined.append(rel)
+                continue
+            inlined = m.group(1)
+            expected = (
+                "### Protocol: Discover Review Droids (summarized)"
+                if mode == "summarize"
+                else "### Protocol: Discover Review Droids"
+            )
+            if expected not in inlined:
                 missing_inlined.append(rel)
         assert not missing_body, (
             f"Skills reference Protocol: Discover Review Droids in body but it's "
@@ -1776,7 +1858,7 @@ class TestInlineProtocolsFoundational:
         )
         assert not missing_inlined, (
             f"Skills reference Protocol: Discover Review Droids but it's NOT "
-            f"inlined in their <!-- INLINE-PROTOCOLS --> block: {missing_inlined}. "
+            f"inlined as expected (mode={mode}): {missing_inlined}. "
             f"Likely cause: scripts/inline-protocols.py regex did not match the "
             f"reference syntax. Re-run the syncer and inspect."
         )
@@ -3127,7 +3209,7 @@ class TestSpecSelfHeal:
         finally:
             sys.path.pop(0)
 
-        agents_sections, _summaries = inline_protocols.parse_agents_md()
+        agents_sections, _summaries, _modes = inline_protocols.parse_agents_md()
         violations = []
         for path in _all_skill_files():
             # Use the inliner's body-only extraction to skip the inlined block.
@@ -3275,14 +3357,25 @@ class TestWorktreeLocationConvention:
         assert violations == [], "\n".join(violations)
 
 
-# --- Phases 1+2+3 of issue #34: top duplicated protocols carry the
-# `<!-- inline-mode: summarize -->` marker AND a `**Summary:**` subsection
-# in AGENTS.md. The inliner reads both at runtime; this test guards the
-# source-of-truth so the marker can't be dropped without flipping a test.
+# --- Phases 1-9 of issue #34: top duplicated protocols carry an
+# `<!-- inline-mode: (summarize|omit) -->` marker AND a `**Summary:**`
+# subsection in AGENTS.md. The inliner reads both at runtime; this test
+# guards the source-of-truth so the marker can't be dropped without
+# flipping a test.
+#
+# `INLINE_MODE_MARKER_RE` and `_find_inline_mode_marker` are defined at
+# module level (above) so this class and TestTerminalTitleFormat can
+# share the matcher without duplicating it.
 
-class TestProtocolSummarizeMarker:
-    """Phases 1+2+3+4+5+6+7 of issue #34: Verify the top-duplicated protocols
-    carry the <!-- inline-mode: summarize --> marker in AGENTS.md."""
+
+class TestProtocolInlineModeMarker:
+    """Phases 1+2+3+4+5+6+7+8+9 of issue #34: Verify the top-duplicated
+    protocols carry an inline-mode marker (summarize OR omit) in AGENTS.md.
+
+    Phase 9 converted all summarize markers to omit. The class was renamed
+    from TestProtocolSummarizeMarker; the tests now match either marker via
+    INLINE_MODE_MARKER_RE so a future revert to summarize mode (or any new
+    mode) won't require test churn."""
 
     # Protocols carrying the standard `### Protocol: <name>` heading.
     # File Location, Format Validation, Finding Presentation, and Valid
@@ -3330,7 +3423,7 @@ class TestProtocolSummarizeMarker:
         # tested via test_summarize_marker_present_for_dry_run_mode_section.
     ]
 
-    def test_summarize_marker_present_for_top_protocols(self):
+    def test_inline_mode_marker_present_for_top_protocols(self):
         content = AGENTS_MD.read_text()
         for proto in self.SUMMARIZED_PROTOCOLS:
             heading = f"### Protocol: {proto}"
@@ -3338,16 +3431,17 @@ class TestProtocolSummarizeMarker:
             assert idx >= 0, f"{heading} missing from AGENTS.md"
             # Check the next 600 chars for the marker AND a Summary subsection.
             window = content[idx: idx + 600]
-            assert "<!-- inline-mode: summarize -->" in window, (
-                f"{proto}: missing <!-- inline-mode: summarize --> marker "
-                "(must be placed immediately under the heading)"
+            marker_idx, mode = _find_inline_mode_marker(window)
+            assert marker_idx >= 0, (
+                f"{proto}: missing <!-- inline-mode: (summarize|omit) --> "
+                "marker (must be placed immediately under the heading)"
             )
             assert "**Summary:**" in window, (
-                f"{proto}: missing **Summary:** subsection "
-                "(must follow the summarize marker)"
+                f"{proto}: missing **Summary:** subsection (must follow the "
+                f"inline-mode marker; current mode={mode})"
             )
 
-    def test_summarize_marker_implies_marker_appears_first(self):
+    def test_inline_mode_marker_implies_marker_appears_first(self):
         """Marker must precede any other prose in the protocol body so
         parse_agents_md sees it before falling through to full-body
         inlining heuristics."""
@@ -3356,189 +3450,156 @@ class TestProtocolSummarizeMarker:
             heading = f"### Protocol: {proto}"
             idx = content.find(heading)
             window = content[idx: idx + 600]
-            # The marker MUST appear before the first `**Summary:**` (and
-            # also before the first `**Referenced by:**` if present).
-            marker_idx = window.find("<!-- inline-mode: summarize -->")
+            marker_idx, _ = _find_inline_mode_marker(window)
             summary_idx = window.find("**Summary:**")
             assert marker_idx < summary_idx, (
                 f"{proto}: marker must come before **Summary:** "
                 f"(marker={marker_idx}, summary={summary_idx})"
             )
 
-    def test_summarize_marker_present_for_file_location_section(self):
+    def test_inline_mode_marker_present_for_file_location_section(self):
         """Phase 3: the `### File Location` section (a non-`Protocol:` H3)
-        also carries the summarize marker. We special-case it because the
+        also carries the inline-mode marker. We special-case it because the
         inliner's heading-detection is structure-agnostic (any H2/H3 can
-        be summarized) but the SUMMARIZED_PROTOCOLS list is keyed by
+        be marked) but the SUMMARIZED_PROTOCOLS list is keyed by
         `Protocol: <name>` form. This test guards the source-of-truth for
         File Location specifically."""
-        content = AGENTS_MD.read_text()
-        heading = "### File Location"
-        idx = content.find(heading)
-        assert idx >= 0, f"{heading} missing from AGENTS.md"
-        window = content[idx: idx + 1200]
-        marker_idx = window.find("<!-- inline-mode: summarize -->")
-        summary_idx = window.find("**Summary:**")
-        assert marker_idx >= 0, (
-            "File Location: missing <!-- inline-mode: summarize --> marker "
-            "(must be placed immediately under the heading)"
-        )
-        assert summary_idx >= 0, (
-            "File Location: missing **Summary:** subsection "
-            "(must follow the summarize marker)"
-        )
-        assert marker_idx < summary_idx, (
-            "File Location: marker must come before **Summary:** "
-            f"(marker={marker_idx}, summary={summary_idx})"
-        )
+        self._assert_section_has_marker("### File Location", window_size=1200)
 
-    def test_summarize_marker_present_for_format_validation_section(self):
+    def test_inline_mode_marker_present_for_format_validation_section(self):
         """Phase 4: the `### Format Validation` section (a non-`Protocol:` H3
         nested under `## optimus-tasks.md Format Specification`) also carries
-        the summarize marker. Same rationale as File Location — the inliner
+        the inline-mode marker. Same rationale as File Location — the inliner
         accepts any H2/H3 but the SUMMARIZED_PROTOCOLS list only enumerates
         `Protocol: <name>` headings, so this section is guarded explicitly."""
-        content = AGENTS_MD.read_text()
-        heading = "### Format Validation"
-        idx = content.find(heading)
-        assert idx >= 0, f"{heading} missing from AGENTS.md"
-        window = content[idx: idx + 1500]
-        marker_idx = window.find("<!-- inline-mode: summarize -->")
-        summary_idx = window.find("**Summary:**")
-        assert marker_idx >= 0, (
-            "Format Validation: missing <!-- inline-mode: summarize --> marker "
-            "(must be placed immediately under the heading)"
-        )
-        assert summary_idx >= 0, (
-            "Format Validation: missing **Summary:** subsection "
-            "(must follow the summarize marker)"
-        )
-        assert marker_idx < summary_idx, (
-            "Format Validation: marker must come before **Summary:** "
-            f"(marker={marker_idx}, summary={summary_idx})"
-        )
+        self._assert_section_has_marker("### Format Validation")
 
-    def test_summarize_marker_present_for_finding_presentation_section(self):
+    def test_inline_mode_marker_present_for_finding_presentation_section(self):
         """Phase 4: the `### Finding Presentation (Unified Model)` section (a
-        non-`Protocol:` H3) also carries the summarize marker. Same rationale
+        non-`Protocol:` H3) also carries the inline-mode marker. Same rationale
         as File Location and Format Validation — the inliner accepts any H2/H3
         but the SUMMARIZED_PROTOCOLS list is keyed by `Protocol: <name>` form,
         so this section is guarded explicitly."""
-        content = AGENTS_MD.read_text()
-        heading = "### Finding Presentation (Unified Model)"
-        idx = content.find(heading)
-        assert idx >= 0, f"{heading} missing from AGENTS.md"
-        window = content[idx: idx + 1500]
-        marker_idx = window.find("<!-- inline-mode: summarize -->")
-        summary_idx = window.find("**Summary:**")
-        assert marker_idx >= 0, (
-            "Finding Presentation: missing <!-- inline-mode: summarize --> "
-            "marker (must be placed immediately under the heading)"
-        )
-        assert summary_idx >= 0, (
-            "Finding Presentation: missing **Summary:** subsection "
-            "(must follow the summarize marker)"
-        )
-        assert marker_idx < summary_idx, (
-            "Finding Presentation: marker must come before **Summary:** "
-            f"(marker={marker_idx}, summary={summary_idx})"
+        self._assert_section_has_marker(
+            "### Finding Presentation (Unified Model)"
         )
 
-    def test_summarize_marker_present_for_valid_status_values_section(self):
+    def test_inline_mode_marker_present_for_valid_status_values_section(self):
         """Phase 7: the `### Valid Status Values (stored in state.json)`
         section (a non-`Protocol:` H3 nested under the Status section) also
-        carries the summarize marker. Same rationale as File Location, Format
+        carries the inline-mode marker. Same rationale as File Location, Format
         Validation, and Finding Presentation — the inliner accepts any H2/H3
         but the SUMMARIZED_PROTOCOLS list is keyed by `Protocol: <name>` form,
         so this section is guarded explicitly."""
-        content = AGENTS_MD.read_text()
-        heading = "### Valid Status Values (stored in state.json)"
-        idx = content.find(heading)
-        assert idx >= 0, f"{heading} missing from AGENTS.md"
-        window = content[idx: idx + 1500]
-        marker_idx = window.find("<!-- inline-mode: summarize -->")
-        summary_idx = window.find("**Summary:**")
-        assert marker_idx >= 0, (
-            "Valid Status Values: missing <!-- inline-mode: summarize --> "
-            "marker (must be placed immediately under the heading)"
-        )
-        assert summary_idx >= 0, (
-            "Valid Status Values: missing **Summary:** subsection "
-            "(must follow the summarize marker)"
-        )
-        assert marker_idx < summary_idx, (
-            "Valid Status Values: marker must come before **Summary:** "
-            f"(marker={marker_idx}, summary={summary_idx})"
+        self._assert_section_has_marker(
+            "### Valid Status Values (stored in state.json)"
         )
 
-    def test_summarize_marker_present_for_dry_run_mode_section(self):
+    def test_inline_mode_marker_present_for_dry_run_mode_section(self):
         """Phase 8: the `## Protocol: Dry-Run Mode` section is an H2 (not H3)
         Protocol: heading — the `SUMMARIZED_PROTOCOLS` list assumes `### Protocol:`,
         so Dry-Run Mode is guarded explicitly here."""
-        content = AGENTS_MD.read_text()
-        heading = "## Protocol: Dry-Run Mode"
-        idx = content.find(heading)
-        assert idx >= 0, f"{heading} missing from AGENTS.md"
-        window = content[idx: idx + 1500]
-        marker_idx = window.find("<!-- inline-mode: summarize -->")
-        summary_idx = window.find("**Summary:**")
-        assert marker_idx >= 0, (
-            "Dry-Run Mode: missing <!-- inline-mode: summarize --> marker "
-            "(must be placed immediately under the heading)"
-        )
-        assert summary_idx >= 0, (
-            "Dry-Run Mode: missing **Summary:** subsection "
-            "(must follow the summarize marker)"
-        )
-        assert marker_idx < summary_idx, (
-            "Dry-Run Mode: marker must come before **Summary:** "
-            f"(marker={marker_idx}, summary={summary_idx})"
-        )
+        self._assert_section_has_marker("## Protocol: Dry-Run Mode")
 
-    def test_summarize_marker_present_for_deep_research_section(self):
+    def test_inline_mode_marker_present_for_deep_research_section(self):
         """Phase 8: the `### Deep Research Before Presenting (MANDATORY for cycle
         review skills)` section is a non-`Protocol:` H3 — guarded explicitly,
         same rationale as File Location / Finding Presentation / etc."""
-        content = AGENTS_MD.read_text()
-        heading = "### Deep Research Before Presenting (MANDATORY for cycle review skills)"
-        idx = content.find(heading)
-        assert idx >= 0, f"{heading} missing from AGENTS.md"
-        window = content[idx: idx + 1500]
-        marker_idx = window.find("<!-- inline-mode: summarize -->")
-        summary_idx = window.find("**Summary:**")
-        assert marker_idx >= 0, (
-            "Deep Research Before Presenting: missing <!-- inline-mode: summarize "
-            "--> marker (must be placed immediately under the heading)"
-        )
-        assert summary_idx >= 0, (
-            "Deep Research Before Presenting: missing **Summary:** subsection "
-            "(must follow the summarize marker)"
-        )
-        assert marker_idx < summary_idx, (
-            "Deep Research Before Presenting: marker must come before **Summary:** "
-            f"(marker={marker_idx}, summary={summary_idx})"
+        self._assert_section_has_marker(
+            "### Deep Research Before Presenting "
+            "(MANDATORY for cycle review skills)"
         )
 
-    def test_summarize_marker_present_for_fix_implementation_section(self):
+    def test_inline_mode_marker_present_for_fix_implementation_section(self):
         """Phase 8: the `### Fix Implementation (Complexity-Based Dispatch)`
         section is a non-`Protocol:` H3 — guarded explicitly, same rationale
         as File Location / Finding Presentation / etc."""
+        self._assert_section_has_marker(
+            "### Fix Implementation (Complexity-Based Dispatch)"
+        )
+
+    # --- helpers --------------------------------------------------------
+
+    def _assert_section_has_marker(
+        self, heading: str, *, window_size: int = 1500
+    ) -> None:
+        """Common assertion body for the per-section presence tests.
+
+        Refactored from per-section duplication after Phase 9 (the
+        substring `<!-- inline-mode: summarize -->` was replaced by a
+        regex match for either marker — the duplicated bodies were
+        rewritten and folded into this helper)."""
         content = AGENTS_MD.read_text()
-        heading = "### Fix Implementation (Complexity-Based Dispatch)"
         idx = content.find(heading)
         assert idx >= 0, f"{heading} missing from AGENTS.md"
-        window = content[idx: idx + 1500]
-        marker_idx = window.find("<!-- inline-mode: summarize -->")
+        window = content[idx: idx + window_size]
+        marker_idx, mode = _find_inline_mode_marker(window)
         summary_idx = window.find("**Summary:**")
+        section_label = heading.lstrip("#").strip()
         assert marker_idx >= 0, (
-            "Fix Implementation: missing <!-- inline-mode: summarize --> marker "
-            "(must be placed immediately under the heading)"
+            f"{section_label}: missing <!-- inline-mode: (summarize|omit) "
+            "--> marker (must be placed immediately under the heading)"
         )
         assert summary_idx >= 0, (
-            "Fix Implementation: missing **Summary:** subsection "
-            "(must follow the summarize marker)"
+            f"{section_label}: missing **Summary:** subsection (must "
+            f"follow the inline-mode marker; current mode={mode})"
         )
         assert marker_idx < summary_idx, (
-            "Fix Implementation: marker must come before **Summary:** "
+            f"{section_label}: marker must come before **Summary:** "
             f"(marker={marker_idx}, summary={summary_idx})"
+        )
+
+    def test_omit_mode_protocols_emit_no_stub_in_consumers(self):
+        """Phase 9 invariant: protocols carrying the omit marker MUST NOT
+        appear as `### Protocol: X (summarized)` headings in any consumer
+        SKILL.md — proves that the inliner respected omit mode (no body,
+        no stub, no header)."""
+        # Parse AGENTS.md to find which protocols are omit-marked.
+        import sys
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        try:
+            inline_protocols = __import__("inline-protocols")
+        finally:
+            sys.path.pop(0)
+        _sections, _summaries, modes = inline_protocols.parse_agents_md()
+        omit_keys = sorted(k for k, m in modes.items() if m == "omit")
+        assert omit_keys, (
+            "Phase 9 contract: at least one protocol must carry the "
+            "<!-- inline-mode: omit --> marker"
+        )
+
+        violations = []
+        for skill in _all_skill_files():
+            content = skill.read_text()
+            for key in omit_keys:
+                # The summarize-stub heading form is `### {key} (summarized)`.
+                # If we see it for an omit-marked protocol, the inliner
+                # silently fell back to summarize mode — that's a bug.
+                stub_heading = f"### {key} (summarized)"
+                if stub_heading in content:
+                    rel = skill.relative_to(REPO_ROOT)
+                    violations.append(f"{rel}: contains '{stub_heading}'")
+                # The full-body heading form (no '(summarized)' suffix) MAY
+                # legitimately appear as a body reference such as
+                # `see AGENTS.md Protocol: X` — that's a body reference,
+                # not the inlined block. We check the inlined block range
+                # explicitly to avoid false positives from prose.
+                m = re.search(
+                    r"<!-- INLINE-PROTOCOLS:START -->(.*?)"
+                    r"<!-- INLINE-PROTOCOLS:END -->",
+                    content, re.DOTALL,
+                )
+                if not m:
+                    continue
+                inlined = m.group(1)
+                full_heading = f"### {key}"
+                if full_heading in inlined:
+                    rel = skill.relative_to(REPO_ROOT)
+                    violations.append(
+                        f"{rel}: omit-marked '{key}' appears as full-body "
+                        "heading inside <!-- INLINE-PROTOCOLS --> block"
+                    )
+        assert violations == [], (
+            "Phase 9 omit-mode violations (inliner did NOT respect omit "
+            "for these protocols):\n" + "\n".join(f"  - {v}" for v in violations)
         )

@@ -8,14 +8,26 @@ Skills reference "see AGENTS.md Protocol: X" but agents can't find AGENTS.md.
 Solution: Append only the referenced protocols/patterns to each SKILL.md,
 making each plugin self-contained.
 
-Phase 1 of issue #34 (inline-protocol bloat reduction):
-Protocols carrying `<!-- inline-mode: summarize -->` immediately under their
-heading propagate as a 5-10 line stub (their `**Summary:**` block) instead of
-the full body. Pass `--no-summarize` to fall back to full-body inlining.
+Phases 1-9 of issue #34 (inline-protocol bloat reduction):
+Protocols may carry one of two inline-mode markers immediately under their
+heading:
+
+  * `<!-- inline-mode: summarize -->` — emit a 5-10 line stub (the
+    protocol's `**Summary:**` subsection) in consumer SKILLs instead of
+    the full body.
+  * `<!-- inline-mode: omit -->` (Phase 9) — emit NOTHING in consumer
+    SKILLs (no body, no stub, no header). Consumer SKILLs reference the
+    protocol via body code (`see AGENTS.md Protocol: X`); the agent
+    reads AGENTS.md on demand. Most aggressive token-reduction mode.
+
+Pass `--no-summarize` to fall back to full-body inlining for ALL marked
+protocols (both summarize and omit). Pass `--no-omit` for selective
+testing that disables only omit mode.
 
 Usage:
-    python3 scripts/inline-protocols.py             # summarize mode (default)
-    python3 scripts/inline-protocols.py --no-summarize
+    python3 scripts/inline-protocols.py             # honor markers (default)
+    python3 scripts/inline-protocols.py --no-summarize  # full body for all
+    python3 scripts/inline-protocols.py --no-omit       # treat omit as full body
     python3 scripts/inline-protocols.py --stats-only
 """
 from __future__ import annotations
@@ -30,6 +42,11 @@ AGENTS_MD = REPO_ROOT / "AGENTS.md"
 MARKER_START = "<!-- INLINE-PROTOCOLS:START -->"
 MARKER_END = "<!-- INLINE-PROTOCOLS:END -->"
 SUMMARIZE_MARKER = "<!-- inline-mode: summarize -->"
+OMIT_MARKER = "<!-- inline-mode: omit -->"
+# Regex matching either marker on a line by itself (used by parser + tests).
+INLINE_MODE_MARKER_RE = re.compile(
+    r'^\s*<!--\s*inline-mode:\s*(summarize|omit)\s*-->\s*$'
+)
 SUMMARY_PREFIX = "**Summary:**"
 # Max file size (5 MB) — prevents hanging on bloated or corrupted inputs.
 MAX_FILE_SIZE = 5 * 1024 * 1024
@@ -105,13 +122,19 @@ def _extract_summary(body: str) -> str | None:
     return summary or None
 
 
-def parse_agents_md() -> tuple[dict[str, str], dict[str, str]]:
+def parse_agents_md() -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
     """Parse AGENTS.md into named sections keyed by heading text.
 
-    Returns a `(sections, summaries)` pair:
+    Returns a `(sections, summaries, modes)` triple:
       * `sections[heading] = full body` for every H2/H3 heading.
-      * `summaries[heading] = summary text` only for protocols carrying the
-        `<!-- inline-mode: summarize -->` marker AND a `**Summary:**` block.
+      * `summaries[heading] = summary text` only for protocols carrying
+        either inline-mode marker AND a `**Summary:**` block. Summaries
+        remain available for omit-mode protocols too — they preserve the
+        documentation depth in AGENTS.md and let a future revert to
+        summarize mode work without a content rewrite.
+      * `modes[heading] = "summarize" | "omit"` only for protocols that
+        carry one of the markers. Headings with no marker are absent from
+        this dict (consumers default to full-body inlining).
     """
     if not AGENTS_MD.exists():
         print(f"ERROR: {AGENTS_MD} not found. Run from repo root.", file=sys.stderr)
@@ -126,9 +149,23 @@ def parse_agents_md() -> tuple[dict[str, str], dict[str, str]]:
     lines = AGENTS_MD.read_text().splitlines()
     sections: dict[str, str] = {}
     summaries: dict[str, str] = {}
+    modes: dict[str, str] = {}
     seen: set[str] = set()
     current_key = None
     current_lines: list[str] = []
+
+    def _detect_mode(body_lines: list[str]) -> str | None:
+        """Return 'summarize' / 'omit' / None for a protocol body.
+
+        Match on the regex (line-anchored) so prose mentions in backticks
+        or inline code don't count — that prevents the meta-doc in
+        `## Editing Rules` from marking itself.
+        """
+        for line in body_lines:
+            m = INLINE_MODE_MARKER_RE.match(line)
+            if m:
+                return m.group(1)
+        return None
 
     def _flush(key: str, body_lines: list[str]) -> None:
         # Warn on duplicate headings — last one wins, which can silently
@@ -144,24 +181,26 @@ def parse_agents_md() -> tuple[dict[str, str], dict[str, str]]:
         seen.add(key)
         body = "\n".join(body_lines)
         sections[key] = body
-        # Detect summarize mode: the marker MUST appear on a line by itself
-        # (after whitespace strip). Prose mentions in backticks/inline-code
-        # don't count — that prevents the meta-doc in `## Editing Rules`
-        # from accidentally marking itself.
-        marker_present = any(
-            line.strip() == SUMMARIZE_MARKER for line in body_lines
-        )
-        # Missing summary while marker is present (and we're sure the
-        # marker is a real marker) is a SOURCE-OF-TRUTH bug — warn.
-        if marker_present:
+        mode = _detect_mode(body_lines)
+        if mode is not None:
+            modes[key] = mode
+            # Summaries are still extracted for both summarize and omit
+            # modes — omit mode doesn't need the summary at runtime, but
+            # extracting it preserves the source-of-truth structure and
+            # makes a future revert to summarize mode trivially safe.
             summary = _extract_summary(body)
             if summary is None:
-                print(
-                    f"  WARNING: '{key}' carries {SUMMARIZE_MARKER} but "
-                    "no **Summary:** subsection found — falling back to "
-                    "full-body inlining for this protocol",
-                    file=sys.stderr,
-                )
+                # Missing summary is only a hard problem for summarize
+                # mode (where the stub IS the summary). For omit mode it
+                # is benign — emit a softer notice so authors know the
+                # documentation block is missing without forcing fallback.
+                if mode == "summarize":
+                    print(
+                        f"  WARNING: '{key}' carries {SUMMARIZE_MARKER} but "
+                        "no **Summary:** subsection found — falling back to "
+                        "full-body inlining for this protocol",
+                        file=sys.stderr,
+                    )
             else:
                 summaries[key] = summary
 
@@ -179,7 +218,7 @@ def parse_agents_md() -> tuple[dict[str, str], dict[str, str]]:
     if current_key:
         _flush(current_key, current_lines)
 
-    return sections, summaries
+    return sections, summaries, modes
 
 
 def extract_refs_from_content(content: str) -> set[str]:
@@ -335,6 +374,7 @@ def _build_summary_stub(key: str, summary: str) -> str:
 def inline_protocols(
     *,
     summarize: bool = True,
+    omit: bool = True,
     stats_only: bool = False,
 ) -> dict | None:
     """Main: inline referenced protocols into each SKILL.md.
@@ -343,19 +383,35 @@ def inline_protocols(
     ----------
     summarize:
         When True (default), protocols carrying `<!-- inline-mode: summarize -->`
-        propagate as their `**Summary:**` stub instead of the full body.
+        propagate as their `**Summary:**` stub instead of the full body. When
+        False, summarize-marked protocols inline the full body. Disabling
+        summarize ALSO forces omit-marked protocols to full body — `summarize`
+        is the master switch (legacy semantics preserved for `--no-summarize`).
+    omit:
+        When True (default), protocols carrying `<!-- inline-mode: omit -->`
+        emit nothing in consumer SKILLs (no body, no stub, no header). When
+        False, omit-marked protocols fall back to the next-most-aggressive
+        mode that's enabled — summarize stub if `summarize=True`, otherwise
+        full body. Useful for diagnostic runs that want to see what the stub
+        would have looked like without globally reverting omit mode.
     stats_only:
         When True, no files are written. Returns a stats dict for callers
         (e.g., `make inline-stats`) to render a table.
     """
-    sections, summaries = parse_agents_md()
+    sections, summaries, modes = parse_agents_md()
     print(f"Parsed {len(sections)} sections from AGENTS.md", file=sys.stderr)
-    if summaries:
+    if modes:
+        summarize_keys = sorted(k for k, m in modes.items() if m == "summarize")
+        omit_keys = sorted(k for k, m in modes.items() if m == "omit")
         print(
-            f"  {len(summaries)} carry summarize markers: "
-            f"{sorted(summaries)}",
+            f"  {len(modes)} carry inline-mode markers: "
+            f"{len(summarize_keys)} summarize, {len(omit_keys)} omit",
             file=sys.stderr,
         )
+        if summarize_keys:
+            print(f"    summarize: {summarize_keys}", file=sys.stderr)
+        if omit_keys:
+            print(f"    omit: {omit_keys}", file=sys.stderr)
 
     # Also include some foundational sections that provide context
     # for protocol references (e.g., State Management references state.json format)
@@ -504,17 +560,49 @@ def inline_protocols(
         inline_parts.append("extracted from the Optimus AGENTS.md to make this plugin self-contained.")
         inline_parts.append("")
 
-        # Track which protocols got summarized vs full-bodied for this skill,
-        # plus the lines saved by summarization (for both stats and the
+        # Track which protocols got summarized vs full-bodied vs omitted
+        # for this skill, plus the lines saved (for both stats and the
         # per-skill log line below).
         summarized_count = 0
         full_count = 0
+        omitted_count = 0
         lines_saved = 0
 
+        def _resolve_mode(key: str) -> str:
+            """Determine effective mode for a protocol given current flags.
+
+            Returns 'omit' / 'summarize' / 'full'. Marker-less protocols
+            always resolve to 'full'. The flags `summarize` and `omit`
+            cascade: if the requested mode is disabled, fall back to the
+            next-most-aggressive mode that IS enabled.
+            """
+            mode = modes.get(key)
+            if mode == "omit":
+                if omit:
+                    return "omit"
+                # Omit disabled — fall through to summarize if enabled.
+                if summarize and key in summaries:
+                    return "summarize"
+                return "full"
+            if mode == "summarize":
+                if summarize and key in summaries:
+                    return "summarize"
+                return "full"
+            return "full"
+
         def _emit(key: str, full_text: str) -> None:
-            """Append either summary stub or full body for `key`."""
-            nonlocal summarized_count, full_count, lines_saved
-            if summarize and key in summaries:
+            """Append summary stub, full body, or nothing for `key`."""
+            nonlocal summarized_count, full_count, omitted_count, lines_saved
+            effective = _resolve_mode(key)
+            if effective == "omit":
+                # Phase 9: emit absolutely nothing for this protocol — no
+                # heading, no stub, no body. Consumer SKILLs reference it
+                # via body code; the agent reads AGENTS.md on demand.
+                omitted_count += 1
+                full_lines = full_text.count("\n") + 1 if full_text else 0
+                lines_saved += full_lines
+                return
+            if effective == "summarize":
                 stub = _build_summary_stub(key, summaries[key])
                 inline_parts.append(stub)
                 summarized_count += 1
@@ -561,16 +649,26 @@ def inline_protocols(
             "body": body_lines,
             "summarized": summarized_count,
             "full": full_count,
+            "omitted": omitted_count,
             "lines_saved": lines_saved,
         })
         # The "before summarize" estimate sums full-body line counts for ALL
-        # inlined keys; "after" sums summary lines for keys with a summary
-        # plus full lines for the rest (= what the skill currently emits).
+        # inlined keys; "after" sums summary lines for keys with a summary,
+        # zero for omitted keys, and full lines for the rest (= what the
+        # skill currently emits with current flags).
         for key in inlined_keys:
             full_text = sections_to_inline.get(key) or extra.get(key) or ""
             full_len = full_text.count("\n") + 1 if full_text else 0
             pre_summarize_total += full_len
-            if summarize and key in summaries:
+            mode = modes.get(key)
+            if mode == "omit" and omit:
+                # Omit emits zero lines for this protocol.
+                continue
+            if mode == "omit" and not omit and summarize and key in summaries:
+                stub_text = _build_summary_stub(key, summaries[key])
+                post_summarize_total += stub_text.count("\n") + 1
+                continue
+            if mode == "summarize" and summarize and key in summaries:
                 stub_text = _build_summary_stub(key, summaries[key])
                 post_summarize_total += stub_text.count("\n") + 1
             else:
@@ -598,8 +696,9 @@ def inline_protocols(
             print(
                 f"  [stats-only] {plugin_name}: would inline "
                 f"{len(sections_to_inline)} protocols "
-                f"({summarized_count} summarized, {full_count} full) + "
-                f"{len(extra)} foundational, {lines_saved} lines saved via summarize"
+                f"({omitted_count} omitted, {summarized_count} summarized, "
+                f"{full_count} full) + {len(extra)} foundational, "
+                f"{lines_saved} lines saved"
             )
             continue
 
@@ -634,9 +733,10 @@ def inline_protocols(
         total_inlined += 1
         print(
             f"  {plugin_name}: inlined {len(sections_to_inline)} protocols "
-            f"({summarized_count} summarized, {full_count} full) + "
-            f"{len(extra)} foundational, {lines_saved} lines saved via "
-            f"summarize ({len(refs)} refs, {len(unmatched)} unmatched)"
+            f"({omitted_count} omitted, {summarized_count} summarized, "
+            f"{full_count} full) + {len(extra)} foundational, "
+            f"{lines_saved} lines saved ({len(refs)} refs, "
+            f"{len(unmatched)} unmatched)"
         )
         if unmatched:
             for u in unmatched:
@@ -644,13 +744,15 @@ def inline_protocols(
 
     if stats_only:
         _render_stats(per_skill, protocol_consumers, protocol_lines,
-                      pre_summarize_total, post_summarize_total, summarize)
+                      pre_summarize_total, post_summarize_total,
+                      summarize, omit)
         return {
             "per_skill": per_skill,
             "protocol_consumers": protocol_consumers,
             "protocol_lines": protocol_lines,
             "pre_summarize_total": pre_summarize_total,
             "post_summarize_total": post_summarize_total,
+            "modes": modes,
         }
 
     print(f"\nDone. Inlined protocols into {total_inlined} SKILL.md files.")
@@ -664,19 +766,25 @@ def _render_stats(
     pre_summarize_total: int,
     post_summarize_total: int,
     summarize: bool,
+    omit: bool,
 ) -> None:
     """Pretty-print the stats table to stdout (for `make inline-stats`)."""
     print()
     print("Per-skill inlining stats")
-    print("-" * 72)
-    header = f"{'Skill':<24} {'Total LOC':>10} {'Inlined LOC':>12} {'Body LOC':>10} {'Inline %':>9}"
+    print("-" * 88)
+    header = (
+        f"{'Skill':<24} {'Total LOC':>10} {'Inlined LOC':>12} "
+        f"{'Body LOC':>10} {'Inline %':>9} {'Full':>5} {'Sum':>5} {'Omit':>5}"
+    )
     print(header)
-    print("-" * 72)
+    print("-" * 88)
     for row in sorted(per_skill, key=lambda r: -r["inlined"]):
         pct = (row["inlined"] / row["total"] * 100) if row["total"] else 0
         print(
             f"{row['plugin']:<24} {row['total']:>10} "
-            f"{row['inlined']:>12} {row['body']:>10} {pct:>8.0f}%"
+            f"{row['inlined']:>12} {row['body']:>10} {pct:>8.0f}% "
+            f"{row.get('full', 0):>5} {row.get('summarized', 0):>5} "
+            f"{row.get('omitted', 0):>5}"
         )
     print()
     print("Duplication summary (by protocol)")
@@ -695,18 +803,37 @@ def _render_stats(
     print()
     print("Estimated total inlined LOC")
     print("-" * 72)
-    print(f"  Before summarize: {pre_summarize_total} LOC across {len(per_skill)} SKILLs")
-    if summarize and pre_summarize_total:
+    print(
+        f"  Before any mode  : {pre_summarize_total} LOC across "
+        f"{len(per_skill)} SKILLs (full-body baseline)"
+    )
+    flag_label = (
+        "summarize+omit" if (summarize and omit)
+        else "summarize-only" if summarize
+        else "omit-only" if omit
+        else "disabled"
+    )
+    if pre_summarize_total and (summarize or omit):
         delta = pre_summarize_total - post_summarize_total
         pct = delta / pre_summarize_total * 100
         print(
-            f"  After summarize : {post_summarize_total} LOC "
+            f"  After {flag_label:<14}: {post_summarize_total} LOC "
             f"(-{delta} LOC, -{pct:.0f}%)"
         )
     else:
         print(
-            "  Summarize disabled (--no-summarize) — using full-body inlining"
+            "  All inline-mode markers disabled — using full-body inlining"
         )
+    # Per-mode breakdown (Phase 9).
+    full_total = sum(r.get("full", 0) for r in per_skill)
+    sum_total = sum(r.get("summarized", 0) for r in per_skill)
+    omit_total = sum(r.get("omitted", 0) for r in per_skill)
+    print()
+    print("Per-mode protocol counts (across all SKILLs)")
+    print("-" * 72)
+    print(f"  Full-body inlined : {full_total}")
+    print(f"  Summarized stubs  : {sum_total}")
+    print(f"  Omitted entirely  : {omit_total}")
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -717,9 +844,19 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--no-summarize",
         action="store_true",
         help=(
-            "Disable summarize mode. Protocols carrying "
-            f"{SUMMARIZE_MARKER!r} will inline their full body instead of "
-            "the summary stub. Useful for diagnostic or full-rebuild runs."
+            "Disable BOTH summarize and omit modes. Protocols carrying "
+            f"{SUMMARIZE_MARKER!r} or {OMIT_MARKER!r} will inline their "
+            "full body. Useful for diagnostic or full-rebuild runs."
+        ),
+    )
+    parser.add_argument(
+        "--no-omit",
+        action="store_true",
+        help=(
+            f"Disable omit mode only. Protocols carrying {OMIT_MARKER!r} "
+            "fall back to summarize mode (if marked) or full body. Lets "
+            "diagnostic runs see the would-have-been stub without "
+            "globally reverting omit mode."
         ),
     )
     parser.add_argument(
@@ -727,7 +864,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help=(
             "Don't write any files. Print a per-skill / per-protocol table "
-            "and a before/after summarize-mode estimate to stdout."
+            "and a before/after estimate to stdout, including per-mode "
+            "counts (full / summarize / omit)."
         ),
     )
     return parser.parse_args(argv)
@@ -735,7 +873,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = _parse_args()
+    # `--no-summarize` is the master switch: it forces full-body inlining
+    # for every marked protocol (legacy semantics from Phases 1-8 preserved).
+    summarize = not args.no_summarize
+    omit = summarize and not args.no_omit
     inline_protocols(
-        summarize=not args.no_summarize,
+        summarize=summarize,
+        omit=omit,
         stats_only=args.stats_only,
     )

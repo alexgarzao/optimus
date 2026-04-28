@@ -23,7 +23,7 @@ class TestParseAgentsMd:
         agents = tmp_path / "AGENTS.md"
         agents.write_text("## Section A\nContent A\n### Section B\nContent B\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        sections, _summaries = ip.parse_agents_md()
+        sections, _summaries, _modes = ip.parse_agents_md()
         assert "Section A" in sections
         assert "Section B" in sections
         assert "Content A" in sections["Section A"]
@@ -33,7 +33,7 @@ class TestParseAgentsMd:
         agents = tmp_path / "AGENTS.md"
         agents.write_text("# H1\nIgnored\n## H2\nKept\n#### H4\nAlso kept in H2\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        sections, _summaries = ip.parse_agents_md()
+        sections, _summaries, _modes = ip.parse_agents_md()
         assert "H1" not in sections
         assert "H4" not in sections
         assert "H2" in sections
@@ -43,7 +43,7 @@ class TestParseAgentsMd:
         agents = tmp_path / "AGENTS.md"
         agents.write_text("")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        sections, summaries = ip.parse_agents_md()
+        sections, summaries, _modes = ip.parse_agents_md()
         assert sections == {}
         assert summaries == {}
 
@@ -406,7 +406,7 @@ class TestCriticalPaths:
         agents = tmp_path / "AGENTS.md"
         agents.write_text("## Same\nFirst content\n## Same\nSecond content\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        sections, _summaries = ip.parse_agents_md()
+        sections, _summaries, _modes = ip.parse_agents_md()
         assert "Second content" in sections["Same"]
         assert "First content" not in sections["Same"]
         captured = capsys.readouterr()
@@ -426,7 +426,7 @@ class TestCriticalPaths:
         agents = tmp_path / "AGENTS.md"
         agents.write_text("## Dup\nA\n## Dup\nB\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        sections, _summaries = ip.parse_agents_md()
+        sections, _summaries, _modes = ip.parse_agents_md()
         assert "Dup" in sections
         captured = capsys.readouterr()
         assert "WARNING" in captured.err
@@ -504,7 +504,7 @@ class TestEdgeCases:
         agents = tmp_path / "AGENTS.md"
         agents.write_text("## Protocol: optimus-tasks.md Validation (HARD BLOCK)\nValidation content\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        sections, _summaries = ip.parse_agents_md()
+        sections, _summaries, _modes = ip.parse_agents_md()
         assert "Protocol: optimus-tasks.md Validation (HARD BLOCK)" in sections
 
     def test_protocol_with_trailing_paren(self, tmp_path: Path):
@@ -517,7 +517,7 @@ class TestEdgeCases:
         agents = tmp_path / "AGENTS.md"
         agents.write_text("## Protocol: Notifica\u00e7\u00e3o de Status\nContent\n")
         monkeypatch.setattr(ip, "AGENTS_MD", agents)
-        sections, _summaries = ip.parse_agents_md()
+        sections, _summaries, _modes = ip.parse_agents_md()
         assert "Protocol: Notifica\u00e7\u00e3o de Status" in sections
 
     def test_includes_foundational_for_taskspec(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -938,7 +938,7 @@ class TestSummarizeMode:
         """parse_agents_md() returns (sections, summaries); summaries
         contains an entry for the marked protocol."""
         agents, _skill = self._setup_summarize_repo(tmp_path, monkeypatch)
-        sections, summaries = ip.parse_agents_md()
+        sections, summaries, _modes = ip.parse_agents_md()
         assert "Protocol: Foo" in sections
         assert "Protocol: Foo" in summaries
         assert "Foo summary" in summaries["Protocol: Foo"]
@@ -1003,7 +1003,7 @@ class TestSummarizeMode:
         any bold marker after a blank line), NOT include it as part of the
         summary."""
         _agents, _skill = self._setup_summarize_repo(tmp_path, monkeypatch)
-        _sections, summaries = ip.parse_agents_md()
+        _sections, summaries, _modes = ip.parse_agents_md()
         summary = summaries["Protocol: Foo"]
         assert "**Referenced by:**" not in summary, (
             f"Summary leaked into Referenced-by block: {summary!r}"
@@ -1029,7 +1029,7 @@ class TestSummarizeMode:
         skill = skill_dir / "SKILL.md"
         skill.write_text("see AGENTS.md Protocol: Bar.\n")
 
-        sections, summaries = ip.parse_agents_md()
+        sections, summaries, _modes = ip.parse_agents_md()
         assert "Protocol: Bar" in sections
         # Summary missing -> protocol does NOT enter `summaries`.
         assert "Protocol: Bar" not in summaries
