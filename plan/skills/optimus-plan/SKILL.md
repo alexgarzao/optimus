@@ -763,8 +763,9 @@ Merge agent findings with the findings from Steps 2.1-2.3. Deduplicate and sort 
 ### Step 3.1: Present Summary, then Walk Through Each Finding
 
 1. **Announce total findings count:** Display `"### Total findings to review: N"` prominently before presenting the first finding
-2. **Present the summary report** (tables from Output Format) for bird's-eye view
-3. **Then present findings ONE AT A TIME** in priority order: contradictions > missing specs > test gaps > observability > DoD > ambiguities
+2. **Skip confirmation when N==1:** Present the single finding directly with header `(1/1) ...`. Do NOT ask "Review 1 finding?" or similar — the user already chose to review.
+3. **Present the summary report** (tables from Output Format) for bird's-eye view
+4. **Then present findings ONE AT A TIME** in priority order: contradictions > missing specs > test gaps > observability > DoD > ambiguities
 
 **For EACH finding**, present with `"(X/N)"` progress prefix in the header:
 
