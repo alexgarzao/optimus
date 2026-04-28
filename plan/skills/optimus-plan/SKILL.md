@@ -1012,48 +1012,13 @@ to import from Ring pre-dev." Do NOT proceed to task identification with an empt
 
 **Summary:** Resolves `TASKS_DIR` (from `.optimus/config.json` `tasksDir` key, default `docs/pre-dev`) and `TASKS_FILE` (`<tasksDir>/optimus-tasks.md`), then detects whether tasksDir lives inside the project repo (`same-repo`) or a separate git repo (`separate-repo`). Sets `TASKS_REPO_ROOT`, `TASKS_GIT_REL`, `TASKS_DEFAULT_BRANCH`, and exposes a `tasks_git()` helper that wraps `git -C "$TASKS_DIR"` in separate-repo mode. Hard guards: reject `tasksDir` starting with `-` (git-option injection), require `python3` for separate-repo path computation, validate `TASKS_DEFAULT_BRANCH` against `^[a-zA-Z0-9._/-]+$`. Skills MUST use `tasks_git` (never raw `git`) on `$TASKS_FILE`. See full recipe in AGENTS.md.
 
-### Deep Research Before Presenting (MANDATORY for cycle review skills)
+### Deep Research Before Presenting (MANDATORY for cycle review skills) (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Deep Research Before Presenting (MANDATORY for cycle review skills)`.**
+
+**Summary:** Before presenting ANY finding, cycle review skills (plan, review, pr-check, coderabbit-review) MUST research silently across 12 dimensions: project patterns + similar cases, architectural decisions (AGENTS.md/TRD/ADRs), existing codebase precedent, current task focus, user/consumer use cases, UX impact, API best practices, engineering best practices (SOLID/DRY/observability), language idioms (`WebSearch`), correctness over convenience, production resilience (timeouts, retries, leaks), data integrity + privacy (LGPD/GDPR). Recommendation Option A MUST be evidence-backed (not generic). NOT optional — prevents false-positive findings. See full 12-item checklist in AGENTS.md.
+
 Applies to: plan, review, pr-check, coderabbit-review
-
-**BEFORE presenting any finding to the user, the agent MUST research it deeply.** This
-research is done SILENTLY — do not show the research process. Present only the conclusions.
-
-**Research checklist (ALL items, every finding):**
-
-1. **Project patterns:** Read the affected file(s) fully. Check how similar cases are handled
-   elsewhere in the codebase. Identify existing conventions the finding might violate or follow.
-2. **Architectural decisions:** Review project rules (AGENTS.md, PROJECT_RULES.md, etc.) and
-   architecture docs (TRD, ADRs). Understand WHY the project is structured this way before
-   suggesting changes.
-3. **Existing codebase:** Search for precedent. If the codebase already does the same thing
-   in 10 other places without issue, that context changes the finding's weight.
-4. **Current task focus:** Is this finding within the scope of the task being worked on?
-   Tangential findings should be flagged as such (not dismissed, but contextualized).
-5. **User/consumer use cases:** Who consumes this code — end users, other services, internal
-   modules? How does the finding affect them? Trace the impact to real user scenarios.
-6. **UX impact:** For user-facing changes, evaluate usability, accessibility, error messaging,
-   and workflows. Would the user notice? Would it block their work?
-7. **API best practices:** For API changes, check REST conventions, error handling patterns,
-   idempotency, status codes, pagination, versioning, and backward compatibility.
-8. **Engineering best practices:** SOLID principles, DRY, separation of concerns, error
-   handling, resilience patterns, observability, testability.
-9. **Language-specific best practices:** Use `WebSearch` to research idioms and conventions
-   for the specific language (Go, TypeScript, Python, etc.). Check official style guides,
-   common linter rules, and community-accepted patterns.
-10. **Correctness over convenience:** Always recommend the correct approach, regardless of
-    effort. The easy option may be presented as an alternative, but Option A must be what
-    the agent believes is right based on all the research above.
-11. **Production resilience:** Would this code survive production conditions? Consider:
-    timeouts on external calls, retry with backoff, circuit breakers, graceful degradation,
-    resource cleanup (connections, handles, goroutines), graceful shutdown, and behavior
-    under load (N+1 queries, unbounded queries, connection pool exhaustion).
-12. **Data integrity and privacy:** Are transaction boundaries correct? Could partial writes
-    occur? Is PII properly handled (not logged, masked in responses)? LGPD/GDPR compliance?
-
-**After research, form the recommendation:** Option A MUST be the approach the agent
-believes is correct based on the research. It must be backed by evidence (project patterns,
-best practice references, official documentation), not just a generic suggestion.
-
 
 ### Finding Option Format (MANDATORY for cycle review skills)
 
@@ -1093,54 +1058,11 @@ Every finding must present 2-3 options with this structure:
 
 **Summary:** When every dependency in a task's `Depends:` column has status `Cancelado`, emit a multi-option resolution message AFTER the per-dep status check loop populates the `DEP_STATUSES` array. Recipe: iterate `DEP_STATUSES`, set `ALL_CANCELLED=true` if every entry equals `Cancelado`; when `ALL_CANCELLED=true` AND the array is non-empty, print three options to stderr — (a) remove all dependencies, (b) replace with alternative task IDs, (c) cancel the task itself — each with the corresponding `/optimus-tasks` invocation, then `exit 1`. If the array is empty or any dep is non-Cancelado, fall through to per-dep error. Variable contract: `DEP_STATUSES` is the canonical name; adapt if existing skill code uses another. See full recipe in AGENTS.md.
 
-### Protocol: Branch Name Derivation
+### Protocol: Branch Name Derivation (summarized)
 
-**Referenced by:** plan, build, review, pr-check, done (workspace auto-navigation)
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Branch Name Derivation`.**
 
-Branch names are derived deterministically from the task's structural data in optimus-tasks.md.
-They are NOT stored in optimus-tasks.md — they are stored in state.json for quick reference
-and can always be re-derived.
-
-**Derivation rule:**
-
-```
-<tipo-prefix>/<task-id-lowercase>-<keywords>
-```
-
-Where:
-- `<tipo-prefix>` is mapped from the Tipo column: Feature→`feat`, Fix→`fix`,
-  Refactor→`refactor`, Chore→`chore`, Docs→`docs`, Test→`test`
-- `<task-id-lowercase>` is the task ID in lowercase (e.g., `t-003`)
-- `<keywords>` are 2-4 lowercase words from the Title, stripping articles,
-  prepositions, and generic words (implement, add, create, update)
-
-**Sanitization (applied to keywords before constructing branch name):**
-1. Convert to lowercase
-2. Replace non-alphanumeric characters (except hyphens) with hyphens
-3. Collapse consecutive hyphens to a single hyphen
-4. Remove leading/trailing hyphens from each keyword
-5. Truncate the full branch name to 100 characters
-
-**Examples:**
-- T-003 "User Auth JWT" (Feature) → `feat/t-003-user-auth-jwt`
-- T-007 "Duplicate Login" (Fix) → `fix/t-007-duplicate-login`
-- T-012 "Extract Middleware" (Refactor) → `refactor/t-012-extract-middleware`
-- T-015 "User Auth: JWT/OAuth2 Support" (Feature) → `feat/t-015-user-auth-jwt-oauth2-support`
-
-**Resolution order when looking for a task's branch:**
-1. Read `branch` from state.json (fastest, source-of-truth).
-2. Search by task ID using the kebab-anchored fallback (NEVER an unanchored
-   `grep -iF "$TASK_ID"`, which matches `T-1` against `T-10`/`T-100`):
-   ```bash
-   TASK_KEBAB="-$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')-"
-   git branch --list "*${TASK_KEBAB#-}*" 2>/dev/null
-   git worktree list --porcelain 2>/dev/null \
-     | awk -v anchor="$TASK_KEBAB" '/^worktree / { path=$2; if (index(tolower(path), anchor) > 0) print path }'
-   ```
-3. Derive from Tipo + ID + Title (always works).
-
-Skills reference this as: "Derive branch name — see AGENTS.md Protocol: Branch Name Derivation."
-
+**Summary:** Branch names derived deterministically from task structural data — NOT stored in optimus-tasks.md, only cached in state.json. Format: `<tipo-prefix>/<task-id-lowercase>-<keywords>`. Tipo→prefix: Feature→feat, Fix→fix, Refactor→refactor, Chore→chore, Docs→docs, Test→test. Keywords: 2-4 lowercase title words, articles/prepositions/generic verbs (implement/add/create/update) stripped. Sanitization: lowercase → non-alphanumeric to hyphens → collapse hyphens → strip leading/trailing → 100-char cap. Resolution order: state.json `branch` field → kebab-anchored search (`-t-003-` to avoid T-1/T-10 collision via `git branch --list "*${KEBAB#-}*"`) → derive from Tipo+ID+Title. See full sanitization + Tipo table + examples in AGENTS.md.
 
 ### Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated) (summarized)
 
@@ -1154,31 +1076,11 @@ Skills reference this as: "Derive branch name — see AGENTS.md Protocol: Branch
 
 **Summary:** Detects when `optimus-tasks.md` has diverged between the current branch and the tasks repo's default branch. Uses `tasks_git` so it works in both same-repo and separate-repo scopes. Throttles `tasks_git fetch` via a 5-minute cache marker at `${MAIN_WORKTREE}/.optimus/.last-tasks-fetch` (defense-in-depth: validates marker contents are numeric before arithmetic to survive corrupted marker files under `set -euo pipefail`). Compares against `origin/$TASKS_DEFAULT_BRANCH` via `tasks_git diff` limited to `$TASKS_GIT_REL`. On non-empty diff, warns via `AskUser` with options to **Sync now** (merge `origin/<default>`) or **Continue without syncing**. NOT a HARD BLOCK — divergence is a soft warning. Skipped silently when `TASKS_DEFAULT_BRANCH` is unresolved. See full recipe in AGENTS.md.
 
-## Protocol: Dry-Run Mode
+### Protocol: Dry-Run Mode (summarized)
 
-**Referenced by:** plan, build, review, done (all stage agents 1-4).
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Dry-Run Mode`.**
 
-All stage agents support **dry-run mode**. When the user includes "dry-run" or
-"preview" in their invocation (e.g., "dry-run spec T-003", "preview review T-012"),
-the agent MUST:
-
-1. **Run all analysis/validation phases normally** — agent dispatch, findings, etc.
-2. **Do NOT change task status** — skip the status update step in state.json.
-3. **Do NOT commit or push anything** — no git operations that modify state.
-4. **Do NOT create workspaces** — skip branch/worktree creation (stage-1 only).
-5. **Do NOT apply fixes** — skip batch-apply phases.
-6. **Do NOT increment stage stats** — skip the Increment Stage Stats protocol.
-7. **Do NOT write session files** — session state is for crash recovery of real
-   executions, not previews.
-8. **Skip convergence rounds 2+** — round 1 (primary review pass) is sufficient
-   for preview; do NOT enter the convergence loop.
-9. **Present results as informational** — phrase the summary as "what would happen"
-   without implying any side effects occurred.
-
-Stage agents may add stage-specific dry-run notes (e.g., which phase numbers
-to skip), but MUST NOT relax any of the rules above. The point of dry-run is
-to give the user a reliable preview with zero state mutation.
-
+**Summary:** All stage skills (plan, build, review, done) support dry-run mode — triggered when the invocation contains `dry-run` or `preview`. Run analysis/validation phases normally but: do NOT change task status in state.json, do NOT git commit/push, do NOT create branches/worktrees (stage-1), do NOT batch-apply fixes, do NOT increment stage stats, do NOT write session files, skip convergence rounds 2+. Present results as informational ("what would happen") with zero side effects. Stage skills may add per-stage dry-run notes but MUST NOT relax these rules. See full per-stage dry-run rules in AGENTS.md.
 
 ### Protocol: GitHub CLI Check (HARD BLOCK)
 
@@ -1194,41 +1096,11 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 ```
 
 
-### Protocol: Increment Stage Stats
+### Protocol: Increment Stage Stats (summarized)
 
-**Referenced by:** plan, review
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Increment Stage Stats`.**
 
-After the status change in state.json (and BEFORE any analysis work begins), increment
-the execution counter for the current stage in `.optimus/stats.json`. This tracks how many
-times each stage ran on each task — useful for spotting spec churn and review cycles.
-
-**NOTE:** Only increment when NOT in dry-run mode.
-
-1. Read `.optimus/stats.json`. If the file does not exist, start with an empty object `{}`.
-   If the file exists but is corrupted, reset it:
-   ```bash
-   # Requires Protocol: Resolve Main Worktree Path to have run first
-   # (or resolve inline; see that protocol).
-   MAIN_WORKTREE="$(git worktree list --porcelain 2>/dev/null | awk '/^worktree / {print $2; exit}')"
-   MAIN_WORKTREE="${MAIN_WORKTREE:?MAIN_WORKTREE not resolved — not in a git repository}"
-   STATS_FILE="${MAIN_WORKTREE}/.optimus/stats.json"
-   if [ -f "$STATS_FILE" ] && ! jq empty "$STATS_FILE" 2>/dev/null; then
-     echo "WARNING: stats.json is corrupted. Resetting counters."
-     echo '{}' > "$STATS_FILE"
-   fi
-   ```
-2. If the task ID key does not exist, initialize it:
-   ```json
-   { "plan_runs": 0, "review_runs": 0 }
-   ```
-3. Increment the appropriate counter (`plan_runs` for plan, `review_runs` for review).
-4. Set the timestamp field (`last_plan` or `last_review`) to the current UTC ISO 8601 time.
-5. Write the updated JSON back to `.optimus/stats.json` (pretty-printed, sorted keys).
-
-**NOTE:** stats.json is gitignored — no commit needed.
-
-Skills reference this as: "Increment stage stats — see AGENTS.md Protocol: Increment Stage Stats."
-
+**Summary:** Plan and review increment per-task execution counters in `${MAIN_WORKTREE}/.optimus/stats.json` immediately after the status change (BEFORE analysis starts). Skip in dry-run mode. Recipe: read stats.json (start `{}` if missing); reset to `{}` if corrupted (`jq empty` fails) with WARNING; init task key `{ "plan_runs": 0, "review_runs": 0 }` if absent; increment matching counter; set `last_plan` / `last_review` to UTC ISO 8601; write back pretty-printed with sorted keys. stats.json is gitignored — no commit. See full recipe in AGENTS.md.
 
 ### Protocol: Notification Hooks (summarized)
 
@@ -1254,75 +1126,11 @@ Skills reference this as: "Increment stage stats — see AGENTS.md Protocol: Inc
 
 **Summary:** Optional commit-push pattern for stage skills (plan, build, review, coderabbit-review). After committing locally, offer to push via `AskUser`. Step 1: detect upstream with `git rev-parse --abbrev-ref @{u}` — if missing, all local commits are unpushed and `git push -u origin <branch>` sets upstream; if present, count unpushed via `git log @{u}..HEAD`. Step 2: in `separate-repo` tasks scope, repeat the same upstream/unpushed dance against the tasks repo via `tasks_git`. After successful push, if the current repo is the Optimus plugin repo, run `droid plugin update` for each installed optimus skill so agents pick up the latest version. See full recipe in AGENTS.md.
 
-### Protocol: Re-run Guard
+### Protocol: Re-run Guard (summarized)
 
-**Referenced by:** plan, review
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Re-run Guard`.**
 
-After the convergence loop exits and the final report/summary is presented, evaluate
-whether to suggest advancement or offer a re-run. This protocol replaces the static
-"Next step suggestion" in plan and review.
-
-**Logic:**
-
-1. Count `total_findings` produced during this execution (all findings from round 1 AND
-   any convergence rounds that were dispatched — note: with opt-in gating, the user may
-   have skipped them all, in which case only round 1 contributes — from all agents and
-   static analysis, regardless of whether they were fixed or skipped by the user). If
-   findings were grouped (per Finding Presentation item 3), count grouped entries, not
-   individual occurrences.
-2. **If `total_findings == 0`:** The analysis is clean. Suggest the next stage:
-   - plan: "Spec validation clean — 0 findings. Next step: run `/optimus-build` to implement this task."
-   - review: "Implementation review clean — 0 findings. Next step: run `/optimus-done` to close this task."
-3. **If `total_findings > 0`:** Ask via `AskUser`:
-   ```
-   Validation found N findings (X fixed, Y skipped).
-   Re-running dispatches ALL review agents again with clean context (no memory of
-   previous findings — findings you previously skipped will reappear for review).
-   This will consume similar tokens to the initial run. Workspace and status are preserved.
-   ```
-   Options:
-   - **Re-run with clean context** — re-analyze from scratch
-   - **Advance to next stage** — proceed despite findings
-
-4. **If "Re-run with clean context":**
-   - Increment stage stats (new execution)
-   - **Skip:** GitHub CLI check, optimus-tasks.md validation, task identification, session state
-     check, status validation/change, workspace creation, divergence check
-   - **Re-execute:** project structure discovery, document loading, static analysis,
-     coverage profiling, agent dispatch (ALL agents), finding presentation, fix application,
-     convergence loop entry gate (and any rounds the user opts into)
-   - **Session file:** After re-run starts, the session protocol (Protocol: Session State)
-     resumes normal operation — update the session file at each phase transition as usual.
-     This ensures crash recovery during a re-run resumes from the correct phase.
-   - After the re-run completes, apply this protocol again (evaluate findings count)
-   - There is no limit on re-runs — the user controls when to stop
-
-   **Re-run reset semantics (MANDATORY):** When the user chooses "Re-run with clean
-   context", the orchestrator MUST:
-
-   1. Reset `convergence_status` to `null` in the session file (was set to `"CONVERGED"`
-      or another terminal state at the previous run's end).
-   2. Reset `phase` to the entry of the re-executed flow (typically the first phase
-      that performs work, NOT the load-only phases).
-   3. Overwrite `started_at` with the new run's timestamp; preserve `created_at`.
-   4. Preserve `task_id`, `task_branch`, and any other identity fields.
-   5. After reset, normal `Protocol: Session State` updates resume.
-
-   WITHOUT this reset, a previous run's `convergence_status: "CONVERGED"` would
-   short-circuit the re-run's loop, producing a phantom "no findings" result.
-
-5. **If "Advance to next stage":** Proceed to push commits and present the next step suggestion.
-
-**NOTE:** "0 findings" means the analysis produced zero findings — not that all findings
-were resolved. If the user skipped findings in a previous run, they will reappear on
-re-run (clean context has no memory of previous decisions). This is by design.
-
-**NOTE:** Re-run analyzes the current codebase state, including any fixes applied and
-committed during the previous run. It does NOT revert commits. This validates that
-applied fixes are correct and checks for any issues introduced by the fixes.
-
-Skills reference this as: "Execute re-run guard — see AGENTS.md Protocol: Re-run Guard."
-
+**Summary:** Replaces the static "next step" suggestion in plan and review. Counts `total_findings` from this execution (grouped entries count as 1). If 0 → suggest next stage (build for plan, done for review). If >0 → `AskUser` offering "Re-run with clean context" (re-dispatches ALL agents with no memory of prior decisions — skipped findings will reappear) or "Advance to next stage". Re-run reset semantics (MANDATORY): reset `convergence_status` to `null`, `phase` to entry, overwrite `started_at`; preserve identity fields. Skip GitHub CLI/tasks validation/workspace/divergence checks; re-execute discovery + dispatch. No re-run limit. See full reset checklist in AGENTS.md.
 
 ### Protocol: Resolve Main Worktree Path (summarized)
 
@@ -1342,48 +1150,11 @@ Skills reference this as: "Execute re-run guard — see AGENTS.md Protocol: Re-r
 
 **Summary:** Session lifecycle state at `${MAIN_WORKTREE}/.optimus/sessions/session-${TASK_ID}.json` tracks `task_id`, `branch`, `phase`, `convergence_status`, `started_at`. Update at every phase transition. Initialize `.optimus/` directory + auto-prune `.optimus/logs/` (30-day, 500-file cap) on transition. See full recipe in AGENTS.md.
 
-### Protocol: Shell Safety Guidelines
+### Protocol: Shell Safety Guidelines (summarized)
 
-**Referenced by:** plan, batch
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Shell Safety Guidelines`.**
 
-All bash examples in AGENTS.md and SKILL.md files are templates that agents execute literally.
-Follow these rules to prevent injection and silent failures:
-
-1. **Always quote variables:** Use `"$VAR"` not `$VAR` — especially for paths, branch names, and user-derived values
-2. **Check exit codes for critical commands:**
-   ```bash
-   tasks_git add "$TASKS_GIT_REL"
-   COMMIT_MSG_FILE=$(mktemp)
-   printf '%s' "chore(tasks): $COMMIT_MSG" > "$COMMIT_MSG_FILE"
-   if ! tasks_git commit -F "$COMMIT_MSG_FILE"; then
-     echo "ERROR: git commit failed. Check pre-commit hooks or git config." >&2
-     rm -f "$COMMIT_MSG_FILE"
-     exit 1
-   fi
-   rm -f "$COMMIT_MSG_FILE"
-   ```
-3. **Never interpolate user-derived values directly into shell commands** — task titles,
-   branch names, and other user input may contain shell metacharacters
-4. **Use `grep -F` for fixed string matching** — never pass branch names or task IDs
-   as regex patterns to `grep` without `-F`
-5. **Use `grep -E '^\| T-NNN \|'`** to match task rows in optimus-tasks.md — plain `grep "T-NNN"`
-   matches titles and dependency columns too
-6. **Validate tool availability** before use: `command -v jq >/dev/null 2>&1` before running `jq`
-7. **Validate JSON files** before parsing: `jq empty "$FILE" 2>/dev/null` before reading keys
-8. **Sanitize user-derived values in commit messages** — task titles and descriptions may
-   contain shell metacharacters (backticks, `$(...)`, double quotes). **Mandatory pattern:**
-   write the commit message to a temporary file and use `git commit -F`:
-   ```bash
-   COMMIT_MSG_FILE=$(mktemp)
-   printf '%s' "chore(tasks): $OPERATION" > "$COMMIT_MSG_FILE"
-   git commit -F "$COMMIT_MSG_FILE"
-   rm -f "$COMMIT_MSG_FILE"
-   ```
-   This avoids all shell expansion issues. If using `-m` directly, sanitize with:
-   `SAFE_VALUE=$(printf '%s' "$VALUE" | tr -d '`$')` before interpolation.
-
-Skills reference this as: "Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelines."
-
+**Summary:** All bash examples in AGENTS.md/SKILL.md are templates executed literally — follow these rules to prevent injection and silent failures: (1) always quote variables (`"$VAR"`); (2) check exit codes for critical commands; (3) never interpolate user-derived values directly into shell; (4) use `grep -F` for fixed-string matching of branch names/task IDs; (5) match task rows with anchored regex `grep -E '^\| T-NNN \|'`; (6) `command -v jq` before use; (7) `jq empty "$FILE"` before parse; (8) for commit messages with user content, write to `mktemp` file and use `git commit -F` (avoids all expansion). See full anti-pattern list + sanitization recipes in AGENTS.md.
 
 ### Protocol: State Management (summarized)
 
@@ -1403,44 +1174,11 @@ Skills reference this as: "Follow shell safety guidelines — see AGENTS.md Prot
 
 **Summary:** `_optimus_set_title <text>` updates the terminal title for iTerm2-on-macOS via AppleScript (`osascript ... set name of s to newName`) — the only channel that reliably mutates `session.name` in "divorced" iTerm2 sessions where OSC 0/1/2 and SetUserVar are ineffective. Used by stage skills to surface task context (e.g., `optimus: PLAN T-007 — User auth`) so users running multiple Optimus sessions can identify them at a glance. The function is auto-inlined into 6 SKILLs by `inline-protocols.py` (do NOT manually paste the body in SKILL.md — F12f rule). Title is informational; failure to set it is non-fatal (silent no-op outside iTerm2/macOS, in Docker/CI without TTY, or when osascript denied). See full bash function in AGENTS.md.
 
-### Protocol: Worktree Location
+### Protocol: Worktree Location (summarized)
 
-**Referenced by:** plan (Step 1.0.5), resume (Step 3.3 Case 2), Protocol: Workspace Auto-Navigation (see Reusable Protocols), done (Phase 4.1 cleanup)
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Worktree Location`.**
 
-Optimus creates linked git worktrees during the task lifecycle:
-
-- `/optimus-plan` creates a worktree when a task starts (Step 1.0.5).
-- `/optimus-resume` creates a worktree on recovery if branch exists but worktree is missing (Step 3.3).
-- Protocol: Workspace Auto-Navigation (see Reusable Protocols) creates a worktree as a fallback when an Optimus skill is invoked from the default branch and the task's worktree is missing.
-
-**Canonical path:** `${MAIN_WORKTREE}/.worktrees/<branch-name>` — gitignored (auto-injected by `Protocol: Initialize .optimus Directory` and `Protocol: Session State`), project-rooted, and resolved against the main worktree (path correct even when invoked from a linked worktree, per Protocol: Resolve Main Worktree Path).
-
-**Note on branch names with `/`:** branch names contain `/` (see `Protocol: Branch Name Derivation`). Used as a directory under `.worktrees/`, the `/` creates intermediate subdirectories — `<repo>/.worktrees/feat/t-007-user-auth/`. `git worktree add` creates these automatically. `ls .worktrees/` shows the tipo-prefix dirs (`feat/`, `fix/`, `chore/`); `find .worktrees/ -mindepth 2 -maxdepth 2 -type d` lists each leaf.
-
-**Why nested under the project repo:**
-
-| Concern | Resolution |
-|---|---|
-| Discoverability | All worktrees for a project listed by `ls <repo>/.worktrees/` |
-| Cleanup lifecycle | Removing the project directory also removes worktrees |
-| `.optimus/` companion | Both `.optimus/` and `.worktrees/` live inside the repo, gitignored — same operational pattern |
-| Cross-repo safety | Worktrees always belong to the **project repo**, never the tasks repo (separate-repo `tasksDir` does not affect worktree location) |
-| Main-worktree resolution | `git worktree list --porcelain` correctly identifies main first regardless of nested linked worktrees — Protocol: Resolve Main Worktree Path unaffected |
-
-**IDE exclusion (recommended):** add `.worktrees/` to your editor's search/index exclusions to prevent double-indexing the same files in main and linked worktrees.
-
-- VS Code (`.vscode/settings.json`): `"search.exclude": { "**/.worktrees": true }, "files.watcherExclude": { "**/.worktrees/**": true }`
-- IntelliJ: mark `.worktrees/` as Excluded in Project Structure.
-
-**Backwards compatibility:**
-
-- Existing worktrees in older sibling locations (`../<repo>-<task>`) continue to work — `git worktree list` finds them regardless of path.
-- New worktrees from `/optimus-plan` and `resume`'s recovery land in `.worktrees/`.
-- No forced migration.
-- Users may relocate manually with `git worktree move <old-path> ${MAIN_WORKTREE}/.worktrees/<branch-name>` when convenient.
-
-Skills reference this as: "see AGENTS.md Protocol: Worktree Location."
-
+**Summary:** Linked worktrees created by plan / resume / Workspace Auto-Navigation / done-cleanup live at the canonical path `${MAIN_WORKTREE}/.worktrees/<branch-name>` — gitignored (auto-injected by Initialize .optimus Directory + Session State protocols), project-rooted, resolved via Resolve Main Worktree Path so paths stay correct from any linked worktree. Branch names contain `/` (per Branch Name Derivation), creating intermediate `feat/`, `fix/` directories under `.worktrees/` automatically. Worktrees ALWAYS belong to the project repo, never the tasks repo (separate-repo `tasksDir` doesn't affect location). Recommend IDE exclusion (`.vscode/settings.json` `search.exclude`, IntelliJ Excluded). Backwards compat: legacy sibling paths still work via worktree metadata; no forced migration. See full convention + IDE config in AGENTS.md.
 
 ### Protocol: optimus-tasks.md Validation (HARD BLOCK) (summarized)
 

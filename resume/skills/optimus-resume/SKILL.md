@@ -776,54 +776,11 @@ to import from Ring pre-dev." Do NOT proceed to task identification with an empt
 
 **Summary:** Resolves `TASKS_DIR` (from `.optimus/config.json` `tasksDir` key, default `docs/pre-dev`) and `TASKS_FILE` (`<tasksDir>/optimus-tasks.md`), then detects whether tasksDir lives inside the project repo (`same-repo`) or a separate git repo (`separate-repo`). Sets `TASKS_REPO_ROOT`, `TASKS_GIT_REL`, `TASKS_DEFAULT_BRANCH`, and exposes a `tasks_git()` helper that wraps `git -C "$TASKS_DIR"` in separate-repo mode. Hard guards: reject `tasksDir` starting with `-` (git-option injection), require `python3` for separate-repo path computation, validate `TASKS_DEFAULT_BRANCH` against `^[a-zA-Z0-9._/-]+$`. Skills MUST use `tasks_git` (never raw `git`) on `$TASKS_FILE`. See full recipe in AGENTS.md.
 
-### Protocol: Branch Name Derivation
+### Protocol: Branch Name Derivation (summarized)
 
-**Referenced by:** plan, build, review, pr-check, done (workspace auto-navigation)
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Branch Name Derivation`.**
 
-Branch names are derived deterministically from the task's structural data in optimus-tasks.md.
-They are NOT stored in optimus-tasks.md — they are stored in state.json for quick reference
-and can always be re-derived.
-
-**Derivation rule:**
-
-```
-<tipo-prefix>/<task-id-lowercase>-<keywords>
-```
-
-Where:
-- `<tipo-prefix>` is mapped from the Tipo column: Feature→`feat`, Fix→`fix`,
-  Refactor→`refactor`, Chore→`chore`, Docs→`docs`, Test→`test`
-- `<task-id-lowercase>` is the task ID in lowercase (e.g., `t-003`)
-- `<keywords>` are 2-4 lowercase words from the Title, stripping articles,
-  prepositions, and generic words (implement, add, create, update)
-
-**Sanitization (applied to keywords before constructing branch name):**
-1. Convert to lowercase
-2. Replace non-alphanumeric characters (except hyphens) with hyphens
-3. Collapse consecutive hyphens to a single hyphen
-4. Remove leading/trailing hyphens from each keyword
-5. Truncate the full branch name to 100 characters
-
-**Examples:**
-- T-003 "User Auth JWT" (Feature) → `feat/t-003-user-auth-jwt`
-- T-007 "Duplicate Login" (Fix) → `fix/t-007-duplicate-login`
-- T-012 "Extract Middleware" (Refactor) → `refactor/t-012-extract-middleware`
-- T-015 "User Auth: JWT/OAuth2 Support" (Feature) → `feat/t-015-user-auth-jwt-oauth2-support`
-
-**Resolution order when looking for a task's branch:**
-1. Read `branch` from state.json (fastest, source-of-truth).
-2. Search by task ID using the kebab-anchored fallback (NEVER an unanchored
-   `grep -iF "$TASK_ID"`, which matches `T-1` against `T-10`/`T-100`):
-   ```bash
-   TASK_KEBAB="-$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')-"
-   git branch --list "*${TASK_KEBAB#-}*" 2>/dev/null
-   git worktree list --porcelain 2>/dev/null \
-     | awk -v anchor="$TASK_KEBAB" '/^worktree / { path=$2; if (index(tolower(path), anchor) > 0) print path }'
-   ```
-3. Derive from Tipo + ID + Title (always works).
-
-Skills reference this as: "Derive branch name — see AGENTS.md Protocol: Branch Name Derivation."
-
+**Summary:** Branch names derived deterministically from task structural data — NOT stored in optimus-tasks.md, only cached in state.json. Format: `<tipo-prefix>/<task-id-lowercase>-<keywords>`. Tipo→prefix: Feature→feat, Fix→fix, Refactor→refactor, Chore→chore, Docs→docs, Test→test. Keywords: 2-4 lowercase title words, articles/prepositions/generic verbs (implement/add/create/update) stripped. Sanitization: lowercase → non-alphanumeric to hyphens → collapse hyphens → strip leading/trailing → 100-char cap. Resolution order: state.json `branch` field → kebab-anchored search (`-t-003-` to avoid T-1/T-10 collision via `git branch --list "*${KEBAB#-}*"`) → derive from Tipo+ID+Title. See full sanitization + Tipo table + examples in AGENTS.md.
 
 ### Protocol: Initialize .optimus Directory (summarized)
 
@@ -843,44 +800,11 @@ Skills reference this as: "Derive branch name — see AGENTS.md Protocol: Branch
 
 **Summary:** `_optimus_set_title <text>` updates the terminal title for iTerm2-on-macOS via AppleScript (`osascript ... set name of s to newName`) — the only channel that reliably mutates `session.name` in "divorced" iTerm2 sessions where OSC 0/1/2 and SetUserVar are ineffective. Used by stage skills to surface task context (e.g., `optimus: PLAN T-007 — User auth`) so users running multiple Optimus sessions can identify them at a glance. The function is auto-inlined into 6 SKILLs by `inline-protocols.py` (do NOT manually paste the body in SKILL.md — F12f rule). Title is informational; failure to set it is non-fatal (silent no-op outside iTerm2/macOS, in Docker/CI without TTY, or when osascript denied). See full bash function in AGENTS.md.
 
-### Protocol: Worktree Location
+### Protocol: Worktree Location (summarized)
 
-**Referenced by:** plan (Step 1.0.5), resume (Step 3.3 Case 2), Protocol: Workspace Auto-Navigation (see Reusable Protocols), done (Phase 4.1 cleanup)
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Worktree Location`.**
 
-Optimus creates linked git worktrees during the task lifecycle:
-
-- `/optimus-plan` creates a worktree when a task starts (Step 1.0.5).
-- `/optimus-resume` creates a worktree on recovery if branch exists but worktree is missing (Step 3.3).
-- Protocol: Workspace Auto-Navigation (see Reusable Protocols) creates a worktree as a fallback when an Optimus skill is invoked from the default branch and the task's worktree is missing.
-
-**Canonical path:** `${MAIN_WORKTREE}/.worktrees/<branch-name>` — gitignored (auto-injected by `Protocol: Initialize .optimus Directory` and `Protocol: Session State`), project-rooted, and resolved against the main worktree (path correct even when invoked from a linked worktree, per Protocol: Resolve Main Worktree Path).
-
-**Note on branch names with `/`:** branch names contain `/` (see `Protocol: Branch Name Derivation`). Used as a directory under `.worktrees/`, the `/` creates intermediate subdirectories — `<repo>/.worktrees/feat/t-007-user-auth/`. `git worktree add` creates these automatically. `ls .worktrees/` shows the tipo-prefix dirs (`feat/`, `fix/`, `chore/`); `find .worktrees/ -mindepth 2 -maxdepth 2 -type d` lists each leaf.
-
-**Why nested under the project repo:**
-
-| Concern | Resolution |
-|---|---|
-| Discoverability | All worktrees for a project listed by `ls <repo>/.worktrees/` |
-| Cleanup lifecycle | Removing the project directory also removes worktrees |
-| `.optimus/` companion | Both `.optimus/` and `.worktrees/` live inside the repo, gitignored — same operational pattern |
-| Cross-repo safety | Worktrees always belong to the **project repo**, never the tasks repo (separate-repo `tasksDir` does not affect worktree location) |
-| Main-worktree resolution | `git worktree list --porcelain` correctly identifies main first regardless of nested linked worktrees — Protocol: Resolve Main Worktree Path unaffected |
-
-**IDE exclusion (recommended):** add `.worktrees/` to your editor's search/index exclusions to prevent double-indexing the same files in main and linked worktrees.
-
-- VS Code (`.vscode/settings.json`): `"search.exclude": { "**/.worktrees": true }, "files.watcherExclude": { "**/.worktrees/**": true }`
-- IntelliJ: mark `.worktrees/` as Excluded in Project Structure.
-
-**Backwards compatibility:**
-
-- Existing worktrees in older sibling locations (`../<repo>-<task>`) continue to work — `git worktree list` finds them regardless of path.
-- New worktrees from `/optimus-plan` and `resume`'s recovery land in `.worktrees/`.
-- No forced migration.
-- Users may relocate manually with `git worktree move <old-path> ${MAIN_WORKTREE}/.worktrees/<branch-name>` when convenient.
-
-Skills reference this as: "see AGENTS.md Protocol: Worktree Location."
-
+**Summary:** Linked worktrees created by plan / resume / Workspace Auto-Navigation / done-cleanup live at the canonical path `${MAIN_WORKTREE}/.worktrees/<branch-name>` — gitignored (auto-injected by Initialize .optimus Directory + Session State protocols), project-rooted, resolved via Resolve Main Worktree Path so paths stay correct from any linked worktree. Branch names contain `/` (per Branch Name Derivation), creating intermediate `feat/`, `fix/` directories under `.worktrees/` automatically. Worktrees ALWAYS belong to the project repo, never the tasks repo (separate-repo `tasksDir` doesn't affect location). Recommend IDE exclusion (`.vscode/settings.json` `search.exclude`, IntelliJ Excluded). Backwards compat: legacy sibling paths still work via worktree metadata; no forced migration. See full convention + IDE config in AGENTS.md.
 
 ### Protocol: optimus-tasks.md Validation (HARD BLOCK) (summarized)
 

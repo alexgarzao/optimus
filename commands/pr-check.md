@@ -1733,48 +1733,13 @@ extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
 **Summary:** Resolve `MAIN_WORKTREE` once via `git worktree list --porcelain | awk '/^worktree / {print $2; exit}'` with `${MAIN_WORKTREE:?…}` defensive guard. Use `${MAIN_WORKTREE}/.optimus/...` for ALL `.optimus/` paths (gitignored, so doesn't propagate across linked worktrees). See full recipe in AGENTS.md.
 
-### Deep Research Before Presenting (MANDATORY for cycle review skills)
+### Deep Research Before Presenting (MANDATORY for cycle review skills) (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Deep Research Before Presenting (MANDATORY for cycle review skills)`.**
+
+**Summary:** Before presenting ANY finding, cycle review skills (plan, review, pr-check, coderabbit-review) MUST research silently across 12 dimensions: project patterns + similar cases, architectural decisions (AGENTS.md/TRD/ADRs), existing codebase precedent, current task focus, user/consumer use cases, UX impact, API best practices, engineering best practices (SOLID/DRY/observability), language idioms (`WebSearch`), correctness over convenience, production resilience (timeouts, retries, leaks), data integrity + privacy (LGPD/GDPR). Recommendation Option A MUST be evidence-backed (not generic). NOT optional — prevents false-positive findings. See full 12-item checklist in AGENTS.md.
+
 Applies to: plan, review, pr-check, coderabbit-review
-
-**BEFORE presenting any finding to the user, the agent MUST research it deeply.** This
-research is done SILENTLY — do not show the research process. Present only the conclusions.
-
-**Research checklist (ALL items, every finding):**
-
-1. **Project patterns:** Read the affected file(s) fully. Check how similar cases are handled
-   elsewhere in the codebase. Identify existing conventions the finding might violate or follow.
-2. **Architectural decisions:** Review project rules (AGENTS.md, PROJECT_RULES.md, etc.) and
-   architecture docs (TRD, ADRs). Understand WHY the project is structured this way before
-   suggesting changes.
-3. **Existing codebase:** Search for precedent. If the codebase already does the same thing
-   in 10 other places without issue, that context changes the finding's weight.
-4. **Current task focus:** Is this finding within the scope of the task being worked on?
-   Tangential findings should be flagged as such (not dismissed, but contextualized).
-5. **User/consumer use cases:** Who consumes this code — end users, other services, internal
-   modules? How does the finding affect them? Trace the impact to real user scenarios.
-6. **UX impact:** For user-facing changes, evaluate usability, accessibility, error messaging,
-   and workflows. Would the user notice? Would it block their work?
-7. **API best practices:** For API changes, check REST conventions, error handling patterns,
-   idempotency, status codes, pagination, versioning, and backward compatibility.
-8. **Engineering best practices:** SOLID principles, DRY, separation of concerns, error
-   handling, resilience patterns, observability, testability.
-9. **Language-specific best practices:** Use `WebSearch` to research idioms and conventions
-   for the specific language (Go, TypeScript, Python, etc.). Check official style guides,
-   common linter rules, and community-accepted patterns.
-10. **Correctness over convenience:** Always recommend the correct approach, regardless of
-    effort. The easy option may be presented as an alternative, but Option A must be what
-    the agent believes is right based on all the research above.
-11. **Production resilience:** Would this code survive production conditions? Consider:
-    timeouts on external calls, retry with backoff, circuit breakers, graceful degradation,
-    resource cleanup (connections, handles, goroutines), graceful shutdown, and behavior
-    under load (N+1 queries, unbounded queries, connection pool exhaustion).
-12. **Data integrity and privacy:** Are transaction boundaries correct? Could partial writes
-    occur? Is PII properly handled (not logged, masked in responses)? LGPD/GDPR compliance?
-
-**After research, form the recommendation:** Option A MUST be the approach the agent
-believes is correct based on the research. It must be backed by evidence (project patterns,
-best practice references, official documentation), not just a generic suggestion.
-
 
 ### Finding Option Format (MANDATORY for cycle review skills)
 
@@ -1831,7 +1796,11 @@ All cycle review skills follow this pattern:
    - Skip — no action
    - Tell me more — if selected, STOP and answer immediately (do NOT continue to next finding)
 
-### Fix Implementation (Complexity-Based Dispatch)
+### Fix Implementation (Complexity-Based Dispatch) (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Fix Implementation (Complexity-Based Dispatch)`.**
+
+**Summary:** Cycle review skills classify each approved fix before applying. **Simple** (single file, localized, exact code provided, obvious resolution: typo / missing nil guard / import / log line / dead code removal): orchestrator applies directly via Edit/MultiEdit, runs unit tests; on failure, reverts and escalates. **Complex** (multi-file, architectural impact, security-sensitive, schema/API/config changes, new tests needed, or unsure): dispatch ring droid. Code fixes use TDD cycle (RED-GREEN-REFACTOR) via `ring-dev-team-backend-engineer-golang`/`-typescript`, `ring-dev-team-frontend-engineer`, `ring-dev-team-qa-analyst`. Documentation fixes: `ring-tw-team-functional-writer`/`-api-writer`/`-docs-reviewer` (no TDD). When in doubt → dispatch. Ring droids are REQUIRED for complex fixes — STOP if missing. See full classification + dispatch templates in AGENTS.md.
 
 Fixes are classified by complexity. **Simple fixes** are applied directly by the
 orchestrator. **Complex fixes** (or fixes whose complexity cannot be determined) are
@@ -1840,46 +1809,6 @@ delegated to specialist ring droids.
 #### Complexity Classification
 
 For each approved fix, assess complexity BEFORE applying:
-
-**Simple fix (apply directly):**
-- The review agent already provided the exact code change needed
-- Single file, localized change (few lines)
-- Obvious resolution: typo, missing error check, wrong variable name, missing nil guard,
-  import fix, formatting, adding a log line, renaming, removing dead code
-- No new logic, no architectural impact, no new test scenarios needed
-
-**Complex fix (dispatch ring droid):**
-- Multiple files affected
-- Requires understanding broader codebase context or architectural decisions
-- New functionality, significant refactoring, or new integration points
-- Requires new test scenarios (not just updating existing ones)
-- Security-sensitive changes (auth, crypto, input validation)
-- Database schema, API contract, or config changes
-- The orchestrator is unsure how to fix it
-
-**When in doubt → dispatch ring droid.** If you cannot confidently classify a fix as
-simple, treat it as complex.
-
-#### Direct Fix (simple findings)
-
-The orchestrator applies the fix directly using Edit/MultiEdit tools. After applying:
-1. Run unit tests to verify no regression
-2. If tests fail, revert and escalate to ring droid dispatch
-
-#### Ring Droid Dispatch (complex findings)
-
-**Code fixes** → dispatch ring backend/frontend/QA droids with **TDD cycle** (RED-GREEN-REFACTOR):
-- `ring-dev-team-backend-engineer-golang` (Go), `ring-dev-team-backend-engineer-typescript` (TS),
-  `ring-dev-team-frontend-engineer` (React/Next.js), `ring-dev-team-qa-analyst` (tests)
-
-**Documentation fixes** → dispatch ring documentation droids **without TDD** (no tests for docs):
-- `ring-tw-team-functional-writer` (guides), `ring-tw-team-api-writer` (API docs),
-  `ring-tw-team-docs-reviewer` (quality fixes)
-
-**Ring droids are REQUIRED for complex fixes** — there is no alternative dispatch mechanism. If the
-required droids are not installed and a complex fix is needed, the skill MUST stop and
-inform the user which droids need to be installed.
-
 
 ### Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated) (summarized)
 

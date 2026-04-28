@@ -711,39 +711,11 @@ All cycle review skills follow this pattern:
 
 **Summary:** Measure unit + integration test coverage via Makefile targets with stack-specific fallbacks (Go: `go test -coverprofile`; Node: `npm test -- --coverage`; Python: `pytest --cov=. --cov-report=term`). Run wrapped in `_optimus_quiet_run` (Protocol: Quiet Command Execution) to keep agent context clean — the agent sees only PASS/FAIL + extracted total percentage; full per-file breakdown stays in `.optimus/logs/` and native coverage files. Thresholds: unit 85%, integration 70% (NEEDS_FIX/HIGH finding below). When scanning untested functions, read coverage output FILE (not stdout) — flag business-logic functions at 0% as HIGH; infrastructure/generated code as SKIP. If no coverage command resolves, mark SKIP — do not fail verification. See full extraction recipes in AGENTS.md.
 
-### Protocol: Default Branch Refusal (HARD BLOCK)
+### Protocol: Default Branch Refusal (HARD BLOCK) (summarized)
 
-**Referenced by:** build, review, done
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Default Branch Refusal (HARD BLOCK)`.**
 
-**Why:** Workspace Auto-Navigation is the primary safeguard, but it can be bypassed
-in edge cases (user cancels the AskUser prompt, silent failure, future skill that
-forgets to invoke the protocol). A second, unconditional refusal at the start of any
-mutating stage prevents accidental commits, worktree removals, or status writes on
-the default branch.
-
-```bash
-DEFAULT_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-if [ -z "$DEFAULT_BRANCH" ]; then
-  if git show-ref --verify refs/remotes/origin/main >/dev/null 2>&1; then
-    DEFAULT_BRANCH="main"
-  elif git show-ref --verify refs/remotes/origin/master >/dev/null 2>&1; then
-    DEFAULT_BRANCH="master"
-  fi
-fi
-CURRENT=$(git branch --show-current 2>/dev/null)
-if [ -n "$DEFAULT_BRANCH" ] && [ "$CURRENT" = "$DEFAULT_BRANCH" ]; then
-  echo "ERROR: refusing to run /optimus-<stage> on default branch '$CURRENT'." >&2
-  echo "       Switch to the task's feature branch (Workspace Auto-Navigation should have handled this)." >&2
-  exit 1
-fi
-```
-
-**Where to invoke:** immediately after Workspace Auto-Navigation completes, before
-the skill performs any state.json write, git commit, git worktree mutation, or
-status transition.
-
-Skills reference this as: "Refuse to run on default branch (HARD BLOCK) — see AGENTS.md Protocol: Default Branch Refusal."
-
+**Summary:** Mutating stage skills (build, review, done) MUST refuse to run on the project's default branch (main/master). Defense-in-depth even after Workspace Auto-Navigation. Resolves DEFAULT_BRANCH via `git symbolic-ref refs/remotes/origin/HEAD` with main→master fallback; compares to `git branch --show-current`; STOP with explicit error message if equal. Invoke immediately after Workspace Auto-Navigation, before any state.json write, git commit, worktree mutation, or status transition. See full recipe in AGENTS.md.
 
 ### Protocol: Divergence Warning (summarized)
 
@@ -751,31 +723,11 @@ Skills reference this as: "Refuse to run on default branch (HARD BLOCK) — see 
 
 **Summary:** Detects when `optimus-tasks.md` has diverged between the current branch and the tasks repo's default branch. Uses `tasks_git` so it works in both same-repo and separate-repo scopes. Throttles `tasks_git fetch` via a 5-minute cache marker at `${MAIN_WORKTREE}/.optimus/.last-tasks-fetch` (defense-in-depth: validates marker contents are numeric before arithmetic to survive corrupted marker files under `set -euo pipefail`). Compares against `origin/$TASKS_DEFAULT_BRANCH` via `tasks_git diff` limited to `$TASKS_GIT_REL`. On non-empty diff, warns via `AskUser` with options to **Sync now** (merge `origin/<default>`) or **Continue without syncing**. NOT a HARD BLOCK — divergence is a soft warning. Skipped silently when `TASKS_DEFAULT_BRANCH` is unresolved. See full recipe in AGENTS.md.
 
-## Protocol: Dry-Run Mode
+### Protocol: Dry-Run Mode (summarized)
 
-**Referenced by:** plan, build, review, done (all stage agents 1-4).
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Dry-Run Mode`.**
 
-All stage agents support **dry-run mode**. When the user includes "dry-run" or
-"preview" in their invocation (e.g., "dry-run spec T-003", "preview review T-012"),
-the agent MUST:
-
-1. **Run all analysis/validation phases normally** — agent dispatch, findings, etc.
-2. **Do NOT change task status** — skip the status update step in state.json.
-3. **Do NOT commit or push anything** — no git operations that modify state.
-4. **Do NOT create workspaces** — skip branch/worktree creation (stage-1 only).
-5. **Do NOT apply fixes** — skip batch-apply phases.
-6. **Do NOT increment stage stats** — skip the Increment Stage Stats protocol.
-7. **Do NOT write session files** — session state is for crash recovery of real
-   executions, not previews.
-8. **Skip convergence rounds 2+** — round 1 (primary review pass) is sufficient
-   for preview; do NOT enter the convergence loop.
-9. **Present results as informational** — phrase the summary as "what would happen"
-   without implying any side effects occurred.
-
-Stage agents may add stage-specific dry-run notes (e.g., which phase numbers
-to skip), but MUST NOT relax any of the rules above. The point of dry-run is
-to give the user a reliable preview with zero state mutation.
-
+**Summary:** All stage skills (plan, build, review, done) support dry-run mode — triggered when the invocation contains `dry-run` or `preview`. Run analysis/validation phases normally but: do NOT change task status in state.json, do NOT git commit/push, do NOT create branches/worktrees (stage-1), do NOT batch-apply fixes, do NOT increment stage stats, do NOT write session files, skip convergence rounds 2+. Present results as informational ("what would happen") with zero side effects. Stage skills may add per-stage dry-run notes but MUST NOT relax these rules. See full per-stage dry-run rules in AGENTS.md.
 
 ### Protocol: GitHub CLI Check (HARD BLOCK)
 

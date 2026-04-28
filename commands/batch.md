@@ -335,48 +335,11 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 ```
 
 
-### Protocol: Shell Safety Guidelines
+### Protocol: Shell Safety Guidelines (summarized)
 
-**Referenced by:** plan, batch
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Shell Safety Guidelines`.**
 
-All bash examples in AGENTS.md and SKILL.md files are templates that agents execute literally.
-Follow these rules to prevent injection and silent failures:
-
-1. **Always quote variables:** Use `"$VAR"` not `$VAR` — especially for paths, branch names, and user-derived values
-2. **Check exit codes for critical commands:**
-   ```bash
-   tasks_git add "$TASKS_GIT_REL"
-   COMMIT_MSG_FILE=$(mktemp)
-   printf '%s' "chore(tasks): $COMMIT_MSG" > "$COMMIT_MSG_FILE"
-   if ! tasks_git commit -F "$COMMIT_MSG_FILE"; then
-     echo "ERROR: git commit failed. Check pre-commit hooks or git config." >&2
-     rm -f "$COMMIT_MSG_FILE"
-     exit 1
-   fi
-   rm -f "$COMMIT_MSG_FILE"
-   ```
-3. **Never interpolate user-derived values directly into shell commands** — task titles,
-   branch names, and other user input may contain shell metacharacters
-4. **Use `grep -F` for fixed string matching** — never pass branch names or task IDs
-   as regex patterns to `grep` without `-F`
-5. **Use `grep -E '^\| T-NNN \|'`** to match task rows in optimus-tasks.md — plain `grep "T-NNN"`
-   matches titles and dependency columns too
-6. **Validate tool availability** before use: `command -v jq >/dev/null 2>&1` before running `jq`
-7. **Validate JSON files** before parsing: `jq empty "$FILE" 2>/dev/null` before reading keys
-8. **Sanitize user-derived values in commit messages** — task titles and descriptions may
-   contain shell metacharacters (backticks, `$(...)`, double quotes). **Mandatory pattern:**
-   write the commit message to a temporary file and use `git commit -F`:
-   ```bash
-   COMMIT_MSG_FILE=$(mktemp)
-   printf '%s' "chore(tasks): $OPERATION" > "$COMMIT_MSG_FILE"
-   git commit -F "$COMMIT_MSG_FILE"
-   rm -f "$COMMIT_MSG_FILE"
-   ```
-   This avoids all shell expansion issues. If using `-m` directly, sanitize with:
-   `SAFE_VALUE=$(printf '%s' "$VALUE" | tr -d '`$')` before interpolation.
-
-Skills reference this as: "Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelines."
-
+**Summary:** All bash examples in AGENTS.md/SKILL.md are templates executed literally — follow these rules to prevent injection and silent failures: (1) always quote variables (`"$VAR"`); (2) check exit codes for critical commands; (3) never interpolate user-derived values directly into shell; (4) use `grep -F` for fixed-string matching of branch names/task IDs; (5) match task rows with anchored regex `grep -E '^\| T-NNN \|'`; (6) `command -v jq` before use; (7) `jq empty "$FILE"` before parse; (8) for commit messages with user content, write to `mktemp` file and use `git commit -F` (avoids all expansion). See full anti-pattern list + sanitization recipes in AGENTS.md.
 
 ### Protocol: State Management (summarized)
 

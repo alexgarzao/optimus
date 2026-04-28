@@ -3318,6 +3318,16 @@ class TestProtocolSummarizeMarker:
         "Project Rules Discovery",
         "Ring Droid Requirement Check",
         "Active Version Guard",
+        # Phase 8:
+        "Default Scope Resolution",
+        "Re-run Guard",
+        "Default Branch Refusal (HARD BLOCK)",
+        "Branch Name Derivation",
+        "Shell Safety Guidelines",
+        "Worktree Location",
+        "Increment Stage Stats",
+        # Note: "Dry-Run Mode" is summarized but uses `## ` (H2) form;
+        # tested via test_summarize_marker_present_for_dry_run_mode_section.
     ]
 
     def test_summarize_marker_present_for_top_protocols(self):
@@ -3458,5 +3468,77 @@ class TestProtocolSummarizeMarker:
         )
         assert marker_idx < summary_idx, (
             "Valid Status Values: marker must come before **Summary:** "
+            f"(marker={marker_idx}, summary={summary_idx})"
+        )
+
+    def test_summarize_marker_present_for_dry_run_mode_section(self):
+        """Phase 8: the `## Protocol: Dry-Run Mode` section is an H2 (not H3)
+        Protocol: heading — the `SUMMARIZED_PROTOCOLS` list assumes `### Protocol:`,
+        so Dry-Run Mode is guarded explicitly here."""
+        content = AGENTS_MD.read_text()
+        heading = "## Protocol: Dry-Run Mode"
+        idx = content.find(heading)
+        assert idx >= 0, f"{heading} missing from AGENTS.md"
+        window = content[idx: idx + 1500]
+        marker_idx = window.find("<!-- inline-mode: summarize -->")
+        summary_idx = window.find("**Summary:**")
+        assert marker_idx >= 0, (
+            "Dry-Run Mode: missing <!-- inline-mode: summarize --> marker "
+            "(must be placed immediately under the heading)"
+        )
+        assert summary_idx >= 0, (
+            "Dry-Run Mode: missing **Summary:** subsection "
+            "(must follow the summarize marker)"
+        )
+        assert marker_idx < summary_idx, (
+            "Dry-Run Mode: marker must come before **Summary:** "
+            f"(marker={marker_idx}, summary={summary_idx})"
+        )
+
+    def test_summarize_marker_present_for_deep_research_section(self):
+        """Phase 8: the `### Deep Research Before Presenting (MANDATORY for cycle
+        review skills)` section is a non-`Protocol:` H3 — guarded explicitly,
+        same rationale as File Location / Finding Presentation / etc."""
+        content = AGENTS_MD.read_text()
+        heading = "### Deep Research Before Presenting (MANDATORY for cycle review skills)"
+        idx = content.find(heading)
+        assert idx >= 0, f"{heading} missing from AGENTS.md"
+        window = content[idx: idx + 1500]
+        marker_idx = window.find("<!-- inline-mode: summarize -->")
+        summary_idx = window.find("**Summary:**")
+        assert marker_idx >= 0, (
+            "Deep Research Before Presenting: missing <!-- inline-mode: summarize "
+            "--> marker (must be placed immediately under the heading)"
+        )
+        assert summary_idx >= 0, (
+            "Deep Research Before Presenting: missing **Summary:** subsection "
+            "(must follow the summarize marker)"
+        )
+        assert marker_idx < summary_idx, (
+            "Deep Research Before Presenting: marker must come before **Summary:** "
+            f"(marker={marker_idx}, summary={summary_idx})"
+        )
+
+    def test_summarize_marker_present_for_fix_implementation_section(self):
+        """Phase 8: the `### Fix Implementation (Complexity-Based Dispatch)`
+        section is a non-`Protocol:` H3 — guarded explicitly, same rationale
+        as File Location / Finding Presentation / etc."""
+        content = AGENTS_MD.read_text()
+        heading = "### Fix Implementation (Complexity-Based Dispatch)"
+        idx = content.find(heading)
+        assert idx >= 0, f"{heading} missing from AGENTS.md"
+        window = content[idx: idx + 1500]
+        marker_idx = window.find("<!-- inline-mode: summarize -->")
+        summary_idx = window.find("**Summary:**")
+        assert marker_idx >= 0, (
+            "Fix Implementation: missing <!-- inline-mode: summarize --> marker "
+            "(must be placed immediately under the heading)"
+        )
+        assert summary_idx >= 0, (
+            "Fix Implementation: missing **Summary:** subsection "
+            "(must follow the summarize marker)"
+        )
+        assert marker_idx < summary_idx, (
+            "Fix Implementation: marker must come before **Summary:** "
             f"(marker={marker_idx}, summary={summary_idx})"
         )
