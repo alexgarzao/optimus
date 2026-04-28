@@ -3412,6 +3412,67 @@ class TestSpecSelfHeal:
         )
 
 
+class TestTasksDirConvention:
+    """Issue #54: tasksDir convention is documented in AGENTS.md with three
+    layouts (default same-repo, project-internal alias, cross-repo) and
+    cross-referenced from README.md."""
+
+    def test_agents_md_has_tasksdir_section(self):
+        """AGENTS.md must declare a 'tasksDir Configuration' H3 section."""
+        agents_md = AGENTS_MD.read_text()
+        assert "### tasksDir Configuration" in agents_md, (
+            "AGENTS.md must contain a '### tasksDir Configuration' section "
+            "(issue #54 acceptance criterion)"
+        )
+
+    def test_agents_md_documents_three_layouts(self):
+        """The tasksDir Configuration section must document all three layouts:
+        default same-repo, project-internal alias, and cross-repo."""
+        agents_md = AGENTS_MD.read_text()
+        start = agents_md.find("### tasksDir Configuration")
+        end = agents_md.find("\n### ", start + 1)
+        section = agents_md[start:end if end > 0 else len(agents_md)]
+        # All three layouts must be named explicitly.
+        assert "Same-repo, default path" in section, (
+            "tasksDir section must document Layout 1 (same-repo, default path)"
+        )
+        assert "Same-repo, project-internal alias" in section, (
+            "tasksDir section must document Layout 2 (project-internal alias)"
+        )
+        assert "Cross-repo" in section, (
+            "tasksDir section must document Layout 3 (cross-repo / separate tasks repo)"
+        )
+
+    def test_agents_md_shows_config_snippet_and_tree(self):
+        """The section must include at least one config.json snippet AND at
+        least one directory-tree example so users can copy-paste the layout."""
+        agents_md = AGENTS_MD.read_text()
+        start = agents_md.find("### tasksDir Configuration")
+        end = agents_md.find("\n### ", start + 1)
+        section = agents_md[start:end if end > 0 else len(agents_md)]
+        # config.json snippet (JSON code block referencing tasksDir).
+        assert '"tasksDir":' in section, (
+            "tasksDir section must include a config.json snippet showing the key"
+        )
+        # Directory-tree example uses tree-drawing characters.
+        assert "├──" in section, (
+            "tasksDir section must include at least one directory-tree example"
+        )
+
+    def test_readme_references_tasksdir(self):
+        """README.md must mention tasksDir (acceptance criterion 2: at least
+        one README example referencing it)."""
+        readme = (REPO_ROOT / "README.md").read_text()
+        assert "tasksDir" in readme, (
+            "README.md must mention tasksDir (issue #54 acceptance criterion 2)"
+        )
+        # Must link to the AGENTS.md section so readers can find the full spec.
+        # Anchor casing varies across renderers; compare lowercased on both sides.
+        assert "agents.md#tasksdir-configuration" in readme.lower(), (
+            "README.md must link to AGENTS.md tasksDir Configuration section"
+        )
+
+
 class TestWorktreeLocationConvention:
     """F-worktrees: All worktree-creation sites use ${MAIN_WORKTREE}/.worktrees/<branch>
     pattern; .gitignore auto-inject uses post-F1 ${MAIN_WORKTREE}/.gitignore contract."""
