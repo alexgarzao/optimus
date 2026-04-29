@@ -424,7 +424,8 @@ Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelin
    case "$BRANCH_NAME" in
      *..*|/*) echo "ERROR: refusing unsafe branch '$BRANCH_NAME'." >&2; exit 1 ;;
    esac
-   WORKTREE_DIR="${MAIN_WORKTREE}/.worktrees/${BRANCH_NAME}"
+   FLAT_BRANCH="${BRANCH_NAME//\//\-}"     # / → - so worktree dirs are flat
+   WORKTREE_DIR="${MAIN_WORKTREE}/.worktrees/${FLAT_BRANCH}"
    ```
    **Pre-check:** If `WORKTREE_DIR` already exists but is not a git worktree, ask via
    `AskUser`: "Directory `<path>` already exists but is not a git worktree."

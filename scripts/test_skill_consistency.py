@@ -3474,8 +3474,9 @@ class TestTasksDirConvention:
 
 
 class TestWorktreeLocationConvention:
-    """F-worktrees: All worktree-creation sites use ${MAIN_WORKTREE}/.worktrees/<branch>
-    pattern; .gitignore auto-inject uses post-F1 ${MAIN_WORKTREE}/.gitignore contract."""
+    """F-worktrees: All worktree-creation sites use ${MAIN_WORKTREE}/.worktrees/<flat-branch>
+    where flat-branch = branch with / replaced by -; .gitignore auto-inject uses post-F1
+    ${MAIN_WORKTREE}/.gitignore contract."""
 
     CREATOR_FILES = [
         (REPO_ROOT / "AGENTS.md", "Workspace Auto-Navigation"),
