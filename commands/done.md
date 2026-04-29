@@ -348,7 +348,8 @@ Options:
 
 ```bash
 git worktree remove "$WORKTREE_PATH"
-# Cleanup intermediate parent dirs (e.g., empty .worktrees/feat/ after removing leaf).
+# Cleanup empty parent dirs (legacy nested layout only — flat layout's parent
+# is .worktrees/ directly, so the loop exits after one iteration).
 # Idempotent: rmdir refuses non-empty dirs silently.
 parent="$(dirname "$WORKTREE_PATH")"
 while [ "$parent" != "${MAIN_WORKTREE}/.worktrees" ] && [ "$parent" != "/" ]; do
@@ -357,8 +358,7 @@ while [ "$parent" != "${MAIN_WORKTREE}/.worktrees" ] && [ "$parent" != "/" ]; do
 done
 ```
 
-This walks up from the removed worktree leaf to `${MAIN_WORKTREE}/.worktrees/` removing
-empty intermediate dirs (`feat/`, `fix/`, etc.) but stops at `.worktrees/` itself.
+This loop walks up from the removed worktree to `${MAIN_WORKTREE}/.worktrees/` and removes empty parent dirs. With the FLAT layout (`Protocol: Worktree Location`), a flat worktree's parent is `.worktrees/` directly so the loop exits after one iteration. Legacy nested worktrees (still supported for backwards-compat) trigger the loop to clean up their `feat/` / `fix/` parent dir as before.
 
 **Edge case — running INSIDE the worktree:** If the agent's current working directory IS
 the worktree being removed, `cd` to the main repository first:

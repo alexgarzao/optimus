@@ -359,8 +359,9 @@ fi
 
 # Anchor the match on the kebab-cased task ID (e.g., `-t-1-`) so substrings like
 # `t-1` cannot match `t-10`/`t-100`. Worktree paths follow Protocol: Worktree
-# Location: ${MAIN_WORKTREE}/.worktrees/<branch-name> (legacy sibling paths
-# ../<repo>-<id>-<keywords> still resolve via git worktree list metadata).
+# Location: ${MAIN_WORKTREE}/.worktrees/<flat-branch-name> (branch slashes
+# replaced with hyphens; legacy sibling paths ../<repo>-<id>-<keywords> still
+# resolve via git worktree list metadata).
 # Feature branches follow `<tipo>/<id>-<keywords>` — both surround the
 # lowercased ID with hyphens.
 TASK_KEBAB="-$(echo "$TASK_ID" | tr '[:upper:]' '[:lower:]')-"
@@ -409,7 +410,8 @@ fi
    case "$TASK_BRANCH" in
      *..*|/*) echo "ERROR: refusing unsafe branch '$TASK_BRANCH'." >&2; exit 1 ;;
    esac
-   WORKTREE_DIR="${MAIN_WORKTREE}/.worktrees/${TASK_BRANCH}"
+   FLAT_BRANCH="${TASK_BRANCH//\//\-}"     # / → - so worktree dirs are flat
+   WORKTREE_DIR="${MAIN_WORKTREE}/.worktrees/${FLAT_BRANCH}"
 
    # HARD BLOCK on git worktree add failure (dir exists, branch checked out elsewhere, etc.)
    if ! git worktree add "$WORKTREE_DIR" "$TASK_BRANCH"; then

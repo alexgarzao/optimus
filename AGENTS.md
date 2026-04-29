@@ -1715,7 +1715,7 @@ Skills reference this as: "Mark terminal session — see AGENTS.md Protocol: Ter
 
 <!-- inline-mode: omit -->
 
-**Summary:** When an Optimus stage skill (build, review, done) is invoked from the default branch (main/master) instead of from the task's linked worktree, automatically detect the correct workspace and navigate there before any mutation. Resolution order: (1) state.json `branch` field for the task; (2) match against `git worktree list` by branch ref; (3) fallback path-segment match by anchored kebab task-ID (`-t-NNN-`); (4) recovery: if branch exists but worktree is missing, create at `${MAIN_WORKTREE}/.worktrees/<branch-name>` per Protocol: Worktree Location. HARD BLOCK on default branch — refuses to mutate from main/master regardless of resolution outcome. See full recipe + Default Branch Refusal cross-reference in AGENTS.md.
+**Summary:** When an Optimus stage skill (build, review, done) is invoked from the default branch (main/master) instead of from the task's linked worktree, automatically detect the correct workspace and navigate there before any mutation. Resolution order: (1) state.json `branch` field for the task; (2) match against `git worktree list` by branch ref; (3) fallback path-segment match by anchored kebab task-ID (`-t-NNN-`); (4) recovery: if branch exists but worktree is missing, create at `${MAIN_WORKTREE}/.worktrees/<flat-branch-name>` (branch with `/` → `-`) per Protocol: Worktree Location. HARD BLOCK on default branch — refuses to mutate from main/master regardless of resolution outcome. See full recipe + Default Branch Refusal cross-reference in AGENTS.md.
 
 **Referenced by:** stages 2-4
 
@@ -1764,8 +1764,8 @@ fi
    - **If N eligible tasks** → list all with worktree paths via `AskUser`:
      ```
      Multiple tasks available:
-       T-001 — User auth (Em Andamento) → <repo>/.worktrees/feat/t-001-user-auth/
-       T-002 — Login page (Em Andamento) → <repo>/.worktrees/feat/t-002-login-page/
+       T-001 — User auth (Em Andamento) → <repo>/.worktrees/feat-t-001-user-auth/
+       T-002 — Login page (Em Andamento) → <repo>/.worktrees/feat-t-002-login-page/
      Which task should I continue?
      ```
    - After task is identified, locate the worktree. Prefer the source-of-truth
@@ -1817,7 +1817,10 @@ fi
      case "<branch-name>" in
        *..*|/*) echo "ERROR: refusing unsafe branch name." >&2; exit 1 ;;
      esac
-     WORKTREE_DIR="${MAIN_WORKTREE}/.worktrees/<branch-name>"
+     # Flatten branch name: every `/` becomes `-` so the worktree dir is flat
+     # (e.g., feat/t-007-... → feat-t-007-...). See Protocol: Worktree Location.
+     FLAT_BRANCH="${BRANCH_NAME//\//\-}"
+     WORKTREE_DIR="${MAIN_WORKTREE}/.worktrees/${FLAT_BRANCH}"
 
      if ! git worktree add "$WORKTREE_DIR" "<branch-name>"; then
        echo "ERROR: 'git worktree add $WORKTREE_DIR' failed (branch already checked out, dir collision, or filesystem error)." >&2
@@ -3077,7 +3080,7 @@ Skills reference this as: "Check active version guard — see AGENTS.md Protocol
 
 <!-- inline-mode: omit -->
 
-**Summary:** Linked worktrees created by plan / resume / Workspace Auto-Navigation / done-cleanup live at the canonical path `${MAIN_WORKTREE}/.worktrees/<branch-name>` — gitignored (auto-injected by Initialize .optimus Directory + Session State protocols), project-rooted, resolved via Resolve Main Worktree Path so paths stay correct from any linked worktree. Branch names contain `/` (per Branch Name Derivation), creating intermediate `feat/`, `fix/` directories under `.worktrees/` automatically. Worktrees ALWAYS belong to the project repo, never the tasks repo (separate-repo `tasksDir` doesn't affect location). Recommend IDE exclusion (`.vscode/settings.json` `search.exclude`, IntelliJ Excluded). Backwards compat: legacy sibling paths still work via worktree metadata; no forced migration. See full convention + IDE config in AGENTS.md.
+**Summary:** Linked worktrees created by plan / resume / Workspace Auto-Navigation / done-cleanup live at the canonical path `${MAIN_WORKTREE}/.worktrees/<flat-branch-name>` — gitignored (auto-injected by Initialize .optimus Directory + Session State protocols), project-rooted, resolved via Resolve Main Worktree Path so paths stay correct from any linked worktree. Branch names contain `/` (per Branch Name Derivation); the worktree directory is created with a flat directory name with `/` replaced by `-` (e.g., `feat/t-007-...` → `feat-t-007-...`). Worktrees ALWAYS belong to the project repo, never the tasks repo (separate-repo `tasksDir` doesn't affect location). Recommend IDE exclusion (`.vscode/settings.json` `search.exclude`, IntelliJ Excluded). Backwards compat: legacy sibling paths and legacy nested-format worktrees still work via worktree metadata; no forced migration. See full convention + IDE config in AGENTS.md.
 
 **Referenced by:** plan (Step 1.0.5), resume (Step 3.3 Case 2), Protocol: Workspace Auto-Navigation (see Reusable Protocols), done (Phase 4.1 cleanup)
 
@@ -3087,9 +3090,9 @@ Optimus creates linked git worktrees during the task lifecycle:
 - `/optimus-resume` creates a worktree on recovery if branch exists but worktree is missing (Step 3.3).
 - Protocol: Workspace Auto-Navigation (see Reusable Protocols) creates a worktree as a fallback when an Optimus skill is invoked from the default branch and the task's worktree is missing.
 
-**Canonical path:** `${MAIN_WORKTREE}/.worktrees/<branch-name>` — gitignored (auto-injected by `Protocol: Initialize .optimus Directory` and `Protocol: Session State`), project-rooted, and resolved against the main worktree (path correct even when invoked from a linked worktree, per Protocol: Resolve Main Worktree Path).
+**Canonical path:** `${MAIN_WORKTREE}/.worktrees/<flat-branch-name>` — gitignored (auto-injected by `Protocol: Initialize .optimus Directory` and `Protocol: Session State`), project-rooted, and resolved against the main worktree (path correct even when invoked from a linked worktree, per Protocol: Resolve Main Worktree Path). Where `<flat-branch-name>` = branch with each `/` replaced by `-` (POSIX bash: `${BRANCH_NAME//\//\-}`).
 
-**Note on branch names with `/`:** branch names contain `/` (see `Protocol: Branch Name Derivation`). Used as a directory under `.worktrees/`, the `/` creates intermediate subdirectories — `<repo>/.worktrees/feat/t-007-user-auth/`. `git worktree add` creates these automatically. `ls .worktrees/` shows the tipo-prefix dirs (`feat/`, `fix/`, `chore/`); `find .worktrees/ -mindepth 2 -maxdepth 2 -type d` lists each leaf.
+**Note on branch names with `/`:** Branch names contain `/` (see `Protocol: Branch Name Derivation`), but the worktree directory name is FLATTENED — every `/` is replaced by `-`. Example: branch `feat/t-007-user-auth` lands at `<repo>/.worktrees/feat-t-007-user-auth/`. The translation rule is a single bash parameter expansion: `${BRANCH_NAME//\//\-}`. Multi-slash branches translate every slash (`feat/sub/x` → `feat-sub-x`). The branch name itself is unchanged in `git`. List worktrees with `ls .worktrees/` (one entry per worktree, no nested dirs) or `find .worktrees/ -mindepth 1 -maxdepth 1 -type d`.
 
 **Why nested under the project repo:**
 
@@ -3109,9 +3112,10 @@ Optimus creates linked git worktrees during the task lifecycle:
 **Backwards compatibility:**
 
 - Existing worktrees in older sibling locations (`../<repo>-<task>`) continue to work — `git worktree list` finds them regardless of path.
+- Existing nested-format worktrees (`.worktrees/feat/t-001-user-auth/`) created by older optimus-plan runs continue to work — `git worktree list` is layout-agnostic. Optionally consolidate with `git worktree move .worktrees/feat/t-001-user-auth .worktrees/feat-t-001-user-auth`. No forced migration.
 - New worktrees from `/optimus-plan` and `resume`'s recovery land in `.worktrees/`.
 - No forced migration.
-- Users may relocate manually with `git worktree move <old-path> ${MAIN_WORKTREE}/.worktrees/<branch-name>` when convenient.
+- Users may relocate manually with `git worktree move <old-path> ${MAIN_WORKTREE}/.worktrees/<flat-branch-name>` (where `<flat-branch-name>` is the branch with `/` → `-`) when convenient.
 
 Skills reference this as: "see AGENTS.md Protocol: Worktree Location."
 

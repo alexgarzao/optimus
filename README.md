@@ -198,7 +198,7 @@ For full details, layout trees, and the cross-repo helper contract, see
 
 ## Worktree layout
 
-Optimus creates linked git worktrees under `<repo>/.worktrees/<branch-name>/` (gitignored). For project setup, configure your editor to exclude `.worktrees/` from search and indexing:
+Optimus creates linked git worktrees under `<repo>/.worktrees/<flat-branch-name>/` (gitignored), where `<flat-branch-name>` is the branch name with each `/` replaced by `-` (e.g., branch `feat/t-001-user-auth` → directory `.worktrees/feat-t-001-user-auth/`). Branch names themselves are unchanged in git. For project setup, configure your editor to exclude `.worktrees/` from search and indexing:
 
 - **VS Code** (`.vscode/settings.json`):
   ```json
