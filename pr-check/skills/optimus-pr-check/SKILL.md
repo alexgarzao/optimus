@@ -1361,16 +1361,17 @@ This triggers Codacy/DeepSource reanalysis automatically.
 
 ## Phase 13: Respond to ALL PR Comments
 
-This phase has TWO sub-flows with independent mode gates:
+This phase has THREE sub-flows with independent mode gates:
 
 | Sub-flow | Runs when | Purpose |
 |---|---|---|
 | **Step 13.0 — Outdated thread cleanup** | `REVIEW_MODE` ∈ {`findings`, `diff`} | Auto-reply + resolve every thread in `outdated_threads` (collected at Step 1.3.1). Pure hygiene — independent of agent verdicts. Required for CodeRabbit / approval-gate compliance, which withhold approval while ANY thread (including outdated ones) is unresolved. |
-| **Steps 13.1-13.6 — Verdict-driven replies** | `REVIEW_MODE = findings` only | Reply per agent verdict (AGREE / CONTEST / ALREADY-FIXED) on `active_threads`, then resolve. Skipped in diff mode because agents performed a fresh review and never produced verdicts on existing comments. |
+| **Steps 13.1-13.4 + 13.6 — Verdict-driven replies + summary** | `REVIEW_MODE = findings` only | Reply per agent verdict (AGREE / CONTEST / ALREADY-FIXED) on `active_threads`, then resolve. Step 13.6 renders the per-thread reply summary. Skipped in diff mode because agents performed a fresh review and never produced verdicts on existing comments. |
+| **Step 13.5 — Hide fully-resolved reviews** | `REVIEW_MODE` ∈ {`findings`, `diff`} | Minimize bot-authored review summaries (CodeRabbit, DeepSource, Codacy, etc.) whose threads are all resolved AND contain only bot-authored content. Hygiene — independent of verdicts. Runs after thread mutations are complete (after 13.4 in `findings` mode, after 13.0 in `diff` mode). |
 
 **Mode behavior at a glance:**
-- `findings` → Step 13.0 runs THEN Steps 13.1-13.6 run.
-- `diff` → Step 13.0 runs (outdated cleanup); Steps 13.1-13.6 are SKIPPED. Phase 14 renders a warning that existing active comments remain unaddressed.
+- `findings` → Step 13.0 → Steps 13.1-13.4 → Step 13.5 → Step 13.6 renders.
+- `diff` → Step 13.0 → Step 13.2 (refresh thread map only) → Step 13.5. Steps 13.1, 13.3, 13.4, 13.6 active-threads table are SKIPPED. Phase 14 renders a warning that existing active comments remain unaddressed.
 - `none` → user already exited at Step 1.8; Phase 13 is unreachable.
 
 **HARD BLOCK (when running):** Every thread in scope MUST receive a reply AND be resolved. Phase 14 verifies zero unresolved threads remain.
@@ -1443,6 +1444,8 @@ Already addressed in a previous commit.
 
 Re-fetch the thread map from Step 1.3.1 to get the latest state (threads may have been resolved by pushes or other activity):
 
+**HARD BLOCK — keep in lockstep with Step 1.3.1:** the `comments` selection below MUST mirror Step 1.3.1's selection, including `pullRequestReview { id author { login } }`. If you drop that field, Step 13.5 loses its `review_node_id` grouping key and will incorrectly classify every review as "no threads attached" → minimize everything indiscriminately.
+
 ```bash
 gh api graphql -f query='
   query {
@@ -1452,6 +1455,7 @@ gh api graphql -f query='
           nodes {
             id
             isResolved
+            isOutdated
             path
             line
             comments(first: 10) {
@@ -1459,6 +1463,7 @@ gh api graphql -f query='
                 databaseId
                 author { login }
                 body
+                pullRequestReview { id author { login } }
               }
             }
           }
@@ -1469,7 +1474,7 @@ gh api graphql -f query='
 '
 ```
 
-Update the thread map with fresh `isResolved` status. Skip threads already resolved.
+Update the thread map with fresh `isResolved` status. Re-derive `review_node_id` and `review_author` from the refreshed first-comment `pullRequestReview` selection — do NOT carry forward the Step 1.3.1 values blindly, since deletions or edits between Step 1.3.1 and Step 13.2 can change the parent review attribution. Skip threads already resolved (their `is_resolved == true` rules them out of further mutation but they REMAIN in the thread map for Step 13.5's grouping).
 
 ### Step 13.3: Reply AND Resolve Each Thread (atomically)
 
@@ -1600,28 +1605,29 @@ After all threads are processed (BOTH the active threads from Steps 13.1-13.3 AN
 
 **Why this includes outdated threads:** CodeRabbit and other approval gates inspect EVERY review thread on the PR, not just the ones agents acted on. Leaving outdated threads with `isResolved: false` blocks PR approval even though the underlying code was already fixed in subsequent commits. Step 13.0's auto-resolve hygiene is the entire reason this gate now passes.
 
-### Step 13.5: Hide Fully-Resolved Reviews
+### Step 13.5: Hide Fully-Resolved Reviews (runs in `findings` and `diff` modes)
 
-**Goal:** collapse review summaries (e.g. CodeRabbit's `https://github.com/<owner>/<repo>/pull/<n>#pullrequestreview-<id>` entries) once all of their threads are resolved — mirroring what a human does manually by clicking "Resolve conversation" on a review summary. Without this step, CodeRabbit's review summary panels stay expanded on the PR forever, even when every underlying thread is resolved, which is exactly what users complain about.
+**Goal:** collapse bot-authored review summaries (e.g. CodeRabbit's `<base_pr_url>#pullrequestreview-<id>` entries) once ALL their inline threads are resolved AND those threads contain only bot-authored content — mirroring what a human does manually by clicking "Resolve conversation" on a review summary. Without this step, CodeRabbit's review summary panels stay expanded on the PR forever even when every underlying thread is resolved, which is exactly what users complain about.
 
-**HARD BLOCK:** Step 13.5 MUST run after Step 13.4 confirms zero unresolved threads. Do NOT skip it — the Completion Checklist and Phase 14 summary verify it ran. Idempotency (Step 13.5.d) makes it safe to re-run, so when in doubt, run it.
+**HARD BLOCK — runs in BOTH modes:**
+- `findings` mode: runs AFTER Step 13.4 confirms zero unresolved threads.
+- `diff` mode: runs AFTER Step 13.0 (outdated cleanup) and Step 13.2 (refresh thread map) — there are no agent verdicts to act on, but minimization is hygiene independent of verdicts.
 
-#### Step 13.5.a: Enumerate ALL reviews on the PR
+The Completion Checklist and Phase 14 summary verify Step 13.5 ran. Idempotency (Step 13.5.4) makes it safe to re-run.
 
+**PR scope reminder:** Step 13.5 acts on the `<owner>/<repo>` resolved at Step 1.1 — do NOT enumerate reviews on a different repo. The PAT scope bounds reach, but a misconfigured invocation must not pivot to another repo's PR.
+
+#### Step 13.5.1: Enumerate ALL reviews on the PR
+
+**First page (no cursor):**
 ```bash
 gh api graphql -f query='
-  query($cursor: String) {
+  query {
     repository(owner: "<owner>", name: "<repo>") {
       pullRequest(number: <number>) {
-        reviews(first: 100, after: $cursor) {
+        reviews(first: 100) {
           pageInfo { hasNextPage endCursor }
-          nodes {
-            id
-            author { login }
-            state
-            body
-            isMinimized
-          }
+          nodes { id author { login } state body isMinimized }
         }
       }
     }
@@ -1629,23 +1635,50 @@ gh api graphql -f query='
 '
 ```
 
-If `pageInfo.hasNextPage` is `true`, re-run with `-f cursor="<endCursor>"` until all pages are fetched. Merge all nodes into a single `reviews[]` list.
+**Subsequent pages — pass the `endCursor` from the previous response:**
+```bash
+gh api graphql -f query='
+  query($cursor: String) {
+    repository(owner: "<owner>", name: "<repo>") {
+      pullRequest(number: <number>) {
+        reviews(first: 100, after: $cursor) {
+          pageInfo { hasNextPage endCursor }
+          nodes { id author { login } state body isMinimized }
+        }
+      }
+    }
+  }
+' -f cursor="<endCursor>"
+```
 
-#### Step 13.5.b: Compute per-review resolution status
+Merge all pages into a single `reviews[]` list.
 
-Using the thread map from Step 13.2 (which now carries `review_node_id` and `review_author` per Step 1.3.1), for EACH `review` in `reviews[]`:
+**`gh` parameter gotcha:** use `-f` for raw string variables (`String`, here for `cursor`) and `-F` for typed variables (`ID!`, used in Step 13.5.3). Mixing them silently fails — `-F id="..."` for a `String` variable will error; `-f id="..."` for an `ID!` variable passes a string where the schema expects an ID.
 
-1. `threads_for_review = [t for t in (active_threads ∪ outdated_threads) if t.review_node_id == review.id]`
-2. `is_fully_resolved = all(t.is_resolved == true for t in threads_for_review)` — vacuously `true` for reviews with zero inline threads (e.g. CodeRabbit summary-only reviews).
-3. `eligible = is_fully_resolved AND review.isMinimized == false`
-4. **Eligibility filter (which authors get auto-hidden):**
-   - Always eligible (when `is_fully_resolved` and not yet minimized): `coderabbitai[bot]`, `deepsource-io`, `codacy-production`, `github-actions[bot]`, `copilot`, `github-advanced-security[bot]`.
-   - Skip `state: PENDING` regardless of author.
-   - Skip human-authored reviews unless `state: APPROVED` AND `body` is empty — humans typically want their summary visible, so default to leaving theirs alone.
+#### Step 13.5.2: Compute per-review eligibility (precedence-ranked decision)
 
-#### Step 13.5.c: Minimize each eligible review (atomically: act → confirm → next)
+Using the thread map from Step 13.2 (whose query mirrors Step 1.3.1's `pullRequestReview` selection — see HARD BLOCK in Step 13.2), evaluate each `review` in `reviews[]` in this **exact order**. The first rule that matches wins:
 
-For EACH eligible review, in order, do not batch:
+1. **If `review.state == "PENDING"`** → skip. Pending reviews aren't visible to other PR participants yet.
+2. **If `review.isMinimized == true`** → skip (idempotency — already hidden).
+3. **If `review.author.login` is NOT in the bot allowlist below** → skip. **Human-authored reviews are NEVER auto-minimized**, regardless of state, body, or thread resolution. Approvals especially must remain visible — they are a governance signal.
+4. **Compute `threads_for_review`** = `[t for t in (active_threads ∪ outdated_threads) if t.review_node_id == review.id]`. **If `len(threads_for_review) == 0`** → skip. Reviews with zero inline threads include CodeRabbit summary-only reviews and reviews whose findings live in the body (Step 1.3.1.5's `♻️ Duplicate comments` and `⚠️ Outside diff range comments` sections); auto-hiding those would suppress findings the user has not yet triaged.
+5. **If any thread in `threads_for_review` has `review_node_id == null` AND `is_resolved == false`** → log a warning (`"Skipped <review_url>: orphan unresolved thread <thread_node_id>"`) and skip this review. Orphan unresolved threads (e.g. deleted first comment, attachment to a commit instead of a review) are an unexpected state worth surfacing rather than silently hiding.
+6. **If any comment inside any thread in `threads_for_review` has an author NOT in the bot allowlist** → skip. Bot threads that contain human replies must stay visible — minimization would collapse the human's content along with the bot's. Log: `"Skipped <review_url>: contains human replies in <N> thread(s)"`.
+7. **If `all(t.is_resolved == true for t in threads_for_review)` is false** → skip. (Step 13.4 already guarantees this in `findings` mode; in `diff` mode, only Step 13.0 ran, so this rule is the actual gate.)
+8. **Otherwise** → eligible. Add the review to `eligible_reviews[]`.
+
+**Bot allowlist (exact login string match — entries fail closed if the actual login differs):**
+- `coderabbitai[bot]`
+- `deepsource-io`
+- `codacy-production`
+- `github-actions[bot]`
+- `copilot-pull-request-reviewer[bot]` *(GitHub Copilot for PRs — verify against the current repo's actual login; the older `copilot` form does not match modern Copilot review accounts)*
+- `github-advanced-security[bot]`
+
+#### Step 13.5.3: Minimize each eligible review (atomically: act → confirm → next)
+
+For EACH review in `eligible_reviews[]`, in order, do not batch:
 
 ```bash
 gh api graphql -f query='
@@ -1657,12 +1690,12 @@ gh api graphql -f query='
 ' -F id="<review_node_id>"
 ```
 
-Confirm `isMinimized: true` in the response before moving to the next review. If `false` returns or the mutation errors (e.g. permission, already-minimized race), log the failure with the review URL and continue — do NOT abort the run; Step 13.4 already guaranteed thread resolution, which is the user-visible blocker. Hiding is hygiene.
+Confirm `isMinimized: true` in the response before moving to the next review. If the mutation errors (permission, race), log the failure with the review URL and continue — do NOT abort the run; Step 13.4 already guaranteed thread resolution (in `findings` mode), which is the user-visible blocker. Hiding is hygiene.
 
 **Example — CodeRabbit review (matching the user's reported surface):**
 ```bash
-# review_node_id = "PRR_kwDOABCDEF4gXyZ_" (from Step 13.5.a, author=coderabbitai[bot])
-# corresponds to https://github.com/<owner>/<repo>/pull/<n>#pullrequestreview-4192419317
+# review_node_id = "PRR_kwDOABCDEF4gXyZ_" (from Step 13.5.1, author=coderabbitai[bot])
+# corresponds to <base_pr_url>#pullrequestreview-4192419317
 
 gh api graphql -f query='
   mutation($id: ID!) {
@@ -1673,19 +1706,21 @@ gh api graphql -f query='
 ' -F id="PRR_kwDOABCDEF4gXyZ_"
 ```
 
-#### Step 13.5.d: Idempotency
+#### Step 13.5.4: Idempotency
 
-`review.isMinimized == true` from Step 13.5.a is the dedupe key — skip without calling the mutation. This makes Step 13.5 safe to re-run after a crash, after a partial Phase 13, or on subsequent pr-check invocations against the same PR. The expected steady-state log on a re-run is `"Hidden 0 fully-resolved reviews (already minimized)"`.
+`review.isMinimized == true` from Step 13.5.1 is the dedupe key (Step 13.5.2 rule 2 enforces it). Steady-state on a re-run is `"Hidden 0 fully-resolved reviews (already minimized: K)"`.
 
-#### Step 13.5.e: Log line (MANDATORY — surface to user)
+**Race window — accepted trade-off:** between Step 13.5.1 (read) and Step 13.5.3 (write), another actor could call `minimizeComment(R, classifier: SPAM | OFFENSIVE | OUTDATED)`. Our subsequent mutation overwrites the classifier to `RESOLVED`. We accept this: pr-check's authority on "this thread is resolved" is established by Step 13.4 (or by the bot author + Step 13.0 in `diff` mode), and treating `RESOLVED` as the safe default is preferable to leaving the review uncollapsed. If the spec is later extended with a moderation pathway, this rule needs revisiting.
 
-After processing all eligible reviews, emit ONE log line with per-author counts:
+#### Step 13.5.5: Log line (MANDATORY — surface to user)
+
+After processing all eligible reviews, emit ONE log line with per-author counts and dedupe accounting:
 
 ```
-Hidden K fully-resolved reviews (CodeRabbit: X, DeepSource: Y, Codacy: Z, other bots: W).
+Hidden K fully-resolved reviews (CodeRabbit: X, DeepSource: Y, Codacy: Z, other bots: W). Already-minimized (idempotent skip): I. Skipped — non-bot replies / orphan threads / unresolved threads / non-bot author: S.
 ```
 
-This line is what the user sees in chat output to confirm the hide-on-resolve behavior actually ran. Phase 14 echoes the same number under "Sources Analyzed".
+This line surfaces in chat output to confirm the hide-on-resolve behavior actually ran. Phase 14 echoes K under "Sources Analyzed".
 
 ### Step 13.6: Reply Summary
 
@@ -1712,10 +1747,13 @@ Render TWO tables. The "Active threads" table is omitted entirely in `diff` mode
 | 2 | file.go:88 | Codacy | Outdated — code changed in subsequent commits | Resolved |
 
 #### Reviews hidden (Step 13.5 — render only when ≥1 review was hidden)
+
+The Review URL column renders the full anchored URL (`<base_pr_url>#pullrequestreview-<id>`) so the audit row is clickable; siblings use bare paths because reviews — unlike threads — have no `file:line` anchor. Render `Threads` as `K/K resolved` for K≥1, or `0/0 (summary-only — skipped per rule 4)` for the rare cases where a future relaxation of rule 4 surfaces here.
+
 | # | Review URL | Author | Threads | Status |
 |---|------------|--------|---------|--------|
-| 1 | https://github.com/<owner>/<repo>/pull/<n>#pullrequestreview-<id> | coderabbitai[bot] | 4/4 resolved | Hidden |
-| 2 | https://github.com/<owner>/<repo>/pull/<n>#pullrequestreview-<id> | deepsource-io | 2/2 resolved | Hidden |
+| 1 | <base_pr_url>#pullrequestreview-<id> | coderabbitai[bot] | 4/4 resolved | Hidden |
+| 2 | <base_pr_url>#pullrequestreview-<id> | deepsource-io | 2/2 resolved | Hidden |
 ```
 
 ---
@@ -1747,13 +1785,16 @@ unaddressed. Re-run `/optimus-pr-check` later to handle them.
 **findings_total (existing, unaddressed):** <N>
 **New agent findings (this run):** <M>
 **Outdated threads auto-resolved (Step 13.0): M** — pure hygiene; required for CodeRabbit / approval-gate compliance
+**Reviews hidden (Step 13.5): K** (CodeRabbit: X, DeepSource: Y, Codacy: Z, other bots: W) — fully-resolved bot review summaries collapsed via `minimizeComment`
 
 [render the next paragraph ONLY if findings_total > 0:]
 ⚠️ **<N> existing PR comments / CI failures were NOT addressed in this run.**
-Phase 13 verdict-driven replies (Steps 13.1-13.6) were skipped because diff
-mode does not produce AGREE/CONTEST verdicts on existing threads. (Step 13.0
-outdated thread cleanup ran normally — see count below.) To address them,
-re-run pr-check with `REVIEW_MODE=findings` (the default when findings_total > 0).
+Phase 13 verdict-driven replies (Steps 13.1, 13.3, 13.4, 13.6 active-threads
+table) were skipped because diff mode does not produce AGREE/CONTEST verdicts
+on existing threads. Step 13.0 (outdated thread cleanup) and Step 13.5 (hide
+fully-resolved reviews) ran normally — see counts above. To address the
+existing N findings, re-run pr-check with `REVIEW_MODE=findings` (the default
+when findings_total > 0).
 
 [then render the standard tables for Fixed / Skipped / Deferred / CI Status /
 Verification / Configuration Changes — same schema as findings mode, but
@@ -1835,7 +1876,7 @@ Render the standard summary below.
 - [ ] Push completed or explicitly skipped
 - [ ] ALL comment threads replied AND resolved atomically (reply → resolve → next, never batch separately)
 - [ ] Verification query confirms zero `isResolved: false` threads remain
-- [ ] Fully-resolved reviews hidden via `minimizeComment` — Step 13.5.a confirms `isMinimized: true` for every previously-eligible review (or zero eligible)
+- [ ] Fully-resolved reviews hidden via `minimizeComment` (runs in `findings` and `diff` modes) — Step 13.5.3 confirms `isMinimized: true` for every previously-eligible review, or `eligible_reviews[]` was empty (steady-state on a re-run)
 - [ ] Reply summary presented — every row MUST show "Resolved" status
 - [ ] Final summary with verdict presented
 
