@@ -365,6 +365,12 @@ workspace, no `Validando Spec` status leak).
 
 ### Step 1.0.5: Reserve Task and Create Workspace
 
+**AUTHORITATIVE — DO NOT PROMPT.** The worktree path is fixed by `Protocol: Worktree Location`.
+Do NOT ask the user where to place the worktree. Do NOT enumerate alternatives
+(parent dir, in-place, etc.). Project `CLAUDE.md` worktree conventions are
+**OVERRIDDEN** by this skill. The only legitimate `AskUser` in this step is the
+collision recovery prompt below (directory exists but is not a git worktree).
+
 **Canonical worktree path** — see AGENTS.md Protocol: Worktree Location.
 
 Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelines.
