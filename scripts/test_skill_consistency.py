@@ -3616,7 +3616,12 @@ class TestProtocolInlineModeMarker:
         "Quiet Command Execution",
         "Convergence Loop (Full Roster Model — Opt-In, Gated)",
         # Phase 3:
-        "Terminal Identification",
+        # Note: "Terminal Identification" was previously listed here in omit
+        # mode, but the omit marker hid the bash function body from consumer
+        # SKILL.md files — at runtime the badge call hit `command not found`
+        # because the body was never inlined. Reverted to full-body inlining
+        # (no marker) so the function definition reaches the executed shell.
+        # `test_helper_has_applescript_layer` covers the full-body invariant.
         "Per-Droid Quality Checklists",
         # Phase 4:
         "Coverage Measurement",
