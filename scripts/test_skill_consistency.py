@@ -27,6 +27,7 @@ improving navigability.
 """
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -2859,28 +2860,127 @@ class TestDiscoverReviewDroidsDenyList:
         assert "BEFORE final selection" in section or "BEFORE final" in section
 
 
-class TestTerminalIdentificationNotPastedInBody:
-    """F12f: After consolidating `_optimus_mark_session` / `_optimus_clear_session`,
-    no SKILL body should contain a manual definition. The functions come from
-    the inlined block via the `AGENTS.md Protocol: Terminal Identification`
-    reference."""
+class TestTerminalIdentificationCallSiteSelfContained:
+    """Regression guard: each ``_optimus_mark_session`` / ``_optimus_clear_session``
+    call site MUST live in the same fenced bash block as the function definition.
 
-    def test_no_set_title_definition_in_skill_bodies(self):
-        violations = []
-        for skill_path in _all_skill_files():
-            content = skill_path.read_text()
-            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
-            if (
-                "_optimus_mark_session() {" in body
-                or "_optimus_clear_session() {" in body
-            ):
-                violations.append(str(skill_path.relative_to(REPO_ROOT)))
-        assert violations == [], (
-            "These SKILL.md files still contain a body-level "
-            "`_optimus_mark_session()` or `_optimus_clear_session()` "
-            "definition; move it to the inlined `Protocol: Terminal "
-            "Identification` block:\n"
-            + "\n".join(violations)
+    Why this test exists: previous attempts inlined the function body via the
+    ``Protocol: Terminal Identification`` block (appended at end of SKILL.md by
+    the inliner) but the call site was a separate bash block earlier in the
+    file. Each Bash tool invocation is a fresh shell, so the definition in one
+    code block did NOT survive into the call's code block — every badge call
+    silently failed with `command not found` (exit 127). This test catches
+    that regression by parsing each fenced bash block and asserting that any
+    block containing a positional call also contains the function definition.
+    """
+
+    @staticmethod
+    def _bash_blocks(content: str) -> list[str]:
+        """Return the contents of every ```bash ... ``` fenced block in the file body
+        (excluding the appendix after INLINE-PROTOCOLS:START, which is reference
+        documentation only — the agent does not execute appendix code)."""
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        blocks: list[str] = []
+        in_block = False
+        current: list[str] = []
+        for line in body.splitlines():
+            stripped = line.strip()
+            if not in_block and stripped == "```bash":
+                in_block = True
+                current = []
+            elif in_block and stripped == "```":
+                blocks.append("\n".join(current))
+                in_block = False
+                current = []
+            elif in_block:
+                current.append(line)
+        return blocks
+
+    # Match a positional call: `_optimus_mark_session WORD ...` or
+    # `_optimus_clear_session` on its own. Excludes the function-definition
+    # form `_optimus_mark_session() {`.
+    _MARK_CALL_RE = re.compile(
+        r"(?m)^\s*_optimus_mark_session\s+[A-Z]+\b"
+    )
+    _CLEAR_CALL_RE = re.compile(
+        r"(?m)^\s*_optimus_clear_session\s*$"
+    )
+
+    # `resume` is intentionally not part of the legacy TITLE_SKILLS (which only
+    # tracks pre-RESUME stages), but its mark/clear call site follows the exact
+    # same self-containment requirement, so this class adds it back in.
+    BADGE_SKILLS = TITLE_SKILLS + ["resume"]
+
+    @pytest.mark.parametrize("skill", BADGE_SKILLS)
+    def test_mark_call_block_contains_definition(self, skill):
+        content = _read_skill(skill)
+        blocks = self._bash_blocks(content)
+        call_blocks = [b for b in blocks if self._MARK_CALL_RE.search(b)]
+        assert call_blocks, (
+            f"{skill}: no fenced bash block contains a positional call to "
+            f"_optimus_mark_session — the call site is missing entirely."
+        )
+        offenders = [
+            b for b in call_blocks if "_optimus_mark_session() {" not in b
+        ]
+        assert not offenders, (
+            f"{skill}: a fenced bash block calls _optimus_mark_session "
+            f"without defining it in the same block. Each Bash tool "
+            f"invocation is a fresh shell — the definition MUST live in "
+            f"the same block as the call.\n"
+            f"Offending block (first 200 chars):\n{offenders[0][:200]}"
+        )
+
+    @pytest.mark.parametrize("skill", BADGE_SKILLS)
+    def test_clear_call_block_contains_definition(self, skill):
+        content = _read_skill(skill)
+        blocks = self._bash_blocks(content)
+        call_blocks = [b for b in blocks if self._CLEAR_CALL_RE.search(b)]
+        assert call_blocks, (
+            f"{skill}: no fenced bash block contains a bare "
+            f"_optimus_clear_session call — the cleanup site is missing."
+        )
+        offenders = [
+            b for b in call_blocks if "_optimus_clear_session() {" not in b
+        ]
+        assert not offenders, (
+            f"{skill}: a fenced bash block calls _optimus_clear_session "
+            f"without defining it in the same block. Each Bash tool "
+            f"invocation is a fresh shell — the definition MUST live in "
+            f"the same block as the call.\n"
+            f"Offending block (first 200 chars):\n{offenders[0][:200]}"
+        )
+
+    @pytest.mark.parametrize("skill", BADGE_SKILLS)
+    def test_mark_call_block_executes_successfully(self, skill, tmp_path):
+        """End-to-end: extract the call-site block and run it in a fresh shell.
+        With LC_TERMINAL=iTerm2 set the function does its work; without it
+        returns 0 silently. Either way exit code MUST be 0 — anything else
+        (notably 127 = command-not-found) means the body was not inlined."""
+        content = _read_skill(skill)
+        blocks = self._bash_blocks(content)
+        call_blocks = [b for b in blocks if self._MARK_CALL_RE.search(b)]
+        assert call_blocks, f"{skill}: missing mark call block"
+        script = tmp_path / "block.sh"
+        script.write_text(call_blocks[0])
+        # Provide TASK_ID/TASK_TITLE so the call site has values for its
+        # positional placeholders. Force LC_TERMINAL unset so the function
+        # silently returns 0 without trying to touch the (unavailable) parent
+        # TTY of the test runner — we are validating the function is DEFINED
+        # and CALLABLE, not its iTerm2 side-effect.
+        env = {
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "TASK_ID": "T-TEST",
+            "TASK_TITLE": "Test Title",
+        }
+        result = subprocess.run(
+            ["bash", str(script)], env=env, capture_output=True, text=True
+        )
+        assert result.returncode == 0, (
+            f"{skill}: bash block at call site exited {result.returncode} "
+            f"(expected 0). 127 = command not found = the function body is "
+            f"not inlined in the same block as the call.\n"
+            f"stderr: {result.stderr[:500]}"
         )
 
 
@@ -3616,12 +3716,7 @@ class TestProtocolInlineModeMarker:
         "Quiet Command Execution",
         "Convergence Loop (Full Roster Model — Opt-In, Gated)",
         # Phase 3:
-        # Note: "Terminal Identification" was previously listed here in omit
-        # mode, but the omit marker hid the bash function body from consumer
-        # SKILL.md files — at runtime the badge call hit `command not found`
-        # because the body was never inlined. Reverted to full-body inlining
-        # (no marker) so the function definition reaches the executed shell.
-        # `test_helper_has_applescript_layer` covers the full-body invariant.
+        "Terminal Identification",
         "Per-Droid Quality Checklists",
         # Phase 4:
         "Coverage Measurement",
