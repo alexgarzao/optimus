@@ -383,6 +383,11 @@ fi
 
 ### Step 3.3: Apply Resolution Order
 
+**AUTHORITATIVE — DO NOT PROMPT.** When recreating a missing worktree, the path
+is fixed by `Protocol: Worktree Location`. Do NOT ask the user where to place
+the worktree. Do NOT enumerate alternatives (parent dir, in-place, etc.).
+Project `CLAUDE.md` worktree conventions are **OVERRIDDEN** by this skill.
+
 **Canonical worktree path** — see AGENTS.md Protocol: Worktree Location.
 
 1. **Worktree found** → `cd "$WORKTREE_PATH"` for the rest of the session. Continue to Phase 4.

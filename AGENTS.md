@@ -3082,6 +3082,11 @@ Skills reference this as: "Check active version guard — see AGENTS.md Protocol
 
 **Summary:** Linked worktrees created by plan / resume / Workspace Auto-Navigation / done-cleanup live at the canonical path `${MAIN_WORKTREE}/.worktrees/<flat-branch-name>` — gitignored (auto-injected by Initialize .optimus Directory + Session State protocols), project-rooted, resolved via Resolve Main Worktree Path so paths stay correct from any linked worktree. Branch names contain `/` (per Branch Name Derivation); the worktree directory is created with a flat directory name with `/` replaced by `-` (e.g., `feat/t-007-...` → `feat-t-007-...`). Worktrees ALWAYS belong to the project repo, never the tasks repo (separate-repo `tasksDir` doesn't affect location). Recommend IDE exclusion (`.vscode/settings.json` `search.exclude`, IntelliJ Excluded). Backwards compat: legacy sibling paths and legacy nested-format worktrees still work via worktree metadata; no forced migration. See full convention + IDE config in AGENTS.md.
 
+**Authoritative.** Skills (plan, resume, build, done) MUST NOT ask the user
+about worktree location. The path is fixed; project `CLAUDE.md` conventions
+are overridden by this protocol. Backwards compatibility below covers
+**existing** worktrees only — it is not a menu of options for new worktrees.
+
 **Referenced by:** plan (Step 1.0.5), resume (Step 3.3 Case 2), Protocol: Workspace Auto-Navigation (see Reusable Protocols), done (Phase 4.1 cleanup)
 
 Optimus creates linked git worktrees during the task lifecycle:
@@ -3109,7 +3114,7 @@ Optimus creates linked git worktrees during the task lifecycle:
 - VS Code (`.vscode/settings.json`): `"search.exclude": { "**/.worktrees": true }, "files.watcherExclude": { "**/.worktrees/**": true }`
 - IntelliJ: mark `.worktrees/` as Excluded in Project Structure.
 
-**Backwards compatibility:**
+**Backwards compatibility (existing worktrees only — NOT alternatives for new worktrees):**
 
 - Existing worktrees in older sibling locations (`../<repo>-<task>`) continue to work — `git worktree list` finds them regardless of path.
 - Existing nested-format worktrees (`.worktrees/feat/t-001-user-auth/`) created by older optimus-plan runs continue to work — `git worktree list` is layout-agnostic. Optionally consolidate with `git worktree move .worktrees/feat/t-001-user-auth .worktrees/feat-t-001-user-auth`. No forced migration.
