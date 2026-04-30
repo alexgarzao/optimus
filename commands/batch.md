@@ -100,7 +100,43 @@ starting the next task.
 
 For each task in the execution order:
 
-Mark terminal session — see AGENTS.md Protocol: Terminal Identification. Use stage=`BATCH` and include the current task ID and title (e.g., `_optimus_mark_session BATCH "T-003" "User Auth JWT"`). Update the marker each time the task changes.
+Mark terminal session (iTerm2 badge + tab color). Substitute `$TASK_ID` and `$TASK_TITLE` for the current task and re-run this block each time you advance to a new task. The function body is inlined here on purpose: each Bash tool invocation is a fresh shell, so a definition pasted in another code block does NOT survive into this one. See AGENTS.md Protocol: Terminal Identification. The canonical body of the function lives there.
+
+```bash
+_optimus_mark_session() {
+  local stage="$1" task_id="$2" title="$3"
+  [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ] || return 0
+  local pid="$PPID" target_tty=""
+  for _ in 1 2 3 4; do
+    [ -z "$pid" ] || [ "$pid" = "1" ] && break
+    target_tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
+    case "$target_tty" in
+      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' '); target_tty="" ;;
+      *) break ;;
+    esac
+  done
+  _optimus_emit() {
+    if [ -n "$target_tty" ] && [ -w "/dev/$target_tty" ]; then
+      printf '%s' "$1" > "/dev/$target_tty" 2>/dev/null || printf '%s' "$1"
+    else
+      printf '%s' "$1"
+    fi
+  }
+  local badge_b64
+  badge_b64=$(printf '%s %s\n%s' "$stage" "$task_id" "$title" | base64 | tr -d '\n')
+  _optimus_emit "$(printf '\e]1337;SetBadgeFormat=%s\a' "$badge_b64")"
+  local r g b
+  case "$stage" in
+    PLAN)   r=66;  g=135; b=245 ;;
+    BUILD)  r=34;  g=197; b=94  ;;
+    REVIEW) r=234; g=179; b=8   ;;
+    DONE)   r=148; g=163; b=184 ;;
+    *)      r=168; g=85;  b=247 ;;
+  esac
+  _optimus_emit "$(printf '\e]6;1;bg;red;brightness;%d\a\e]6;1;bg;green;brightness;%d\a\e]6;1;bg;blue;brightness;%d\a' "$r" "$g" "$b")"
+}
+_optimus_mark_session BATCH "$TASK_ID" "$TASK_TITLE"
+```
 
 ### Step 2.1: Stage Dispatch
 
@@ -187,7 +223,34 @@ After completing a task (all stages done), re-evaluate the remaining task pool:
 
 ## Phase 3: Batch Summary
 
-After all tasks are processed (or the user stops), restore the terminal session via `_optimus_clear_session` (see Protocol: Terminal Identification for the function definition):
+After all tasks are processed (or the user stops), restore the terminal session (body inlined for the same reason as the mark block above):
+
+```bash
+_optimus_clear_session() {
+  [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ] || return 0
+  local pid="$PPID" target_tty=""
+  for _ in 1 2 3 4; do
+    [ -z "$pid" ] || [ "$pid" = "1" ] && break
+    target_tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
+    case "$target_tty" in
+      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' '); target_tty="" ;;
+      *) break ;;
+    esac
+  done
+  _optimus_emit_clear() {
+    if [ -n "$target_tty" ] && [ -w "/dev/$target_tty" ]; then
+      printf '%s' "$1" > "/dev/$target_tty" 2>/dev/null || printf '%s' "$1"
+    else
+      printf '%s' "$1"
+    fi
+  }
+  _optimus_emit_clear "$(printf '\e]1337;SetBadgeFormat=\a')"
+  _optimus_emit_clear "$(printf '\e]6;1;bg;*;default\a')"
+}
+_optimus_clear_session
+```
+
+Then present the summary:
 
 ```markdown
 ## Batch Execution Summary
@@ -258,114 +321,6 @@ If this command fails (exit code != 0), **STOP** immediately:
 ```
 GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
 ```
-
-
-### Protocol: Terminal Identification
-
-**Summary:** `_optimus_mark_session <stage> <task_id> <title>` marks the current iTerm2 session with two **focus-independent** signals: an iTerm2 Badge (OSC 1337 SetBadgeFormat) — large semi-transparent overlay text always visible (incl. Mission Control thumbnails and Dock previews) — and a Tab Color (OSC 6 SetColors) tinting the tab per stage (PLAN=blue, BUILD=green, REVIEW=yellow, DONE=gray, RESUME/BATCH=purple). Used by stage skills so users running multiple Optimus sessions can identify each at a glance, even with the window unfocused or backgrounded. Replaces the previous AppleScript title approach which only updated reliably when the iTerm2 tab had focus and required TCC permission. Helper writes to the parent shell's controlling TTY; silent no-op outside iTerm2/macOS. Companion `_optimus_clear_session` resets badge and tab color at stage completion. See full bash function in AGENTS.md.
-
-**Referenced by:** all stage agents (1-4), batch
-
-After the task ID is identified and confirmed, set the terminal title to show the
-current stage and task. This allows users running multiple agents in parallel terminals
-to identify each terminal at a glance.
-
-**Mark session (after task ID is known):**
-
-```bash
-_optimus_mark_session() {
-  # iTerm2 Badge + Tab Color marker. Both signals are focus-independent:
-  # the Badge (OSC 1337 SetBadgeFormat) renders a large semi-transparent
-  # overlay visible in Mission Control and Dock previews even when the
-  # window is unfocused. Tab Color (OSC 6) tints the tab itself, visible
-  # in the tab bar regardless of which tab is active. Replaces the
-  # previous AppleScript title approach, which only worked reliably with
-  # focus and required TCC permission. The Execute tool runs bash without
-  # a controlling TTY, so we resolve the parent process's TTY via ps and
-  # write escape sequences directly to it; iTerm2 interprets OSC 1337
-  # and OSC 6 immediately. Silent no-op outside iTerm2/macOS or when the
-  # parent TTY cannot be resolved (Docker/CI).
-  # $1 = stage label (PLAN|BUILD|REVIEW|DONE|RESUME|BATCH)
-  # $2 = task id     (e.g. T-003)
-  # $3 = task title  (e.g. "User Auth JWT")
-  local stage="$1" task_id="$2" title="$3"
-  [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ] || return 0
-
-  local pid="$PPID" target_tty=""
-  for _ in 1 2 3 4; do
-    [ -z "$pid" ] || [ "$pid" = "1" ] && break
-    target_tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
-    case "$target_tty" in
-      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' '); target_tty="" ;;
-      *) break ;;
-    esac
-  done
-
-  _optimus_emit() {
-    if [ -n "$target_tty" ] && [ -w "/dev/$target_tty" ]; then
-      printf '%s' "$1" > "/dev/$target_tty" 2>/dev/null || printf '%s' "$1"
-    else
-      printf '%s' "$1"
-    fi
-  }
-
-  local badge_b64
-  badge_b64=$(printf '%s %s\n%s' "$stage" "$task_id" "$title" | base64 | tr -d '\n')
-  _optimus_emit "$(printf '\e]1337;SetBadgeFormat=%s\a' "$badge_b64")"
-
-  local r g b
-  case "$stage" in
-    PLAN)   r=66;  g=135; b=245 ;;  # blue
-    BUILD)  r=34;  g=197; b=94  ;;  # green
-    REVIEW) r=234; g=179; b=8   ;;  # yellow
-    DONE)   r=148; g=163; b=184 ;;  # gray
-    *)      r=168; g=85;  b=247 ;;  # purple (RESUME/BATCH)
-  esac
-  _optimus_emit "$(printf '\e]6;1;bg;red;brightness;%d\a\e]6;1;bg;green;brightness;%d\a\e]6;1;bg;blue;brightness;%d\a' "$r" "$g" "$b")"
-}
-_optimus_mark_session "<STAGE>" "$TASK_ID" "$TASK_TITLE"
-```
-
-Example: stage `PLAN`, task `T-003`, title `User Auth JWT` produces a blue tab and an overlay badge reading "PLAN T-003 / User Auth JWT".
-
-**Why escape sequences over AppleScript:** Badge and tab color render immediately on receipt, regardless of focus, in iTerm2 sessions including "divorced" ones. The Execute tool runs `bash -c` without a controlling TTY, so we resolve the parent shell's TTY via `ps` and write the escape sequences there. No TCC prompt, no AppleScript permission dance.
-
-**Restore at stage completion or exit:**
-
-```bash
-_optimus_clear_session() {
-  [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ] || return 0
-  local pid="$PPID" target_tty=""
-  for _ in 1 2 3 4; do
-    [ -z "$pid" ] || [ "$pid" = "1" ] && break
-    target_tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
-    case "$target_tty" in
-      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' '); target_tty="" ;;
-      *) break ;;
-    esac
-  done
-  _optimus_emit_clear() {
-    if [ -n "$target_tty" ] && [ -w "/dev/$target_tty" ]; then
-      printf '%s' "$1" > "/dev/$target_tty" 2>/dev/null || printf '%s' "$1"
-    else
-      printf '%s' "$1"
-    fi
-  }
-  _optimus_emit_clear "$(printf '\e]1337;SetBadgeFormat=\a')"
-  _optimus_emit_clear "$(printf '\e]6;1;bg;*;default\a')"
-}
-_optimus_clear_session
-```
-
-**NOTE:** This helper is iTerm2-on-macOS only. Outside iTerm2 (Terminal.app, Ghostty, Warp, Alacritty) or outside macOS, both functions are silent no-ops — users on other terminals see no visual marker.
-
-**Troubleshooting iTerm2:**
-
-1. **Badge invisible despite call succeeding** — Open iTerm2 Preferences > Profiles > [your profile] > Badge. Badge font/color is configured per-profile; if the badge font color matches the background, increase contrast. Default semi-transparent rendering should always be visible.
-2. **Tab color appears wrong or doesn't change** — Some iTerm2 themes lock tab background colors. Check Preferences > Appearance > Tabs > "Tab style". `Compact` or `Minimal` styles render tab colors most reliably.
-3. **No badge or color in some sessions** — The helper requires the parent process to have a controlling TTY. Inside Docker/CI without a TTY, the function silently no-ops; this is expected.
-
-Skills reference this as: "Mark terminal session — see AGENTS.md Protocol: Terminal Identification."
 
 
 <!-- INLINE-PROTOCOLS:END -->
