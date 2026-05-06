@@ -539,15 +539,17 @@ Before loading docs, discover the project's structure:
 Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution. Load the Ring pre-dev
 task spec for objective, acceptance criteria, API contracts, and data model.
 
-Also load other project reference docs:
-- API contracts
-- DB schema / data model
-- Technical architecture
-- Business requirements
-- Coding standards (source of truth)
-- Dependency relationships
-
 Ring pre-dev artifacts are the primary specification source.
+
+### Step 0.5: Build Doc Brief (HARD BLOCK on TaskSpec resolution)
+
+Build (or reuse) the per-task Doc Brief — see AGENTS.md Protocol: Doc Brief Cache.
+
+- If `.optimus/sessions/T-XXX/doc-brief.md` exists and `task_spec_hash` matches `git hash-object <current-task-spec>`: REUSE.
+- Otherwise: generate the brief now per the protocol. The orchestrator (not a sub-agent) reads PRD, TRD, API, and data-model once, extracts only the sections relevant to T-XXX (mentions of the task ID, AC keywords, listed endpoints/entities/modules), and writes the result to `.optimus/sessions/T-XXX/doc-brief.md`.
+- For plan, the `## Relevant Coding Standards / Protocols` section MUST include only these protocols: `Per-Droid Quality Checklists`, `Deep Research Before Presenting`, `Convergence Loop`, `Re-run Guard`.
+
+The Doc Brief is the primary context passed inline to all downstream sub-agent dispatches in Phase 2 (validation). Do NOT instruct sub-agents to read PRD/TRD/API/data-model directly unless the Doc Brief is explicitly insufficient for a finding.
 
 ### Step 1.3: Verify Existing Code
 
@@ -774,10 +776,11 @@ Goal: Pre-implementation validation of task T-XXX — [your domain]
 
 Context:
   - Project root: <absolute path to project worktree>
-  - Task spec: <TASKS_DIR>/<TaskSpec> (READ this file)
-  - Subtasks dir: <TASKS_DIR>/subtasks/T-XXX/ (READ all .md files if dir exists)
-  - Reference docs dir: <TASKS_DIR>/ (explore for PRD, TRD, API design, data model)
-  - Project rules: AGENTS.md, PROJECT_RULES.md, docs/PROJECT_RULES.md (READ all that exist)
+  - Task spec excerpt (already extracted in Doc Brief; full file at <TASKS_DIR>/<TaskSpec>)
+  - Doc brief (READ FIRST — task-scoped excerpt of pre-dev docs, AGENTS.md protocols, project rules):
+    .optimus/sessions/T-XXX/doc-brief.md
+  - Subtasks dir: <TASKS_DIR>/subtasks/T-XXX/ (READ all .md files if dir exists; SKIP if absent)
+  - Full pre-dev docs (only consult if Doc Brief is insufficient): <TASKS_DIR>/
   - Gaps already identified: [list from Steps 2.1-2.3]
 
 IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
@@ -918,10 +921,12 @@ Execute the opt-in convergence loop — see AGENTS.md "Common Patterns > Protoco
 
 **Stage-specific scope for convergence rounds 2+:**
 Dispatch the **same 4 droids** from Step 2.4 (business-logic-reviewer, security-reviewer,
-qa-analyst, code-reviewer). Each agent receives file paths to task spec, reference docs,
-optimus-tasks.md, and project rules (re-read fresh from disk). Do NOT include the findings ledger
-in agent prompts — the orchestrator handles dedup using strict matching (same file + same
-line range ±5 + same category).
+qa-analyst, code-reviewer). Each agent receives the SAME compact context as round 1: the
+Doc Brief (`.optimus/sessions/T-XXX/doc-brief.md`) and the round-1 findings ledger. Do NOT
+instruct agents to "re-read fresh from disk" — that defeats the brief's caching purpose.
+Agents may consult full pre-dev docs only if a finding requires verbatim reference. The
+orchestrator handles dedup using strict matching (same file + same line range ±5 + same
+category).
 
 Include analysis instructions: cross-reference (Step 2.1), test gaps (Step 2.2),
 observability (Step 2.3), DoD, ambiguities. Include the cross-cutting analysis instructions

@@ -281,23 +281,13 @@ Before loading docs, discover the project's structure and tooling:
 
 ### Step 1.7: Load All Reference Documents
 
-Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution. Load the Ring pre-dev
-task spec for objective, acceptance criteria, API contracts, data model, and implementation
-guidance. Read ALL subtask files for step-by-step implementation instructions. Check for
-`PARALLEL-PLAN.md` in the subtasks directory.
+- Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution.
+- Load the Doc Brief — see AGENTS.md Protocol: Doc Brief Cache.
+  - If `.optimus/sessions/T-XXX/doc-brief.md` exists with matching `task_spec_hash`: load it. The brief contains the task-scoped excerpt of PRD, TRD, API, data-model, plus the relevant AGENTS.md protocols.
+  - Otherwise: generate the brief now per the protocol, using the protocol set: `Per-Droid Quality Checklists`, `Deep Research Before Presenting`, `Convergence Loop`, `Re-run Guard`, `Quiet Command Execution`, `Coverage Measurement`, `Notification Hooks`.
+- Read ALL subtask `.md` files from the subtasks directory. Check for `PARALLEL-PLAN.md` in the subtasks directory.
 
-Also load other project reference docs:
-- API contracts
-- DB schema / data model
-- Technical architecture (TRD)
-- Business requirements (PRD)
-- Coding standards / project rules
-- Dependency relationships
-
-**Ring pre-dev artifacts are the primary implementation guide.** The subtask files
-contain validated code examples and exact implementation steps reviewed by multiple
-AI agents during pre-dev — use them as the source of truth for HOW to implement.
-The task spec's acceptance criteria are the source of truth for WHAT to validate.
+**The Doc Brief is the primary context for downstream droid dispatches in Phase 2.** The brief carries the task-scoped excerpts of PRD, TRD, API, and data-model that the implementing droids need; do NOT instruct droids to read PRD/TRD/API/data-model directly unless the Doc Brief is explicitly insufficient for a finding. The subtask files remain the source of truth for HOW to implement (they contain the validated code examples and exact steps reviewed during pre-dev), and the task spec's acceptance criteria remain the source of truth for WHAT to validate.
 
 ### Step 1.8: Explore Existing Codebase
 

@@ -273,14 +273,12 @@ Before loading docs, discover the project's structure and tooling (reuse discove
 
 ### Step 1.2: Load Reference Documents
 
-Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution. Also load:
-- Task spec: scope, acceptance criteria, testing strategy, DoD
-- API contracts (if backend task)
-- DB schema / data model (if backend task)
-- Technical architecture
-- Business requirements and user stories
-- Coding standards (source of truth)
-- Dependency relationships
+- Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution.
+- Load the Doc Brief — see AGENTS.md Protocol: Doc Brief Cache.
+  - If `.optimus/sessions/T-XXX/doc-brief.md` exists with matching `task_spec_hash`: load it. The brief contains the task-scoped excerpt of PRD, TRD, API, data-model, plus the relevant AGENTS.md protocols.
+  - Otherwise: generate the brief now per the protocol, using the protocol set: `Per-Droid Quality Checklists`, `Deep Research Before Presenting`, `Convergence Loop`, `Re-run Guard`, `Coverage Measurement`, `Quiet Command Execution`, `Ring Droid Requirement Check`.
+
+The Doc Brief is the primary context for downstream agent dispatches in Phase 3 and beyond; do NOT instruct agents to read PRD/TRD/API/data-model directly unless the Doc Brief is explicitly insufficient for a finding.
 
 ### Step 1.3: Identify Changed Files
 
@@ -476,10 +474,10 @@ Goal: Post-task validation of T-XXX — [your validation domain]
 
 Context:
   - Project root: <absolute path to project worktree>
-  - Task spec: <TASKS_DIR>/<TaskSpec> (READ this file)
-  - Subtasks dir: <TASKS_DIR>/subtasks/T-XXX/ (READ all .md files if dir exists)
-  - Reference docs dir: <TASKS_DIR>/ (explore for PRD, TRD, API design, data model)
-  - Project rules: AGENTS.md, PROJECT_RULES.md, docs/PROJECT_RULES.md (READ all that exist)
+  - Doc brief (READ FIRST — task-scoped excerpt of pre-dev docs, AGENTS.md protocols, project rules):
+    .optimus/sessions/T-XXX/doc-brief.md
+  - Full pre-dev docs (consult ONLY if Doc Brief is insufficient): <TASKS_DIR>/
+  - Subtasks dir: <TASKS_DIR>/subtasks/T-XXX/ (READ all .md files if dir exists; SKIP if absent)
   - Changed files: [list of file paths] (READ each file)
 
 IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
@@ -723,7 +721,9 @@ Goal: Cross-reference task spec with implemented tests to find scenario gaps.
 
 Context:
   - Project root: <absolute path to project worktree>
-  - Task spec: <TASKS_DIR>/<TaskSpec> (READ this file for acceptance criteria and test IDs)
+  - Doc brief (READ FIRST — contains AC list + test IDs in dedicated sections):
+    .optimus/sessions/T-XXX/doc-brief.md
+  - Full task spec (consult only for verbatim wording): <TASKS_DIR>/<TaskSpec>
   - Changed source files: [list of file paths] (READ each file)
   - Test files: [list of test file paths] (READ each file)
   - Coverage profile: [coverage command output if available]
@@ -789,9 +789,12 @@ Execute the opt-in convergence loop — see AGENTS.md "Common Patterns > Protoco
 
 **Stage-specific scope for convergence rounds 2+:**
 Dispatch the **same agent roster** from Phase 3 (all agents from the Agent Roster table).
-Each agent receives file paths, task spec, reference docs, and project rules (re-read fresh
-from disk). Do NOT include the findings ledger in agent prompts — the orchestrator handles
-dedup using strict matching (same file + same line range ±5 + same category).
+Each agent receives the SAME compact context as round 1: the Doc Brief
+(`.optimus/sessions/T-XXX/doc-brief.md`), changed file paths, and the round-1 findings
+ledger. Do NOT instruct agents to "re-read fresh from disk" — that defeats the brief's
+caching purpose. Agents may consult full pre-dev docs only if a finding requires verbatim
+reference. The orchestrator handles dedup using strict matching (same file + same line
+range ±5 + same category).
 
 Include the cross-cutting analysis instructions (same 5 items from Phase 3 prompt).
 
