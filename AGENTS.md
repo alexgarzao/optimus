@@ -2574,11 +2574,25 @@ scope: <backend|frontend|fullstack|docs|infra — best-effort, can be empty>
 **Generation flow (executed by the orchestrator, NOT a sub-agent — to avoid recursive token cost):**
 
 1. Read the TaskSpec; extract objective, AC list, test IDs.
-2. For each pre-dev doc (PRD, TRD, API, data-model): read the file once, extract only sections that mention `T-XXX`, the AC keywords, or names listed in the TaskSpec (endpoints, entities, modules). Use grep + targeted Read; do not include irrelevant sections.
-3. Identify which AGENTS.md protocols the consuming skills will invoke (caller passes the protocol list); include only those under `## Relevant Coding Standards / Protocols`.
-4. Write to `.optimus/sessions/T-XXX/doc-brief.md` with the front-matter and section structure above.
+2. **Infer task scope** (used by step 3 to skip irrelevant docs). Scope is one of `backend | frontend | fullstack | docs | infra`. Inference signals, in priority order:
+   1. Explicit hint in TaskSpec frontmatter (`scope:` field) — use as-is if present.
+   2. Subtask file paths under `<TASKS_DIR>/subtasks/T-XXX/`: `.tsx|.jsx|.css|.scss` → frontend; `.go|.sql|migrations/` → backend; mix → fullstack.
+   3. Diff file extensions if the task already has changes on the current branch (`git diff --name-only <base>..HEAD` against the same patterns).
+   4. Keywords in TaskSpec body: "API endpoint", "migration", "schema", "service", "handler" → backend; "component", "page", "route", "modal", "form", "accessibility" → frontend; "Dockerfile", "helm", "terraform", "pipeline" → infra; "guide", "documentation", "README" without code refs → docs.
+   5. Default: `fullstack`.
 
-**Size budget:** target ≤ 5 KB (≤ ~1.5K tokens). If a doc has no T-XXX-relevant content, OMIT the corresponding section.
+   Record the inferred value in the `scope:` front-matter field of the brief.
+3. For each pre-dev doc (PRD, TRD, API, data-model): read the file once, extract only sections that mention `T-XXX`, the AC keywords, or names listed in the TaskSpec (endpoints, entities, modules). Use grep + targeted Read; do not include irrelevant sections. **Apply scope filter:**
+   - `backend` → load TRD, data-model, API (only endpoints in TaskSpec). SKIP design-validation, frontend-specific TRD sections, voice-and-tone.
+   - `frontend` → load TRD (UI/UX layer only), design-validation, API (only endpoints in TaskSpec — for the client side). SKIP data-model, server-only TRD sections.
+   - `fullstack` → load all of the above (no skip).
+   - `docs` → load PRD, voice-and-tone (if exists). SKIP TRD, data-model, API, design-validation.
+   - `infra` → load TRD (deployment / infra sections only). SKIP PRD, data-model, design-validation, voice-and-tone, API.
+   - When in doubt, prefer to include rather than exclude — but log the skip decision in a hidden HTML comment at the bottom of the brief (`<!-- scope-filter: skipped <doc> because scope=<scope> -->`) so reviewers can audit.
+4. Identify which AGENTS.md protocols the consuming skills will invoke (caller passes the protocol list); include only those under `## Relevant Coding Standards / Protocols`.
+5. Write to `.optimus/sessions/T-XXX/doc-brief.md` with the front-matter and section structure above.
+
+**Size budget:** target ≤ 5 KB (≤ ~1.5K tokens). If a doc has no T-XXX-relevant content (or was skipped by the scope filter), OMIT the corresponding section.
 
 **Reuse rule:** any skill that previously listed PRD/TRD/API/data-model loads MUST first attempt to load `.optimus/sessions/T-XXX/doc-brief.md` and use it inline in subagent prompts INSTEAD OF passing `Reference docs dir: <TASKS_DIR>/ (explore for PRD, TRD, ...)`. Subagents may still consult full pre-dev docs at `<TASKS_DIR>/` if the brief is insufficient for a specific finding.
 
