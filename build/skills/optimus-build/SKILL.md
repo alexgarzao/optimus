@@ -499,6 +499,23 @@ After ALL subtasks are complete:
    Each droid receives all files changed by this task + project rules + task spec.
    Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists.
 
+   **Each review droid prompt MUST include this verification-scope block verbatim:**
+
+   ```
+   Verification scope (MANDATORY):
+     Static analysis (lint, vet, format) and tests (unit, integration, coverage)
+     have already been run by the orchestrator. Results are in this prompt or in
+     the log files referenced under .optimus/logs/.
+     - Do NOT run verification commands yourself. Forbidden: `go test`, `npm test`,
+       `npm run test`, `pytest`, `make test`, `make lint`, `make test-coverage`,
+       `make test-integration`, `golangci-lint`, `go vet`, `goimports`, `gofmt`,
+       `prettier`, `eslint`, `tsc`, or any equivalent.
+     - If you need test/coverage details, Read the log files referenced in this
+       prompt — do not regenerate them.
+     - Use Read, Grep, and Glob to inspect source files. Reserve Bash for read-only
+       git inspection (`git log`, `git blame`, `git diff`) when needed.
+   ```
+
    **Spec Compliance agent** (`ring-dev-team-qa-analyst`) must additionally (beyond the protocol):
    1. List every acceptance criterion from the Ring source (via `TaskSpec` column) and mark PASS/FAIL/PARTIAL
    2. List every test ID and verify a corresponding test exists

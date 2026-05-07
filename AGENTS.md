@@ -3639,6 +3639,25 @@ elsewhere, related test files, existing conventions).
 beyond its core domain. These are defined in Protocol: Per-Droid Quality Checklists below.
 Skills that dispatch review droids MUST reference this protocol in their agent prompts.
 
+**Verification scope:** Every droid prompt MUST also include the universal verification-scope
+block, telling sub-agents NOT to re-run lint/test/coverage commands the orchestrator has
+already executed:
+
+```
+Verification scope (MANDATORY):
+  Static analysis (lint, vet, format) and tests (unit, integration, coverage)
+  have already been run by the orchestrator. Results are in this prompt or in
+  the log files referenced under .optimus/logs/.
+  - Do NOT run verification commands yourself. Forbidden: `go test`, `npm test`,
+    `npm run test`, `pytest`, `make test`, `make lint`, `make test-coverage`,
+    `make test-integration`, `golangci-lint`, `go vet`, `goimports`, `gofmt`,
+    `prettier`, `eslint`, `tsc`, or any equivalent.
+  - If you need test/coverage details, Read the log files referenced in this
+    prompt — do not regenerate them.
+  - Use Read, Grep, and Glob to inspect source files. Reserve Bash for read-only
+    git inspection (`git log`, `git blame`, `git diff`) when needed.
+```
+
 **Cross-cutting analysis:** Every droid prompt MUST include the universal cross-cutting
 section:
 1. What would break in production under load with this code?

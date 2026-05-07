@@ -771,6 +771,19 @@ For EACH evaluated comment, provide:
     - Engineering quality: Maintainability, testability, reliability impact
   - Recommendation with tradeoffs
 
+Verification scope (MANDATORY):
+  Static analysis (lint, vet, format) and tests (unit, integration, coverage)
+  have already been run by the orchestrator. Results are in this prompt or in
+  the log files referenced under .optimus/logs/.
+  - Do NOT run verification commands yourself. Forbidden: `go test`, `npm test`,
+    `npm run test`, `pytest`, `make test`, `make lint`, `make test-coverage`,
+    `make test-integration`, `golangci-lint`, `go vet`, `goimports`, `gofmt`,
+    `prettier`, `eslint`, `tsc`, or any equivalent.
+  - If you need test/coverage details, Read the log files referenced in this
+    prompt — do not regenerate them.
+  - Use Read, Grep, and Glob to inspect source files. Reserve Bash for read-only
+    git inspection (`git log`, `git blame`, `git diff`) when needed.
+
 Cross-cutting analysis — apply ONLY to existing comments (use these questions to
 decide AGREE / CONTEST / ALREADY FIXED, NOT to surface new findings):
   1. What would break in production under load with this code?
@@ -807,6 +820,19 @@ For EACH new finding, provide:
     - Project focus: MVP-critical or gold-plating?
     - Engineering quality: Maintainability, testability, reliability impact
   - Recommendation with tradeoffs
+
+Verification scope (MANDATORY):
+  Static analysis (lint, vet, format) and tests (unit, integration, coverage)
+  have already been run by the orchestrator. Results are in this prompt or in
+  the log files referenced under .optimus/logs/.
+  - Do NOT run verification commands yourself. Forbidden: `go test`, `npm test`,
+    `npm run test`, `pytest`, `make test`, `make lint`, `make test-coverage`,
+    `make test-integration`, `golangci-lint`, `go vet`, `goimports`, `gofmt`,
+    `prettier`, `eslint`, `tsc`, or any equivalent.
+  - If you need test/coverage details, Read the log files referenced in this
+    prompt — do not regenerate them.
+  - Use Read, Grep, and Glob to inspect source files. Reserve Bash for read-only
+    git inspection (`git log`, `git blame`, `git diff`) when needed.
 
 Cross-cutting analysis (MANDATORY for all agents in diff mode):
   1. What would break in production under load with this code?
@@ -1306,8 +1332,8 @@ the orchestrator handles dedup using strict matching (same file + same line rang
 same category).
 
 Include existing PR comments from all sources (reuse data from Phase 1 — do NOT re-fetch
-Codacy/DeepSource comments, they only update after push). Include the cross-cutting
-analysis instructions (same 5 items from Step 3.3 prompt).
+Codacy/DeepSource comments, they only update after push). Include the same items from the
+Step 3.3 prompt (both the Verification scope block and the Cross-cutting analysis 5 items).
 
 **Failure handling:** If a fresh sub-agent dispatch fails (Task tool error, ring droid
 unavailable), do NOT count as zero findings. Ask the user via `AskUser` whether to

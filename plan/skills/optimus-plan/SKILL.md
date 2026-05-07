@@ -799,6 +799,19 @@ Required output:
   For each finding: severity, category, description, recommendation
   If no issues: "PASS — [domain] validation clean"
 
+Verification scope (MANDATORY):
+  Static analysis (lint, vet, format) and tests (unit, integration, coverage)
+  have already been run by the orchestrator. Results are in this prompt or in
+  the log files referenced under .optimus/logs/.
+  - Do NOT run verification commands yourself. Forbidden: `go test`, `npm test`,
+    `npm run test`, `pytest`, `make test`, `make lint`, `make test-coverage`,
+    `make test-integration`, `golangci-lint`, `go vet`, `goimports`, `gofmt`,
+    `prettier`, `eslint`, `tsc`, or any equivalent.
+  - If you need test/coverage details, Read the log files referenced in this
+    prompt — do not regenerate them.
+  - Use Read, Grep, and Glob to inspect source files. Reserve Bash for read-only
+    git inspection (`git log`, `git blame`, `git diff`) when needed.
+
 Cross-cutting analysis (MANDATORY for all agents):
   1. What would break in production under load if this spec is implemented as-is?
   2. What's MISSING from the spec that should be there? (not just what's wrong)
@@ -929,8 +942,8 @@ orchestrator handles dedup using strict matching (same file + same line range ±
 category).
 
 Include analysis instructions: cross-reference (Step 2.1), test gaps (Step 2.2),
-observability (Step 2.3), DoD, ambiguities. Include the cross-cutting analysis instructions
-(same 5 items from Step 2.4 prompt).
+observability (Step 2.3), DoD, ambiguities. Include the same items from the Step 2.4 prompt
+(both the Verification scope block and the Cross-cutting analysis 5 items).
 
 **Failure handling:** If a fresh sub-agent dispatch fails (Task tool error, ring droid
 unavailable), do NOT count as zero findings. Ask the user via `AskUser` whether to
