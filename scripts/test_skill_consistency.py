@@ -2156,29 +2156,37 @@ class TestClaudeCommandsSync:
             f"prune them."
         )
 
-    def test_main_command_body_matches_skill_md(self):
-        """`commands/<plugin>.md` body equals `<plugin>/skills/optimus-<plugin>/SKILL.md`
-        body after applying `/optimus-X` -> `/optimus:X`. This proves
-        `scripts/sync-claude-commands.py` was run before commit and that no
-        manual edits drifted from the SKILL.md source.
+    def test_main_command_body_is_thin_skill_delegator(self):
+        """`commands/<plugin>.md` is a thin Skill-tool delegator, NOT a copy
+        of the SKILL.md body. The historical mirror format duplicated ~11K
+        lines repo-wide; this test enforces the slimmer wrapper produced by
+        `scripts/sync-claude-commands.py:render_main_command`.
+
+        The expected body is exactly:
+
+            Invoke the `optimus-<plugin>` skill via the Skill tool. Arguments: $ARGUMENTS
+
+        The skill itself (registered from `<plugin>/skills/optimus-<plugin>/SKILL.md`)
+        carries the actual workflow.
         """
         violations = []
         for name in self._factory_plugin_names():
-            skill_path = REPO_ROOT / name / "skills" / f"optimus-{name}" / "SKILL.md"
             cmd_path = REPO_ROOT / "commands" / f"{name}.md"
-            if not (skill_path.exists() and cmd_path.exists()):
+            if not cmd_path.exists():
                 # Surface as a separate failure mode in the existence tests.
                 continue
-            skill_body = _strip_frontmatter(skill_path.read_text())
-            cmd_body = _strip_frontmatter(cmd_path.read_text())
-            expected = _rewrite_slash_refs(skill_body).rstrip() + "\n"
-            actual = cmd_body.rstrip() + "\n"
-            if expected != actual:
-                violations.append(name)
+            cmd_body = _strip_frontmatter(cmd_path.read_text()).strip()
+            expected = (
+                f"Invoke the `optimus:{name}` skill via the Skill tool. "
+                f"Arguments: $ARGUMENTS"
+            )
+            if cmd_body != expected:
+                violations.append(f"{name}: body is {cmd_body!r}")
         assert not violations, (
-            f"`commands/<plugin>.md` bodies have drifted from their SKILL.md "
-            f"sources for: {violations}. "
-            f"Run `python3 scripts/sync-claude-commands.py` to resync."
+            "`commands/<plugin>.md` bodies are not the expected thin "
+            "Skill-tool delegator:\n  - "
+            + "\n  - ".join(violations)
+            + "\nRun `python3 scripts/sync-claude-commands.py` to resync."
         )
 
     def test_alias_command_body_redirects_to_namespaced_slash(self):
@@ -3584,11 +3592,10 @@ class TestWorktreeLocationConvention:
         (REPO_ROOT / "resume" / "skills" / "optimus-resume" / "SKILL.md", "Step 3.3"),
     ]
 
-    # User-facing command mirrors (auto-generated from SKILL.md by sync-claude-commands.py).
-    COMMAND_MIRRORS = [
-        REPO_ROOT / "commands" / "plan.md",
-        REPO_ROOT / "commands" / "resume.md",
-    ]
+    # NOTE: top-level `commands/<plugin>.md` files are now thin Skill-tool
+    # delegators (see TestClaudeCommandsSync.test_main_command_body_is_thin_skill_delegator).
+    # They no longer mirror SKILL.md content, so worktree-pattern checks apply
+    # only to the canonical CREATOR_FILES below.
 
     def test_no_sibling_worktree_path_pattern(self):
         """No `../${REPO_NAME}-...` or `../<repo>-...` worktree-add invocations should remain."""
@@ -3599,34 +3606,16 @@ class TestWorktreeLocationConvention:
             for lineno, line in enumerate(body.splitlines(), start=1):
                 if "git worktree add" in line and "../" in line:
                     violations.append(f"{path.relative_to(REPO_ROOT)}:{lineno}: sibling pattern: {line.strip()}")
-        # Also check user-facing command mirrors.
-        for path in self.COMMAND_MIRRORS:
-            if not path.exists():
-                continue
-            content = path.read_text()
-            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
-            for lineno, line in enumerate(body.splitlines(), start=1):
-                if "git worktree add" in line and "../" in line:
-                    violations.append(f"{path.relative_to(REPO_ROOT)}:{lineno}: sibling pattern: {line.strip()}")
         assert violations == [], "\n".join(violations)
 
     def test_worktree_paths_use_dot_worktrees(self):
-        """Creator sites and command mirrors use ${MAIN_WORKTREE}/.worktrees/.
+        """Creator sites use ${MAIN_WORKTREE}/.worktrees/.
 
         AGENTS.md is skipped in this check because ${MAIN_WORKTREE}/.worktrees/
         IS in AGENTS.md auto-nav (and that's exactly what we want to verify
         elsewhere via the dedicated test for the convention section)."""
         for path, _ in self.CREATOR_FILES:
             if path.name == "AGENTS.md":
-                continue
-            content = path.read_text()
-            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
-            assert "${MAIN_WORKTREE}/.worktrees/" in body, (
-                f"{path.relative_to(REPO_ROOT)}: missing ${{MAIN_WORKTREE}}/.worktrees/ pattern"
-            )
-        # Also verify the command mirrors.
-        for path in self.COMMAND_MIRRORS:
-            if not path.exists():
                 continue
             content = path.read_text()
             body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
@@ -3732,7 +3721,10 @@ class TestProtocolInlineModeMarker:
         "Parse CodeRabbit Review Body",
         # Phase 7:
         "optimus-tasks.md Validation (HARD BLOCK)",
-        "Project Rules Discovery",
+        # Note: "Project Rules Discovery" was promoted to full-inline (no
+        # marker) in the Onda 4 token-reduction sweep — body is 30 lines
+        # × 6 references, within the full-inline budget. It no longer
+        # belongs in this marker-required list.
         "Ring Droid Requirement Check",
         "Active Version Guard",
         # Phase 8:
