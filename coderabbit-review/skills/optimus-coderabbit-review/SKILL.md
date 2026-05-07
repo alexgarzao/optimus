@@ -423,54 +423,7 @@ If coverage is below threshold, flag as findings.
 
 ### Step 5.2: Test Scenario Gap Analysis
 
-Dispatch an agent to identify missing test scenarios in the changed files.
-
-**Dispatch a test gap analyzer** via `Task` tool. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
-
-The agent receives file paths and can navigate the codebase autonomously.
-
-```
-Goal: Identify missing test scenarios in files changed during this review.
-
-Context:
-  - Project root: <absolute path to project worktree>
-  - Changed source files: [list of file paths] (READ each file)
-  - Test files: [list of test file paths] (READ each file)
-  - Coverage profile: [coverage command output if available]
-
-IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
-  - Read files at the paths above
-  - Search for existing test patterns in the project
-  - Find related test files not listed above
-  - Discover how similar functions are tested elsewhere in the codebase
-
-Your job:
-  For each public function changed/added:
-  1. Unit tests: check for happy path, error paths, edge cases, validation failures
-  2. Integration tests: check for DB failure, timeout, retry, rollback scenarios
-  3. Report what EXISTS and what is MISSING
-  4. Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag false confidence tests
-  5. Could these tests pass while the feature is actually broken?
-
-Required output format:
-  ## Unit Test Gaps
-  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
-  |---|------|----------|--------------------|-------------------|----------|
-
-  ## Integration Test Gaps
-  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
-  |---|------|----------|--------------------|-------------------|----------|
-
-  ## Test Effectiveness Issues
-  | # | File | Test | Issue | Risk | Priority |
-  |---|------|------|-------|------|----------|
-
-  ## Summary
-  - Functions analyzed: X
-  - Fully covered: X | Partial: X | No tests: X
-  - Missing scenarios: X HIGH, Y MEDIUM, Z LOW
-  - Effectiveness issues: X
-```
+Dispatch a test gap analyzer — see AGENTS.md Protocol: Test Gap Analyzer Dispatch.
 
 **HIGH priority gaps** are presented as findings for user decision (fix now or defer).
 
@@ -670,5 +623,61 @@ Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Pr
 > **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Quiet Command Execution`.**
 
 **Summary:** `_optimus_quiet_run <label> <command>` redirects stdout+stderr to `${MAIN_WORKTREE}/.optimus/logs/<ts>-<label>-<pid>.log`, emits a single `PASS`/`FAIL` line, and on failure dumps the last 50 lines (with `cat -v` to neutralize ANSI/OSC escape sequences). Uses `umask 0077` on the log file (output may contain credentials/stack traces). Exit code preserved so `if _optimus_quiet_run ...; then ... fi` works. Reserved exit codes: `2` = missing label/command; `3` = cannot create logs dir. Log retention (30-day age cap + 500-file count cap) is pruned at every Initialize Directory + Session State call. Use for verification commands only; never for output the agent must parse turn-by-turn. See full recipe in AGENTS.md.
+
+### Protocol: Test Gap Analyzer Dispatch
+
+**Summary:** Standardised prompt template for dispatching a test gap analyzer (`ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`) via `Task` tool. Identifies missing test scenarios across changed files: happy path / error paths / edge cases / integration failures + test effectiveness checks. Returns three tables (Unit Test Gaps, Integration Test Gaps, Test Effectiveness Issues) plus a Summary. Used by skills that perform post-change reviews.
+
+**Referenced by:** deep-review, coderabbit-review
+
+The orchestrator MUST dispatch via `Task` tool with this exact prompt (substituting the listed file paths and the coverage profile placeholder):
+
+```
+Goal: Identify missing test scenarios in files changed during this review.
+
+Context:
+  - Project root: <absolute path to project worktree>
+  - Changed source files: [list of file paths] (READ each file)
+  - Test files: [list of test file paths] (READ each file)
+  - Coverage profile: [coverage command output if available]
+
+IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
+  - Read files at the paths above
+  - Search for existing test patterns in the project
+  - Find related test files not listed above
+  - Discover how similar functions are tested elsewhere in the codebase
+
+Your job:
+  For each public function changed/added:
+  1. Unit tests: check for happy path, error paths, edge cases, validation failures
+  2. Integration tests: check for DB failure, timeout, retry, rollback scenarios
+  3. Report what EXISTS and what is MISSING
+  4. Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag false confidence tests
+  5. Could these tests pass while the feature is actually broken?
+
+Required output format:
+  ## Unit Test Gaps
+  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
+  |---|------|----------|--------------------|-------------------|----------|
+
+  ## Integration Test Gaps
+  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
+  |---|------|----------|--------------------|-------------------|----------|
+
+  ## Test Effectiveness Issues
+  | # | File | Test | Issue | Risk | Priority |
+  |---|------|------|-------|------|----------|
+
+  ## Summary
+  - Functions analyzed: X
+  - Fully covered: X | Partial: X | No tests: X
+  - Missing scenarios: X HIGH, Y MEDIUM, Z LOW
+  - Effectiveness issues: X
+```
+
+**HIGH priority gaps** are presented as findings for user decision (fix now or defer).
+
+Skills reference this as: "Dispatch a test gap analyzer — see AGENTS.md Protocol: Test Gap Analyzer Dispatch."
+
 
 <!-- INLINE-PROTOCOLS:END -->
