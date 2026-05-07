@@ -281,23 +281,13 @@ Before loading docs, discover the project's structure and tooling:
 
 ### Step 1.7: Load All Reference Documents
 
-Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution. Load the Ring pre-dev
-task spec for objective, acceptance criteria, API contracts, data model, and implementation
-guidance. Read ALL subtask files for step-by-step implementation instructions. Check for
-`PARALLEL-PLAN.md` in the subtasks directory.
+- Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution.
+- Load the Doc Brief — see AGENTS.md Protocol: Doc Brief Cache.
+  - If `.optimus/sessions/T-XXX/doc-brief.md` exists with matching `task_spec_hash`: load it. The brief contains the task-scoped excerpt of PRD, TRD, API, data-model, plus the relevant AGENTS.md protocols.
+  - Otherwise: generate the brief now per the protocol, using the protocol set: `Per-Droid Quality Checklists`, `Deep Research Before Presenting`, `Convergence Loop`, `Re-run Guard`, `Quiet Command Execution`, `Coverage Measurement`, `Notification Hooks`.
+- Read ALL subtask `.md` files from the subtasks directory. Check for `PARALLEL-PLAN.md` in the subtasks directory.
 
-Also load other project reference docs:
-- API contracts
-- DB schema / data model
-- Technical architecture (TRD)
-- Business requirements (PRD)
-- Coding standards / project rules
-- Dependency relationships
-
-**Ring pre-dev artifacts are the primary implementation guide.** The subtask files
-contain validated code examples and exact implementation steps reviewed by multiple
-AI agents during pre-dev — use them as the source of truth for HOW to implement.
-The task spec's acceptance criteria are the source of truth for WHAT to validate.
+**The Doc Brief is the primary context for downstream droid dispatches in Phase 2.** The brief carries the task-scoped excerpts of PRD, TRD, API, and data-model that the implementing droids need; do NOT instruct droids to read PRD/TRD/API/data-model directly unless the Doc Brief is explicitly insufficient for a finding. The subtask files remain the source of truth for HOW to implement (they contain the validated code examples and exact steps reviewed during pre-dev), and the task spec's acceptance criteria remain the source of truth for WHAT to validate.
 
 ### Step 1.8: Explore Existing Codebase
 
@@ -642,6 +632,12 @@ The optimus-tasks.md table only tracks structural data (dependencies, versions, 
 — it does NOT duplicate content from Ring.
 
 
+### Protocol: Coverage Measurement (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Coverage Measurement`.**
+
+**Summary:** Measure unit + integration test coverage via Makefile targets with stack-specific fallbacks (Go: `go test -coverprofile`; Node: `npm test -- --coverage`; Python: `pytest --cov=. --cov-report=term`). Run wrapped in `_optimus_quiet_run` (Protocol: Quiet Command Execution) to keep agent context clean — the agent sees only PASS/FAIL + extracted total percentage; full per-file breakdown stays in `.optimus/logs/` and native coverage files. Thresholds: unit 85%, integration 70% (NEEDS_FIX/HIGH finding below). When scanning untested functions, read coverage output FILE (not stdout) — flag business-logic functions at 0% as HIGH; infrastructure/generated code as SKIP. If no coverage command resolves, mark SKIP — do not fail verification. See full extraction recipes in AGENTS.md.
+
 ### Protocol: GitHub CLI Check (HARD BLOCK)
 
 **Referenced by:** all stage agents (1-4), tasks, batch
@@ -655,6 +651,12 @@ If this command fails (exit code != 0), **STOP** immediately:
 GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
 ```
 
+
+### Protocol: Notification Hooks (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Notification Hooks`.**
+
+**Summary:** Optional hook system: stages emit events (`status-change`, `task-blocked`, `task-done`, `task-cancelled`) by invoking `<repo>/tasks-hooks.sh <event> <task_id> <args...>` (or `<repo>/docs/tasks-hooks.sh`) if the file exists and is executable. Hook receives sanitized args (alphanumeric + space + `-_:` only — does NOT allow `.` or `/` to prevent path-traversal if hook authors interpolate args into file paths). Argument shape: 4 args for `status-change`/`task-done`/`task-cancelled` (`event task_id old_status new_status`); 4 args for `task-blocked` (`event task_id current_status reason`). Hooks run in background (`&`) — failures NEVER block the pipeline. Capture `OLD_STATUS` BEFORE writing the new status. See full event signatures + sanitization recipe in AGENTS.md.
 
 ### Protocol: PR Title Validation
 
@@ -674,5 +676,69 @@ If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
 
 Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Title Validation."
 
+
+### Protocol: Per-Droid Quality Checklists (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Per-Droid Quality Checklists`.**
+
+**Summary:** Per-droid quality dimensions that review/pr-check/deep-review/coderabbit-review/plan/build skills MUST include in their agent prompts beyond the core review domain. Examples: code-reviewer adds resilience/concurrency/cognitive-complexity/error-handling checks; security-reviewer adds PII/error-response-leakage/rate-limiting/secrets; test-reviewer adds effectiveness/false-positive-risk/spec-traceability; nil-safety adds channel/map/slice safety; consequences adds backward-compat/migration-path/event-contract; dead-code adds zombie test infrastructure and stale feature flags; qa-analyst adds testability/operational-readiness; frontend adds UX states/accessibility/i18n; backend adds graceful-shutdown/context-propagation/structured-logging. Skills reference this when building specialist droid prompts so agents review uniformly. See full per-droid lists in AGENTS.md.
+
+### Protocol: Project Rules Discovery
+
+**Summary:** Every reviewing/validating/generating skill MUST scan for project conventions before starting. Search the canonical list (AGENTS.md, CLAUDE.md, DROIDS.md, .cursorrules, PROJECT_RULES.md, .editorconfig, coding-standards.md, CONTRIBUTING.md, linter configs like .eslintrc/biome.json/.golangci.yml/.prettierrc) and read ALL that exist. If none exist, warn the user. Discovered files become the authoritative source of truth and MUST be passed to every dispatched sub-agent. See full file list in AGENTS.md.
+
+**Referenced by:** stages 1-4, deep-review, coderabbit-review
+
+Every skill that reviews, validates, or generates code MUST search for project rules
+and AI instruction files before starting. Search for these files in order and read ALL
+that exist:
+
+```
+AGENTS.md                    # Primary agent instructions
+CLAUDE.md                    # Claude-specific rules
+DROIDS.md                    # Droid-specific rules
+.cursorrules                 # Cursor-specific rules
+PROJECT_RULES.md             # Coding standards (root or docs/)
+docs/PROJECT_RULES.md
+.editorconfig                # Editor formatting rules
+docs/coding-standards.md     # Explicit coding conventions
+docs/conventions.md
+.github/CONTRIBUTING.md      # Contribution guidelines
+CONTRIBUTING.md
+.eslintrc*                   # Linter configs (implicit rules)
+biome.json
+.golangci.yml
+.prettierrc*
+```
+
+If NONE exist, warn the user. If any are found, they become the source of truth
+for coding standards and must be passed to every dispatched sub-agent.
+
+Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Project Rules Discovery."
+
+
+### Protocol: Quiet Command Execution (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Quiet Command Execution`.**
+
+**Summary:** `_optimus_quiet_run <label> <command>` redirects stdout+stderr to `${MAIN_WORKTREE}/.optimus/logs/<ts>-<label>-<pid>.log`, emits a single `PASS`/`FAIL` line, and on failure dumps the last 50 lines (with `cat -v` to neutralize ANSI/OSC escape sequences). Uses `umask 0077` on the log file (output may contain credentials/stack traces). Exit code preserved so `if _optimus_quiet_run ...; then ... fi` works. Reserved exit codes: `2` = missing label/command; `3` = cannot create logs dir. Log retention (30-day age cap + 500-file count cap) is pruned at every Initialize Directory + Session State call. Use for verification commands only; never for output the agent must parse turn-by-turn. See full recipe in AGENTS.md.
+
+### Protocol: State Management (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: State Management`.**
+
+**Summary:** Read/write/delete entries in `${MAIN_WORKTREE}/.optimus/state.json` with `jq`. Schema: `{task_id: {status, branch, updated_at}}`. Status values: `Pendente | Validando Spec | Em Andamento | Validando Impl | DONE | Cancelado`. All writes use `jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" '.[$id] = {...}'` (injection-safe), with a tmp-file + `jq empty` validation step before `mv` to guarantee atomicity. Cancelado entries keep `branch: ""` (empty string, NOT absent — readers must treat both as Cancelado-state). Corrupted state.json is removed and treated as empty (reconciliation via worktree scan). state.json is gitignored; never committed. See full recipe in AGENTS.md for jq templates and reconciliation steps.
+
+### Protocol: TaskSpec Resolution (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: TaskSpec Resolution`.**
+
+**Summary:** Resolves the full path to a task's Ring pre-dev spec file by combining `<TASKS_DIR>` with the task's `TaskSpec` column from `optimus-tasks.md`. If `TaskSpec` is `-`, STOPs with a hint to run `/optimus-plan T-XXX`. HARD BLOCK on path traversal: resolves via `realpath -m` (or python3 `os.path.realpath` fallback) and rejects any result outside `$TASKS_DIR_ABS`. Also rejects symlinks (TOCTOU defence: realpath dereferences transparently, so a post-`-L` check guarantees no symlink in the final path). `TASKS_DIR` itself must be a valid git repo (enforced upstream by Resolve Tasks Git Scope) but is no longer required to live under `PROJECT_ROOT` — separate-repo scope is supported. Subtasks live at `<TASKS_DIR>/subtasks/T-NNN/`. See full recipe in AGENTS.md.
+
+### Protocol: Terminal Identification (summarized)
+
+> **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Terminal Identification`.**
+
+**Summary:** `_optimus_mark_session <stage> <task_id> <title>` marks the current iTerm2 session with two **focus-independent** signals: an iTerm2 Badge (OSC 1337 SetBadgeFormat) — large semi-transparent overlay text always visible (incl. Mission Control thumbnails and Dock previews) — and a Tab Color (OSC 6 SetColors) tinting the tab per stage (PLAN=blue, BUILD=green, REVIEW=yellow, DONE=gray, RESUME/BATCH=purple). Used by stage skills so users running multiple Optimus sessions can identify each at a glance, even with the window unfocused or backgrounded. Replaces the previous AppleScript title approach which only updated reliably when the iTerm2 tab had focus and required TCC permission. Helper writes to the parent shell's controlling TTY; silent no-op outside iTerm2/macOS. Companion `_optimus_clear_session` resets badge and tab color at stage completion. See full bash function in AGENTS.md.
 
 <!-- INLINE-PROTOCOLS:END -->

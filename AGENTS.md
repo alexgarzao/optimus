@@ -1154,7 +1154,7 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 
 ### Protocol: Initialize .optimus Directory
 
-<!-- inline-mode: omit -->
+<!-- inline-mode: summarize -->
 
 **Summary:** Create `${MAIN_WORKTREE}/.optimus/{sessions,reports,logs}/` with `mkdir -p`. Add `# optimus-operational-files` and `# optimus-operational-worktrees` markers to `${MAIN_WORKTREE}/.gitignore` idempotently (grep-anchor before append). Refuse symlinked `.gitignore`. Auto-prune `.optimus/logs/` (30 days, 500 files). See full recipe in AGENTS.md.
 
@@ -1215,7 +1215,7 @@ Skills reference this as: "Initialize .optimus directory — see AGENTS.md Proto
 
 ### Protocol: Quiet Command Execution
 
-<!-- inline-mode: omit -->
+<!-- inline-mode: summarize -->
 
 **Summary:** `_optimus_quiet_run <label> <command>` redirects stdout+stderr to `${MAIN_WORKTREE}/.optimus/logs/<ts>-<label>-<pid>.log`, emits a single `PASS`/`FAIL` line, and on failure dumps the last 50 lines (with `cat -v` to neutralize ANSI/OSC escape sequences). Uses `umask 0077` on the log file (output may contain credentials/stack traces). Exit code preserved so `if _optimus_quiet_run ...; then ... fi` works. Reserved exit codes: `2` = missing label/command; `3` = cannot create logs dir. Log retention (30-day age cap + 500-file count cap) is pruned at every Initialize Directory + Session State call. Use for verification commands only; never for output the agent must parse turn-by-turn. See full recipe in AGENTS.md.
 
@@ -1604,7 +1604,7 @@ Skills reference this as: "Execute session state protocol from AGENTS.md using s
 
 ### Protocol: Terminal Identification
 
-<!-- inline-mode: omit -->
+<!-- inline-mode: summarize -->
 
 **Summary:** `_optimus_mark_session <stage> <task_id> <title>` marks the current iTerm2 session with two **focus-independent** signals: an iTerm2 Badge (OSC 1337 SetBadgeFormat) — large semi-transparent overlay text always visible (incl. Mission Control thumbnails and Dock previews) — and a Tab Color (OSC 6 SetColors) tinting the tab per stage (PLAN=blue, BUILD=green, REVIEW=yellow, DONE=gray, RESUME/BATCH=purple). Used by stage skills so users running multiple Optimus sessions can identify each at a glance, even with the window unfocused or backgrounded. Replaces the previous AppleScript title approach which only updated reliably when the iTerm2 tab had focus and required TCC permission. Helper writes to the parent shell's controlling TTY; silent no-op outside iTerm2/macOS. Companion `_optimus_clear_session` resets badge and tab color at stage completion. See full bash function in AGENTS.md.
 
@@ -2270,7 +2270,7 @@ Skills reference this as: "Check optimus-tasks.md divergence — see AGENTS.md P
 
 ### Protocol: Notification Hooks
 
-<!-- inline-mode: omit -->
+<!-- inline-mode: summarize -->
 
 **Summary:** Optional hook system: stages emit events (`status-change`, `task-blocked`, `task-done`, `task-cancelled`) by invoking `<repo>/tasks-hooks.sh <event> <task_id> <args...>` (or `<repo>/docs/tasks-hooks.sh`) if the file exists and is executable. Hook receives sanitized args (alphanumeric + space + `-_:` only — does NOT allow `.` or `/` to prevent path-traversal if hook authors interpolate args into file paths). Argument shape: 4 args for `status-change`/`task-done`/`task-cancelled` (`event task_id old_status new_status`); 4 args for `task-blocked` (`event task_id current_status reason`). Hooks run in background (`&`) — failures NEVER block the pipeline. Capture `OLD_STATUS` BEFORE writing the new status. See full event signatures + sanitization recipe in AGENTS.md.
 
@@ -2384,7 +2384,7 @@ Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring D
 
 ### Protocol: Coverage Measurement
 
-<!-- inline-mode: omit -->
+<!-- inline-mode: summarize -->
 
 **Summary:** Measure unit + integration test coverage via Makefile targets with stack-specific fallbacks (Go: `go test -coverprofile`; Node: `npm test -- --coverage`; Python: `pytest --cov=. --cov-report=term`). Run wrapped in `_optimus_quiet_run` (Protocol: Quiet Command Execution) to keep agent context clean — the agent sees only PASS/FAIL + extracted total percentage; full per-file breakdown stays in `.optimus/logs/` and native coverage files. Thresholds: unit 85%, integration 70% (NEEDS_FIX/HIGH finding below). When scanning untested functions, read coverage output FILE (not stdout) — flag business-logic functions at 0% as HIGH; infrastructure/generated code as SKIP. If no coverage command resolves, mark SKIP — do not fail verification. See full extraction recipes in AGENTS.md.
 
@@ -2479,7 +2479,7 @@ Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Titl
 
 ### Protocol: TaskSpec Resolution
 
-<!-- inline-mode: omit -->
+<!-- inline-mode: summarize -->
 
 **Summary:** Resolves the full path to a task's Ring pre-dev spec file by combining `<TASKS_DIR>` with the task's `TaskSpec` column from `optimus-tasks.md`. If `TaskSpec` is `-`, STOPs with a hint to run `/optimus-plan T-XXX`. HARD BLOCK on path traversal: resolves via `realpath -m` (or python3 `os.path.realpath` fallback) and rejects any result outside `$TASKS_DIR_ABS`. Also rejects symlinks (TOCTOU defence: realpath dereferences transparently, so a post-`-L` check guarantees no symlink in the final path). `TASKS_DIR` itself must be a valid git repo (enforced upstream by Resolve Tasks Git Scope) but is no longer required to live under `PROJECT_ROOT` — separate-repo scope is supported. Subtasks live at `<TASKS_DIR>/subtasks/T-NNN/`. See full recipe in AGENTS.md.
 
@@ -2531,9 +2531,74 @@ Resolve the full path to a task's Ring pre-dev spec and its subtasks directory:
 
 Skills reference this as: "Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution."
 
-### Protocol: Project Rules Discovery
+### Protocol: Doc Brief Cache
 
 <!-- inline-mode: omit -->
+
+**Summary:** Per-task cached excerpt of pre-dev docs (PRD, TRD, API, data-model) plus the relevant AGENTS.md protocols, generated once and reused across plan/build/review and across all parallel subagent dispatches. Lives at `.optimus/sessions/T-XXX/doc-brief.md` (~≤5 KB / ≤1.5K tokens). Generated by the orchestrator (NOT a sub-agent) so the build cost is paid once. Invalidated when `task_spec_hash` no longer matches `git hash-object <task-spec-path>`; warns and offers regen if PRD/TRD/API/data-model hashes drift. Replaces the previous "Reference docs dir: <TASKS_DIR>/ (explore for PRD, TRD, ...)" line in subagent prompts.
+
+**Referenced by:** plan, build, review
+
+**Location:** `.optimus/sessions/T-XXX/doc-brief.md` (one per task; same dir already used by Session State).
+
+**Schema (markdown sections, in order):**
+
+1. `## Objective` — taken from the TaskSpec's objective/scope.
+2. `## Acceptance Criteria` — bulleted list lifted from the TaskSpec.
+3. `## Test IDs` — list of test IDs declared in the TaskSpec.
+4. `## Relevant from PRD` — only sections that mention `T-XXX` or the related user story. OMIT the section entirely if PRD has no relevant content.
+5. `## Relevant from TRD` — only modules/components touched by the task. OMIT if not applicable.
+6. `## Relevant from API` — only endpoints listed in the TaskSpec. OMIT if not a backend/API task.
+7. `## Relevant from data-model` — only entities referenced by the task. OMIT if not applicable.
+8. `## Relevant Coding Standards / Protocols` — only the AGENTS.md protocols the consuming skill(s) will invoke (caller passes the list).
+
+**If a section has no relevant content, OMIT it entirely. Do NOT write `(none)` placeholders.**
+
+**Header front-matter (top of `doc-brief.md`):**
+
+```
+<!--
+task_spec_hash: <sha1 from `git hash-object <task-spec-path>` at generation time>
+prd_hash: <sha1 of PRD if loaded, else empty>
+trd_hash: <sha1 of TRD if loaded, else empty>
+api_hash: <sha1 of API if loaded, else empty>
+data_model_hash: <sha1 of data-model if loaded, else empty>
+generated_by: <skill name that generated it>
+generated_at: <ISO-8601 UTC>
+scope: <backend|frontend|fullstack|docs|infra — best-effort, can be empty>
+-->
+```
+
+**Invalidation rule:** Before reusing, the consuming skill MUST verify `task_spec_hash` matches `git hash-object <current-task-spec>`. If mismatch → regenerate. If any of `prd_hash | trd_hash | api_hash | data_model_hash` differ from the current files (best-effort check on files that exist) → warn the user and offer to regenerate.
+
+**Generation flow (executed by the orchestrator, NOT a sub-agent — to avoid recursive token cost):**
+
+1. Read the TaskSpec; extract objective, AC list, test IDs.
+2. **Infer task scope** (used by step 3 to skip irrelevant docs). Scope is one of `backend | frontend | fullstack | docs | infra`. Inference signals, in priority order:
+   1. Explicit hint in TaskSpec frontmatter (`scope:` field) — use as-is if present.
+   2. Subtask file paths under `<TASKS_DIR>/subtasks/T-XXX/`: `.tsx|.jsx|.css|.scss` → frontend; `.go|.sql|migrations/` → backend; mix → fullstack.
+   3. Diff file extensions if the task already has changes on the current branch (`git diff --name-only <base>..HEAD` against the same patterns).
+   4. Keywords in TaskSpec body: "API endpoint", "migration", "schema", "service", "handler" → backend; "component", "page", "route", "modal", "form", "accessibility" → frontend; "Dockerfile", "helm", "terraform", "pipeline" → infra; "guide", "documentation", "README" without code refs → docs.
+   5. Default: `fullstack`.
+
+   Record the inferred value in the `scope:` front-matter field of the brief.
+3. For each pre-dev doc (PRD, TRD, API, data-model): read the file once, extract only sections that mention `T-XXX`, the AC keywords, or names listed in the TaskSpec (endpoints, entities, modules). Use grep + targeted Read; do not include irrelevant sections. **Apply scope filter:**
+   - `backend` → load TRD, data-model, API (only endpoints in TaskSpec). SKIP design-validation, frontend-specific TRD sections, voice-and-tone.
+   - `frontend` → load TRD (UI/UX layer only), design-validation, API (only endpoints in TaskSpec — for the client side). SKIP data-model, server-only TRD sections.
+   - `fullstack` → load all of the above (no skip).
+   - `docs` → load PRD, voice-and-tone (if exists). SKIP TRD, data-model, API, design-validation.
+   - `infra` → load TRD (deployment / infra sections only). SKIP PRD, data-model, design-validation, voice-and-tone, API.
+   - When in doubt, prefer to include rather than exclude — but log the skip decision in a hidden HTML comment at the bottom of the brief (`<!-- scope-filter: skipped <doc> because scope=<scope> -->`) so reviewers can audit.
+4. Identify which AGENTS.md protocols the consuming skills will invoke (caller passes the protocol list); include only those under `## Relevant Coding Standards / Protocols`.
+5. Write to `.optimus/sessions/T-XXX/doc-brief.md` with the front-matter and section structure above.
+
+**Size budget:** target ≤ 5 KB (≤ ~1.5K tokens). If a doc has no T-XXX-relevant content (or was skipped by the scope filter), OMIT the corresponding section.
+
+**Reuse rule:** any skill that previously listed PRD/TRD/API/data-model loads MUST first attempt to load `.optimus/sessions/T-XXX/doc-brief.md` and use it inline in subagent prompts INSTEAD OF passing `Reference docs dir: <TASKS_DIR>/ (explore for PRD, TRD, ...)`. Subagents may still consult full pre-dev docs at `<TASKS_DIR>/` if the brief is insufficient for a specific finding.
+
+Skills reference this as: "Load the Doc Brief — see AGENTS.md Protocol: Doc Brief Cache."
+
+### Protocol: Project Rules Discovery
 
 **Summary:** Every reviewing/validating/generating skill MUST scan for project conventions before starting. Search the canonical list (AGENTS.md, CLAUDE.md, DROIDS.md, .cursorrules, PROJECT_RULES.md, .editorconfig, coding-standards.md, CONTRIBUTING.md, linter configs like .eslintrc/biome.json/.golangci.yml/.prettierrc) and read ALL that exist. If none exist, warn the user. Discovered files become the authoritative source of truth and MUST be passed to every dispatched sub-agent. See full file list in AGENTS.md.
 
@@ -2568,7 +2633,7 @@ Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Pr
 
 ### Protocol: Re-run Guard
 
-<!-- inline-mode: omit -->
+<!-- inline-mode: summarize -->
 
 **Summary:** Replaces the static "next step" suggestion in plan and review. Counts `total_findings` from this execution (grouped entries count as 1). If 0 → suggest next stage (build for plan, done for review). If >0 → `AskUser` offering "Re-run with clean context" (re-dispatches ALL agents with no memory of prior decisions — skipped findings will reappear) or "Advance to next stage". Re-run reset semantics (MANDATORY): reset `convergence_status` to `null`, `phase` to entry, overwrite `started_at`; preserve identity fields. Skip GitHub CLI/tasks validation/workspace/divergence checks; re-execute discovery + dispatch. No re-run limit. See full reset checklist in AGENTS.md.
 
@@ -2724,7 +2789,7 @@ Skills reference this as: "Offer to push commits — see AGENTS.md Protocol: Pus
 
 ### Protocol: State Management
 
-<!-- inline-mode: omit -->
+<!-- inline-mode: summarize -->
 
 **Summary:** Read/write/delete entries in `${MAIN_WORKTREE}/.optimus/state.json` with `jq`. Schema: `{task_id: {status, branch, updated_at}}`. Status values: `Pendente | Validando Spec | Em Andamento | Validando Impl | DONE | Cancelado`. All writes use `jq --arg id "$TASK_ID" --arg status "$NEW_STATUS" '.[$id] = {...}'` (injection-safe), with a tmp-file + `jq empty` validation step before `mv` to guarantee atomicity. Cancelado entries keep `branch: ""` (empty string, NOT absent — readers must treat both as Cancelado-state). Corrupted state.json is removed and treated as empty (reconciliation via worktree scan). state.json is gitignored; never committed. See full recipe in AGENTS.md for jq templates and reconciliation steps.
 
@@ -3529,7 +3594,7 @@ section:
 
 ### Protocol: Per-Droid Quality Checklists
 
-<!-- inline-mode: omit -->
+<!-- inline-mode: summarize -->
 
 **Summary:** Per-droid quality dimensions that review/pr-check/deep-review/coderabbit-review/plan/build skills MUST include in their agent prompts beyond the core review domain. Examples: code-reviewer adds resilience/concurrency/cognitive-complexity/error-handling checks; security-reviewer adds PII/error-response-leakage/rate-limiting/secrets; test-reviewer adds effectiveness/false-positive-risk/spec-traceability; nil-safety adds channel/map/slice safety; consequences adds backward-compat/migration-path/event-contract; dead-code adds zombie test infrastructure and stale feature flags; qa-analyst adds testability/operational-readiness; frontend adds UX states/accessibility/i18n; backend adds graceful-shutdown/context-propagation/structured-logging. Skills reference this when building specialist droid prompts so agents review uniformly. See full per-droid lists in AGENTS.md.
 
