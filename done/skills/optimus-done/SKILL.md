@@ -671,20 +671,6 @@ skill that needs the default branch MUST use the recipe above.
 Skills reference this as: "Resolve default branch — see AGENTS.md Protocol: Default Branch Resolution."
 
 
-### Protocol: GitHub CLI Check (HARD BLOCK)
-
-**Referenced by:** all stage agents (1-4), tasks, batch
-
-```bash
-gh auth status 2>/dev/null
-```
-
-If this command fails (exit code != 0), **STOP** immediately:
-```
-GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
-```
-
-
 ### Protocol: Notification Hooks (summarized)
 
 > **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Notification Hooks`.**

@@ -1260,52 +1260,7 @@ Measure coverage — see AGENTS.md Protocol: Coverage Measurement.
 
 ### Step 9.2: Test Gap Analysis
 
-Dispatch a test gap analyzer via `Task` tool. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
-
-The agent receives file paths and can navigate the codebase autonomously.
-
-```
-Goal: Cross-reference implemented tests with source code to find missing scenarios.
-
-Context:
-  - Project root: <absolute path to project worktree>
-  - Changed source files: [list of file paths] (READ each file)
-  - Test files: [list of test file paths] (READ each file)
-  - Coverage profile: [coverage command output if available]
-
-IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
-  - Read files at the paths above
-  - Search for existing test patterns in the project
-  - Find related test files not listed above
-  - Discover how similar functions are tested elsewhere in the codebase
-
-Your job:
-  For each public function changed/added:
-  1. Unit tests: check for happy path, error paths, edge cases, validation failures
-  2. Integration tests: check for DB failure, timeout, retry, rollback scenarios
-  3. Report what EXISTS and what is MISSING
-  4. Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag false confidence tests
-  5. Could these tests pass while the feature is actually broken?
-
-Required output format:
-  ## Unit Test Gaps
-  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
-  |---|------|----------|--------------------|-------------------|----------|
-
-  ## Integration Test Gaps
-  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
-  |---|------|----------|--------------------|-------------------|----------|
-
-  ## Test Effectiveness Issues
-  | # | File | Test | Issue | Risk | Priority |
-  |---|------|------|-------|------|----------|
-
-  ## Summary
-  - Functions analyzed: X
-  - Fully covered: X | Partial: X | No tests: X
-  - Missing scenarios: X HIGH, Y MEDIUM, Z LOW
-  - Effectiveness issues: X
-```
+Dispatch a test gap analyzer — see AGENTS.md Protocol: Test Gap Analyzer Dispatch. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
 
 HIGH priority gaps are presented as findings for user decision.
 
@@ -1985,44 +1940,11 @@ Every finding must present 2-3 options with this structure:
 
 **Summary:** Measure unit + integration test coverage via Makefile targets with stack-specific fallbacks (Go: `go test -coverprofile`; Node: `npm test -- --coverage`; Python: `pytest --cov=. --cov-report=term`). Run wrapped in `_optimus_quiet_run` (Protocol: Quiet Command Execution) to keep agent context clean — the agent sees only PASS/FAIL + extracted total percentage; full per-file breakdown stays in `.optimus/logs/` and native coverage files. Thresholds: unit 85%, integration 70% (NEEDS_FIX/HIGH finding below). When scanning untested functions, read coverage output FILE (not stdout) — flag business-logic functions at 0% as HIGH; infrastructure/generated code as SKIP. If no coverage command resolves, mark SKIP — do not fail verification. See full extraction recipes in AGENTS.md.
 
-### Protocol: GitHub CLI Check (HARD BLOCK)
-
-**Referenced by:** all stage agents (1-4), tasks, batch
-
-```bash
-gh auth status 2>/dev/null
-```
-
-If this command fails (exit code != 0), **STOP** immediately:
-```
-GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
-```
-
-
 ### Protocol: Initialize .optimus Directory (summarized)
 
 > **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Initialize .optimus Directory`.**
 
 **Summary:** Create `${MAIN_WORKTREE}/.optimus/{sessions,reports,logs}/` with `mkdir -p`. Add `# optimus-operational-files` and `# optimus-operational-worktrees` markers to `${MAIN_WORKTREE}/.gitignore` idempotently (grep-anchor before append). Refuse symlinked `.gitignore`. Auto-prune `.optimus/logs/` (30 days, 500 files). See full recipe in AGENTS.md.
-
-### Protocol: PR Title Validation
-
-**Referenced by:** stages 2-4
-
-Check if a PR exists for the current branch:
-```bash
-gh pr view --json number,title --jq '{number, title}' 2>/dev/null
-```
-
-If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
-- Regex: `^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$`
-- Cross-check the type against the task's **Tipo** column (Feature→`feat`, Fix→`fix`, Refactor→`refactor`, Chore→`chore`, Docs→`docs`, Test→`test`)
-- **If title is invalid:** warn via `AskUser`: "PR #N title `<current>` does not follow Conventional Commits. Suggested: `<corrected>`. Fix now with `gh pr edit <number> --title \"<corrected>\"`?"
-- **If title is valid:** proceed silently
-- If no PR exists, skip.
-
-Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Title Validation."
-
 
 ### Protocol: Per-Droid Quality Checklists (summarized)
 
@@ -2030,44 +1952,66 @@ Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Titl
 
 **Summary:** Per-droid quality dimensions that review/pr-check/deep-review/coderabbit-review/plan/build skills MUST include in their agent prompts beyond the core review domain. Examples: code-reviewer adds resilience/concurrency/cognitive-complexity/error-handling checks; security-reviewer adds PII/error-response-leakage/rate-limiting/secrets; test-reviewer adds effectiveness/false-positive-risk/spec-traceability; nil-safety adds channel/map/slice safety; consequences adds backward-compat/migration-path/event-contract; dead-code adds zombie test infrastructure and stale feature flags; qa-analyst adds testability/operational-readiness; frontend adds UX states/accessibility/i18n; backend adds graceful-shutdown/context-propagation/structured-logging. Skills reference this when building specialist droid prompts so agents review uniformly. See full per-droid lists in AGENTS.md.
 
-### Protocol: Project Rules Discovery
-
-**Summary:** Every reviewing/validating/generating skill MUST scan for project conventions before starting. Search the canonical list (AGENTS.md, CLAUDE.md, DROIDS.md, .cursorrules, PROJECT_RULES.md, .editorconfig, coding-standards.md, CONTRIBUTING.md, linter configs like .eslintrc/biome.json/.golangci.yml/.prettierrc) and read ALL that exist. If none exist, warn the user. Discovered files become the authoritative source of truth and MUST be passed to every dispatched sub-agent. See full file list in AGENTS.md.
-
-**Referenced by:** stages 1-4, deep-review, coderabbit-review
-
-Every skill that reviews, validates, or generates code MUST search for project rules
-and AI instruction files before starting. Search for these files in order and read ALL
-that exist:
-
-```
-AGENTS.md                    # Primary agent instructions
-CLAUDE.md                    # Claude-specific rules
-DROIDS.md                    # Droid-specific rules
-.cursorrules                 # Cursor-specific rules
-PROJECT_RULES.md             # Coding standards (root or docs/)
-docs/PROJECT_RULES.md
-.editorconfig                # Editor formatting rules
-docs/coding-standards.md     # Explicit coding conventions
-docs/conventions.md
-.github/CONTRIBUTING.md      # Contribution guidelines
-CONTRIBUTING.md
-.eslintrc*                   # Linter configs (implicit rules)
-biome.json
-.golangci.yml
-.prettierrc*
-```
-
-If NONE exist, warn the user. If any are found, they become the source of truth
-for coding standards and must be passed to every dispatched sub-agent.
-
-Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Project Rules Discovery."
-
-
 ### Protocol: Quiet Command Execution (summarized)
 
 > **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Quiet Command Execution`.**
 
 **Summary:** `_optimus_quiet_run <label> <command>` redirects stdout+stderr to `${MAIN_WORKTREE}/.optimus/logs/<ts>-<label>-<pid>.log`, emits a single `PASS`/`FAIL` line, and on failure dumps the last 50 lines (with `cat -v` to neutralize ANSI/OSC escape sequences). Uses `umask 0077` on the log file (output may contain credentials/stack traces). Exit code preserved so `if _optimus_quiet_run ...; then ... fi` works. Reserved exit codes: `2` = missing label/command; `3` = cannot create logs dir. Log retention (30-day age cap + 500-file count cap) is pruned at every Initialize Directory + Session State call. Use for verification commands only; never for output the agent must parse turn-by-turn. See full recipe in AGENTS.md.
+
+### Protocol: Test Gap Analyzer Dispatch
+
+**Summary:** Standardised prompt template for dispatching a test gap analyzer (`ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`) via `Task` tool. Identifies missing test scenarios across changed files: happy path / error paths / edge cases / integration failures + test effectiveness checks. Returns three tables (Unit Test Gaps, Integration Test Gaps, Test Effectiveness Issues) plus a Summary. Used by skills that perform post-change reviews.
+
+**Referenced by:** deep-review, coderabbit-review
+
+The orchestrator MUST dispatch via `Task` tool with this exact prompt (substituting the listed file paths and the coverage profile placeholder):
+
+```
+Goal: Identify missing test scenarios in files changed during this review.
+
+Context:
+  - Project root: <absolute path to project worktree>
+  - Changed source files: [list of file paths] (READ each file)
+  - Test files: [list of test file paths] (READ each file)
+  - Coverage profile: [coverage command output if available]
+
+IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
+  - Read files at the paths above
+  - Search for existing test patterns in the project
+  - Find related test files not listed above
+  - Discover how similar functions are tested elsewhere in the codebase
+
+Your job:
+  For each public function changed/added:
+  1. Unit tests: check for happy path, error paths, edge cases, validation failures
+  2. Integration tests: check for DB failure, timeout, retry, rollback scenarios
+  3. Report what EXISTS and what is MISSING
+  4. Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag false confidence tests
+  5. Could these tests pass while the feature is actually broken?
+
+Required output format:
+  ## Unit Test Gaps
+  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
+  |---|------|----------|--------------------|-------------------|----------|
+
+  ## Integration Test Gaps
+  | # | File | Function | Existing Scenarios | Missing Scenarios | Priority |
+  |---|------|----------|--------------------|-------------------|----------|
+
+  ## Test Effectiveness Issues
+  | # | File | Test | Issue | Risk | Priority |
+  |---|------|------|-------|------|----------|
+
+  ## Summary
+  - Functions analyzed: X
+  - Fully covered: X | Partial: X | No tests: X
+  - Missing scenarios: X HIGH, Y MEDIUM, Z LOW
+  - Effectiveness issues: X
+```
+
+**HIGH priority gaps** are presented as findings for user decision (fix now or defer).
+
+Skills reference this as: "Dispatch a test gap analyzer — see AGENTS.md Protocol: Test Gap Analyzer Dispatch."
+
 
 <!-- INLINE-PROTOCOLS:END -->

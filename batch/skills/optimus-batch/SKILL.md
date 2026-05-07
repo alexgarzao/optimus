@@ -353,20 +353,6 @@ Then present the summary:
 The following protocols are referenced by this skill. They are
 extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
-### Protocol: GitHub CLI Check (HARD BLOCK)
-
-**Referenced by:** all stage agents (1-4), tasks, batch
-
-```bash
-gh auth status 2>/dev/null
-```
-
-If this command fails (exit code != 0), **STOP** immediately:
-```
-GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
-```
-
-
 ### Protocol: State Management (summarized)
 
 > **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: State Management`.**
