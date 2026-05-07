@@ -195,6 +195,19 @@ Required output format:
   If no issues found, state "PASS — no issues in [domain]"
   Include a "What Was Done Well" section acknowledging good practices.
 
+Verification scope (MANDATORY):
+  Static analysis (lint, vet, format) and tests (unit, integration, coverage)
+  have already been run by the orchestrator. Results are in this prompt or in
+  the log files referenced under .optimus/logs/.
+  - Do NOT run verification commands yourself. Forbidden: `go test`, `npm test`,
+    `npm run test`, `pytest`, `make test`, `make lint`, `make test-coverage`,
+    `make test-integration`, `golangci-lint`, `go vet`, `goimports`, `gofmt`,
+    `prettier`, `eslint`, `tsc`, or any equivalent.
+  - If you need test/coverage details, Read the log files referenced in this
+    prompt — do not regenerate them.
+  - Use Read, Grep, and Glob to inspect source files. Reserve Bash for read-only
+    git inspection (`git log`, `git blame`, `git diff`) when needed.
+
 Cross-cutting analysis (MANDATORY for all agents):
   1. What would break in production under load with this code?
   2. What's MISSING that should be here? (not just what's wrong)
@@ -432,8 +445,8 @@ project rules (re-read fresh from disk). Do NOT include the findings ledger in a
 prompts — the orchestrator handles dedup using strict matching (same file + same line
 range ±5 + same category).
 
-Include the scope from Phase 1, plus the cross-cutting analysis instructions (same 5
-items from Phase 2 prompt).
+Include the scope from Phase 1, plus the same items from the Phase 2 prompt (both the
+Verification scope block and the Cross-cutting analysis 5 items).
 
 **Failure handling:** If a dispatched agent slot fails (Task tool error, ring droid
 unavailable), do NOT count as zero findings. Ask the user via `AskUser` whether to

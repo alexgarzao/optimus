@@ -348,6 +348,19 @@ IMPORTANT: You have access to Read, Grep, and Glob tools. USE THEM to:
   - Discover test patterns, error handling conventions, and architectural styles
   - Explore related files not listed above when needed for context
 
+Verification scope (MANDATORY):
+  Static analysis (lint, vet, format) and tests (unit, integration, coverage)
+  have already been run by the orchestrator. Results are in this prompt or in
+  the log files referenced under .optimus/logs/.
+  - Do NOT run verification commands yourself. Forbidden: `go test`, `npm test`,
+    `npm run test`, `pytest`, `make test`, `make lint`, `make test-coverage`,
+    `make test-integration`, `golangci-lint`, `go vet`, `goimports`, `gofmt`,
+    `prettier`, `eslint`, `tsc`, or any equivalent.
+  - If you need test/coverage details, Read the log files referenced in this
+    prompt — do not regenerate them.
+  - Use Read, Grep, and Glob to inspect source files. Reserve Bash for read-only
+    git inspection (`git log`, `git blame`, `git diff`) when needed.
+
 Cross-cutting analysis (MANDATORY for all agents):
   1. What would break in production under load with this code?
   2. What's MISSING that should be here? (not just what's wrong)

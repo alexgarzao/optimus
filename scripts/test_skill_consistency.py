@@ -717,6 +717,46 @@ class TestMakefileConvention:
         )
 
 
+# --- Verification scope: droid prompts must forbid re-running lint/test ---
+
+# Skills whose droid prompt templates MUST instruct sub-agents NOT to re-run
+# verification commands (lint, test, coverage) the orchestrator already ran.
+SKILLS_WITH_VERIFICATION_SCOPE = [
+    "review", "pr-check", "coderabbit-review",
+    "deep-review", "build", "plan",
+]
+
+
+class TestVerificationScope:
+    """Every consumer-skill droid prompt template must include a Verification scope block.
+
+    The orchestrator runs lint/test/coverage once; sub-agents should not
+    re-run them (wastes tokens in the agent's isolated context). The
+    `Verification scope (MANDATORY)` block in each droid prompt template
+    enforces this contract.
+    """
+
+    def test_skills_have_verification_scope_block(self):
+        """Each consumer SKILL.md must contain 'Verification scope (MANDATORY)'."""
+        violations = []
+        for skill in SKILLS_WITH_VERIFICATION_SCOPE:
+            content = _read_skill(skill)
+            if "Verification scope (MANDATORY)" not in content:
+                violations.append(skill)
+        assert violations == [], (
+            "Skills missing 'Verification scope (MANDATORY)' block in droid "
+            "prompt template:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    def test_agents_md_documents_verification_scope(self):
+        """AGENTS.md must document the Verification scope contract for skill authors."""
+        content = AGENTS_MD.read_text()
+        assert "Verification scope" in content, (
+            "AGENTS.md missing 'Verification scope' guidance for droid prompts"
+        )
+
+
 # --- Convergence model: Full Roster, opt-in gated ---
 
 
