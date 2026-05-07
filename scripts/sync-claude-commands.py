@@ -137,26 +137,38 @@ def write_if_changed(path: Path, content: str) -> bool:
 
 
 def render_main_command(plugin: str) -> str:
-    """Render the top-level `commands/<plugin>.md` file content.
+    """Render the top-level `commands/<plugin>.md` file content as a thin wrapper.
 
-    Reads the per-plugin SKILL.md, extracts the description, rewrites slash
-    references in the body, and assembles a single file with single-line
-    frontmatter.
+    The slash command surface for Claude Code is a thin delegator: instead of
+    duplicating the entire SKILL.md body (which historically grew each
+    `commands/<plugin>.md` to ~600+ lines and totalled ~11K lines repo-wide),
+    this emits a 5-line stub that asks Claude to invoke the matching skill
+    via the Skill tool. The skill description (taken from the SKILL.md
+    frontmatter) is preserved so `/help` and the slash-command picker still
+    surface the same one-liner.
+
+    The skill itself (`optimus-<plugin>`) is auto-registered by the harness
+    from `<plugin>/skills/optimus-<plugin>/SKILL.md` and contains the actual
+    workflow. The Skill tool loads it on demand when Claude invokes it.
     """
     skill_path = REPO_ROOT / plugin / "skills" / f"optimus-{plugin}" / "SKILL.md"
     if not skill_path.is_file():
         raise FileNotFoundError(f"SKILL.md not found: {skill_path}")
     raw = skill_path.read_text()
-    fm, body = parse_frontmatter(raw)
+    fm, _ = parse_frontmatter(raw)
     description = fm.get("description") or ""
     # Rewrite slash refs in the description too — it can mention sister
     # commands (e.g., `done` mentions `/optimus-pr-check` as a recommended
     # action when reviewers flag changes).
     description = normalize_description(rewrite_slash_refs(description))
-    new_body = rewrite_slash_refs(body)
-    # Body from the SKILL already starts with a newline run; ensure the file
-    # ends with exactly one trailing newline.
-    return f"---\ndescription: {description}\n---\n{new_body.rstrip()}\n"
+    return (
+        f"---\n"
+        f"description: {description}\n"
+        f"---\n"
+        f"\n"
+        f"Invoke the `optimus:{plugin}` skill via the Skill tool. "
+        f"Arguments: $ARGUMENTS\n"
+    )
 
 
 def render_alias_command(plugin: str, alias_path: Path) -> str:
