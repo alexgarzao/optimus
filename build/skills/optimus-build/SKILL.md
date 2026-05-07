@@ -655,84 +655,17 @@ The optimus-tasks.md table only tracks structural data (dependencies, versions, 
 
 **Summary:** Measure unit + integration test coverage via Makefile targets with stack-specific fallbacks (Go: `go test -coverprofile`; Node: `npm test -- --coverage`; Python: `pytest --cov=. --cov-report=term`). Run wrapped in `_optimus_quiet_run` (Protocol: Quiet Command Execution) to keep agent context clean — the agent sees only PASS/FAIL + extracted total percentage; full per-file breakdown stays in `.optimus/logs/` and native coverage files. Thresholds: unit 85%, integration 70% (NEEDS_FIX/HIGH finding below). When scanning untested functions, read coverage output FILE (not stdout) — flag business-logic functions at 0% as HIGH; infrastructure/generated code as SKIP. If no coverage command resolves, mark SKIP — do not fail verification. See full extraction recipes in AGENTS.md.
 
-### Protocol: GitHub CLI Check (HARD BLOCK)
-
-**Referenced by:** all stage agents (1-4), tasks, batch
-
-```bash
-gh auth status 2>/dev/null
-```
-
-If this command fails (exit code != 0), **STOP** immediately:
-```
-GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
-```
-
-
 ### Protocol: Notification Hooks (summarized)
 
 > **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Notification Hooks`.**
 
 **Summary:** Optional hook system: stages emit events (`status-change`, `task-blocked`, `task-done`, `task-cancelled`) by invoking `<repo>/tasks-hooks.sh <event> <task_id> <args...>` (or `<repo>/docs/tasks-hooks.sh`) if the file exists and is executable. Hook receives sanitized args (alphanumeric + space + `-_:` only — does NOT allow `.` or `/` to prevent path-traversal if hook authors interpolate args into file paths). Argument shape: 4 args for `status-change`/`task-done`/`task-cancelled` (`event task_id old_status new_status`); 4 args for `task-blocked` (`event task_id current_status reason`). Hooks run in background (`&`) — failures NEVER block the pipeline. Capture `OLD_STATUS` BEFORE writing the new status. See full event signatures + sanitization recipe in AGENTS.md.
 
-### Protocol: PR Title Validation
-
-**Referenced by:** stages 2-4
-
-Check if a PR exists for the current branch:
-```bash
-gh pr view --json number,title --jq '{number, title}' 2>/dev/null
-```
-
-If a PR exists, validate its title follows **Conventional Commits 1.0.0**:
-- Regex: `^(feat|fix|refactor|chore|docs|test|build|ci|style|perf)(\([a-zA-Z0-9_\-]+\))?!?: .+$`
-- Cross-check the type against the task's **Tipo** column (Feature→`feat`, Fix→`fix`, Refactor→`refactor`, Chore→`chore`, Docs→`docs`, Test→`test`)
-- **If title is invalid:** warn via `AskUser`: "PR #N title `<current>` does not follow Conventional Commits. Suggested: `<corrected>`. Fix now with `gh pr edit <number> --title \"<corrected>\"`?"
-- **If title is valid:** proceed silently
-- If no PR exists, skip.
-
-Skills reference this as: "Validate PR title — see AGENTS.md Protocol: PR Title Validation."
-
-
 ### Protocol: Per-Droid Quality Checklists (summarized)
 
 > **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Per-Droid Quality Checklists`.**
 
 **Summary:** Per-droid quality dimensions that review/pr-check/deep-review/coderabbit-review/plan/build skills MUST include in their agent prompts beyond the core review domain. Examples: code-reviewer adds resilience/concurrency/cognitive-complexity/error-handling checks; security-reviewer adds PII/error-response-leakage/rate-limiting/secrets; test-reviewer adds effectiveness/false-positive-risk/spec-traceability; nil-safety adds channel/map/slice safety; consequences adds backward-compat/migration-path/event-contract; dead-code adds zombie test infrastructure and stale feature flags; qa-analyst adds testability/operational-readiness; frontend adds UX states/accessibility/i18n; backend adds graceful-shutdown/context-propagation/structured-logging. Skills reference this when building specialist droid prompts so agents review uniformly. See full per-droid lists in AGENTS.md.
-
-### Protocol: Project Rules Discovery
-
-**Summary:** Every reviewing/validating/generating skill MUST scan for project conventions before starting. Search the canonical list (AGENTS.md, CLAUDE.md, DROIDS.md, .cursorrules, PROJECT_RULES.md, .editorconfig, coding-standards.md, CONTRIBUTING.md, linter configs like .eslintrc/biome.json/.golangci.yml/.prettierrc) and read ALL that exist. If none exist, warn the user. Discovered files become the authoritative source of truth and MUST be passed to every dispatched sub-agent. See full file list in AGENTS.md.
-
-**Referenced by:** stages 1-4, deep-review, coderabbit-review
-
-Every skill that reviews, validates, or generates code MUST search for project rules
-and AI instruction files before starting. Search for these files in order and read ALL
-that exist:
-
-```
-AGENTS.md                    # Primary agent instructions
-CLAUDE.md                    # Claude-specific rules
-DROIDS.md                    # Droid-specific rules
-.cursorrules                 # Cursor-specific rules
-PROJECT_RULES.md             # Coding standards (root or docs/)
-docs/PROJECT_RULES.md
-.editorconfig                # Editor formatting rules
-docs/coding-standards.md     # Explicit coding conventions
-docs/conventions.md
-.github/CONTRIBUTING.md      # Contribution guidelines
-CONTRIBUTING.md
-.eslintrc*                   # Linter configs (implicit rules)
-biome.json
-.golangci.yml
-.prettierrc*
-```
-
-If NONE exist, warn the user. If any are found, they become the source of truth
-for coding standards and must be passed to every dispatched sub-agent.
-
-Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Project Rules Discovery."
-
 
 ### Protocol: Quiet Command Execution (summarized)
 

@@ -1126,20 +1126,6 @@ Every finding must present 2-3 options with this structure:
 - **Very high:** Architectural change, many files, extensive testing, risk of regressions
 
 
-### Protocol: GitHub CLI Check (HARD BLOCK)
-
-**Referenced by:** all stage agents (1-4), tasks, batch
-
-```bash
-gh auth status 2>/dev/null
-```
-
-If this command fails (exit code != 0), **STOP** immediately:
-```
-GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before proceeding.
-```
-
-
 ### Protocol: Notification Hooks (summarized)
 
 > **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Notification Hooks`.**
@@ -1151,40 +1137,6 @@ GitHub CLI (gh) is not authenticated. Run `gh auth login` to authenticate before
 > **Summary inlined here. Full recipe at `AGENTS.md -> Protocol: Per-Droid Quality Checklists`.**
 
 **Summary:** Per-droid quality dimensions that review/pr-check/deep-review/coderabbit-review/plan/build skills MUST include in their agent prompts beyond the core review domain. Examples: code-reviewer adds resilience/concurrency/cognitive-complexity/error-handling checks; security-reviewer adds PII/error-response-leakage/rate-limiting/secrets; test-reviewer adds effectiveness/false-positive-risk/spec-traceability; nil-safety adds channel/map/slice safety; consequences adds backward-compat/migration-path/event-contract; dead-code adds zombie test infrastructure and stale feature flags; qa-analyst adds testability/operational-readiness; frontend adds UX states/accessibility/i18n; backend adds graceful-shutdown/context-propagation/structured-logging. Skills reference this when building specialist droid prompts so agents review uniformly. See full per-droid lists in AGENTS.md.
-
-### Protocol: Project Rules Discovery
-
-**Summary:** Every reviewing/validating/generating skill MUST scan for project conventions before starting. Search the canonical list (AGENTS.md, CLAUDE.md, DROIDS.md, .cursorrules, PROJECT_RULES.md, .editorconfig, coding-standards.md, CONTRIBUTING.md, linter configs like .eslintrc/biome.json/.golangci.yml/.prettierrc) and read ALL that exist. If none exist, warn the user. Discovered files become the authoritative source of truth and MUST be passed to every dispatched sub-agent. See full file list in AGENTS.md.
-
-**Referenced by:** stages 1-4, deep-review, coderabbit-review
-
-Every skill that reviews, validates, or generates code MUST search for project rules
-and AI instruction files before starting. Search for these files in order and read ALL
-that exist:
-
-```
-AGENTS.md                    # Primary agent instructions
-CLAUDE.md                    # Claude-specific rules
-DROIDS.md                    # Droid-specific rules
-.cursorrules                 # Cursor-specific rules
-PROJECT_RULES.md             # Coding standards (root or docs/)
-docs/PROJECT_RULES.md
-.editorconfig                # Editor formatting rules
-docs/coding-standards.md     # Explicit coding conventions
-docs/conventions.md
-.github/CONTRIBUTING.md      # Contribution guidelines
-CONTRIBUTING.md
-.eslintrc*                   # Linter configs (implicit rules)
-biome.json
-.golangci.yml
-.prettierrc*
-```
-
-If NONE exist, warn the user. If any are found, they become the source of truth
-for coding standards and must be passed to every dispatched sub-agent.
-
-Skills reference this as: "Discover project rules — see AGENTS.md Protocol: Project Rules Discovery."
-
 
 ### Protocol: Re-run Guard (summarized)
 

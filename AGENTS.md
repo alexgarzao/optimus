@@ -1141,6 +1141,8 @@ Skills reference this as: "Check all-deps-cancelled — see AGENTS.md Protocol: 
 
 ### Protocol: GitHub CLI Check (HARD BLOCK)
 
+<!-- inline-mode: omit -->
+
 **Referenced by:** all stage agents (1-4), tasks, batch
 
 ```bash
@@ -2461,6 +2463,8 @@ Skills reference this as: "Measure coverage — see AGENTS.md Protocol: Coverage
 
 ### Protocol: PR Title Validation
 
+<!-- inline-mode: omit -->
+
 **Referenced by:** stages 2-4
 
 Check if a PR exists for the current branch:
@@ -2599,6 +2603,8 @@ scope: <backend|frontend|fullstack|docs|infra — best-effort, can be empty>
 Skills reference this as: "Load the Doc Brief — see AGENTS.md Protocol: Doc Brief Cache."
 
 ### Protocol: Project Rules Discovery
+
+<!-- inline-mode: omit -->
 
 **Summary:** Every reviewing/validating/generating skill MUST scan for project conventions before starting. Search the canonical list (AGENTS.md, CLAUDE.md, DROIDS.md, .cursorrules, PROJECT_RULES.md, .editorconfig, coding-standards.md, CONTRIBUTING.md, linter configs like .eslintrc/biome.json/.golangci.yml/.prettierrc) and read ALL that exist. If none exist, warn the user. Discovered files become the authoritative source of truth and MUST be passed to every dispatched sub-agent. See full file list in AGENTS.md.
 
