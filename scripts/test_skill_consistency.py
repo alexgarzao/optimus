@@ -26,6 +26,7 @@ splitting prematurely would multiply the import overhead without
 improving navigability.
 """
 
+import base64
 import json
 import os
 import re
@@ -3029,6 +3030,131 @@ class TestTerminalIdentificationCallSiteSelfContained:
             f"(expected 0). 127 = command not found = the function body is "
             f"not inlined in the same block as the call.\n"
             f"stderr: {result.stderr[:500]}"
+        )
+
+    # plan/build/review/done parse TASK_TITLE inline (same block as the
+    # mark_session call). batch and resume rely on agent-side substitution of
+    # $TASK_TITLE from values parsed earlier in the skill flow, so the parse
+    # is documented in the preamble instead.
+    TITLE_PARSED_IN_CALL_BLOCK = ["plan", "build", "review", "done"]
+
+    @pytest.mark.parametrize("skill", TITLE_PARSED_IN_CALL_BLOCK)
+    def test_mark_call_block_parses_task_title_inline(self, skill):
+        """plan/build/review/done MUST parse TASK_TITLE in the SAME bash block
+        as the _optimus_mark_session call. Splitting parse and call across two
+        separate bash blocks (the pre-fix layout) lets TASK_TITLE evaporate
+        across the shell boundary — each Bash tool invocation is a fresh shell,
+        so a TASK_TITLE parsed in another block does NOT survive into this one,
+        and the badge renders with an empty title placeholder."""
+        content = _read_skill(skill)
+        blocks = self._bash_blocks(content)
+        call_blocks = [b for b in blocks if self._MARK_CALL_RE.search(b)]
+        assert call_blocks, f"{skill}: missing mark call block"
+        offenders = [b for b in call_blocks if "TASK_TITLE=$(awk" not in b]
+        assert not offenders, (
+            f"{skill}: the bash block calling _optimus_mark_session does NOT "
+            f"parse TASK_TITLE inline. Inline the awk parse in this block — "
+            f"each Bash tool invocation is a fresh shell, and a TASK_TITLE "
+            f"parsed in another block evaporates before this one runs.\n"
+            f"Offending block (first 200 chars):\n{offenders[0][:200]}"
+        )
+
+    @pytest.mark.parametrize("skill", BADGE_SKILLS)
+    def test_mark_call_preamble_documents_substitution(self, skill):
+        """The markdown text preceding the mark_session bash block MUST document
+        the substitution requirement ('Substitute $TASK_ID...'). Without it, an
+        agent reading the skill has no signal that $TASK_ID/$TASK_TITLE/
+        $TASKS_FILE placeholders need values before bash runs — the call fires
+        with empty args and the badge renders as a bare '<STAGE>'."""
+        content = _read_skill(skill)
+        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        segments = body.split("\n```bash\n")
+        for i, seg in enumerate(segments[1:], start=1):
+            end = seg.find("\n```")
+            if end < 0:
+                continue
+            bash_content = seg[:end]
+            if self._MARK_CALL_RE.search(bash_content):
+                preamble = segments[i - 1][-1000:]
+                assert "ubstitute" in preamble, (
+                    f"{skill}: markdown preamble before the _optimus_mark_session "
+                    f"bash block does not contain a 'Substitute' instruction. "
+                    f"Document the required substitution of $TASK_ID (and "
+                    f"$TASK_TITLE if not parsed in the same block).\n"
+                    f"Preamble (last 1000 chars):\n{preamble}"
+                )
+                assert "TASK_ID" in preamble, (
+                    f"{skill}: preamble does not name $TASK_ID — the "
+                    f"substitution instruction should reference the variable.\n"
+                    f"Preamble:\n{preamble}"
+                )
+                return
+        pytest.fail(f"{skill}: no mark_session bash block found for preamble check")
+
+    @pytest.mark.parametrize("skill", BADGE_SKILLS)
+    def test_mark_call_block_emits_badge_with_task_metadata(self, skill, tmp_path):
+        """End-to-end: run the call block with mock task metadata and verify
+        the emitted OSC 1337 SetBadgeFormat base64 decodes to a string that
+        contains both the task ID and the task title. This catches the
+        cross-shell variable-death bug: a structurally correct block can still
+        emit a bare '<STAGE>' badge if $TASK_ID/$TASK_TITLE are empty when the
+        call runs."""
+        content = _read_skill(skill)
+        blocks = self._bash_blocks(content)
+        call_blocks = [b for b in blocks if self._MARK_CALL_RE.search(b)]
+        assert call_blocks, f"{skill}: missing mark call block"
+
+        # Fake optimus-tasks.md so the inline awk parser (plan/build/review/done
+        # variant) finds the T-TEST row. batch/resume ignore it and use the
+        # $TASK_TITLE env var directly.
+        tasks_md = tmp_path / "optimus-tasks.md"
+        tasks_md.write_text(
+            "| ID | Title | Tipo | Depends | Priority | Version | Estimate | TaskSpec |\n"
+            "|---|---|---|---|---|---|---|---|\n"
+            "| T-TEST | Test Title | backend | - | Alta | v1 | 1d | - |\n"
+        )
+
+        # Override `ps` to return failure so the PPID walk yields empty
+        # target_tty, forcing _optimus_emit to fall back to stdout where the
+        # test can capture the OSC sequence. Without this, on an interactive
+        # test host the function would write directly to /dev/<tty> and the
+        # subprocess stdout would stay empty.
+        wrapper = "ps() { return 1; }\n" + call_blocks[0]
+        script = tmp_path / "block.sh"
+        script.write_text(wrapper)
+
+        env = {
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "LC_TERMINAL": "iTerm2",
+            "TASK_ID": "T-TEST",
+            "TASK_TITLE": "Test Title",
+            "TASKS_FILE": str(tasks_md),
+        }
+        result = subprocess.run(
+            ["bash", str(script)], env=env, capture_output=True, text=True
+        )
+        assert result.returncode == 0, (
+            f"{skill}: block exited {result.returncode}\n"
+            f"stderr: {result.stderr[:500]}"
+        )
+
+        osc_re = re.compile(r"\x1b\]1337;SetBadgeFormat=([A-Za-z0-9+/=]+)\x07")
+        match = osc_re.search(result.stdout)
+        assert match, (
+            f"{skill}: no OSC 1337 SetBadgeFormat in stdout — the function did "
+            f"not emit. Stdout (first 500 chars):\n{result.stdout[:500]}"
+        )
+        decoded = base64.b64decode(match.group(1)).decode("utf-8", errors="replace")
+        assert "T-TEST" in decoded, (
+            f"{skill}: badge content missing task ID. Decoded={decoded!r}. "
+            f"$TASK_ID was empty when the call ran — the cross-shell variable "
+            f"death bug. Inline the parse in the same block OR document the "
+            f"substitution requirement in the preamble."
+        )
+        assert "Test Title" in decoded, (
+            f"{skill}: badge content missing task title. Decoded={decoded!r}. "
+            f"Either the inline parse did not find the row or $TASK_TITLE was "
+            f"empty when the call ran."
         )
 
 

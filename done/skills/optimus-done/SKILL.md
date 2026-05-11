@@ -123,9 +123,7 @@ message. It never offers to redo `plan`, `build`, or `review`.
 
 **CRITICAL:** Set the terminal title so the user can identify this terminal at a glance.
 
-**First, parse `TASK_TITLE` from optimus-tasks.md** — the title is interpolated
-into the terminal title below, and parsing it lazily (after the title is set)
-results in `optimus: DONE T-XXX — ` with an empty trailing dash:
+**Mark terminal session (iTerm2 badge + tab color).** Before running this block, **substitute `$TASK_ID`** with the confirmed task ID and **`$TASKS_FILE`** with the resolved optimus-tasks.md path. The block parses `TASK_TITLE` and calls `_optimus_mark_session` in the **SAME** Bash invocation — each Bash tool invocation is a fresh shell, so a `TASK_TITLE` parsed in a previous block would NOT survive here, and the badge would render empty. The function body is inlined for the same reason. See AGENTS.md Protocol: Terminal Identification. The canonical function body lives there.
 
 ```bash
 # optimus-tasks.md columns by pipe index:
@@ -142,15 +140,11 @@ TASK_TITLE=$(awk -F'|' -v id="$TASK_ID" '
 ' "$TASKS_FILE")
 
 if [ -z "$TASK_TITLE" ]; then
-  # Non-fatal: the terminal title is informational. Fall back to a stub so the
-  # later interpolation does not produce a trailing-dash artifact.
+  # Non-fatal: the badge text is informational. Fall back to a stub so the
+  # badge does not render as a bare "DONE" with no task context.
   TASK_TITLE="(title unavailable)"
 fi
-```
 
-Then execute the title-setter NOW. Mark terminal session (iTerm2 badge + tab color). The function body is inlined here on purpose: each Bash tool invocation is a fresh shell, so a definition pasted in another code block does NOT survive into this one. See AGENTS.md Protocol: Terminal Identification. The canonical body of the function lives there.
-
-```bash
 _optimus_mark_session() {
   local stage="$1" task_id="$2" title="$3"
   [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ] || return 0

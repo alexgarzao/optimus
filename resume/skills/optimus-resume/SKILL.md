@@ -524,7 +524,7 @@ If the user invoked a dry-run (e.g., "dry-run resume T-XXX", "preview resume"):
 
 ### Step 4.1: Set Terminal Title
 
-Mark terminal session (iTerm2 badge + tab color). The function body is inlined here on purpose: each Bash tool invocation is a fresh shell, so a definition pasted in another code block does NOT survive into this one. See AGENTS.md Protocol: Terminal Identification. The canonical body of the function lives there.
+Mark terminal session (iTerm2 badge + tab color). Before running this block, **substitute `$TASK_ID` with the resolved task ID and `$TASK_TITLE` with the title parsed in Step 2.3** — each Bash tool invocation is a fresh shell, so values parsed earlier do NOT survive into this block, and calling without substitution renders a bare "RESUME" badge with no task context. The function body is inlined for the same reason. See AGENTS.md Protocol: Terminal Identification. The canonical function body lives there.
 
 ```bash
 _optimus_mark_session() {
