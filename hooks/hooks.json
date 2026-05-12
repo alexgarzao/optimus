@@ -1,0 +1,17 @@
+{
+  "description": "Instant iTerm2 badge + SKILL.md preload for /optimus:* slash commands. Works around the Claude Code Skill-tool bug where SKILL.md content is not injected into the model's context when a slash command fires.",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CLAUDE_PLUGIN_ROOT}/hooks/optimus-skill-loader.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
