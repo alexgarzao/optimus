@@ -63,7 +63,9 @@ input="$(cat || true)"
 log "--- raw stdin ---"; log "$input"; log "--- end raw stdin ---"
 
 prompt="$(printf '%s' "$input" | jq -r '.prompt // .user_prompt // .userInput // empty' 2>/dev/null || true)"
+cwd_from_stdin="$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null || true)"
 log "extracted prompt=$prompt"
+log "extracted cwd=$cwd_from_stdin"
 
 # Match /optimus:<name> [<first-arg>] at start of prompt.
 # BASH_REMATCH[1] = skill name (or alias the user typed)
@@ -111,6 +113,60 @@ elif [ -f "$HOME/.claude/skills/default/optimus-${skill_name}/SKILL.md" ]; then
 else
   log "SKILL.md not found for $skill_name"
   exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Lifecycle gate: /optimus:done requires status "Validando Impl"
+# ---------------------------------------------------------------------------
+# Prevents the user from skipping /optimus:review after build. Reads
+# ${MAIN_WORKTREE}/.optimus/state.json — resolved via git common-dir so
+# the check works from inside a linked worktree too. Bypassable by
+# passing --force anywhere after the task ID:
+#   /optimus:done T-99 --force
+#
+# Permissive on missing infrastructure (no git, no state.json, no
+# task_arg, no jq) so we never block users in non-optimus projects.
+if [ "$skill_name" = "done" ] && [ -n "$task_arg" ] && ! [[ " $prompt " == *" --force "* ]]; then
+  # Resolve main worktree. --git-common-dir is the canonical .git path
+  # shared by all linked worktrees; its parent is the main worktree.
+  # git returns a path that is relative to the directory passed via -C
+  # (or to PWD if no -C). Normalize against the hook's stdin cwd so we
+  # don't accidentally land in the cwd of the bash process itself.
+  base_cwd="${cwd_from_stdin:-$PWD}"
+  git_dir_raw="$(cd "$base_cwd" 2>/dev/null && git rev-parse --git-common-dir 2>/dev/null || true)"
+  if [ -n "$git_dir_raw" ]; then
+    case "$git_dir_raw" in
+      /*) git_dir="$git_dir_raw" ;;
+      *)  git_dir="${base_cwd}/${git_dir_raw}" ;;
+    esac
+    main_worktree="$(dirname "$git_dir")"
+    state_file="${main_worktree}/.optimus/state.json"
+    log "gate: state_file=$state_file"
+
+    if [ -f "$state_file" ] && command -v jq >/dev/null 2>&1; then
+      status="$(jq -r --arg id "$task_arg" '.[$id].status // "Pendente"' "$state_file" 2>/dev/null || echo "")"
+      log "gate: task=$task_arg status=$status"
+
+      if [ "$status" != "Validando Impl" ]; then
+        case "$status" in
+          "Pendente"|"")    reason="task has not started yet (no entry in state.json — implicit Pendente)" ;;
+          "Validando Spec") reason="task is still in planning (/optimus:plan output not yet built)" ;;
+          "Em Andamento")   reason="task was built but never reviewed — RUN /optimus:review ${task_arg} FIRST" ;;
+          "DONE")           reason="task is already DONE (use /optimus:resume ${task_arg} to reopen)" ;;
+          "Cancelado")      reason="task was cancelled" ;;
+          *)                reason="task is in an unexpected status: ${status}" ;;
+        esac
+        {
+          echo "BLOCKED: /optimus:done ${task_arg} requires status 'Validando Impl'."
+          echo "Current status: ${status:-<none>}"
+          echo "Reason: ${reason}"
+          echo "Override with: /optimus:done ${task_arg} --force"
+        } >&2
+        log "gate: BLOCKED status=$status reason=$reason"
+        exit 2
+      fi
+    fi
+  fi
 fi
 
 # ---------------------------------------------------------------------------
