@@ -96,6 +96,44 @@ keeps it up to date as new commands are added.
 Run `/optimus-sync` (or `make sync-plugins`) to sync all plugins — installs new,
 updates existing, removes orphaned. Works for both Droid and Claude Code simultaneously.
 
+### iTerm2 setup (optional, Claude Code only)
+
+When running under Claude Code in iTerm2 on macOS, every `/optimus:*` invocation
+emits OSC escape sequences so you can identify which stage and task each tab is
+running at a glance. Most surfaces work automatically with no setup:
+
+| Surface | Setup needed |
+|---|---|
+| Badge overlay (`STAGE` + task ID) | None |
+| Tab background color (per stage) | None |
+| Tab strip label (`OPTIMUS:<CMD> <ARG>`) | None |
+| macOS window title bar | None |
+| **Per-session subtitle** (strip above each pane) | **One-time profile tweak** |
+
+The per-session subtitle requires a profile-level setting because iTerm2 only
+renders the user variable when its title format explicitly references it:
+
+1. iTerm2 → Settings (Cmd+,) → Profiles → *[your profile]* → General
+2. In the **Subtitle** field (placeholder: "Interpolated string"), paste:
+   ```
+   \(user.optimus)
+   ```
+3. Close the Settings window — iTerm2 saves the profile change immediately.
+   New tabs/windows using that profile pick it up automatically.
+
+After that, the subtitle shows `OPTIMUS:<STAGE> <TASK-ID>` whenever a stage
+skill runs. It stays empty until a `/optimus:*` prompt fires the hook.
+
+**Notes:**
+- The setup is per-profile, per-machine. It survives restarts but does not sync
+  across machines.
+- Non-iTerm2 terminals (Terminal.app, Alacritty, Ghostty, …) silently ignore
+  the OSC sequences without breaking anything.
+- The Droid (Factory) packaging does not ship the hook; this is Claude Code only.
+- iTerm2 3.6.x exposes Subtitle as a free-text field in the Profile General
+  panel; older versions may expose a "Customize…" button on the Title dropdown
+  instead — either path accepts the same `\(user.optimus)` interpolation.
+
 ## Quick Start
 
 1. **Import tasks:** `/optimus-import` — creates `optimus-tasks.md` from Ring pre-dev artifacts
