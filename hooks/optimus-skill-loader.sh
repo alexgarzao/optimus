@@ -216,6 +216,37 @@ if [ -n "$stage" ]; then
     badge_b64="$(printf 'OPTIMUS:%s\n%s' "$cmd_upper" "$badge_line2" | base64 | tr -d '\n')"
     printf '\e]1337;SetBadgeFormat=%s\a' "$badge_b64" > "/dev/$target_tty" 2>/dev/null || true
 
+    # Title text: single-line "OPTIMUS:<CMD> <ARG>" (omit trailing space
+    # when no arg). Emitted on two channels because iTerm2 surfaces them
+    # differently:
+    #
+    #   1. OSC 1337;SetTabName  — user-set name; shows in the tab strip
+    #      and survives shell prompt redraws (precmd in oh-my-zsh themes
+    #      doesn't write here).
+    #
+    #   2. OSC 0  — icon + window title; this is the channel iTerm2 uses
+    #      to compute the per-session title bar (the strip above each
+    #      pane that normally shows "caffeinate (claude)" or similar
+    #      auto-detected job names). SetTabName alone does NOT override
+    #      the session title bar — OSC 0 does.
+    if [ -n "$task_arg" ]; then
+      title_text="OPTIMUS:${cmd_upper} ${task_arg}"
+    else
+      title_text="OPTIMUS:${cmd_upper}"
+    fi
+    title_b64="$(printf '%s' "$title_text" | base64 | tr -d '\n')"
+    printf '\e]1337;SetTabName=%s\a' "$title_b64" > "/dev/$target_tty" 2>/dev/null || true
+    printf '\e]0;%s\a' "$title_text" > "/dev/$target_tty" 2>/dev/null || true
+
+    # SetUserVar exposes the title content as \(user.optimus) so iTerm2
+    # profiles configured with a custom Title format like
+    #   \(user.optimus)
+    # can render the stage + task ID. SetUserVar values must be base64.
+    # The variable persists across the session and is empty until a
+    # /optimus:* prompt fires the hook.
+    optimus_var_b64="$(printf '%s' "$title_text" | base64 | tr -d '\n')"
+    printf '\e]1337;SetUserVar=optimus=%s\a' "$optimus_var_b64" > "/dev/$target_tty" 2>/dev/null || true
+
     # Tab color: stage → RGB. Matches the canonical mapping inside the
     # SKILL.md files so the stub and the final mark_session call agree.
     case "$stage" in
