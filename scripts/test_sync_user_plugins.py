@@ -180,6 +180,7 @@ def _run_sync(tmp_path: Path, env_extra: dict[str, str] | None = None,
               restrict_path: bool = False,
               exclude_droid: bool = False,
               exclude_claude: bool = False,
+              exclude_opencode: bool = True,
               isolated: bool = False) -> subprocess.CompletedProcess:
     """Run the sync script with mocked PATH and HOME.
 
@@ -187,6 +188,12 @@ def _run_sync(tmp_path: Path, env_extra: dict[str, str] | None = None,
         restrict_path: Use only tmp_path/bin as PATH (no system binaries).
         exclude_droid: Filter `droid` out of the system PATH.
         exclude_claude: Filter `claude` out of the system PATH.
+        exclude_opencode: Filter `opencode` out of the system PATH. Defaults
+            to True because existing tests in this file predate OpenCode
+            support and don't supply the `commands/opencode/` source fixture
+            the OpenCode branch expects. Tests that exercise OpenCode
+            explicitly should pass `exclude_opencode=False` and arrange the
+            target tmp repo to contain that directory.
         isolated: Copy script to tmp_path so BASH_SOURCE doesn't resolve to
             the optimus repo (defeats Source 3 fallback).
     """
@@ -201,6 +208,8 @@ def _run_sync(tmp_path: Path, env_extra: dict[str, str] | None = None,
             excluded.append("droid")
         if exclude_claude:
             excluded.append("claude")
+        if exclude_opencode:
+            excluded.append("opencode")
         sys_path = _path_without(*excluded) if excluded else env.get("PATH", "/usr/bin")
         env["PATH"] = f"{bin_dir}:{sys_path}"
     env["HOME"] = str(tmp_path / "home")

@@ -13,9 +13,8 @@ For every plugin entry in `.factory-plugin/marketplace.json` (the source of
 truth for the plugin list) the script emits:
 
   - `commands/<plugin>.md`          main command — frontmatter description from
-                                     SKILL.md, body is the SKILL body with all
-                                     `/optimus-<X>` references rewritten to
-                                     `/optimus:<X>`.
+                                     SKILL.md, body is a thin Skill-tool
+                                     delegator that invokes `optimus:<plugin>`.
   - `commands/<alias>.md`           when `<plugin>/commands/<alias>.md` exists
                                      in the per-plugin layout. The body
                                      becomes `/optimus:<plugin> $ARGUMENTS`.
@@ -29,111 +28,21 @@ Usage: python3 scripts/sync-claude-commands.py
 """
 from __future__ import annotations
 
-import json
-import re
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-MARKETPLACE_JSON = REPO_ROOT / ".factory-plugin" / "marketplace.json"
+from _sync_commands_common import (
+    REPO_ROOT,
+    load_plugin_names,
+    load_skill_description,
+    normalize_description,
+    parse_frontmatter,
+    per_plugin_alias_files,
+    rewrite_slash_refs_to_namespaced,
+    write_if_changed,
+)
+
 COMMANDS_DIR = REPO_ROOT / "commands"
-
-# Matches `/optimus-<word>` slash-command references. The leading `/` is
-# REQUIRED — bare mentions like `optimus-build` (used as skill names) must be
-# left alone. The captured group `<X>` is preserved when rewriting to
-# `/optimus:<X>`.
-SLASH_REF_RE = re.compile(r"/optimus-([a-z][a-z0-9-]*)")
-
-
-def rewrite_slash_refs(text: str) -> str:
-    """Substitute `/optimus-<X>` with `/optimus:<X>` (slash-prefixed only)."""
-    return SLASH_REF_RE.sub(r"/optimus:\1", text)
-
-
-def parse_frontmatter(text: str) -> tuple[dict, str]:
-    """Parse YAML-ish frontmatter at the start of a markdown file.
-
-    Frontmatter is bounded by `---` lines at the very top. Returns
-    `(frontmatter_dict, body)`. If no frontmatter, returns `({}, text)`.
-
-    The script only needs `description`, so this implementation extracts
-    that field directly with regex. SKILL.md frontmatter blocks contain
-    structured fields (examples, trigger, skip_when, etc.) with mixed
-    quoting that don't all parse cleanly under strict YAML; the regex
-    approach side-steps those edge cases without losing fidelity for the
-    one field we care about.
-
-    Supports three `description:` forms observed in the codebase:
-      1. quoted single line:   `description: "..."`
-      2. unquoted single line: `description: ...`
-      3. folded multiline:     `description: >\n  line1\n  line2\n  ...`
-    """
-    if not text.startswith("---\n"):
-        return {}, text
-    end = text.find("\n---\n", 4)
-    if end == -1:
-        return {}, text
-    fm_block = text[4:end]
-    body = text[end + len("\n---\n") :]
-
-    data: dict[str, str] = {}
-    desc = _extract_description(fm_block)
-    if desc is not None:
-        data["description"] = desc
-    return data, body
-
-
-def _extract_description(fm_block: str) -> str | None:
-    """Pull the `description` field out of a frontmatter block, supporting
-    the three forms documented in `parse_frontmatter`.
-    """
-    lines = fm_block.splitlines()
-    for i, line in enumerate(lines):
-        m = re.match(r"^description:\s*(.*)$", line)
-        if not m:
-            continue
-        rest = m.group(1).strip()
-        # Form 3: folded multiline (`>` or `|` indicator). Collect indented
-        # continuation lines until a non-indented line appears.
-        if rest in (">", "|", ">-", "|-", ">+", "|+"):
-            chunks = []
-            for cont in lines[i + 1 :]:
-                if cont.strip() == "":
-                    chunks.append("")
-                    continue
-                if cont.startswith((" ", "\t")):
-                    chunks.append(cont.strip())
-                else:
-                    break
-            return " ".join(c for c in chunks if c)
-        # Forms 1 & 2: same line. Strip surrounding double-quotes if present.
-        if len(rest) >= 2 and rest.startswith('"') and rest.endswith('"'):
-            return rest[1:-1]
-        return rest
-    return None
-
-
-def normalize_description(value: str) -> str:
-    """Collapse whitespace so the description fits on a single frontmatter line.
-
-    SKILL.md descriptions can be folded multiline strings (`description: >`).
-    Claude command frontmatter expects a single-line value, so we squash all
-    interior whitespace runs to one space and strip surrounding whitespace.
-    """
-    return re.sub(r"\s+", " ", value).strip()
-
-
-def write_if_changed(path: Path, content: str) -> bool:
-    """Write `content` to `path` only if the file would actually change.
-
-    Returns True when the file was created or rewritten. This keeps the script
-    idempotent: a second run produces zero filesystem mutations.
-    """
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists() and path.read_text() == content:
-        return False
-    path.write_text(content)
-    return True
 
 
 def render_main_command(plugin: str) -> str:
@@ -151,16 +60,11 @@ def render_main_command(plugin: str) -> str:
     from `<plugin>/skills/optimus-<plugin>/SKILL.md` and contains the actual
     workflow. The Skill tool loads it on demand when Claude invokes it.
     """
-    skill_path = REPO_ROOT / plugin / "skills" / f"optimus-{plugin}" / "SKILL.md"
-    if not skill_path.is_file():
-        raise FileNotFoundError(f"SKILL.md not found: {skill_path}")
-    raw = skill_path.read_text()
-    fm, _ = parse_frontmatter(raw)
-    description = fm.get("description") or ""
+    description = load_skill_description(plugin)
     # Rewrite slash refs in the description too — it can mention sister
     # commands (e.g., `done` mentions `/optimus-pr-check` as a recommended
     # action when reviewers flag changes).
-    description = normalize_description(rewrite_slash_refs(description))
+    description = normalize_description(rewrite_slash_refs_to_namespaced(description))
     return (
         f"---\n"
         f"description: {description}\n"
@@ -182,18 +86,9 @@ def render_alias_command(plugin: str, alias_path: Path) -> str:
     raw = alias_path.read_text()
     fm, body = parse_frontmatter(raw)
     description = fm.get("description") or ""
-    description = normalize_description(rewrite_slash_refs(description))
-    new_body = rewrite_slash_refs(body)
+    description = normalize_description(rewrite_slash_refs_to_namespaced(description))
+    new_body = rewrite_slash_refs_to_namespaced(body)
     return f"---\ndescription: {description}\n---\n{new_body.rstrip()}\n"
-
-
-def load_plugin_names() -> list[str]:
-    """Return plugin names from the Droid marketplace (source of truth)."""
-    if not MARKETPLACE_JSON.is_file():
-        raise FileNotFoundError(f"Marketplace JSON not found: {MARKETPLACE_JSON}")
-    data = json.loads(MARKETPLACE_JSON.read_text())
-    plugins = data.get("plugins", [])
-    return [p["name"] for p in plugins]
 
 
 def main() -> int:
@@ -215,19 +110,16 @@ def main() -> int:
         expected_files.add(main_target.name)
         main_count += 1
 
-        # Alias commands (zero or more per plugin)
-        alias_dir = REPO_ROOT / plugin / "commands"
-        if alias_dir.is_dir():
-            for alias_file in sorted(alias_dir.glob("*.md")):
-                alias_content = render_alias_command(plugin, alias_file)
-                alias_target = COMMANDS_DIR / alias_file.name
-                write_if_changed(alias_target, alias_content)
-                expected_files.add(alias_target.name)
-                alias_count += 1
+    # Alias commands (zero or more per plugin)
+    for plugin_name, alias_file in per_plugin_alias_files():
+        alias_content = render_alias_command(plugin_name, alias_file)
+        alias_target = COMMANDS_DIR / alias_file.name
+        write_if_changed(alias_target, alias_content)
+        expected_files.add(alias_target.name)
+        alias_count += 1
 
-    # Remove orphaned files: anything in commands/ that this run did not
-    # produce. Keeps the directory clean when a plugin is removed from the
-    # marketplace.
+    # Remove orphaned files at the repo-root level only — DO NOT recurse into
+    # subdirectories (the OpenCode generator owns `commands/opencode/`).
     for existing in COMMANDS_DIR.glob("*.md"):
         if existing.name not in expected_files:
             existing.unlink()

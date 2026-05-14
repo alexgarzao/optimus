@@ -1,6 +1,6 @@
 ---
 name: optimus-sync
-description: "Sync all Optimus plugins — install new, update existing, remove orphaned. Supports Droid (Factory) and Claude Code simultaneously."
+description: "Sync all Optimus plugins — install new, update existing, remove orphaned. Supports Droid (Factory), Claude Code, and OpenCode simultaneously."
 trigger: >
   - When user says "sync", "sync plugins", "update plugins", or "optimus sync"
   - When user wants to install/update all Optimus plugins at once
@@ -8,10 +8,11 @@ trigger: >
 skip_when: >
   - User wants to install a single specific plugin (use `droid plugin install` directly)
 prerequisite: >
-  - At least one supported platform: droid CLI installed OR claude CLI installed
+  - At least one supported platform: droid CLI installed OR claude CLI installed OR opencode CLI installed
   - jq installed and available
   - For Droid: Optimus marketplace registered (`droid plugin marketplace add https://github.com/alexgarzao/optimus`)
   - For Claude Code: Optimus marketplace registered (`claude plugin marketplace add https://github.com/alexgarzao/optimus`) — one-time setup
+  - For OpenCode: the Optimus repo cloned locally — OpenCode has no plugin marketplace; sync creates symlinks under `~/.config/opencode/` back to the clone
 NOT_skip_when: >
   - "I'll update plugins manually" -- optimus-sync handles scope conflicts and orphan removal automatically.
   - "Only one plugin needs updating" -- sync is optimized for batch operations and ensures consistency.
@@ -19,10 +20,10 @@ examples:
   - name: Sync all plugins
     invocation: "/optimus-sync"
     expected_flow: >
-      1. Detect available platforms (Droid, Claude Code, or both)
-      2. Update each platform's marketplace cache
+      1. Detect available platforms (Droid, Claude Code, OpenCode, or any combination)
+      2. Update each platform's marketplace cache (Droid + Claude only — OpenCode has no marketplace)
       3. Calculate changes per platform (new/orphaned/existing)
-      4. Execute each operation with progress
+      4. Execute each operation with progress (OpenCode uses symlinks; the others use plugin CLIs)
       5. Show per-platform summary
 related:
   complementary:
@@ -44,10 +45,10 @@ verification:
 Syncs installed Optimus plugins with the marketplace. Installs new plugins, removes
 orphaned ones, and updates all existing plugins — with real-time progress.
 
-Supports **dual-platform sync**: Droid (Factory) and Claude Code. Detects which
-platforms are available and syncs both in a single run.
+Supports **triple-platform sync**: Droid (Factory), Claude Code, and OpenCode.
+Detects which platforms are available and syncs all in a single run.
 
-The two platforms package the same SKILLs differently:
+The three platforms package the same SKILLs differently:
 
 - **Droid:** 17 individual plugins (`plan@optimus`, `build@optimus`, ...).
   Each is installed/updated/removed separately. Invoked as `/<plugin>` or
@@ -57,11 +58,19 @@ The two platforms package the same SKILLs differently:
   `commands/` directory inside the plugin. Aliases like `/optimus:sp` and
   `/optimus:bd` are namespaced too — there is no longer a per-skill
   `/optimus-<name>:<alias>` form.
+- **OpenCode:** No plugin marketplace exists. Instead, sync creates
+  symlinks back to the cloned Optimus repo under `~/.config/opencode/`:
+  - `~/.config/opencode/skills/optimus-<plugin>/` → `<repo>/<plugin>/skills/optimus-<plugin>/`
+  - `~/.config/opencode/commands/optimus-<cmd>.md` → `<repo>/commands/opencode/optimus-<cmd>.md`
+  Commands and aliases surface as bare-name slash invocations
+  (`/optimus-plan`, `/optimus-sp`, ...). The repo source is the
+  single source of truth — `git pull` propagates changes without re-syncing.
 
 The sync script normalizes these conventions: the Droid branch installs the
 17 bare-name plugins; the Claude branch installs a single `optimus@optimus`
 and silently uninstalls any legacy `optimus-<name>@optimus` entries left
-over from the pre-2.0 layout.
+over from the pre-2.0 layout; the OpenCode branch creates idempotent
+symlinks and removes orphaned `optimus-*` entries.
 
 ---
 
@@ -72,13 +81,14 @@ Check that at least one supported platform is available.
 ### Step 1.1: Detect platforms
 
 ```bash
-HAS_DROID=false; HAS_CLAUDE_CODE=false
+HAS_DROID=false; HAS_CLAUDE_CODE=false; HAS_OPENCODE=false
 command -v droid >/dev/null 2>&1 && HAS_DROID=true
 command -v claude >/dev/null 2>&1 && HAS_CLAUDE_CODE=true
-echo "Droid: $HAS_DROID | Claude Code: $HAS_CLAUDE_CODE"
+command -v opencode >/dev/null 2>&1 && HAS_OPENCODE=true
+echo "Droid: $HAS_DROID | Claude Code: $HAS_CLAUDE_CODE | OpenCode: $HAS_OPENCODE"
 ```
 
-If both are `false`, **STOP**: "No supported platform found. Install Droid from https://docs.factory.ai or install Claude Code from https://docs.anthropic.com/claude-code."
+If all three are `false`, **STOP**: "No supported platform found. Install Droid from https://docs.factory.ai, Claude Code from https://docs.anthropic.com/claude-code, or OpenCode from https://opencode.ai."
 
 ### Step 1.2: Check jq
 
@@ -106,6 +116,14 @@ claude plugin marketplace update optimus 2>&1 || echo "WARNING: Could not update
 
 If the marketplace is not registered, the user must register it once with:
 `claude plugin marketplace add https://github.com/alexgarzao/optimus`
+
+### Step 2.3: OpenCode (no marketplace)
+
+OpenCode does not provide a marketplace or install CLI. The sync uses the
+local clone of the Optimus repo as the source for all symlinks. No update
+step is needed at this phase — `git pull` (or the developer's branch
+checkout) supplies the latest content directly to OpenCode through the
+already-established symlinks.
 
 ---
 
@@ -163,6 +181,18 @@ the installed bare names to derive three lists:
 single `optimus` plugin. The branch installs `optimus@optimus` if missing
 (or updates it if present) and uninstalls every other `*@optimus` plugin it
 finds (legacy per-skill installs from the pre-2.0 layout).
+
+**OpenCode:** Reads the plugin list directly from the in-repo
+`.factory-plugin/marketplace.json` rather than from the resolved EXPECTED.
+This avoids a class of bugs where the cross-platform resolver picks
+the Claude marketplace cache (which lists a single `optimus` umbrella
+plugin, not the 17 bare-name skills). For each plugin in that file,
+ensure a symlink exists at `~/.config/opencode/skills/optimus-<plugin>/`
+pointing to the repo source. For each file under `<repo>/commands/opencode/`,
+ensure a symlink at `~/.config/opencode/commands/<filename>` points to the
+repo source. Orphan sweep removes any `optimus-*` entries (skills or
+commands) in those two directories that no longer correspond to a current
+source.
 
 ---
 
@@ -243,9 +273,12 @@ Present the final summary using `<json-render>` with **per-platform** metrics:
 
 Droid — Added: N | Updated: N | Removed: N | Failed: N
 Claude Code — Added: N | Updated: N | Removed: N | Failed: N
+OpenCode — Added: N | Updated: N | Unchanged: N | Removed: N | Failed: N
 ```
 
-Only show platforms that were detected and synced.
+Only show platforms that were detected and synced. The OpenCode line
+includes an `Unchanged` column because its symlink-based sync naturally
+reports no-op cases — useful as confirmation when the user re-runs sync.
 
 ---
 
@@ -270,3 +303,11 @@ Only show platforms that were detected and synced.
   ...) since the plugin owns the `optimus:` namespace. On Droid the bare
   invocations (`/sp`, `/bd`) work directly — Droid does not support the
   `<plugin>:<command>` namespace syntax.
+- OpenCode commands are prefixed (`/optimus-plan`, `/optimus-sp`, ...) because
+  OpenCode does not provide plugin-level namespacing in its documented
+  behavior. The `optimus-` prefix keeps Optimus commands distinct from
+  the user's other custom commands.
+- The OpenCode branch never deletes user-authored content. If a non-symlink
+  file exists at a target path (`~/.config/opencode/commands/optimus-X.md`
+  or `~/.config/opencode/skills/optimus-X/`), sync logs a `FAIL` for that
+  entry and leaves the user's file untouched.

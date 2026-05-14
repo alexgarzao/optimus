@@ -2,11 +2,13 @@
 set -euo pipefail
 
 # Syncs installed Optimus plugins with the marketplace.
-# Supports two platforms:
+# Supports three platforms:
 #   - Droid (Factory): uses `droid plugin install/update/uninstall`
 #   - Claude Code: uses `claude plugin install/update/uninstall` (native plugin system)
+#   - OpenCode (sst/opencode): manages symlinks under ~/.config/opencode/
+#     (OpenCode has no marketplace or install CLI, so we sync filesystem links)
 #
-# Detects which platforms are available and syncs both in a single run.
+# Detects which platforms are available and syncs all in a single run.
 # - Installs new plugins that were added to the marketplace
 # - Removes orphaned plugins that were removed from the marketplace
 # - Updates all existing plugins (with uninstall+reinstall fallback for Droid scope conflicts)
@@ -21,6 +23,10 @@ set -euo pipefail
 #                   Installed once via `claude plugin install optimus@optimus`.
 #                   Legacy per-plugin `optimus-<name>@optimus` installs from the
 #                   pre-2.0 layout are detected and uninstalled silently.
+#   - OpenCode:     17 skills under ~/.config/opencode/skills/optimus-<plugin>/
+#                   (symlinks back to the repo source) and 34 commands under
+#                   ~/.config/opencode/commands/optimus-<cmd>.md (also symlinks).
+#                   Invocation is bare-name: `/optimus-plan`, `/optimus-sp`, etc.
 #   - The EXPECTED list returned by `_resolve_expected_plugins` is in BARE form
 #     (legacy contract used by the Droid branch).
 
@@ -44,8 +50,12 @@ readonly CLAUDE_MARKETPLACE_FILE="${CLAUDE_MARKETPLACE_FILE:-$HOME/.claude/plugi
 # ─── Platform detection ───────────────────────────────────────────────────────
 HAS_DROID=false
 HAS_CLAUDE_CODE=false
+HAS_OPENCODE=false
 command -v droid >/dev/null 2>&1 && HAS_DROID=true
 command -v claude >/dev/null 2>&1 && HAS_CLAUDE_CODE=true
+command -v opencode >/dev/null 2>&1 && HAS_OPENCODE=true
+# OpenCode config dir defaults to XDG_CONFIG_HOME/opencode but accepts override.
+readonly OPENCODE_CONFIG_DIR="${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}"
 
 # ─── Validate inputs ─────────────────────────────────────────────────────────
 if [ "$HAS_DROID" = true ]; then
@@ -62,10 +72,11 @@ if [ "$HAS_CLAUDE_CODE" = true ]; then
   fi
 fi
 
-if [ "$HAS_DROID" = false ] && [ "$HAS_CLAUDE_CODE" = false ]; then
+if [ "$HAS_DROID" = false ] && [ "$HAS_CLAUDE_CODE" = false ] && [ "$HAS_OPENCODE" = false ]; then
   _error "No supported platform found."
   echo "  Install Droid from: https://docs.factory.ai" >&2
   echo "  Or install Claude Code: https://docs.anthropic.com/claude-code" >&2
+  echo "  Or install OpenCode: https://opencode.ai" >&2
   exit 1
 fi
 
@@ -604,6 +615,209 @@ _sync_claude_code() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# OpenCode Sync
+# ═══════════════════════════════════════════════════════════════════════════════
+#
+# OpenCode (sst/opencode) does not provide a plugin marketplace or install CLI.
+# Distribution is filesystem-based: skills live under
+# `~/.config/opencode/skills/<name>/SKILL.md` and commands under
+# `~/.config/opencode/commands/<name>.md`. We sync by maintaining symlinks
+# back to the cloned/installed Optimus repo so that `git pull` upstream
+# propagates instantly without re-syncing.
+#
+# Layout per platform after a successful sync:
+#   ~/.config/opencode/skills/optimus-<plugin>/  → <repo>/<plugin>/skills/optimus-<plugin>/
+#   ~/.config/opencode/commands/optimus-<cmd>.md → <repo>/commands/opencode/optimus-<cmd>.md
+#
+# Orphan detection: anything matching `optimus-*` under those two directories
+# that doesn't correspond to a current entry in the expected list or in
+# `commands/opencode/` is removed.
+
+# Resolves the Optimus repo root from the script location. Works both for
+# developers running from a clone and for users running from a Claude Code
+# plugin cache (`~/.claude/plugins/cache/optimus/optimus/<version>/sync/...`).
+_repo_root() {
+  local script_dir
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  (cd "$script_dir/../.." && pwd)
+}
+
+# Idempotent symlink update. Creates the link or replaces an outdated one,
+# reporting OK / SKIP / FAIL in stdout for the caller to count.
+#
+# Usage: _link_status <target_dir_or_file> <expected_source>
+# Outputs one of: NEW | UPDATED | UNCHANGED | FAIL
+_link_status() {
+  local link_path="$1" expected_source="$2"
+  if [ ! -e "$expected_source" ] && [ ! -L "$expected_source" ]; then
+    echo "FAIL"
+    return
+  fi
+  if [ -L "$link_path" ]; then
+    local current
+    current=$(readlink "$link_path" 2>/dev/null || echo "")
+    if [ "$current" = "$expected_source" ]; then
+      echo "UNCHANGED"
+      return
+    fi
+    rm -f "$link_path"
+    if ln -s "$expected_source" "$link_path" 2>/dev/null; then
+      echo "UPDATED"
+    else
+      echo "FAIL"
+    fi
+    return
+  fi
+  if [ -e "$link_path" ]; then
+    # Real file/dir at the target path — refuse to clobber. The user probably
+    # has a hand-authored file there; warn instead.
+    echo "FAIL"
+    return
+  fi
+  if ln -s "$expected_source" "$link_path" 2>/dev/null; then
+    echo "NEW"
+  else
+    echo "FAIL"
+  fi
+}
+
+_sync_opencode() {
+  # Note: the EXPECTED list passed by Main is intentionally ignored. OpenCode
+  # syncs from the repo filesystem directly (.factory-plugin/marketplace.json
+  # + commands/opencode/), which avoids a class of bugs where the resolver
+  # picks the Claude marketplace cache (single `optimus` umbrella plugin)
+  # and OpenCode would otherwise try to symlink a non-existent skill.
+  local _expected_unused="${1:-}"
+  : "$_expected_unused"  # avoid SC2034
+  echo "── OpenCode ──"
+  echo ""
+
+  local repo_root
+  repo_root="$(_repo_root)"
+  if [ ! -d "$repo_root" ]; then
+    _error "Could not resolve Optimus repo root from script location."
+    return 1
+  fi
+
+  local factory_marketplace="$repo_root/.factory-plugin/marketplace.json"
+  if [ ! -f "$factory_marketplace" ]; then
+    _error "$factory_marketplace not found. OpenCode sync requires the repo's marketplace file."
+    return 1
+  fi
+
+  local skills_dir="$OPENCODE_CONFIG_DIR/skills"
+  local commands_dir="$OPENCODE_CONFIG_DIR/commands"
+  mkdir -p "$skills_dir" "$commands_dir" || {
+    _error "Could not create $OPENCODE_CONFIG_DIR/{skills,commands}/"
+    return 1
+  }
+
+  local opencode_commands_src="$repo_root/commands/opencode"
+  if [ ! -d "$opencode_commands_src" ]; then
+    _error "$opencode_commands_src not found. Run \`python3 scripts/sync-opencode-commands.py\` first."
+    return 1
+  fi
+
+  # Source of truth for expected plugin names: the in-repo factory
+  # marketplace (always bare names, always complete). This decouples
+  # OpenCode sync from the cross-platform marketplace cache resolution.
+  local expected
+  expected=$(jq -r '.plugins[].name' "$factory_marketplace" | sort)
+  if [ -z "$expected" ]; then
+    _error "No plugins found in $factory_marketplace"
+    return 1
+  fi
+
+  local added=0 updated=0 unchanged=0 removed=0 failed=0
+  local plugin status
+
+  # ── Skills ─────────────────────────────────────────────────────────────
+  # For each plugin in the in-repo marketplace, ensure ~/.config/opencode/
+  # skills/optimus-<p> symlinks to the repo source.
+  while IFS= read -r plugin; do
+    [ -z "$plugin" ] && continue
+    local skill_link="$skills_dir/optimus-$plugin"
+    local skill_source="$repo_root/$plugin/skills/optimus-$plugin"
+    status=$(_link_status "$skill_link" "$skill_source")
+    case "$status" in
+      NEW)       echo "  + skills/optimus-$plugin ... OK";       added=$((added + 1)) ;;
+      UPDATED)   echo "  * skills/optimus-$plugin ... OK (relinked)"; updated=$((updated + 1)) ;;
+      UNCHANGED) unchanged=$((unchanged + 1)) ;;
+      FAIL)      echo "  + skills/optimus-$plugin ... FAIL";     failed=$((failed + 1)) ;;
+    esac
+  done <<< "$expected"
+
+  # ── Commands ───────────────────────────────────────────────────────────
+  # Mirror every commands/opencode/*.md from the repo as a symlink in
+  # ~/.config/opencode/commands/. The filename (e.g. optimus-plan.md)
+  # becomes the invocation key (/optimus-plan).
+  local cmd_file cmd_basename
+  for cmd_file in "$opencode_commands_src"/*.md; do
+    [ -f "$cmd_file" ] || continue
+    cmd_basename="$(basename "$cmd_file")"
+    local cmd_link="$commands_dir/$cmd_basename"
+    status=$(_link_status "$cmd_link" "$cmd_file")
+    case "$status" in
+      NEW)       echo "  + commands/$cmd_basename ... OK";       added=$((added + 1)) ;;
+      UPDATED)   echo "  * commands/$cmd_basename ... OK (relinked)"; updated=$((updated + 1)) ;;
+      UNCHANGED) unchanged=$((unchanged + 1)) ;;
+      FAIL)      echo "  + commands/$cmd_basename ... FAIL";     failed=$((failed + 1)) ;;
+    esac
+  done
+
+  # ── Orphan sweep ───────────────────────────────────────────────────────
+  # Anything matching optimus-* in either target dir that doesn't trace back
+  # to the current expected set or the current commands/opencode/ source is
+  # an orphan — remove it.
+  local expected_skills=""
+  while IFS= read -r plugin; do
+    [ -z "$plugin" ] && continue
+    expected_skills="${expected_skills}optimus-${plugin}"$'\n'
+  done <<< "$expected"
+
+  local entry name
+  for entry in "$skills_dir"/optimus-*; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue
+    name="$(basename "$entry")"
+    if ! grep -Fxq "$name" <<< "$expected_skills"; then
+      if rm -rf "$entry" 2>/dev/null; then
+        echo "  - skills/$name ... OK (orphan)"
+        removed=$((removed + 1))
+      else
+        echo "  - skills/$name ... FAIL"
+        failed=$((failed + 1))
+      fi
+    fi
+  done
+
+  local expected_commands=""
+  for cmd_file in "$opencode_commands_src"/*.md; do
+    [ -f "$cmd_file" ] || continue
+    expected_commands="${expected_commands}$(basename "$cmd_file")"$'\n'
+  done
+
+  for entry in "$commands_dir"/optimus-*.md; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue
+    name="$(basename "$entry")"
+    if ! grep -Fxq "$name" <<< "$expected_commands"; then
+      if rm -f "$entry" 2>/dev/null; then
+        echo "  - commands/$name ... OK (orphan)"
+        removed=$((removed + 1))
+      else
+        echo "  - commands/$name ... FAIL"
+        failed=$((failed + 1))
+      fi
+    fi
+  done
+
+  echo ""
+  echo "  OpenCode — Added: $added | Updated: $updated | Unchanged: $unchanged | Removed: $removed | Failed: $failed"
+
+  [ "$failed" -gt 0 ] && return 1
+  return 0
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -614,6 +828,7 @@ echo ""
 platforms=""
 if [ "$HAS_DROID" = true ]; then platforms="${platforms}Droid "; fi
 if [ "$HAS_CLAUDE_CODE" = true ]; then platforms="${platforms}Claude Code "; fi
+if [ "$HAS_OPENCODE" = true ]; then platforms="${platforms}OpenCode "; fi
 echo "Platforms: $platforms"
 echo ""
 
@@ -640,6 +855,7 @@ EXPECTED=$(_resolve_expected_plugins) || exit 1
 # Run sync per platform
 droid_rc=0
 claude_rc=0
+opencode_rc=0
 
 if [ "$HAS_DROID" = true ]; then
   _sync_droid "$EXPECTED" || droid_rc=$?
@@ -651,9 +867,14 @@ if [ "$HAS_CLAUDE_CODE" = true ]; then
   echo ""
 fi
 
+if [ "$HAS_OPENCODE" = true ]; then
+  _sync_opencode "$EXPECTED" || opencode_rc=$?
+  echo ""
+fi
+
 echo "=== Sync Complete ==="
 
 # Exit with failure if any platform had failures
-if [ "$droid_rc" -gt 0 ] || [ "$claude_rc" -gt 0 ]; then
+if [ "$droid_rc" -gt 0 ] || [ "$claude_rc" -gt 0 ] || [ "$opencode_rc" -gt 0 ]; then
   exit 1
 fi
