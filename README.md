@@ -1,6 +1,6 @@
 # Optimus
 
-Skills marketplace for Droid (Factory) and Claude Code.
+Skills marketplace for Droid (Factory), Claude Code, and OpenCode.
 
 **Requires the Ring ecosystem** (droids + pre-dev workflow).
 
@@ -91,10 +91,31 @@ under the `optimus:` namespace — e.g., `/optimus:plan`, `/optimus:build`,
 separate plugins; running `/optimus-sync` (or `claude plugin update optimus@optimus`)
 keeps it up to date as new commands are added.
 
+### OpenCode
+
+OpenCode does not provide a plugin marketplace, so install is filesystem-based.
+
+```bash
+git clone https://github.com/alexgarzao/optimus ~/optimus
+cd ~/optimus
+make sync-plugins   # auto-detects OpenCode and creates symlinks
+```
+
+Commands surface as `/optimus-plan`, `/optimus-build`, `/optimus-help`, …
+(bare-name form — no `optimus:` namespace, mirroring the Droid convention).
+Aliases follow the same pattern: `/optimus-sp`, `/optimus-bd`, `/optimus-rv`,
+etc. After sync, `~/.config/opencode/{skills,commands}/` contains symlinks
+back into the clone — `git pull` is enough to update; re-run sync only when
+the set of commands changes.
+
+See [docs/opencode-platform-support.md](docs/opencode-platform-support.md)
+for known limitations (no iTerm2 hook port, Ring as prerequisite, etc.).
+
 ### Staying up to date
 
 Run `/optimus-sync` (or `make sync-plugins`) to sync all plugins — installs new,
-updates existing, removes orphaned. Works for both Droid and Claude Code simultaneously.
+updates existing, removes orphaned. Works for Droid, Claude Code, and OpenCode
+simultaneously.
 
 ### iTerm2 setup (optional, Claude Code only)
 
@@ -149,30 +170,40 @@ Or use `/optimus-batch` to chain all stages with checkpoints between them.
 
 ## Command Aliases
 
-Each skill includes a short alias for quick access. Droid and Claude Code use
+Each skill includes a short alias for quick access. The three platforms use
 different invocation forms — Droid keeps the bare alias; Claude Code namespaces
-it under `optimus:`.
+under `optimus:`; OpenCode uses bare names prefixed with `optimus-`.
 
-| Alias (Droid) | Claude Code | Command | Alias (Droid) | Claude Code | Command |
-|---|---|---|---|---|---|
-| `/sp` | `/optimus:sp` | `/optimus-plan` (Droid) / `/optimus:plan` (Claude) | `/dr` | `/optimus:dr` | `/optimus:deep-review` |
-| `/bd` | `/optimus:bd` | `/optimus:build` | `/ddr` | `/optimus:ddr` | `/optimus:deep-doc-review` |
-| `/rv` | `/optimus:rv` | `/optimus:review` | `/cr` | `/optimus:cr` | `/optimus:coderabbit-review` |
-| `/dn` | `/optimus:dn` | `/optimus:done` | `/prc` | `/optimus:prc` | `/optimus:pr-check` |
-| `/bt` | `/optimus:bt` | `/optimus:batch` | `/im` | `/optimus:im` | `/optimus:import` |
-| `/qr` | `/optimus:qr` | `/optimus:quick-report` | `/rs` | `/optimus:rs` | `/optimus:resolve` |
-| `/rp` | `/optimus:rp` | `/optimus:report` | `/t` | `/optimus:t` | `/optimus:tasks` |
-| `/rsm` | `/optimus:rsm` | `/optimus:resume` | `/hp` | `/optimus:hp` | `/optimus:help` |
-| `/sy` | `/optimus:sy` | `/optimus:sync` | | | |
+| Droid | Claude Code | OpenCode | Underlying command |
+|---|---|---|---|
+| `/sp` | `/optimus:sp` | `/optimus-sp` | `plan` |
+| `/bd` | `/optimus:bd` | `/optimus-bd` | `build` |
+| `/rv` | `/optimus:rv` | `/optimus-rv` | `review` |
+| `/dn` | `/optimus:dn` | `/optimus-dn` | `done` |
+| `/bt` | `/optimus:bt` | `/optimus-bt` | `batch` |
+| `/qr` | `/optimus:qr` | `/optimus-qr` | `quick-report` |
+| `/rp` | `/optimus:rp` | `/optimus-rp` | `report` |
+| `/rsm` | `/optimus:rsm` | `/optimus-rsm` | `resume` |
+| `/sy` | `/optimus:sy` | `/optimus-sy` | `sync` |
+| `/dr` | `/optimus:dr` | `/optimus-dr` | `deep-review` |
+| `/ddr` | `/optimus:ddr` | `/optimus-ddr` | `deep-doc-review` |
+| `/cr` | `/optimus:cr` | `/optimus-cr` | `coderabbit-review` |
+| `/prc` | `/optimus:prc` | `/optimus-prc` | `pr-check` |
+| `/im` | `/optimus:im` | `/optimus-im` | `import` |
+| `/rs` | `/optimus:rs` | `/optimus-rs` | `resolve` |
+| `/t` | `/optimus:t` | `/optimus-t` | `tasks` |
+| `/hp` | `/optimus:hp` | `/optimus-hp` | `help` |
 
 ## How it works
 
-The repo packages the same SKILLs for two platforms, each with its own
-marketplace manifest at the repo root:
+The repo packages the same SKILLs for three platforms, each with its own
+manifest at the repo root:
 
 - `.factory-plugin/marketplace.json` — Droid marketplace (lists 17 plugins)
 - `.claude-plugin/marketplace.json` — Claude Code marketplace (lists the
   single `optimus` plugin sourced from `.`)
+- `.opencode-plugin/plugin.json` — OpenCode version marker (no marketplace
+  format exists, so this only carries version metadata)
 
 Per platform:
 
@@ -186,13 +217,20 @@ Per platform:
   - `.claude-plugin/plugin.json` at the repo root — `optimus` plugin manifest
   - Top-level `commands/<plugin>.md` and `commands/<alias>.md` are auto-discovered
     by Claude Code and exposed as `/optimus:<command>` / `/optimus:<alias>`.
+- **OpenCode:** No plugin format; sync creates symlinks under `~/.config/opencode/`:
+  - `~/.config/opencode/skills/optimus-<plugin>/` → repo `<plugin>/skills/optimus-<plugin>/`
+  - `~/.config/opencode/commands/optimus-<cmd>.md` → repo `commands/opencode/optimus-<cmd>.md`
+  - `commands/opencode/` is regenerated from per-skill SKILL.md (separate target from Claude's `commands/`)
 
 The `commands/` directory at the repo root is **generated** by
 `scripts/sync-claude-commands.py` from the per-skill `SKILL.md` (and the
 optional `<plugin>/commands/<alias>.md`) — run the script after editing a
-SKILL or an alias to keep the Claude side in sync. Tests in
-`scripts/test_skill_consistency.py` (class `TestClaudeCommandsSync`) enforce
-that the script was run before commit.
+SKILL or an alias to keep the Claude side in sync. The OpenCode equivalent
+lives at `commands/opencode/` and is generated by
+`scripts/sync-opencode-commands.py`. Both generators share parsing logic
+via `scripts/_sync_commands_common.py`. Tests in
+`scripts/test_skill_consistency.py` (`TestClaudeCommandsSync` and
+`TestOpenCodeCommandsSync`) enforce that both scripts were run before commit.
 
 **Inline-protocol bloat reduction (issue #34, Phases 1-9):** Most shared
 protocols are now omit-mode — the inliner emits nothing for them in

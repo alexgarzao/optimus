@@ -2259,6 +2259,136 @@ class TestClaudeCommandsSync:
         )
 
 
+class TestOpenCodeCommandsSync:
+    """Drift-detection tests for the `commands/opencode/` directory.
+
+    `scripts/sync-opencode-commands.py` generates per-platform OpenCode
+    commands (`commands/opencode/optimus-<name>.md`) from each plugin's
+    SKILL.md and per-plugin alias files. These tests verify the generated
+    files exist, are not orphaned, and match what the script would produce
+    — so a contributor cannot forget to rerun the syncer and ship a stale
+    OpenCode command surface.
+    """
+
+    OPENCODE_DIR = REPO_ROOT / "commands" / "opencode"
+
+    def _factory_plugin_names(self) -> list[str]:
+        factory_path = REPO_ROOT / ".factory-plugin" / "marketplace.json"
+        return [p["name"] for p in json.loads(factory_path.read_text())["plugins"]]
+
+    def _alias_files_by_stem(self) -> dict[str, Path]:
+        """Map alias stem (e.g. `sp`) → source path under `<plugin>/commands/`."""
+        out: dict[str, Path] = {}
+        for cmd_file in sorted(REPO_ROOT.glob("*/commands/*.md")):
+            out[cmd_file.stem] = cmd_file
+        return out
+
+    def test_opencode_dir_exists(self):
+        """The OpenCode commands directory was generated."""
+        assert self.OPENCODE_DIR.is_dir(), (
+            "commands/opencode/ is missing. Run "
+            "`python3 scripts/sync-opencode-commands.py`."
+        )
+
+    def test_main_command_exists_for_every_plugin(self):
+        """Every plugin has a corresponding `commands/opencode/optimus-<plugin>.md`."""
+        missing = []
+        for name in self._factory_plugin_names():
+            cmd_file = self.OPENCODE_DIR / f"optimus-{name}.md"
+            if not cmd_file.exists():
+                missing.append(name)
+        assert not missing, (
+            f"OpenCode commands missing for plugins: {missing}. "
+            f"Run `python3 scripts/sync-opencode-commands.py` to regenerate."
+        )
+
+    def test_alias_command_exists_for_every_alias(self):
+        """Every per-plugin alias has `commands/opencode/optimus-<alias>.md`."""
+        missing = []
+        for stem, source_path in self._alias_files_by_stem().items():
+            target = self.OPENCODE_DIR / f"optimus-{stem}.md"
+            if not target.exists():
+                missing.append(
+                    f"optimus-{stem}.md (source: "
+                    f"{source_path.relative_to(REPO_ROOT)})"
+                )
+        assert not missing, (
+            f"OpenCode alias commands missing: {missing}. "
+            f"Run `python3 scripts/sync-opencode-commands.py`."
+        )
+
+    def test_no_orphan_opencode_commands(self):
+        """Every `commands/opencode/*.md` corresponds to a real plugin or alias."""
+        plugin_names = set(self._factory_plugin_names())
+        alias_stems = set(self._alias_files_by_stem().keys())
+        valid = {f"optimus-{p}.md" for p in plugin_names} | {
+            f"optimus-{s}.md" for s in alias_stems
+        }
+        if not self.OPENCODE_DIR.is_dir():
+            pytest.skip("commands/opencode/ directory does not exist yet")
+        orphans = []
+        for cmd_file in sorted(self.OPENCODE_DIR.glob("*.md")):
+            if cmd_file.name not in valid:
+                orphans.append(cmd_file.name)
+        assert not orphans, (
+            f"Orphan OpenCode commands (no matching plugin or alias): "
+            f"{orphans}. Run `python3 scripts/sync-opencode-commands.py` to "
+            f"prune them."
+        )
+
+    def test_main_command_body_invokes_skill_directly(self):
+        """`commands/opencode/optimus-<plugin>.md` invokes the bare-name skill.
+
+        Expected body:
+
+            Invoke the `optimus-<plugin>` skill. Arguments: $ARGUMENTS
+
+        This is the OpenCode form — no `:` namespace, no "via the Skill
+        tool" phrasing (OpenCode's tool is lowercase `skill`). Generated
+        by `scripts/sync-opencode-commands.py:render_main_command`.
+        """
+        violations = []
+        for name in self._factory_plugin_names():
+            cmd_path = self.OPENCODE_DIR / f"optimus-{name}.md"
+            if not cmd_path.exists():
+                continue
+            cmd_body = _strip_frontmatter(cmd_path.read_text()).strip()
+            expected = f"Invoke the `optimus-{name}` skill. Arguments: $ARGUMENTS"
+            if cmd_body != expected:
+                violations.append(f"optimus-{name}: body is {cmd_body!r}")
+        assert not violations, (
+            "OpenCode main command bodies are not the expected skill invoker:\n  - "
+            + "\n  - ".join(violations)
+            + "\nRun `python3 scripts/sync-opencode-commands.py` to resync."
+        )
+
+    def test_alias_command_body_invokes_skill_directly(self):
+        """`commands/opencode/optimus-<alias>.md` invokes the same skill as its main.
+
+        Aliases share the body shape with main commands — both call the
+        underlying `optimus-<plugin>` skill directly. This avoids chained
+        slash-command invocations inside OpenCode.
+        """
+        violations = []
+        for stem, source_path in self._alias_files_by_stem().items():
+            plugin_name = source_path.parent.parent.name
+            target = self.OPENCODE_DIR / f"optimus-{stem}.md"
+            if not target.exists():
+                continue
+            body = _strip_frontmatter(target.read_text()).strip()
+            expected = (
+                f"Invoke the `optimus-{plugin_name}` skill. Arguments: $ARGUMENTS"
+            )
+            if body != expected:
+                violations.append(
+                    f"optimus-{stem}.md: body is {body!r}, expected {expected!r}"
+                )
+        assert not violations, (
+            "OpenCode alias command bodies don't invoke their target skill:\n  - "
+            + "\n  - ".join(violations)
+        )
+
+
 class TestWorkspaceValidationHardening:
     """Defense-in-depth checks for branch/worktree validation across stage skills.
 

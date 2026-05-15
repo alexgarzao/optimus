@@ -80,7 +80,14 @@ Pendente → Validando Spec → Em Andamento → Validando Impl → DONE
 
 ### Command Aliases
 
-Each plugin includes a short alias for quick access:
+Each plugin includes a short alias for quick access. Invocation differs per
+platform:
+
+- **Droid:** bare aliases (`/sp`, `/bd`, `/rv`, …)
+- **Claude Code:** namespaced (`/optimus:sp`, `/optimus:bd`, …)
+- **OpenCode:** prefixed bare (`/optimus-sp`, `/optimus-bd`, …)
+
+The table below shows the alias → underlying command mapping in Droid form.
 
 | Alias | Full Command | Alias | Full Command |
 |-------|-------------|-------|-------------|
