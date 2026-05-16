@@ -1928,7 +1928,12 @@ class TestInlineProtocolsFoundational:
         missing_inlined = []
         for rel in consumers:
             path = REPO_ROOT / rel
-            content = path.read_text()
+            # Plugin name = first path segment ("pr-check" or "deep-review").
+            plugin = rel.split("/", 1)[0]
+            # Layout-aware: progressive-disclosure skills (e.g., pr-check
+            # after the index refactor) keep the body reference in
+            # phases/*.md, not in the top-level SKILL.md.
+            content = _read_skill(plugin)
             # Body reference must always be present — the inliner's regex
             # matches against this exact phrasing.
             if "Protocol: Discover Review Droids" not in content:
@@ -1937,10 +1942,13 @@ class TestInlineProtocolsFoundational:
                 # Phase 9: nothing should be inlined. The body reference
                 # alone is the sync signal.
                 continue
+            # The INLINE-PROTOCOLS block lives in SKILL.md proper. Read just
+            # that file (not the concatenated layout) for the inliner check.
+            skill_content = path.read_text()
             # Pre-Phase-9 modes inline either a full body or a stub.
             m = re.search(
                 r"<!-- INLINE-PROTOCOLS:START -->(.*?)<!-- INLINE-PROTOCOLS:END -->",
-                content, re.DOTALL,
+                skill_content, re.DOTALL,
             )
             if not m:
                 missing_inlined.append(rel)
@@ -1974,8 +1982,9 @@ class TestInlineProtocolsFoundational:
         References use a stable semantic anchor instead of the verbatim numeric
         step ID so this test does not break when phases are renumbered.
         """
-        path = REPO_ROOT / "pr-check/skills/optimus-pr-check/SKILL.md"
-        content = path.read_text()
+        # Layout-aware: progressive-disclosure pr-check keeps the
+        # thread-collection step in phases/01-fetch-pr-context.md.
+        content = _read_skill("pr-check")
 
         # Stale "filter/filtered" prose check — the partition refactor must sweep ALL
         # references to the old discard-only model. These assertions catch regressions
@@ -3026,9 +3035,10 @@ class TestSharedCodeRabbitParserProtocol:
         )
 
     def test_pr_check_references_shared_protocol(self):
-        path = REPO_ROOT / "pr-check" / "skills" / "optimus-pr-check" / "SKILL.md"
-        content = path.read_text()
-        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        # Layout-aware: progressive-disclosure pr-check keeps the CodeRabbit
+        # parser reference in phases/02-summary-and-dispatch.md (where the
+        # agent prompt embeds it).
+        body = _read_skill("pr-check").split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
         assert "Protocol: Parse CodeRabbit Review Body" in body, (
             "pr-check SKILL body must reference the shared protocol"
         )
