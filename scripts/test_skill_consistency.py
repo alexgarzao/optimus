@@ -1561,11 +1561,18 @@ class TestResumeAdmin:
         )
 
     def test_resume_sets_terminal_title(self):
-        """resume must mark the terminal session per AGENTS.md Protocol: Terminal Identification."""
+        """resume must mark the terminal session per AGENTS.md Protocol: Terminal Identification.
+
+        Accepts both invocation forms — legacy inline ``_optimus_mark_session``
+        function call AND the script-wrapper form introduced by the
+        progressive-disclosure refactor (``optimus-mark-session.sh mark``)."""
         content = _read_skill("resume")
         body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
-        assert re.search(r'_optimus_mark_session\s+RESUME\s+"\$TASK_ID"\s+"\$TASK_TITLE"', body), (
-            "resume must invoke the _optimus_mark_session helper with the RESUME label"
+        legacy = re.search(r'_optimus_mark_session\s+RESUME\s+"\$TASK_ID"\s+"\$TASK_TITLE"', body)
+        script = re.search(r'optimus-mark-session\.sh\s+mark\s+RESUME\s+"\$TASK_ID"\s+"\$TASK_TITLE"', body)
+        assert legacy or script, (
+            "resume must invoke a mark-session call with the RESUME label "
+            "(either _optimus_mark_session or optimus-mark-session.sh mark)"
         )
 
     # --- Round 2 regression tests ---
