@@ -61,11 +61,6 @@ request from the user, **you MUST `Read` `rules.md` BEFORE answering**. The
 core rules are summarized at the bottom of this file; the full guardrails live
 in `rules.md`.
 
-Shared scripts (canonical helpers):
-- `scripts/runtime/optimus-mark-session.sh` — iTerm2 badge + tab color
-- `scripts/runtime/optimus-state-read.sh` — JSON read of state.json
-- `scripts/runtime/optimus-task-gate.sh` — status-gate validation
-
 ## Phases
 
 Run phases in order. Before each phase, **`Read` the phase file**, then execute
@@ -75,7 +70,7 @@ its steps.
    Covers GitHub CLI check, optimus-tasks.md validation, workspace resolution
    (current-branch rule), default-branch refusal, task ID resolution, session-state
    handling (done-specific: no resume/redo), terminal marking
-   (`bash scripts/runtime/optimus-mark-session.sh mark DONE ...`), status validation
+   (iTerm2 badge + tab color via inline helper), status validation
    (`Validando Impl` required), dependency checks, and divergence warning.
 
 2. **Phase 2 — Close Gates (4 sequential HARD BLOCKS).** Read `phases/02-close-gates.md`.
@@ -91,7 +86,7 @@ its steps.
    worktree and branch (local + remote). User decides what to keep. Partial-state
    contract: failed remote deletion flags `pending_remote_delete` in state.json
    for later retry. On completion, clears the iTerm2 marker via
-   `bash scripts/runtime/optimus-mark-session.sh clear`.
+   the inline `_optimus_clear_session` helper (defined in the phase file).
 
 <a id="step-resolve-current-workspace"></a>
 **Anchor reference:** other skills point at the workspace-resolution step via

@@ -78,14 +78,66 @@ if [ -z "$TASK_TITLE" ]; then
   TASK_TITLE="(title unavailable)"
 fi
 
-# Canonical helper (badge + tab color). Silent no-op outside iTerm2/macOS.
-bash scripts/runtime/optimus-mark-session.sh mark REVIEW "$TASK_ID" "$TASK_TITLE"
+_optimus_mark_session() {
+  local stage="$1" task_id="$2" title="$3"
+  [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ] || return 0
+  local pid="$PPID" target_tty=""
+  for _ in 1 2 3 4; do
+    [ -z "$pid" ] || [ "$pid" = "1" ] && break
+    target_tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
+    case "$target_tty" in
+      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' '); target_tty="" ;;
+      *) break ;;
+    esac
+  done
+  _optimus_emit() {
+    if [ -n "$target_tty" ] && [ -w "/dev/$target_tty" ]; then
+      printf '%s' "$1" > "/dev/$target_tty" 2>/dev/null || printf '%s' "$1"
+    else
+      printf '%s' "$1"
+    fi
+  }
+  local badge_b64
+  badge_b64=$(printf '%s %s\n%s' "$stage" "$task_id" "$title" | base64 | tr -d '\n')
+  _optimus_emit "$(printf '\e]1337;SetBadgeFormat=%s\a' "$badge_b64")"
+  local r g b
+  case "$stage" in
+    PLAN)   r=66;  g=135; b=245 ;;
+    BUILD)  r=34;  g=197; b=94  ;;
+    REVIEW) r=234; g=179; b=8   ;;
+    DONE)   r=148; g=163; b=184 ;;
+    *)      r=168; g=85;  b=247 ;;
+  esac
+  _optimus_emit "$(printf '\e]6;1;bg;red;brightness;%d\a\e]6;1;bg;green;brightness;%d\a\e]6;1;bg;blue;brightness;%d\a' "$r" "$g" "$b")"
+}
+_optimus_mark_session REVIEW "$TASK_ID" "$TASK_TITLE"
 ```
 
 **On stage completion or exit**, restore the title:
 
 ```bash
-bash scripts/runtime/optimus-mark-session.sh clear
+_optimus_clear_session() {
+  [ "$LC_TERMINAL" = "iTerm2" ] || [ "$TERM_PROGRAM" = "iTerm.app" ] || return 0
+  local pid="$PPID" target_tty=""
+  for _ in 1 2 3 4; do
+    [ -z "$pid" ] || [ "$pid" = "1" ] && break
+    target_tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
+    case "$target_tty" in
+      ""|"?"|"??") pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' '); target_tty="" ;;
+      *) break ;;
+    esac
+  done
+  _optimus_emit_clear() {
+    if [ -n "$target_tty" ] && [ -w "/dev/$target_tty" ]; then
+      printf '%s' "$1" > "/dev/$target_tty" 2>/dev/null || printf '%s' "$1"
+    else
+      printf '%s' "$1"
+    fi
+  }
+  _optimus_emit_clear "$(printf '\e]1337;SetBadgeFormat=\a')"
+  _optimus_emit_clear "$(printf '\e]6;1;bg;*;default\a')"
+}
+_optimus_clear_session
 ```
 
 ### Step 1.0.8: Validate and Update Task Status

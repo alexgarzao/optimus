@@ -84,11 +84,6 @@ Templates referenced by phases:
 - `templates/validation-dimensions.md` — the 8 dimensions Phase 3 must cover
 - `templates/output-format.md` — the final Validation Report layout
 
-Shared scripts (canonical helpers):
-- `scripts/runtime/optimus-mark-session.sh` — iTerm2 badge + tab color
-- `scripts/runtime/optimus-state-read.sh` — JSON read of state.json
-- `scripts/runtime/optimus-task-gate.sh` — status-gate validation
-
 ## Phases
 
 Run phases in order. Before each phase, **`Read` the phase file**, then execute
@@ -96,7 +91,7 @@ its steps.
 
 1. **Phase 1 — Setup, Task Identification, Workspace.** Read `phases/01-setup.md`.
    Covers GitHub CLI check, optimus-tasks.md validation, task ID resolution,
-   terminal marking (`bash scripts/runtime/optimus-mark-session.sh mark PLAN ...`),
+   terminal marking (iTerm2 badge + tab color via inline helper),
    status/dependency validation, abandoned-workspace recovery, missing-spec
    self-heal, worktree creation, divergence warning, stats increment.
 
@@ -122,7 +117,7 @@ its steps.
 
 9. **Phase 9 — Push Commits (optional).** Read `phases/09-push.md`.
    On completion, clear the iTerm2 marker:
-   `bash scripts/runtime/optimus-mark-session.sh clear`.
+   the inline `_optimus_clear_session` helper (defined in the phase file).
 
 ## Rules Summary
 

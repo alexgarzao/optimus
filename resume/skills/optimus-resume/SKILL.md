@@ -81,11 +81,6 @@ For deviations, ambiguous instructions, or any "let me just cd manually" request
 guardrails AND the explicit override of the inlined `Protocol: State Management` destructive
 fallback (Resume STOPs on corruption, never `rm -f`s state.json).
 
-Shared scripts (canonical helpers):
-- `scripts/runtime/optimus-mark-session.sh` — iTerm2 badge + tab color
-- `scripts/runtime/optimus-state-read.sh` — JSON read of state.json
-- `scripts/runtime/optimus-task-gate.sh` — status-gate validation
-
 ## Phases
 
 Run phases in order. Before each phase, **`Read` the phase file**, then execute its steps.
@@ -94,7 +89,7 @@ Run phases in order. Before each phase, **`Read` the phase file**, then execute 
 2. **Phase 2 — Identify Task.** Read `phases/02-identify-task.md`. Resolve task ID (provided or auto-detected from state.json), parse metadata from optimus-tasks.md, refuse terminal statuses (`DONE`/`Cancelado`), informational dependency check (populate `BLOCKING_DEPS`).
 3. **Phase 3 — Resolve Workspace.** Read `phases/03-resolve-workspace.md`. Derive expected branch, look up worktree, apply resolution order. Recovery path (Step 3.3) is the ONLY place that may write to state.json (user-confirmed Reset to Pendente).
 4. **Phase 4 — Set Terminal Title and Report.** Read `phases/04-report.md`. Terminal marking via `bash scripts/runtime/optimus-mark-session.sh mark RESUME ...`. Collect read-only telemetry (git/PR/session/stats). Print `<json-render>` summary with absolute-path `cd` callout. Next-stage recommendation table (status × PR state).
-5. **Phase 5 — Offer Next Stage.** Read `phases/05-next-stage.md`. AskUser to invoke the next stage. Dependency-aware and PR-state-aware option suppression. On delegation, restore terminal via `bash scripts/runtime/optimus-mark-session.sh clear`.
+5. **Phase 5 — Offer Next Stage.** Read `phases/05-next-stage.md`. AskUser to invoke the next stage. Dependency-aware and PR-state-aware option suppression. On delegation, restore terminal via the inline `_optimus_clear_session` helper (defined in the phase file).
 
 ## Rules Summary
 
