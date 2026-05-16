@@ -3051,15 +3051,9 @@ class TestSharedCodeRabbitParserProtocol:
         )
 
     def test_coderabbit_review_references_shared_protocol(self):
-        path = (
-            REPO_ROOT
-            / "coderabbit-review"
-            / "skills"
-            / "optimus-coderabbit-review"
-            / "SKILL.md"
-        )
-        content = path.read_text()
-        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        # Layout-aware: progressive-disclosure coderabbit-review keeps the
+        # CodeRabbit parser reference in phases/01-execute.md.
+        body = _read_skill("coderabbit-review").split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
         assert "Protocol: Parse CodeRabbit Review Body" in body, (
             "coderabbit-review SKILL body must reference the shared protocol"
         )
