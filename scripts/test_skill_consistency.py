@@ -1561,11 +1561,18 @@ class TestResumeAdmin:
         )
 
     def test_resume_sets_terminal_title(self):
-        """resume must mark the terminal session per AGENTS.md Protocol: Terminal Identification."""
+        """resume must mark the terminal session per AGENTS.md Protocol: Terminal Identification.
+
+        Accepts both invocation forms — legacy inline ``_optimus_mark_session``
+        function call AND the script-wrapper form introduced by the
+        progressive-disclosure refactor (``optimus-mark-session.sh mark``)."""
         content = _read_skill("resume")
         body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
-        assert re.search(r'_optimus_mark_session\s+RESUME\s+"\$TASK_ID"\s+"\$TASK_TITLE"', body), (
-            "resume must invoke the _optimus_mark_session helper with the RESUME label"
+        legacy = re.search(r'_optimus_mark_session\s+RESUME\s+"\$TASK_ID"\s+"\$TASK_TITLE"', body)
+        script = re.search(r'optimus-mark-session\.sh\s+mark\s+RESUME\s+"\$TASK_ID"\s+"\$TASK_TITLE"', body)
+        assert legacy or script, (
+            "resume must invoke a mark-session call with the RESUME label "
+            "(either _optimus_mark_session or optimus-mark-session.sh mark)"
         )
 
     # --- Round 2 regression tests ---
@@ -3044,15 +3051,9 @@ class TestSharedCodeRabbitParserProtocol:
         )
 
     def test_coderabbit_review_references_shared_protocol(self):
-        path = (
-            REPO_ROOT
-            / "coderabbit-review"
-            / "skills"
-            / "optimus-coderabbit-review"
-            / "SKILL.md"
-        )
-        content = path.read_text()
-        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        # Layout-aware: progressive-disclosure coderabbit-review keeps the
+        # CodeRabbit parser reference in phases/01-execute.md.
+        body = _read_skill("coderabbit-review").split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
         assert "Protocol: Parse CodeRabbit Review Body" in body, (
             "coderabbit-review SKILL body must reference the shared protocol"
         )
@@ -3667,7 +3668,9 @@ class TestSpecSelfHeal:
         """tasks SKILL.md must offer 'Defer' as a first-class option at creation time
         (not just a fallback when Ring is unavailable). This keeps the user in control
         and is symmetric with plan's self-heal flow."""
-        tasks_md = (REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md").read_text()
+        # Layout-aware: progressive-disclosure tasks keeps the Create flow in
+        # phases/02-create-task.md.
+        tasks_md = _read_skill("tasks")
         assert "**Defer**" in tasks_md or "**Defer —" in tasks_md, (
             "tasks SKILL.md must expose a 'Defer' option at task creation time "
             "(sets TaskSpec to `-`, deferring spec generation to /optimus:plan)"
@@ -3698,8 +3701,9 @@ class TestSpecSelfHeal:
 
     def test_tasks_defer_documents_handoff_to_plan(self):
         """Tasks Defer branch must point user at /optimus-plan for later spec generation."""
-        body = (REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md").read_text()
-        body = body.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        # Layout-aware: progressive-disclosure tasks keeps the Defer prose
+        # in phases/02-create-task.md.
+        body = _read_skill("tasks").split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
         assert "/optimus-plan" in body and "later" in body, (
             "tasks Defer must inform user that /optimus-plan T-XXX will pick this up later"
         )
@@ -3785,8 +3789,9 @@ class TestSpecSelfHeal:
     def test_tasks_offers_track_selection(self):
         """tasks SKILL.md must offer BOTH ring:pre-dev-feature AND ring:pre-dev-full
         inside the Step 2.3.1 'Generate via Ring' branch."""
-        body = (REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md").read_text()
-        body = body.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        # Layout-aware: progressive-disclosure tasks keeps Step 2.3.1 in
+        # phases/02-create-task.md.
+        body = _read_skill("tasks").split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
         start = body.find("### Step 2.3.1")
         end = body.find("### Step 2.4", start + 1)
         section = body[start:end] if start >= 0 and end > start else ""
