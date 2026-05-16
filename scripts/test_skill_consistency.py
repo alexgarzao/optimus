@@ -4369,3 +4369,111 @@ class TestBranchNameDerivation:
                     f"{label} SKILL.md missing canonical case arm "
                     f"{tipo} → {prefix}"
                 )
+
+
+# --- Progressive-disclosure layout invariants ----------------------------
+#
+# Skills that adopt the index + phases/ refactor must satisfy three structural
+# invariants beyond the legacy substring checks. These tests apply ONLY to
+# skills with the progressive layout (phases/ or rules.md present); legacy
+# monolithic skills are untouched.
+
+def _progressive_skills():
+    """Enumerate (plugin_name, skill_dir) for every plugin whose skill has
+    adopted the progressive-disclosure layout."""
+    out = []
+    for skill_md in REPO_ROOT.glob("*/skills/optimus-*/SKILL.md"):
+        skill_dir = skill_md.parent
+        if (skill_dir / "phases").is_dir() or (skill_dir / "rules.md").is_file():
+            plugin = skill_dir.parent.parent.name
+            out.append((plugin, skill_dir))
+    return out
+
+
+class TestProgressiveDisclosureLayout:
+    """Three invariants for skills migrated to the index + phases layout.
+
+    These tests SKIP cleanly when no skill has adopted the layout yet — they
+    activate as soon as the first skill migrates, and run on every migration
+    thereafter.
+    """
+
+    # 15360 bytes = 15 KiB ≈ 3.75K tokens. Leaves 4-12K of the 8-16K local-
+    # model context for diff/conversation/response. The 1 KiB headroom above
+    # the 14 KiB nominal target absorbs the INLINE-PROTOCOLS appendix (shared
+    # protocol summaries auto-inlined from AGENTS.md by inline-protocols.py)
+    # without forcing skills to manually trim that block.
+    SKILL_MD_MAX_BYTES = 15360
+
+    def test_skill_md_size_within_budget(self):
+        """SKILL.md (the canonical index) must fit the 14 KiB local-model
+        budget. Phases, templates, and rules are loaded on demand and do not
+        count against this budget."""
+        progressive = _progressive_skills()
+        if not progressive:
+            pytest.skip("no skills have adopted the progressive-disclosure layout yet")
+        violations = []
+        for plugin, skill_dir in progressive:
+            skill_md = skill_dir / "SKILL.md"
+            size = skill_md.stat().st_size
+            if size > self.SKILL_MD_MAX_BYTES:
+                rel = skill_md.relative_to(REPO_ROOT)
+                violations.append(
+                    f"{rel}: {size} bytes (> {self.SKILL_MD_MAX_BYTES} budget)"
+                )
+        assert violations == [], (
+            "Progressive-disclosure SKILL.md files exceed the 14 KiB budget. "
+            "Extract more content to phases/ or templates/:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    def test_rules_md_present(self):
+        """Every progressive-disclosure skill must have a rules.md sibling
+        containing the full guardrails. The SKILL.md keeps a short summary
+        and instructs the model to Read rules.md on deviation."""
+        progressive = _progressive_skills()
+        if not progressive:
+            pytest.skip("no progressive-disclosure skills yet")
+        violations = []
+        for plugin, skill_dir in progressive:
+            rules = skill_dir / "rules.md"
+            if not rules.is_file():
+                rel = (skill_dir / "rules.md").relative_to(REPO_ROOT)
+                violations.append(str(rel))
+        assert violations == [], (
+            "Progressive-disclosure skills missing rules.md:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
+
+    # Matches markdown `Read path/to/file.md` references that the SKILL.md
+    # uses to point at phases, templates, or rules. The path is captured in
+    # group 1. Accepts backtick-wrapped paths since the SKILL.md style is
+    # `Read \`phases/01-setup.md\``.
+    _POINTER_RE = re.compile(
+        r"Read\s+`(phases/[^`]+\.md|templates/[^`]+\.md|rules\.md)`"
+    )
+
+    def test_pointers_resolve(self):
+        """Every `Read phases/X.md` / `Read templates/X.md` / `Read rules.md`
+        pointer in SKILL.md must resolve to a real file. Catches typos and
+        renames that would otherwise silently break the progressive flow."""
+        progressive = _progressive_skills()
+        if not progressive:
+            pytest.skip("no progressive-disclosure skills yet")
+        violations = []
+        for plugin, skill_dir in progressive:
+            skill_md = skill_dir / "SKILL.md"
+            content = skill_md.read_text()
+            for match in self._POINTER_RE.finditer(content):
+                rel_path = match.group(1)
+                target = skill_dir / rel_path
+                if not target.is_file():
+                    rel = skill_md.relative_to(REPO_ROOT)
+                    violations.append(
+                        f"{rel}: pointer 'Read `{rel_path}`' does not resolve "
+                        f"(expected at {target.relative_to(REPO_ROOT)})"
+                    )
+        assert violations == [], (
+            "Progressive-disclosure pointers do not resolve:\n"
+            + "\n".join(f"  - {v}" for v in violations)
+        )
