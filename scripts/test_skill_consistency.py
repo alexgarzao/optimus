@@ -274,12 +274,24 @@ class TestStageRenameConsistency:
 OLD_TITLE_FORMAT = re.compile(
     r"printf.*optimus:.*%s\s*\|\s*%s"
 )
-# Matches a `_optimus_mark_session` invocation passing stage label, task id,
-# and task title (positional args). Accepts the literal stage names used
-# across skills, the `<STAGE>` placeholder used in the AGENTS.md protocol
-# template, or a concrete example like `_optimus_mark_session BATCH "T-003" "User Auth JWT"`.
+# Matches a stage skill's terminal marking invocation. Two equivalent forms:
+#
+#  1. The original inlined helper call (used by skills that still embed the
+#     bash function inline):
+#       _optimus_mark_session BATCH "T-003" "User Auth JWT"
+#
+#  2. The script-wrapper form introduced by the progressive-disclosure
+#     refactor (skills delegate to scripts/runtime/optimus-mark-session.sh):
+#       bash scripts/runtime/optimus-mark-session.sh mark PLAN "$TASK_ID" "$TASK_TITLE"
+#
+# Both invoke the same canonical algorithm — the regex accepts either so the
+# test's intent ("every stage skill configures terminal marking") survives
+# the architectural change.
 NEW_TITLE_FORMAT = re.compile(
-    r'_optimus_mark_session\s+(?:"<STAGE>"|[A-Z]+)\s+(?:"\$TASK_ID"|"T-\d+")\s+(?:"\$TASK_TITLE"|"[^"]+")'
+    r'(?:_optimus_mark_session|optimus-mark-session\.sh\s+mark)'
+    r'\s+(?:"<STAGE>"|[A-Z]+)'
+    r'\s+(?:"\$TASK_ID"|"T-\d+")'
+    r'\s+(?:"\$TASK_TITLE"|"[^"]+")'
 )
 TITLE_SKILLS = ["plan", "build", "review", "done", "batch"]
 
@@ -424,10 +436,34 @@ SKILLS_WITH_FINDINGS = [
 
 
 def _read_skill(plugin_name: str) -> str:
-    """Read the SKILL.md for a given plugin name."""
+    """Read the SKILL.md for a given plugin name.
+
+    Layout-aware: if the skill directory contains progressive-disclosure
+    subfolders (``phases/``, ``templates/``) or a ``rules.md`` sibling, the
+    concatenation of every Markdown file under the skill dir is returned so
+    that content checks pass regardless of where text was extracted to. Old
+    monolithic skills behave exactly as before (single ``SKILL.md`` read).
+    """
     paths = list(REPO_ROOT.glob(f"{plugin_name}/skills/*/SKILL.md"))
     assert paths, f"No SKILL.md found for {plugin_name}"
-    return paths[0].read_text()
+    skill_path = paths[0]
+    skill_dir = skill_path.parent
+    has_progressive_layout = (
+        (skill_dir / "phases").is_dir()
+        or (skill_dir / "templates").is_dir()
+        or (skill_dir / "rules.md").is_file()
+    )
+    if not has_progressive_layout:
+        return skill_path.read_text()
+    # Concatenate SKILL.md + every other .md under the skill dir (sorted for
+    # determinism). The exact concat order doesn't matter for substring/regex
+    # presence checks, only that every byte the skill owns is included.
+    parts = [skill_path.read_text()]
+    for md in sorted(skill_dir.rglob("*.md")):
+        if md == skill_path:
+            continue
+        parts.append(md.read_text())
+    return "\n".join(parts)
 
 
 class TestFindingPresentation:
@@ -1124,7 +1160,10 @@ class TestTasksDirLocation:
             paths = list(REPO_ROOT.glob(f"{skill}/skills/*/SKILL.md"))
             if not paths:
                 continue
-            content = paths[0].read_text()
+            # Use layout-aware reader: protocol references for progressive-
+            # disclosure skills (e.g., optimus-plan after the index refactor)
+            # live in phases/*.md, not in the top-level SKILL.md.
+            content = _read_skill(skill)
             # Either direct reference or transitive (Validation depends on
             # Resolve Tasks Git Scope) is acceptable.
             if (
@@ -1156,7 +1195,9 @@ class TestTasksDirLocation:
             paths = list(REPO_ROOT.glob(f"{skill}/skills/*/SKILL.md"))
             if not paths:
                 continue
-            content = paths[0].read_text()
+            # Layout-aware: tasks_git invocations may live in phases/*.md
+            # after progressive-disclosure migration.
+            content = _read_skill(skill)
             has_definition = bool(TASKS_GIT_HELPER_RE.search(content))
             has_invocation = "tasks_git" in content
             has_protocol_ref = (
