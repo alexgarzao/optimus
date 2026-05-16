@@ -3,7 +3,7 @@
 Loaded by `SKILL.md` after Phase 6 commits. This was the original "Phase 6:
 Convergence Loop (Optional — Gated)".
 
-## Step 6.1: Convergence Loop
+### Step 6.1: Convergence Loop
 
 Execute the opt-in convergence loop — see AGENTS.md "Common Patterns > Protocol: Convergence Loop (Full Roster Model — Opt-In, Gated)".
 

@@ -443,27 +443,40 @@ def _read_skill(plugin_name: str) -> str:
     concatenation of every Markdown file under the skill dir is returned so
     that content checks pass regardless of where text was extracted to. Old
     monolithic skills behave exactly as before (single ``SKILL.md`` read).
+
+    For progressive-layout skills, the auxiliary .md files are spliced into
+    SKILL.md **immediately before** the ``<!-- INLINE-PROTOCOLS:START -->``
+    marker. This preserves the semantics of existing tests that split the
+    skill text into "body" (skill-authored content) and "protocols" (the
+    AGENTS.md mirror): every byte the skill author wrote ends up on the body
+    side of the split, regardless of which file it physically lives in.
     """
     paths = list(REPO_ROOT.glob(f"{plugin_name}/skills/*/SKILL.md"))
     assert paths, f"No SKILL.md found for {plugin_name}"
     skill_path = paths[0]
     skill_dir = skill_path.parent
+    skill_md = skill_path.read_text()
     has_progressive_layout = (
         (skill_dir / "phases").is_dir()
         or (skill_dir / "templates").is_dir()
         or (skill_dir / "rules.md").is_file()
     )
     if not has_progressive_layout:
-        return skill_path.read_text()
-    # Concatenate SKILL.md + every other .md under the skill dir (sorted for
-    # determinism). The exact concat order doesn't matter for substring/regex
-    # presence checks, only that every byte the skill owns is included.
-    parts = [skill_path.read_text()]
+        return skill_md
+    # Collect every auxiliary .md under the skill dir (sorted for determinism).
+    aux_parts = []
     for md in sorted(skill_dir.rglob("*.md")):
         if md == skill_path:
             continue
-        parts.append(md.read_text())
-    return "\n".join(parts)
+        aux_parts.append(md.read_text())
+    if not aux_parts:
+        return skill_md
+    aux_text = "\n\n" + "\n\n".join(aux_parts)
+    marker = "<!-- INLINE-PROTOCOLS:START -->"
+    if marker in skill_md:
+        before, after = skill_md.split(marker, 1)
+        return before + aux_text + "\n\n" + marker + after
+    return skill_md + aux_text
 
 
 class TestFindingPresentation:
@@ -2790,11 +2803,11 @@ class TestAllDepsCancelledMessage:
     def test_stage_skills_reference_all_deps_cancelled_protocol(self):
         violations = []
         for skill in self.REQUIRED_SKILLS:
-            path = REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md"
-            content = path.read_text()
-            # Strip inlined block
-            body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+            # Layout-aware: progressive skills keep the dependency-check prose
+            # in phases/*.md, not in the top-level SKILL.md body.
+            body = _read_skill(skill).split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
             if self.REQUIRED_REF not in body:
+                path = REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md"
                 violations.append(f"{path.relative_to(REPO_ROOT)}: missing reference")
         assert violations == [], "\n".join(violations)
 
@@ -2847,11 +2860,11 @@ class TestStructuredAskUserScope:
         # the structured markers are present.
         violations = []
         for skill in self.CYCLE_REVIEW_SKILLS:
-            path = REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md"
-            content = path.read_text()
-            # Look for the canonical [topic]/[option] template presence anywhere
-            # in the body — every cycle review skill should have at least one.
+            # Layout-aware: the [topic]/[option] template lives in
+            # phases/04-present-findings.md for progressive-disclosure skills.
+            content = _read_skill(skill)
             if "[topic]" not in content or "[option]" not in content:
+                path = REPO_ROOT / skill / "skills" / f"optimus-{skill}" / "SKILL.md"
                 violations.append(
                     f"{path.relative_to(REPO_ROOT)}: cycle review skill missing "
                     f"structured AskUser template"
@@ -3125,6 +3138,18 @@ class TestTerminalIdentificationCallSiteSelfContained:
     _CLEAR_CALL_RE = re.compile(
         r"(?m)^\s*_optimus_clear_session\s*$"
     )
+    # Script-wrapper alternative introduced by the progressive-disclosure
+    # refactor: skills delegate to scripts/runtime/optimus-mark-session.sh,
+    # so the function need not be defined inline (the script is the
+    # self-contained replacement). Detection of the script form satisfies the
+    # "no cross-shell variable death" invariant differently: the script runs
+    # in its own subshell with everything it needs.
+    _MARK_SCRIPT_RE = re.compile(
+        r"optimus-mark-session\.sh\s+mark\s+[A-Z]+\b"
+    )
+    _CLEAR_SCRIPT_RE = re.compile(
+        r"optimus-mark-session\.sh\s+clear\b"
+    )
 
     # `resume` is intentionally not part of the legacy TITLE_SKILLS (which only
     # tracks pre-RESUME stages), but its mark/clear call site follows the exact
@@ -3135,13 +3160,22 @@ class TestTerminalIdentificationCallSiteSelfContained:
     def test_mark_call_block_contains_definition(self, skill):
         content = _read_skill(skill)
         blocks = self._bash_blocks(content)
-        call_blocks = [b for b in blocks if self._MARK_CALL_RE.search(b)]
-        assert call_blocks, (
-            f"{skill}: no fenced bash block contains a positional call to "
-            f"_optimus_mark_session — the call site is missing entirely."
+        # Two acceptable forms:
+        #  1. Legacy inline form: a block calls _optimus_mark_session AND defines it inline
+        #     (cross-shell-variable safety via single-block self-containment).
+        #  2. Script-wrapper form: a block calls scripts/runtime/optimus-mark-session.sh,
+        #     which is self-contained by virtue of being a separate script (its own
+        #     subshell with its own definitions). No inline definition needed.
+        legacy_call_blocks = [b for b in blocks if self._MARK_CALL_RE.search(b)]
+        script_call_blocks = [b for b in blocks if self._MARK_SCRIPT_RE.search(b)]
+        assert legacy_call_blocks or script_call_blocks, (
+            f"{skill}: no fenced bash block contains a mark-session call "
+            f"(neither inline _optimus_mark_session nor optimus-mark-session.sh)."
         )
+        if not legacy_call_blocks:
+            return  # script form is self-contained; no definition-in-same-block check
         offenders = [
-            b for b in call_blocks if "_optimus_mark_session() {" not in b
+            b for b in legacy_call_blocks if "_optimus_mark_session() {" not in b
         ]
         assert not offenders, (
             f"{skill}: a fenced bash block calls _optimus_mark_session "
@@ -3155,13 +3189,16 @@ class TestTerminalIdentificationCallSiteSelfContained:
     def test_clear_call_block_contains_definition(self, skill):
         content = _read_skill(skill)
         blocks = self._bash_blocks(content)
-        call_blocks = [b for b in blocks if self._CLEAR_CALL_RE.search(b)]
-        assert call_blocks, (
-            f"{skill}: no fenced bash block contains a bare "
-            f"_optimus_clear_session call — the cleanup site is missing."
+        legacy_call_blocks = [b for b in blocks if self._CLEAR_CALL_RE.search(b)]
+        script_call_blocks = [b for b in blocks if self._CLEAR_SCRIPT_RE.search(b)]
+        assert legacy_call_blocks or script_call_blocks, (
+            f"{skill}: no fenced bash block contains a clear-session call "
+            f"(neither inline _optimus_clear_session nor optimus-mark-session.sh clear)."
         )
+        if not legacy_call_blocks:
+            return  # script form is self-contained
         offenders = [
-            b for b in call_blocks if "_optimus_clear_session() {" not in b
+            b for b in legacy_call_blocks if "_optimus_clear_session() {" not in b
         ]
         assert not offenders, (
             f"{skill}: a fenced bash block calls _optimus_clear_session "
@@ -3179,7 +3216,9 @@ class TestTerminalIdentificationCallSiteSelfContained:
         (notably 127 = command-not-found) means the body was not inlined."""
         content = _read_skill(skill)
         blocks = self._bash_blocks(content)
-        call_blocks = [b for b in blocks if self._MARK_CALL_RE.search(b)]
+        legacy_blocks = [b for b in blocks if self._MARK_CALL_RE.search(b)]
+        script_blocks = [b for b in blocks if self._MARK_SCRIPT_RE.search(b)]
+        call_blocks = legacy_blocks + script_blocks
         assert call_blocks, f"{skill}: missing mark call block"
         script = tmp_path / "block.sh"
         script.write_text(call_blocks[0])
@@ -3193,8 +3232,11 @@ class TestTerminalIdentificationCallSiteSelfContained:
             "TASK_ID": "T-TEST",
             "TASK_TITLE": "Test Title",
         }
+        # Script-wrapper form invokes a real file relative to the repo root,
+        # so run from there to make the relative path resolve.
         result = subprocess.run(
-            ["bash", str(script)], env=env, capture_output=True, text=True
+            ["bash", str(script)], env=env, capture_output=True, text=True,
+            cwd=str(REPO_ROOT),
         )
         assert result.returncode == 0, (
             f"{skill}: bash block at call site exited {result.returncode} "
@@ -3212,18 +3254,24 @@ class TestTerminalIdentificationCallSiteSelfContained:
     @pytest.mark.parametrize("skill", TITLE_PARSED_IN_CALL_BLOCK)
     def test_mark_call_block_parses_task_title_inline(self, skill):
         """plan/build/review/done MUST parse TASK_TITLE in the SAME bash block
-        as the _optimus_mark_session call. Splitting parse and call across two
+        as the mark-session call. Splitting parse and call across two
         separate bash blocks (the pre-fix layout) lets TASK_TITLE evaporate
         across the shell boundary — each Bash tool invocation is a fresh shell,
         so a TASK_TITLE parsed in another block does NOT survive into this one,
-        and the badge renders with an empty title placeholder."""
+        and the badge renders with an empty title placeholder.
+
+        Accepts both invocation forms (legacy ``_optimus_mark_session`` and the
+        script wrapper ``optimus-mark-session.sh mark``) — the inline-parse
+        requirement is independent of which form is used."""
         content = _read_skill(skill)
         blocks = self._bash_blocks(content)
-        call_blocks = [b for b in blocks if self._MARK_CALL_RE.search(b)]
+        legacy_blocks = [b for b in blocks if self._MARK_CALL_RE.search(b)]
+        script_blocks = [b for b in blocks if self._MARK_SCRIPT_RE.search(b)]
+        call_blocks = legacy_blocks + script_blocks
         assert call_blocks, f"{skill}: missing mark call block"
         offenders = [b for b in call_blocks if "TASK_TITLE=$(awk" not in b]
         assert not offenders, (
-            f"{skill}: the bash block calling _optimus_mark_session does NOT "
+            f"{skill}: the bash block calling mark-session does NOT "
             f"parse TASK_TITLE inline. Inline the awk parse in this block — "
             f"each Bash tool invocation is a fresh shell, and a TASK_TITLE "
             f"parsed in another block evaporates before this one runs.\n"
@@ -3232,11 +3280,14 @@ class TestTerminalIdentificationCallSiteSelfContained:
 
     @pytest.mark.parametrize("skill", BADGE_SKILLS)
     def test_mark_call_preamble_documents_substitution(self, skill):
-        """The markdown text preceding the mark_session bash block MUST document
+        """The markdown text preceding the mark-session bash block MUST document
         the substitution requirement ('Substitute $TASK_ID...'). Without it, an
         agent reading the skill has no signal that $TASK_ID/$TASK_TITLE/
         $TASKS_FILE placeholders need values before bash runs — the call fires
-        with empty args and the badge renders as a bare '<STAGE>'."""
+        with empty args and the badge renders as a bare '<STAGE>'.
+
+        Accepts both invocation forms — the legacy ``_optimus_mark_session``
+        call and the script wrapper ``optimus-mark-session.sh mark``."""
         content = _read_skill(skill)
         body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
         segments = body.split("\n```bash\n")
@@ -3245,10 +3296,11 @@ class TestTerminalIdentificationCallSiteSelfContained:
             if end < 0:
                 continue
             bash_content = seg[:end]
-            if self._MARK_CALL_RE.search(bash_content):
+            if (self._MARK_CALL_RE.search(bash_content)
+                    or self._MARK_SCRIPT_RE.search(bash_content)):
                 preamble = segments[i - 1][-1000:]
                 assert "ubstitute" in preamble, (
-                    f"{skill}: markdown preamble before the _optimus_mark_session "
+                    f"{skill}: markdown preamble before the mark-session "
                     f"bash block does not contain a 'Substitute' instruction. "
                     f"Document the required substitution of $TASK_ID (and "
                     f"$TASK_TITLE if not parsed in the same block).\n"
@@ -3260,7 +3312,7 @@ class TestTerminalIdentificationCallSiteSelfContained:
                     f"Preamble:\n{preamble}"
                 )
                 return
-        pytest.fail(f"{skill}: no mark_session bash block found for preamble check")
+        pytest.fail(f"{skill}: no mark-session bash block found for preamble check")
 
     @pytest.mark.parametrize("skill", BADGE_SKILLS)
     def test_mark_call_block_emits_badge_with_task_metadata(self, skill, tmp_path):
@@ -3272,7 +3324,9 @@ class TestTerminalIdentificationCallSiteSelfContained:
         call runs."""
         content = _read_skill(skill)
         blocks = self._bash_blocks(content)
-        call_blocks = [b for b in blocks if self._MARK_CALL_RE.search(b)]
+        legacy_blocks = [b for b in blocks if self._MARK_CALL_RE.search(b)]
+        script_blocks = [b for b in blocks if self._MARK_SCRIPT_RE.search(b)]
+        call_blocks = legacy_blocks + script_blocks
         assert call_blocks, f"{skill}: missing mark call block"
 
         # Fake optimus-tasks.md so the inline awk parser (plan/build/review/done
@@ -3301,8 +3355,11 @@ class TestTerminalIdentificationCallSiteSelfContained:
             "TASK_TITLE": "Test Title",
             "TASKS_FILE": str(tasks_md),
         }
+        # cwd=REPO_ROOT lets the script form resolve its relative path to
+        # scripts/runtime/optimus-mark-session.sh.
         result = subprocess.run(
-            ["bash", str(script)], env=env, capture_output=True, text=True
+            ["bash", str(script)], env=env, capture_output=True, text=True,
+            cwd=str(REPO_ROOT),
         )
         assert result.returncode == 0, (
             f"{skill}: block exited {result.returncode}\n"
@@ -3546,7 +3603,7 @@ class TestSpecSelfHeal:
 
     def test_plan_has_resolve_missing_spec_step(self):
         """plan SKILL.md must declare a self-heal step that runs before TaskSpec Resolution."""
-        plan_md = (REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md").read_text()
+        plan_md = _read_skill("plan")
         assert "Step 1.0.4.5" in plan_md or "Resolve Missing Spec" in plan_md, (
             "plan SKILL.md must contain a 'Step 1.0.4.5: Resolve Missing Spec' step "
             "that handles TaskSpec=- BEFORE the workspace is created"
@@ -3560,7 +3617,7 @@ class TestSpecSelfHeal:
 
     def test_plan_self_heal_runs_before_taskspec_resolution(self):
         """The self-heal step must appear textually before the TaskSpec Resolution call."""
-        plan_md = (REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md").read_text()
+        plan_md = _read_skill("plan")
         heal_idx = plan_md.find("Resolve Missing Spec")
         resolve_idx = plan_md.find("Protocol: TaskSpec Resolution")
         assert heal_idx > 0 and resolve_idx > 0, (
@@ -3613,14 +3670,14 @@ class TestSpecSelfHeal:
 
     def test_plan_self_heal_offers_cancel_option(self):
         """Cancel must be a first-class option that aborts the plan with a clear STOP message."""
-        body = (REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md").read_text()
+        body = _read_skill("plan")
         body = body.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
         assert "**Cancel**" in body, "plan self-heal must offer Cancel as first-class option"
         assert "Plan cancelled" in body, "Cancel branch must STOP with deterministic message"
 
     def test_plan_self_heal_revalidates_and_commits(self):
         """Step 1.0.4.5 mutates optimus-tasks.md; it MUST re-validate + commit per AGENTS.md protocols."""
-        body = (REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md").read_text()
+        body = _read_skill("plan")
         body = body.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
         start = body.find("### Step 1.0.4.5")
         end = body.find("### Step 1.0.5", start + 1)
@@ -3640,7 +3697,7 @@ class TestSpecSelfHeal:
     def test_plan_self_heal_uses_progress_topic_format(self):
         """The new AskUser prompt must use the canonical [topic] (X/N) progress prefix."""
         import re
-        body = (REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md").read_text()
+        body = _read_skill("plan")
         body = body.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
         start = body.find("### Step 1.0.4.5")
         end = body.find("### Step 1.0.5", start + 1)
@@ -3682,26 +3739,20 @@ class TestSpecSelfHeal:
     def test_link_existing_spec_uses_canonical_protocol_reference(self):
         """Both plan and tasks 'Link existing spec' must reference the canonical protocol."""
         canonical = "AGENTS.md Protocol: TaskSpec Resolution"
-        for skill_path in [
-            REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md",
-            REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md",
-        ]:
-            content = skill_path.read_text().split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        for skill in ("plan", "tasks"):
+            content = _read_skill(skill).split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
             link_section = content.split("Link existing spec", 1)[1].split("\n\n###", 1)[0]
             assert canonical in link_section, (
-                f"{skill_path.parent.parent.name} 'Link existing spec' must reference {canonical}"
+                f"optimus-{skill} 'Link existing spec' must reference {canonical}"
             )
 
     def test_link_existing_spec_mentions_symlink(self):
         """Symlink TOCTOU is part of the protocol — prose must surface it at the new entry point."""
-        for skill_path in [
-            REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md",
-            REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md",
-        ]:
-            content = skill_path.read_text().split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        for skill in ("plan", "tasks"):
+            content = _read_skill(skill).split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
             link_section = content.split("Link existing spec", 1)[1].split("\n\n###", 1)[0]
             assert "symlink" in link_section.lower(), (
-                f"{skill_path.parent.parent.name} 'Link existing spec' must explicitly mention symlinks"
+                f"optimus-{skill} 'Link existing spec' must explicitly mention symlinks"
             )
 
     # --- Issue #53: Ring track selection (lightweight vs full) ---
@@ -3709,7 +3760,7 @@ class TestSpecSelfHeal:
     def test_plan_offers_track_selection(self):
         """plan SKILL.md must offer BOTH ring:pre-dev-feature AND ring:pre-dev-full
         inside the Step 1.0.4.5 'Generate via Ring' branch."""
-        body = (REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md").read_text()
+        body = _read_skill("plan")
         body = body.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
         start = body.find("### Step 1.0.4.5")
         end = body.find("### Step 1.0.5", start + 1)
@@ -3762,24 +3813,12 @@ class TestSpecSelfHeal:
         """Each of the 3 SKILLs must mention the Estimate-based default rule
         (Lightweight + Full + Estimate) within the relevant slice."""
         slices = [
-            (
-                REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md",
-                "### Step 1.0.4.5",
-                "### Step 1.0.5",
-            ),
-            (
-                REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md",
-                "### Step 2.3.1",
-                "### Step 2.4",
-            ),
-            (
-                REPO_ROOT / "import" / "skills" / "optimus-import" / "SKILL.md",
-                "### Step 1.6",
-                None,  # special: ends at --- or Phase 2
-            ),
+            ("plan",   "### Step 1.0.4.5", "### Step 1.0.5"),
+            ("tasks",  "### Step 2.3.1",   "### Step 2.4"),
+            ("import", "### Step 1.6",     None),  # special: ends at --- or Phase 2
         ]
-        for path, start_marker, end_marker in slices:
-            body = path.read_text().split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        for skill, start_marker, end_marker in slices:
+            body = _read_skill(skill).split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
             start = body.find(start_marker)
             if end_marker is None:
                 end_candidates = [
@@ -3793,7 +3832,7 @@ class TestSpecSelfHeal:
             section = body[start:end] if start >= 0 and end > start else ""
             for needle in ("Lightweight", "Full", "Estimate"):
                 assert needle in section, (
-                    f"{path.parent.parent.name} {start_marker} must mention "
+                    f"optimus-{skill} {start_marker} must mention "
                     f"'{needle}' as part of the Ring-track Estimate default rule"
                 )
 
@@ -3801,24 +3840,12 @@ class TestSpecSelfHeal:
         """Each of the 3 SKILLs must reference both `ring_track` AND
         `Protocol: State Management` within the relevant slice."""
         slices = [
-            (
-                REPO_ROOT / "plan" / "skills" / "optimus-plan" / "SKILL.md",
-                "### Step 1.0.4.5",
-                "### Step 1.0.5",
-            ),
-            (
-                REPO_ROOT / "tasks" / "skills" / "optimus-tasks" / "SKILL.md",
-                "### Step 2.3.1",
-                "### Step 2.4",
-            ),
-            (
-                REPO_ROOT / "import" / "skills" / "optimus-import" / "SKILL.md",
-                "### Step 1.6",
-                None,
-            ),
+            ("plan",   "### Step 1.0.4.5", "### Step 1.0.5"),
+            ("tasks",  "### Step 2.3.1",   "### Step 2.4"),
+            ("import", "### Step 1.6",     None),
         ]
-        for path, start_marker, end_marker in slices:
-            body = path.read_text().split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        for skill, start_marker, end_marker in slices:
+            body = _read_skill(skill).split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
             start = body.find(start_marker)
             if end_marker is None:
                 end_candidates = [
@@ -3831,11 +3858,11 @@ class TestSpecSelfHeal:
                 end = body.find(end_marker, start + 1)
             section = body[start:end] if start >= 0 and end > start else ""
             assert "ring_track" in section, (
-                f"{path.parent.parent.name} {start_marker} must reference 'ring_track' "
+                f"optimus-{skill} {start_marker} must reference 'ring_track' "
                 "(the state.json field for the chosen Ring track)"
             )
             assert "Protocol: State Management" in section, (
-                f"{path.parent.parent.name} {start_marker} must reference "
+                f"optimus-{skill} {start_marker} must reference "
                 "'AGENTS.md Protocol: State Management' for the ring_track write"
             )
 
@@ -3934,11 +3961,26 @@ class TestWorktreeLocationConvention:
     # They no longer mirror SKILL.md content, so worktree-pattern checks apply
     # only to the canonical CREATOR_FILES below.
 
+    @staticmethod
+    def _creator_text(path):
+        """Read a creator-site file with progressive-disclosure awareness.
+
+        AGENTS.md is read as-is. SKILL.md files in skill directories that have
+        adopted the index + phases/ layout get their phase content spliced in
+        before the INLINE-PROTOCOLS marker — matching the body semantics that
+        existed pre-migration.
+        """
+        if path.name != "SKILL.md":
+            return path.read_text()
+        # path is e.g. .../plan/skills/optimus-plan/SKILL.md → plugin = "plan"
+        plugin = path.parents[2].name
+        return _read_skill(plugin)
+
     def test_no_sibling_worktree_path_pattern(self):
         """No `../${REPO_NAME}-...` or `../<repo>-...` worktree-add invocations should remain."""
         violations = []
         for path, _ in self.CREATOR_FILES:
-            content = path.read_text()
+            content = self._creator_text(path)
             body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
             for lineno, line in enumerate(body.splitlines(), start=1):
                 if "git worktree add" in line and "../" in line:
@@ -3954,7 +3996,7 @@ class TestWorktreeLocationConvention:
         for path, _ in self.CREATOR_FILES:
             if path.name == "AGENTS.md":
                 continue
-            content = path.read_text()
+            content = self._creator_text(path)
             body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
             assert "${MAIN_WORKTREE}/.worktrees/" in body, (
                 f"{path.relative_to(REPO_ROOT)}: missing ${{MAIN_WORKTREE}}/.worktrees/ pattern"
@@ -4278,10 +4320,13 @@ class TestBranchNameDerivation:
 
     def _plan_body(self) -> str:
         """Return the hand-authored body of plan SKILL.md (without the
-        auto-inlined protocols block)."""
-        content = (REPO_ROOT / "plan" / "skills" / "optimus-plan"
-                   / "SKILL.md").read_text()
-        return content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        auto-inlined protocols block).
+
+        Layout-aware: progressive-disclosure skills splice phases/ content
+        before the INLINE-PROTOCOLS marker, so the body still captures all
+        skill-authored text.
+        """
+        return _read_skill("plan").split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
 
     def test_plan_inlines_canonical_case_statement(self):
         """All six Tipo→prefix mappings must appear as bash case-arms in
@@ -4314,9 +4359,7 @@ class TestBranchNameDerivation:
         """plan and resume must use the same case statement so worktree
         paths and resume's branch resolution stay in lockstep."""
         plan_body = self._plan_body()
-        resume_content = (REPO_ROOT / "resume" / "skills" / "optimus-resume"
-                          / "SKILL.md").read_text()
-        resume_body = resume_content.split(
+        resume_body = _read_skill("resume").split(
             "<!-- INLINE-PROTOCOLS:START -->", 1
         )[0]
         # Each (Tipo, prefix) pair must be present in BOTH skills.

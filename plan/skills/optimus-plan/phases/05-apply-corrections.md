@@ -3,7 +3,7 @@
 Loaded by `SKILL.md` after all findings have been resolved with the user. This
 was the original "Phase 4: Apply Approved Corrections".
 
-## Step 4.1: Apply ALL Approved Corrections
+### Step 4.1: Apply ALL Approved Corrections
 
 After the user has responded to ALL findings:
 1. Present a pre-apply summary listing every change grouped by file

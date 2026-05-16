@@ -3,7 +3,7 @@
 Loaded by `SKILL.md` after Phase 7 convergence exits. This was the original
 "Phase 7: Re-run Guard".
 
-## Step 7.1: Evaluate Re-run or Advance
+### Step 7.1: Evaluate Re-run or Advance
 
 Execute re-run guard — see AGENTS.md Protocol: Re-run Guard.
 

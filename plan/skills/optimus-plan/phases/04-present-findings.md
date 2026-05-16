@@ -3,7 +3,7 @@
 Loaded by `SKILL.md` after Phase 3 dispatches the validation agents. This was
 the original "Phase 3: Present and Resolve Findings".
 
-## Step 3.1: Present Summary, then Walk Through Each Finding
+### Step 3.1: Present Summary, then Walk Through Each Finding
 
 1. **Announce total findings count:** Display `"### Total findings to review: N"` prominently before presenting the first finding
 2. **Skip confirmation when N==1:** Present the single finding directly with header `(1/1) ...`. Do NOT ask "Review 1 finding?" or similar — the user already chose to review.

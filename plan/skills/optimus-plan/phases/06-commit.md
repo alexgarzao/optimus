@@ -3,7 +3,7 @@
 Loaded by `SKILL.md` after Phase 5 applies corrections. This was the original
 "Phase 5: Commit Changes".
 
-## Step 5.1: Commit Changes (if any modifications were made)
+### Step 5.1: Commit Changes (if any modifications were made)
 
 If any corrections were applied in Phase 5:
 1. Run `git status` and `git diff` to review all changes

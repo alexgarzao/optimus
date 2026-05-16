@@ -4,7 +4,7 @@ Loaded by `SKILL.md` after Phase 1 setup completes. Covers Steps 1.1, 1.2, 0.5,
 and 1.3 of the original Phase 1 — project structure discovery, document loading,
 Doc Brief caching, and existing-code verification.
 
-## Step 1.1: Discover Project Structure
+### Step 1.1: Discover Project Structure
 
 Before loading docs, discover the project's structure:
 
@@ -15,14 +15,14 @@ Before loading docs, discover the project's structure:
 4. **Identify reference docs:** Look for task specs, API design, data model, architecture docs, business requirements, and dependency maps.
 5. **Identify doc hierarchy:** Determine the source-of-truth ordering for conflicting docs (typically: project rules/AI instructions > API design > data model > architecture > business requirements > task specs).
 
-## Step 1.2: Load Documents
+### Step 1.2: Load Documents
 
 Resolve TaskSpec — see AGENTS.md Protocol: TaskSpec Resolution. Load the Ring pre-dev
 task spec for objective, acceptance criteria, API contracts, and data model.
 
 Ring pre-dev artifacts are the primary specification source.
 
-## Step 0.5: Build Doc Brief (HARD BLOCK on TaskSpec resolution)
+### Step 0.5: Build Doc Brief (HARD BLOCK on TaskSpec resolution)
 
 Build (or reuse) the per-task Doc Brief — see AGENTS.md Protocol: Doc Brief Cache.
 
@@ -32,7 +32,7 @@ Build (or reuse) the per-task Doc Brief — see AGENTS.md Protocol: Doc Brief Ca
 
 The Doc Brief is the primary context passed inline to all downstream sub-agent dispatches in Phase 3 (validation). Do NOT instruct sub-agents to read PRD/TRD/API/data-model directly unless the Doc Brief is explicitly insufficient for a finding.
 
-## Step 1.3: Verify Existing Code
+### Step 1.3: Verify Existing Code
 
 Check the codebase for:
 - Are dependencies (required tasks) actually implemented?

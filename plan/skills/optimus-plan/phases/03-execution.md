@@ -4,7 +4,7 @@ Loaded by `SKILL.md` after Phase 2 context is built. Implements the original
 Phase 2: cross-referencing, test-gap analysis, observability analysis, and
 parallel ring-droid dispatch.
 
-## Step 2.1: Cross-Reference
+### Step 2.1: Cross-Reference
 
 For EACH item in the task spec, verify it exists and is consistent in the reference docs.
 Flag any item that:
@@ -15,7 +15,7 @@ Flag any item that:
 > Use the 8 validation dimensions from `templates/validation-dimensions.md` as
 > the checklist for what to cross-reference.
 
-## Step 2.2: Analyze Test Gaps (MANDATORY — do NOT skip)
+### Step 2.2: Analyze Test Gaps (MANDATORY — do NOT skip)
 
 For EACH test type (unit, integration, E2E):
 1. List every function/method/flow the task will create or modify
@@ -50,14 +50,14 @@ Add a column to the Test Coverage Gaps table:
 | 3 | E2E | Empty state flow | HIGH | T-018 | Anticipate — current task creates this flow |
 ```
 
-## Step 2.3: Analyze Observability Gaps (MANDATORY — do NOT skip)
+### Step 2.3: Analyze Observability Gaps (MANDATORY — do NOT skip)
 
 For EACH new component:
 1. Check existing logging patterns in the codebase
 2. Verify new components follow them
 3. Flag missing logs and missing structured fields for metrics
 
-## Step 2.4: Dispatch Validation Agents (MANDATORY)
+### Step 2.4: Dispatch Validation Agents (MANDATORY)
 
 **HARD BLOCK:** Dispatch specialist ring droids in parallel to validate the task spec. Each agent receives file paths and can navigate the codebase autonomously.
 

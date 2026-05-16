@@ -5,7 +5,7 @@ check, task identification, terminal marking, status validation, dependency
 checks, abandoned-workspace recovery, missing-spec self-heal, workspace
 creation, divergence check, and stats increment.
 
-## Step 1.0: Verify GitHub CLI (HARD BLOCK)
+### Step 1.0: Verify GitHub CLI (HARD BLOCK)
 
 **HARD BLOCK:** Verify GitHub CLI — see AGENTS.md Protocol: GitHub CLI Check.
 
@@ -13,11 +13,11 @@ creation, divergence check, and stats increment.
 subsequent stages (2-5) all require `gh`. Failing early prevents the user from completing
 spec validation only to discover `gh` is not set up when they try to run Stage-2.
 
-## Step 1.0.1: Resolve and Validate optimus-tasks.md
+### Step 1.0.1: Resolve and Validate optimus-tasks.md
 
 **HARD BLOCK:** Find and validate optimus-tasks.md — see AGENTS.md Protocol: optimus-tasks.md Validation.
 
-## Step 1.0.2: Identify Task to Validate
+### Step 1.0.2: Identify Task to Validate
 
 **If the user specified a task ID** (e.g., "validate T-006"):
 - Use the provided task ID
@@ -34,17 +34,21 @@ spec validation only to discover `gh` is not set up when they try to run Stage-2
 
 **BLOCKING**: Do NOT proceed until the user confirms which task to validate.
 
-## Step 1.0.2.1: Check Session State
+### Step 1.0.2.1: Check Session State
 
 Execute session state protocol — see AGENTS.md Protocol: Session State. Use stage=`plan`, status=`Validando Spec`.
 
 **On stage completion** (after Phase 7 Re-run Guard resolves to advance): delete the session file and restore terminal title.
 
-## Step 1.0.2.2: Set Terminal Title
+### Step 1.0.2.2: Set Terminal Title
 
 **CRITICAL:** Set the terminal title so the user can identify this terminal at a glance.
 
-**Parse the task title** (same parser pattern as `resume/SKILL.md` Step 2.3):
+**Substitute `$TASK_ID` and `$TASKS_FILE`** with the confirmed task ID and resolved
+optimus-tasks.md path before running the block. The parse and the mark call
+**MUST live in the SAME bash invocation** — each Bash tool invocation is a
+fresh shell, so a `TASK_TITLE` parsed in a previous block would NOT survive
+into a separate mark call. See AGENTS.md Protocol: Terminal Identification.
 
 ```bash
 # optimus-tasks.md columns by pipe index:
@@ -64,14 +68,8 @@ if [ -z "$TASK_TITLE" ]; then
   # badge does not render as a bare "PLAN" with no task context.
   TASK_TITLE="(title unavailable)"
 fi
-```
 
-**Mark the session** (badge + tab color). The mark call must run in the
-SAME bash invocation as the title parse above, because each Bash tool
-invocation is a fresh shell:
-
-```bash
-# Canonical helper, see AGENTS.md Protocol: Terminal Identification.
+# Canonical helper (badge + tab color). Silent no-op outside iTerm2/macOS.
 bash scripts/runtime/optimus-mark-session.sh mark PLAN "$TASK_ID" "$TASK_TITLE"
 ```
 
@@ -85,7 +83,7 @@ bash scripts/runtime/optimus-mark-session.sh clear
 > parent TTY cannot be resolved. The badge is informational — failure to
 > mark must NOT block the stage flow.
 
-## Step 1.0.3: Validate Task Status (DO NOT modify yet)
+### Step 1.0.3: Validate Task Status (DO NOT modify yet)
 
 **HARD BLOCK:** This step is mandatory. Do NOT skip it.
 
@@ -125,7 +123,7 @@ bash scripts/runtime/optimus-mark-session.sh clear
 
 **Anti-rationalization:** This agent accepts tasks in `Pendente` or `Validando Spec` (re-execution) status. If a task is in any other status (`Em Andamento`, `Validando Impl`, `DONE`, `Cancelado`), refuse to proceed — the task has already passed this stage or was cancelled.
 
-## Step 1.0.4: Detect and Clean Abandoned Workspaces
+### Step 1.0.4: Detect and Clean Abandoned Workspaces
 
 **ALWAYS run this step** — regardless of task status. This detects orphaned workspaces
 from a previous run that was interrupted (crash, user closed terminal, etc.).
@@ -189,7 +187,7 @@ from a previous run that was interrupted (crash, user closed terminal, etc.).
 
 4. **If no branch or worktree exists** → proceed to Step 1.0.4.5
 
-## Step 1.0.4.5: Resolve Missing Spec
+### Step 1.0.4.5: Resolve Missing Spec
 
 Before reserving the task and creating the workspace, detect and self-heal a missing spec.
 This runs BEFORE Step 1.0.5 so that a Cancel here leaves the task untouched (no orphan
@@ -300,7 +298,7 @@ workspace, no `Validando Spec` status leak).
 
 7. Post-condition: `TaskSpec` is now a valid relative path (not `-`). Proceed to Step 1.0.5.
 
-## Step 1.0.5: Reserve Task and Create Workspace
+### Step 1.0.5: Reserve Task and Create Workspace
 
 **AUTHORITATIVE — DO NOT PROMPT.** The worktree path is fixed by `Protocol: Worktree Location`.
 Do NOT ask the user where to place the worktree. Do NOT enumerate alternatives
@@ -399,10 +397,10 @@ Follow shell safety guidelines — see AGENTS.md Protocol: Shell Safety Guidelin
 
 **BLOCKING**: Do NOT proceed until the worktree is created.
 
-## Step 1.0.6: Check optimus-tasks.md Divergence (warning)
+### Step 1.0.6: Check optimus-tasks.md Divergence (warning)
 
 Check optimus-tasks.md divergence — see AGENTS.md Protocol: Divergence Warning.
 
-## Step 1.0.7: Increment Stage Stats
+### Step 1.0.7: Increment Stage Stats
 
 Increment stage stats — see AGENTS.md Protocol: Increment Stage Stats. Use counter=`plan_runs`, timestamp=`last_plan`.
