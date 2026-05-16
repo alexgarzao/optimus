@@ -91,23 +91,18 @@ core rules are summarized at the bottom of this file; the full guardrails
 No False Positives, User Authority, Communication, Dry-Run Mode) live in
 `rules.md`.
 
-Shared scripts (canonical helpers):
-- `scripts/runtime/optimus-mark-session.sh` — iTerm2 badge + tab color
-- `scripts/runtime/optimus-state-read.sh` — JSON read of state.json
-- `scripts/runtime/optimus-task-gate.sh` — status-gate validation
-
 ## Phases
 
 Run phases in order. Before each phase, **`Read` the phase file**, then execute
 its steps.
 
-1. **Phase 1 — Load Context.** Read `phases/01-load-context.md`. GH CLI, tasks.md, workspace, default-branch refusal, terminal marking (`bash scripts/runtime/optimus-mark-session.sh mark REVIEW ...`), status validation (`Em Andamento` → `Validando Impl`), deps, project structure, doc-brief, changed-files, scope.
+1. **Phase 1 — Load Context.** Read `phases/01-load-context.md`. GH CLI, tasks.md, workspace, default-branch refusal, terminal marking (iTerm2 badge + tab color via inline helper), status validation (`Em Andamento` → `Validando Impl`), deps, project structure, doc-brief, changed-files, scope.
 2. **Phase 2 — Static Analysis and Coverage.** Read `phases/02-static-analysis.md`. Lint/vet/format in parallel, unit tests with coverage, gap analysis.
 3. **Phase 3 — Parallel Agent Dispatch.** Read `phases/03-agent-dispatch.md`. Agent roster, prompt template, per-agent instructions, severity classification.
 4. **Phase 4 — Consolidate and Present.** Read `phases/04-consolidate-and-present.md`. Merge, dedupe, sort, overview table.
 5. **Phase 5 — Resolve Findings (Interactive).** Read `phases/05-resolve-findings.md`. **HARD BLOCK on Tell-me-more — anti-rationalization block carried verbatim.**
 6. **Phase 6 — Apply Fixes.** Read `phases/06-apply-fixes.md`. Batch-apply approved fixes, re-run tests, summary.
-7. **Phase 7 — Finalize.** Read `phases/07-finalize.md`. Convergence loop (opt-in), Re-run Guard, integration tests, validation summary, optional push + PR. Clears iTerm2 marker via `bash scripts/runtime/optimus-mark-session.sh clear`.
+7. **Phase 7 — Finalize.** Read `phases/07-finalize.md`. Convergence loop (opt-in), Re-run Guard, integration tests, validation summary, optional push + PR. Clears iTerm2 marker via the inline `_optimus_clear_session` helper (defined in the phase file).
 
 ## Rules Summary
 

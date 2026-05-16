@@ -84,11 +84,6 @@ answering**. The core rules are summarized at the bottom of this file; the
 full guardrails (Scope Discipline, Error Handling, Communication, Dry-Run
 Mode) live in `rules.md`.
 
-Shared scripts (canonical helpers):
-- `scripts/runtime/optimus-mark-session.sh` — iTerm2 badge + tab color
-- `scripts/runtime/optimus-state-read.sh` — JSON read of state.json
-- `scripts/runtime/optimus-task-gate.sh` — status-gate validation
-
 ## Phases
 
 Run phases in order. Before each phase, **`Read` the phase file**, then execute
@@ -97,7 +92,7 @@ its steps.
 1. **Phase 1 — Load Context & Question Everything.** Read `phases/01-load-context.md`.
    Covers GitHub CLI check, tasks.md validation, task ID resolution, session
    state, terminal marking
-   (`bash scripts/runtime/optimus-mark-session.sh mark BUILD ...`), status
+   (iTerm2 badge + tab color via inline helper), status
    validation (`Validando Spec` or `Em Andamento`), dependency checks, workspace
    verification, default-branch refusal, PR title validation, ring droid
    requirement check, project structure discovery (Makefile lint/test HARD
@@ -114,7 +109,7 @@ its steps.
 3. **Phase 3 — Post-Execution.** Read `phases/03-post-execution.md`. Test-gap
    cross-reference with future tasks, final summary, commit (only after
    explicit user approval), and optional push. On completion, clears the iTerm2
-   marker via `bash scripts/runtime/optimus-mark-session.sh clear`.
+   marker via the inline `_optimus_clear_session` helper (defined in the phase file).
 
 ## Rules Summary
 
