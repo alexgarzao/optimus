@@ -508,37 +508,78 @@ class TestSkillBodiesUseMainWorktrePrefixForReadsAndAppends:
 
 
 class TestInlineProtocolsInjectsMainWorktree:
-    """The propagation script must inject Protocol: Resolve Main Worktree Path
-    as a foundational dependency for any skill that touches .optimus/ files."""
+    """The propagation script must wire Protocol: Resolve Main Worktree Path
+    into any skill that touches .optimus/ files.
+
+    Post-Phase-9 contract (`Protocol: Resolve Main Worktree Path` moved to
+    ``<!-- inline-mode: omit -->``): the inliner emits NO heading or stub for
+    this protocol. The sync signal is now structural — every skill that
+    inlines a state-touching protocol must, somewhere in its authored
+    content, prove it consumes the resolver's contract by either:
+
+      (a) referencing the protocol by name (``Protocol: Resolve Main Worktree Path``), OR
+      (b) using ``${MAIN_WORKTREE}`` in bash blocks / referenced summaries.
+
+    Either signal demonstrates the skill respects the worktree-isolation
+    contract. The test is layout-aware: for skills migrated to the index +
+    ``phases/`` layout, the body lives across SKILL.md and every ``.md`` file
+    under the skill dir, so the search scope spans the full plugin tree.
+    """
+
+    _TRIGGERS = (
+        "### Protocol: State Management",
+        "### Protocol: Session State",
+        "### Protocol: Increment Stage Stats",
+        "### Protocol: Initialize .optimus Directory",
+        "### Protocol: Divergence Warning",
+    )
+    _CONSUMER_SIGNALS = (
+        "Protocol: Resolve Main Worktree Path",
+        "MAIN_WORKTREE",
+    )
+
+    @staticmethod
+    def _skill_content(skill_path: Path) -> str:
+        """Read SKILL.md plus every other .md file in the skill dir.
+
+        Progressive-disclosure skills extract bash blocks and prose into
+        ``phases/*.md`` siblings; the consumer-signal check has to follow
+        the content there, otherwise migrated skills appear "empty" even
+        though they still consume ``${MAIN_WORKTREE}`` exactly as before.
+        """
+        skill_dir = skill_path.parent
+        parts = [skill_path.read_text()]
+        for md in sorted(skill_dir.rglob("*.md")):
+            if md == skill_path:
+                continue
+            parts.append(md.read_text())
+        return "\n".join(parts)
 
     def test_state_touching_skills_have_main_worktree_inlined(self):
-        """Skills that inline State Management / Session State / Stats /
-        Initialize .optimus / Divergence Warning must also inline the main
-        worktree resolver."""
-        triggers = (
-            "### Protocol: State Management",
-            "### Protocol: Session State",
-            "### Protocol: Increment Stage Stats",
-            "### Protocol: Initialize .optimus Directory",
-            "### Protocol: Divergence Warning",
-        )
-        resolver_heading = "### Protocol: Resolve Main Worktree Path"
+        """Skills that inline a state-touching protocol must consume the
+        main-worktree resolver — either by reference (``Protocol: Resolve
+        Main Worktree Path``) or by usage (``${MAIN_WORKTREE}``)."""
         violations = []
         for skill_path in _all_skill_files():
-            content = _read(skill_path)
-            inlined_start = content.find("<!-- INLINE-PROTOCOLS:START -->")
+            skill_md_content = skill_path.read_text()
+            inlined_start = skill_md_content.find("<!-- INLINE-PROTOCOLS:START -->")
             if inlined_start == -1:
                 continue  # skill has no inlined block (e.g., help, sync)
-            inlined = content[inlined_start:]
-            triggered = [t for t in triggers if t in inlined]
-            if triggered and resolver_heading not in inlined:
+            inlined = skill_md_content[inlined_start:]
+            triggered = [t for t in self._TRIGGERS if t in inlined]
+            if not triggered:
+                continue
+            content = self._skill_content(skill_path)
+            if not any(sig in content for sig in self._CONSUMER_SIGNALS):
                 rel = skill_path.relative_to(REPO_ROOT)
                 violations.append(
-                    f"{rel}: inlines {triggered} but missing {resolver_heading!r}"
+                    f"{rel}: inlines {triggered} but does not reference "
+                    f"the resolver protocol or use ${{MAIN_WORKTREE}} anywhere"
                 )
         assert violations == [], (
-            "Skills inlining state-touching protocols are missing the "
-            "main-worktree resolver. Re-run "
-            "`python3 scripts/inline-protocols.py` after editing AGENTS.md:\n"
+            "Skills inlining state-touching protocols are not consuming the "
+            "main-worktree resolver contract. Either add a body reference to "
+            "`AGENTS.md Protocol: Resolve Main Worktree Path` or use "
+            "`${MAIN_WORKTREE}/.optimus/...` in bash blocks:\n"
             + "\n".join(f"  - {v}" for v in violations)
         )
