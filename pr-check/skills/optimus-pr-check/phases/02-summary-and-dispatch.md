@@ -250,7 +250,7 @@ If the protocol returns `MIN_NOT_MET`, **STOP** with:
 
 ```
 Required ring droids not installed. Install at minimum
-`ring-default-code-reviewer` and `ring-default-security-reviewer`,
+`ring:code-reviewer` and `ring:security-reviewer`,
 then re-run.
 ```
 
@@ -279,7 +279,7 @@ For each comment that has a non-empty `FIX_DIFF`, classify dispatch:
 |---|---|
 | Critical (🔴) | ALL discovered ring agents |
 | High / Major (🟠) | ALL discovered ring agents |
-| Medium / Minor (🟡) | Single agent matching the finding's category (security finding → `ring-default-security-reviewer`; logic finding → `ring-default-business-logic-reviewer`; default → `ring-default-code-reviewer`) |
+| Medium / Minor (🟡) | Single agent matching the finding's category (security finding → `ring:security-reviewer`; logic finding → `ring:business-logic-reviewer`; default → `ring:code-reviewer`) |
 | Low / Trivial / Nitpick (🔵 / 🧹) | NO agent dispatch — present `FIX_DIFF` directly to user in Phase 6 with `Apply CodeRabbit as-is / Skip / Tell me more` (the option set already added in PR #15) |
 | Unknown / missing severity | ALL discovered ring agents (safe fallback — never silently drop) |
 

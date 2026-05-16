@@ -143,9 +143,9 @@ Build requires both **implementation droids** (for subtask dispatch) and **core 
 (for post-implementation review). If any are missing, **STOP** and list missing droids:
 ```
 Required ring droids are not installed. Install them before running this skill:
-  Implementation: ring-dev-team-backend-engineer-golang (Go) / ring-dev-team-backend-engineer-typescript (TS) / ring-dev-team-frontend-engineer (React)
-  Review: ring-default-code-reviewer, ring-default-business-logic-reviewer, ring-default-security-reviewer, ring-default-ring-test-reviewer, ring-default-ring-nil-safety-reviewer, ring-default-ring-consequences-reviewer, ring-default-ring-dead-code-reviewer
-  Spec Compliance: ring-dev-team-qa-analyst
+  Implementation: ring:backend-engineer-golang (Go) / ring:backend-engineer-typescript (TS) / ring:frontend-engineer (React)
+  Review: ring:code-reviewer, ring:business-logic-reviewer, ring:security-reviewer, ring:test-reviewer, ring:nil-safety-reviewer, ring:consequences-reviewer, ring:dead-code-reviewer
+  Spec Compliance: ring:qa-analyst
 ```
 
 ## Step 1.6: Discover Project Structure

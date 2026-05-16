@@ -14,7 +14,7 @@ Measure coverage — see AGENTS.md Protocol: Coverage Measurement.
 
 ### Step 9.2: Test Gap Analysis
 
-Dispatch a test gap analyzer — see AGENTS.md Protocol: Test Gap Analyzer Dispatch. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
+Dispatch a test gap analyzer — see AGENTS.md Protocol: Test Gap Analyzer Dispatch. Use `ring:test-reviewer` or `ring:qa-analyst`.
 
 HIGH priority gaps are presented as findings for user decision.
 

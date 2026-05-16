@@ -3355,7 +3355,17 @@ class TestTerminalIdentificationCallSiteSelfContained:
         # test can capture the OSC sequence. Without this, on an interactive
         # test host the function would write directly to /dev/<tty> and the
         # subprocess stdout would stay empty.
-        wrapper = "ps() { return 1; }\n" + call_blocks[0]
+        #
+        # `export -f` makes the mock visible to child bash invocations — the
+        # script-wrapper form (`bash scripts/runtime/optimus-mark-session.sh
+        # mark ...`) spawns a fresh shell that would otherwise see the real
+        # `/bin/ps`. Legacy inline form already ran in the same shell, so the
+        # export is a no-op there but harmless.
+        wrapper = (
+            "ps() { return 1; }\n"
+            "export -f ps\n"
+            + call_blocks[0]
+        )
         script = tmp_path / "block.sh"
         script.write_text(wrapper)
 
@@ -4384,6 +4394,62 @@ class TestBranchNameDerivation:
                     f"{label} SKILL.md missing canonical case arm "
                     f"{tipo} → {prefix}"
                 )
+
+
+# --- Ring agent naming convention ----------------------------------------
+#
+# Optimus skills dispatch Ring agents via the Task tool. The agent identifier
+# MUST match the frontmatter `name:` of the actual Ring agent file (e.g.,
+# `ring:code-reviewer`, `ring:backend-engineer-golang`).
+#
+# The legacy hyphen-prefixed form (`ring-default-code-reviewer`,
+# `ring-dev-team-backend-engineer-golang`) does not match any real agent on
+# OpenCode — OpenCode uses strict frontmatter-name matching and reports
+# "agent not installed". Claude Code happened to fuzzy-match the hyphen form
+# silently, masking the bug for that platform.
+#
+# This regression guard fails the suite if any hyphen-prefixed Ring name
+# resurfaces in a skill file or AGENTS.md.
+
+
+class TestRingAgentNamingConvention:
+    """Ring agent references must use `ring:<name>` (the canonical frontmatter
+    name shipped by every Ring plugin). Hyphen-prefixed forms like
+    `ring-default-code-reviewer` are not valid identifiers on any platform —
+    they only worked on Claude Code by accident (fuzzy match)."""
+
+    # Catches: ring-default-X, ring-dev-team-X, ring-tw-team-X, ring-pm-team-X,
+    # ring-pmm-team-X, ring-pmo-team-X, ring-ops-team-X, ring-finance-team-X,
+    # ring-finops-team-X — followed by at least one more hyphen-prefixed token.
+    _LEGACY_RE = re.compile(
+        r"ring-(?:default|dev-team|tw-team|pm-team|pmm-team|"
+        r"pmo-team|ops-team|finance-team|finops-team)-[a-z][a-z0-9-]+"
+    )
+
+    def test_no_hyphen_prefixed_ring_names_in_skills(self):
+        """No SKILL.md, phase, rules, or template file should reference a
+        Ring agent via the hyphen-prefixed form. Use `ring:<name>` instead."""
+        violations = []
+        for md_file in sorted(REPO_ROOT.glob("*/skills/optimus-*/**/*.md")):
+            content = md_file.read_text()
+            for match in self._LEGACY_RE.finditer(content):
+                rel = md_file.relative_to(REPO_ROOT)
+                violations.append(f"{rel}: '{match.group(0)}' — use ring:<name> instead")
+        assert violations == [], (
+            "Hyphen-prefixed Ring agent names found (should be `ring:<name>`):\n"
+            + "\n".join(f"  - {v}" for v in violations[:30])
+            + ("\n  ..." if len(violations) > 30 else "")
+        )
+
+    def test_no_hyphen_prefixed_ring_names_in_agents_md(self):
+        """AGENTS.md must use the `ring:<name>` form too — it is the source
+        of truth for agent references that Optimus skills copy from."""
+        content = (REPO_ROOT / "AGENTS.md").read_text()
+        matches = self._LEGACY_RE.findall(content)
+        assert not matches, (
+            "Hyphen-prefixed Ring agent names found in AGENTS.md (should be "
+            "`ring:<name>`):\n  " + "\n  ".join(sorted(set(matches))[:20])
+        )
 
 
 # --- Progressive-disclosure layout invariants ----------------------------

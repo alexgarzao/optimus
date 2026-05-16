@@ -30,26 +30,26 @@ For fixes that alter execution flow, conditions, method calls, or observable beh
 **Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. If the core review droids are not installed, **STOP** and inform the user:
 ```
 Required ring droids are not installed. Install them before running this skill:
-  - ring-default-code-reviewer
-  - ring-default-business-logic-reviewer
-  - ring-default-security-reviewer
-  - ring-default-ring-test-reviewer
-  - ring-default-ring-nil-safety-reviewer
-  - ring-default-ring-consequences-reviewer
-  - ring-default-ring-dead-code-reviewer
+  - ring:code-reviewer
+  - ring:business-logic-reviewer
+  - ring:security-reviewer
+  - ring:test-reviewer
+  - ring:nil-safety-reviewer
+  - ring:consequences-reviewer
+  - ring:dead-code-reviewer
 ```
 
 **Droids to dispatch:**
 
 | Domain | When to Dispatch | Ring Droid |
 |--------|-----------------|------------|
-| **Code Quality** — architecture, SOLID, DRY, resilience, resource lifecycle, concurrency, performance, configuration, cognitive complexity, error handling, domain purity | Always | `ring-default-code-reviewer` |
-| **Business Logic** — domain correctness, edge cases, spec traceability, data integrity, backward compatibility, API semantics | Always | `ring-default-business-logic-reviewer` |
-| **Security** — vulnerabilities, OWASP, input validation, data privacy, error response leakage, rate limiting, auth propagation | Always | `ring-default-security-reviewer` |
-| **Test Quality** — coverage gaps, error scenarios, flaky patterns, test effectiveness, false positive risk, test coupling, spec traceability | Always | `ring-default-ring-test-reviewer` |
-| **Nil/Null Safety** — nil pointer risks, unsafe dereferences, resource cleanup nil checks, channel/map/slice safety | Always | `ring-default-ring-nil-safety-reviewer` |
-| **Ripple Effects** — cross-file impacts, backward compatibility, configuration drift, migration paths, shared state, event contracts | Always | `ring-default-ring-consequences-reviewer` |
-| **Dead Code** — orphaned code, zombie test infrastructure, stale feature flags, deprecated paths | Always | `ring-default-ring-dead-code-reviewer` |
+| **Code Quality** — architecture, SOLID, DRY, resilience, resource lifecycle, concurrency, performance, configuration, cognitive complexity, error handling, domain purity | Always | `ring:code-reviewer` |
+| **Business Logic** — domain correctness, edge cases, spec traceability, data integrity, backward compatibility, API semantics | Always | `ring:business-logic-reviewer` |
+| **Security** — vulnerabilities, OWASP, input validation, data privacy, error response leakage, rate limiting, auth propagation | Always | `ring:security-reviewer` |
+| **Test Quality** — coverage gaps, error scenarios, flaky patterns, test effectiveness, false positive risk, test coupling, spec traceability | Always | `ring:test-reviewer` |
+| **Nil/Null Safety** — nil pointer risks, unsafe dereferences, resource cleanup nil checks, channel/map/slice safety | Always | `ring:nil-safety-reviewer` |
+| **Ripple Effects** — cross-file impacts, backward compatibility, configuration drift, migration paths, shared state, event contracts | Always | `ring:consequences-reviewer` |
+| **Dead Code** — orphaned code, zombie test infrastructure, stale feature flags, deprecated paths | Always | `ring:dead-code-reviewer` |
 
 **Agent prompt context MUST include:**
 ```
@@ -108,7 +108,7 @@ For each approved fix:
    no regressions — see AGENTS.md Protocol: Quiet Command Execution.
 
 **For documentation fixes (docs, README, specs):** dispatch ring documentation droids
-(`ring-tw-team-functional-writer`, `ring-tw-team-api-writer`). Documentation
+(`ring:functional-writer`, `ring:api-writer`). Documentation
 droids do NOT follow TDD — they apply the fix directly.
 
 ### Step 4.3: Handle Test Failures

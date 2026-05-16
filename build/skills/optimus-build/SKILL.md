@@ -41,13 +41,13 @@ examples:
       3. Standard execution flow with subtask loop
 related:
   complementary:
-    - ring-dev-team-backend-engineer-golang  # ring droid: Go implementation
-    - ring-dev-team-backend-engineer-typescript  # ring droid: TS implementation
-    - ring-dev-team-frontend-engineer  # ring droid: React/Next.js implementation
-    - ring-dev-team-qa-analyst  # ring droid: test implementation
-    - ring-default-code-reviewer  # ring droid: code review
-    - ring-default-business-logic-reviewer  # ring droid: business logic review
-    - ring-default-security-reviewer  # ring droid: security review
+    - ring:backend-engineer-golang  # ring droid: Go implementation
+    - ring:backend-engineer-typescript  # ring droid: TS implementation
+    - ring:frontend-engineer  # ring droid: React/Next.js implementation
+    - ring:qa-analyst  # ring droid: test implementation
+    - ring:code-reviewer  # ring droid: code review
+    - ring:business-logic-reviewer  # ring droid: business logic review
+    - ring:security-reviewer  # ring droid: security review
   sequence:
     after:
       - optimus-plan

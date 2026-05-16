@@ -26,7 +26,7 @@ Before touching any code, show the user a summary of everything that will be cha
 ### Step 7.2: Apply All Fixes via Ring Droids
 Apply fixes using ring droids with TDD cycle — see AGENTS.md "Common Patterns > Fix Implementation".
 
-**Droid selection for this stage:** Use the stack-appropriate droid (Go→`ring-dev-team-backend-engineer-golang`, TS→`ring-dev-team-backend-engineer-typescript`, React→`ring-dev-team-frontend-engineer`, tests→`ring-dev-team-qa-analyst`). Documentation fixes use ring-tw-team droids without TDD.
+**Droid selection for this stage:** Use the stack-appropriate droid (Go→`ring:backend-engineer-golang`, TS→`ring:backend-engineer-typescript`, React→`ring:frontend-engineer`, tests→`ring:qa-analyst`). Documentation fixes use ring-tw-team droids without TDD.
 
 **After each fix:** run unit tests to verify no regressions.
 
@@ -65,7 +65,7 @@ If coverage is below threshold, add findings to the results.
 
 After coverage measurement, dispatch an agent to cross-reference the task spec's acceptance criteria with implemented tests and identify missing scenarios.
 
-**Dispatch a test gap analyzer** via `Task` tool. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
+**Dispatch a test gap analyzer** via `Task` tool. Use `ring:test-reviewer` or `ring:qa-analyst`.
 
 The agent receives file paths and can navigate the codebase autonomously.
 

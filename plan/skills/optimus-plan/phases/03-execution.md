@@ -64,18 +64,18 @@ For EACH new component:
 **Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. **If any of the droids below are not available, STOP and inform the user:**
 ```
 Required ring droids are not installed. Install them before running this skill:
-  - ring-default-business-logic-reviewer
-  - ring-default-security-reviewer
-  - ring-dev-team-qa-analyst
-  - ring-default-code-reviewer
+  - ring:business-logic-reviewer
+  - ring:security-reviewer
+  - ring:qa-analyst
+  - ring:code-reviewer
 ```
 
 **Droids to dispatch:**
 
-1. `ring-default-business-logic-reviewer` — validate business rules completeness, edge cases, and domain correctness in the task spec
-2. `ring-default-security-reviewer` — identify security gaps in the spec (missing auth, input validation, data exposure risks)
-3. `ring-dev-team-qa-analyst` — validate testing strategy completeness, identify untested scenarios
-4. `ring-default-code-reviewer` — assess architectural feasibility, identify patterns that may conflict with the codebase
+1. `ring:business-logic-reviewer` — validate business rules completeness, edge cases, and domain correctness in the task spec
+2. `ring:security-reviewer` — identify security gaps in the spec (missing auth, input validation, data exposure risks)
+3. `ring:qa-analyst` — validate testing strategy completeness, identify untested scenarios
+4. `ring:code-reviewer` — assess architectural feasibility, identify patterns that may conflict with the codebase
 
 **Agent prompt MUST include:**
 ```
@@ -133,7 +133,7 @@ Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quali
 Adapt checklist items to spec validation context (e.g., "verify X exists in spec" instead of
 "verify X is implemented in code").
 
-**QA agent** (`ring-dev-team-qa-analyst`) must additionally (beyond the protocol):
+**QA agent** (`ring:qa-analyst`) must additionally (beyond the protocol):
 - Spec quality: are ACs measurable and testable? (not vague like "works correctly")
 - Does each AC specify both success AND failure behavior?
 - Rollback/recovery strategy defined for failure cases
