@@ -92,11 +92,11 @@ PR review, not author understanding. If you want as-is application, stay on
 2. Documentation fixes use ring-tw-team droids without TDD
 
 **Droid selection (complex fixes only):**
-- Go → `ring-dev-team-backend-engineer-golang`
-- TypeScript → `ring-dev-team-backend-engineer-typescript`
-- React/Next.js → `ring-dev-team-frontend-engineer`
-- Tests → `ring-dev-team-qa-analyst`
-- Docs → `ring-tw-team-functional-writer`, `ring-tw-team-api-writer`
+- Go → `ring:backend-engineer-golang`
+- TypeScript → `ring:backend-engineer-typescript`
+- React/Next.js → `ring:frontend-engineer`
+- Tests → `ring:qa-analyst`
+- Docs → `ring:functional-writer`, `ring:api-writer`
 
 ### Step 8.3: Handle Test Failures (max 3 attempts)
 

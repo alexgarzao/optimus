@@ -11,30 +11,30 @@ Dispatch specialist agents covering the validation domains below. Use the agent 
 **Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. If the core review droids are not installed, **STOP** and inform the user:
 ```
 Required ring droids are not installed. Install them before running this skill:
-  - ring-default-code-reviewer
-  - ring-default-business-logic-reviewer
-  - ring-default-security-reviewer
-  - ring-default-ring-test-reviewer
-  - ring-default-ring-nil-safety-reviewer
-  - ring-default-ring-consequences-reviewer
-  - ring-default-ring-dead-code-reviewer
-  - ring-dev-team-qa-analyst
+  - ring:code-reviewer
+  - ring:business-logic-reviewer
+  - ring:security-reviewer
+  - ring:test-reviewer
+  - ring:nil-safety-reviewer
+  - ring:consequences-reviewer
+  - ring:dead-code-reviewer
+  - ring:qa-analyst
 ```
 
 **Droids to dispatch:**
 
 | Validation Domain | When to Dispatch | Ring Droid |
 |-------------------|------------------|------------|
-| **Code Quality** — architecture, patterns, SOLID, DRY, maintainability | Always | `ring-default-code-reviewer` |
-| **Business Logic** — domain correctness, edge cases, business rules | Always | `ring-default-business-logic-reviewer` |
-| **Security** — vulnerabilities, OWASP, input validation, secrets | Always | `ring-default-security-reviewer` |
-| **Test Quality** — coverage gaps, test quality, missing scenarios | Always | `ring-default-ring-test-reviewer` |
-| **Nil/Null Safety** — nil pointer risks, unsafe dereferences | Always | `ring-default-ring-nil-safety-reviewer` |
-| **Ripple Effects** — how changes propagate beyond changed files | Always | `ring-default-ring-consequences-reviewer` |
-| **Dead Code** — orphaned code from changes | Always | `ring-default-ring-dead-code-reviewer` |
-| **Frontend Patterns** — framework patterns, accessibility, performance | Frontend or full-stack tasks | `ring-dev-team-frontend-engineer` |
-| **Backend Patterns** — language patterns, error handling, conventions | Backend or full-stack tasks | `ring-dev-team-backend-engineer-golang` |
-| **Spec Compliance** — acceptance criteria, test IDs, API contracts | Always | `ring-dev-team-qa-analyst` |
+| **Code Quality** — architecture, patterns, SOLID, DRY, maintainability | Always | `ring:code-reviewer` |
+| **Business Logic** — domain correctness, edge cases, business rules | Always | `ring:business-logic-reviewer` |
+| **Security** — vulnerabilities, OWASP, input validation, secrets | Always | `ring:security-reviewer` |
+| **Test Quality** — coverage gaps, test quality, missing scenarios | Always | `ring:test-reviewer` |
+| **Nil/Null Safety** — nil pointer risks, unsafe dereferences | Always | `ring:nil-safety-reviewer` |
+| **Ripple Effects** — how changes propagate beyond changed files | Always | `ring:consequences-reviewer` |
+| **Dead Code** — orphaned code from changes | Always | `ring:dead-code-reviewer` |
+| **Frontend Patterns** — framework patterns, accessibility, performance | Frontend or full-stack tasks | `ring:frontend-engineer` |
+| **Backend Patterns** — language patterns, error handling, conventions | Backend or full-stack tasks | `ring:backend-engineer-golang` |
+| **Spec Compliance** — acceptance criteria, test IDs, API contracts | Always | `ring:qa-analyst` |
 
 ### Agent Prompt Template
 
@@ -99,7 +99,7 @@ Cross-cutting analysis (MANDATORY for all agents):
 
 Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists.
 
-**Spec Compliance agent** (`ring-dev-team-qa-analyst`) must additionally (beyond the protocol):
+**Spec Compliance agent** (`ring:qa-analyst`) must additionally (beyond the protocol):
 1. List every acceptance criterion from the Ring source (via `TaskSpec` column) and mark PASS/FAIL/PARTIAL
 2. List every test ID and verify a corresponding test exists
 3. If the task has API endpoints, verify request/response format matches API contracts

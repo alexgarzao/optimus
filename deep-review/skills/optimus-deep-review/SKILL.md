@@ -88,7 +88,7 @@ If the protocol returns `MIN_NOT_MET`, **STOP** and inform the user:
 
 ```
 Required ring droids not installed. Install at minimum
-`ring-default-code-reviewer` and `ring-default-security-reviewer`,
+`ring:code-reviewer` and `ring:security-reviewer`,
 then re-run.
 ```
 
@@ -540,7 +540,7 @@ extracted from the Optimus AGENTS.md to make this plugin self-contained.
 
 ### Protocol: Test Gap Analyzer Dispatch
 
-**Summary:** Standardised prompt template for dispatching a test gap analyzer (`ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`) via `Task` tool. Identifies missing test scenarios across changed files: happy path / error paths / edge cases / integration failures + test effectiveness checks. Returns three tables (Unit Test Gaps, Integration Test Gaps, Test Effectiveness Issues) plus a Summary. Used by skills that perform post-change reviews.
+**Summary:** Standardised prompt template for dispatching a test gap analyzer (`ring:test-reviewer` or `ring:qa-analyst`) via `Task` tool. Identifies missing test scenarios across changed files: happy path / error paths / edge cases / integration failures + test effectiveness checks. Returns three tables (Unit Test Gaps, Integration Test Gaps, Test Effectiveness Issues) plus a Summary. Used by skills that perform post-change reviews.
 
 **Referenced by:** deep-review, coderabbit-review
 

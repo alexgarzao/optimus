@@ -1992,16 +1992,16 @@ classification depends on it.
 
 Droids whose purpose is implementation, design, operations, or non-code domains:
 
-- `ring-default-codebase-explorer` — exploration, not review
-- `ring-default-write-plan` — planning, not review
-- `ring-default-review-slicer` — internal classification, not code review
-- `ring-dev-team-devops-engineer` — DevOps implementation
-- `ring-dev-team-frontend-designer` — UX design
-- `ring-dev-team-helm-engineer` — Helm charts
-- `ring-dev-team-sre` — observability validation
-- `ring-dev-team-ui-engineer` — UI implementation
-- `ring-dev-team-frontend-bff-engineer-*` — BFF implementation
-- `ring-dev-team-prompt-quality-reviewer` — reviews AI prompts, not code
+- `ring:codebase-explorer` — exploration, not review
+- `ring:write-plan` — planning, not review
+- `ring:review-slicer` — internal classification, not code review
+- `ring:devops-engineer` — DevOps implementation
+- `ring:frontend-designer` — UX design
+- `ring:helm-engineer` — Helm charts
+- `ring:sre` — observability validation
+- `ring:ui-engineer` — UI implementation
+- `ring:frontend-bff-engineer-typescript-*` — BFF implementation
+- `ring:prompt-quality-reviewer` — reviews AI prompts, not code
 - All `ring-finance-*`, `ring-finops-*`, `ring-ops-*`, `ring-pm-*`, `ring-pmm-*`, `ring-pmo-*`, `ring-tw-*` — non-code domains
 
 **Description-based relevance filter:**
@@ -2045,16 +2045,16 @@ summary derived from the description), and `source` (`ring` or `non-ring`):
 
 ```
 Ring Core
-  - ring-default-code-reviewer — Code quality, SOLID, DRY, maintainability
-  - ring-default-security-reviewer — Vulnerabilities, OWASP, input validation
+  - ring:code-reviewer — Code quality, SOLID, DRY, maintainability
+  - ring:security-reviewer — Vulnerabilities, OWASP, input validation
   - ...
 
 Ring Stack
-  - ring-dev-team-backend-engineer-golang — Go idiomaticity (project has go.mod)
+  - ring:backend-engineer-golang — Go idiomaticity (project has go.mod)
 
 Ring Domain
-  - ring-dev-team-performance-reviewer — Performance hotspots
-  - ring-dev-team-lib-commons-reviewer — lib-commons usage (project imports it)
+  - ring:performance-reviewer — Performance hotspots
+  - ring:lib-commons-reviewer — lib-commons usage (project imports it)
 
 Non-Ring                       (only when INCLUDE_NON_RING=true)
   - my-custom-reviewer — User-installed reviewer
@@ -2067,8 +2067,8 @@ with default-selected ring entries and default-deselected non-ring entries).
 
 The protocol MUST yield at least both:
 
-- `ring-default-code-reviewer` AND
-- `ring-default-security-reviewer`
+- `ring:code-reviewer` AND
+- `ring:security-reviewer`
 
 If either is missing from the discovered roster, the protocol returns `MIN_NOT_MET`
 instead of a roster. The caller is responsible for STOP semantics — typically a
@@ -2365,34 +2365,34 @@ Before dispatching ring droids, verify the required droids are available. If any
 droid is not installed, **STOP** and list missing droids.
 
 **Core review droids** (required by review, pr-check, deep-review, coderabbit-review):
-- `ring-default-code-reviewer`
-- `ring-default-business-logic-reviewer`
-- `ring-default-security-reviewer`
-- `ring-default-ring-test-reviewer`
+- `ring:code-reviewer`
+- `ring:business-logic-reviewer`
+- `ring:security-reviewer`
+- `ring:test-reviewer`
 
 **Extended review droids** (required by review, pr-check, deep-review, coderabbit-review):
-- `ring-default-ring-nil-safety-reviewer`
-- `ring-default-ring-consequences-reviewer`
-- `ring-default-ring-dead-code-reviewer`
+- `ring:nil-safety-reviewer`
+- `ring:consequences-reviewer`
+- `ring:dead-code-reviewer`
 
 **QA droids** (required by review, deep-review, build):
-- `ring-dev-team-qa-analyst`
+- `ring:qa-analyst`
 
 **Documentation droids** (required by deep-doc-review):
-- `ring-tw-team-docs-reviewer`
-- `ring-default-business-logic-reviewer`
-- `ring-default-code-reviewer`
+- `ring:docs-reviewer`
+- `ring:business-logic-reviewer`
+- `ring:code-reviewer`
 
 **Implementation droids** (required by build):
-- `ring-dev-team-backend-engineer-golang` (Go)
-- `ring-dev-team-backend-engineer-typescript` (TypeScript)
-- `ring-dev-team-frontend-engineer` (React/Next.js)
+- `ring:backend-engineer-golang` (Go)
+- `ring:backend-engineer-typescript` (TypeScript)
+- `ring:frontend-engineer` (React/Next.js)
 
 **Spec validation droids** (required by plan):
-- `ring-default-business-logic-reviewer`
-- `ring-default-security-reviewer`
-- `ring-dev-team-qa-analyst`
-- `ring-default-code-reviewer`
+- `ring:business-logic-reviewer`
+- `ring:security-reviewer`
+- `ring:qa-analyst`
+- `ring:code-reviewer`
 
 Skills reference this as: "Verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check."
 
@@ -3340,7 +3340,7 @@ exit?") preserves user authority while keeping the gate honest.
 
 <!-- inline-mode: omit -->
 
-**Summary:** Cycle review skills classify each approved fix before applying. **Simple** (single file, localized, exact code provided, obvious resolution: typo / missing nil guard / import / log line / dead code removal): orchestrator applies directly via Edit/MultiEdit, runs unit tests; on failure, reverts and escalates. **Complex** (multi-file, architectural impact, security-sensitive, schema/API/config changes, new tests needed, or unsure): dispatch ring droid. Code fixes use TDD cycle (RED-GREEN-REFACTOR) via `ring-dev-team-backend-engineer-golang`/`-typescript`, `ring-dev-team-frontend-engineer`, `ring-dev-team-qa-analyst`. Documentation fixes: `ring-tw-team-functional-writer`/`-api-writer`/`-docs-reviewer` (no TDD). When in doubt → dispatch. Ring droids are REQUIRED for complex fixes — STOP if missing. See full classification + dispatch templates in AGENTS.md.
+**Summary:** Cycle review skills classify each approved fix before applying. **Simple** (single file, localized, exact code provided, obvious resolution: typo / missing nil guard / import / log line / dead code removal): orchestrator applies directly via Edit/MultiEdit, runs unit tests; on failure, reverts and escalates. **Complex** (multi-file, architectural impact, security-sensitive, schema/API/config changes, new tests needed, or unsure): dispatch ring droid. Code fixes use TDD cycle (RED-GREEN-REFACTOR) via `ring:backend-engineer-golang`/`-typescript`, `ring:frontend-engineer`, `ring:qa-analyst`. Documentation fixes: `ring:functional-writer`/`-api-writer`/`-docs-reviewer` (no TDD). When in doubt → dispatch. Ring droids are REQUIRED for complex fixes — STOP if missing. See full classification + dispatch templates in AGENTS.md.
 
 Fixes are classified by complexity. **Simple fixes** are applied directly by the
 orchestrator. **Complex fixes** (or fixes whose complexity cannot be determined) are
@@ -3378,12 +3378,12 @@ The orchestrator applies the fix directly using Edit/MultiEdit tools. After appl
 #### Ring Droid Dispatch (complex findings)
 
 **Code fixes** → dispatch ring backend/frontend/QA droids with **TDD cycle** (RED-GREEN-REFACTOR):
-- `ring-dev-team-backend-engineer-golang` (Go), `ring-dev-team-backend-engineer-typescript` (TS),
-  `ring-dev-team-frontend-engineer` (React/Next.js), `ring-dev-team-qa-analyst` (tests)
+- `ring:backend-engineer-golang` (Go), `ring:backend-engineer-typescript` (TS),
+  `ring:frontend-engineer` (React/Next.js), `ring:qa-analyst` (tests)
 
 **Documentation fixes** → dispatch ring documentation droids **without TDD** (no tests for docs):
-- `ring-tw-team-functional-writer` (guides), `ring-tw-team-api-writer` (API docs),
-  `ring-tw-team-docs-reviewer` (quality fixes)
+- `ring:functional-writer` (guides), `ring:api-writer` (API docs),
+  `ring:docs-reviewer` (quality fixes)
 
 **Ring droids are REQUIRED for complex fixes** — there is no alternative dispatch mechanism. If the
 required droids are not installed and a complex fix is needed, the skill MUST stop and
@@ -3490,7 +3490,7 @@ Every finding must present 2-3 options with this structure:
 
 ### Protocol: Test Gap Analyzer Dispatch
 
-**Summary:** Standardised prompt template for dispatching a test gap analyzer (`ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`) via `Task` tool. Identifies missing test scenarios across changed files: happy path / error paths / edge cases / integration failures + test effectiveness checks. Returns three tables (Unit Test Gaps, Integration Test Gaps, Test Effectiveness Issues) plus a Summary. Used by skills that perform post-change reviews.
+**Summary:** Standardised prompt template for dispatching a test gap analyzer (`ring:test-reviewer` or `ring:qa-analyst`) via `Task` tool. Identifies missing test scenarios across changed files: happy path / error paths / edge cases / integration failures + test effectiveness checks. Returns three tables (Unit Test Gaps, Integration Test Gaps, Test Effectiveness Issues) plus a Summary. Used by skills that perform post-change reviews.
 
 **Referenced by:** deep-review, coderabbit-review
 
@@ -3695,7 +3695,7 @@ section:
 Each droid type has specific dimensions it MUST verify beyond its core domain. Skills
 that dispatch review droids MUST include the applicable checklists in agent prompts.
 
-**Code Quality agent** (`ring-default-code-reviewer`) must additionally verify:
+**Code Quality agent** (`ring:code-reviewer`) must additionally verify:
 - Resilience: external calls have timeout, retry with backoff, circuit breaker where appropriate
 - Resource lifecycle: all opened connections/handles are closed (defer, cleanup, graceful shutdown)
 - Concurrency: shared state has proper synchronization, no goroutine leaks, no deadlock risk
@@ -3706,7 +3706,7 @@ that dispatch review droids MUST include the applicable checklists in agent prom
 - Domain purity: no infrastructure concerns in domain layer, dependency direction correct
 - Resource leaks: DB connections, HTTP clients, file handles, channels properly closed
 
-**Business Logic agent** (`ring-default-business-logic-reviewer`) must additionally verify:
+**Business Logic agent** (`ring:business-logic-reviewer`) must additionally verify:
 - Spec traceability: each code path maps to a spec requirement (flag orphan logic with no spec backing)
 - Data integrity: transaction boundaries correct, partial writes impossible, rollback defined
 - Backward compatibility: existing consumers/contracts not broken by this change
@@ -3714,7 +3714,7 @@ that dispatch review droids MUST include the applicable checklists in agent prom
 - Domain edge cases: what happens with zero, negative, maximum, duplicate, concurrent values?
 - Business rule completeness: all business rules from spec have implementation AND test
 
-**Security agent** (`ring-default-security-reviewer`) must additionally verify:
+**Security agent** (`ring:security-reviewer`) must additionally verify:
 - Data privacy: PII not logged, sensitive fields masked in responses, LGPD/GDPR compliance
 - Error responses: no internal details leaked (stack traces, DB schemas, internal paths, SQL)
 - Rate limiting: high-throughput or public endpoints have rate limiting consideration
@@ -3722,7 +3722,7 @@ that dispatch review droids MUST include the applicable checklists in agent prom
 - Secrets: no hardcoded credentials, tokens, API keys in code or config files
 - Auth propagation: authentication context properly propagated through the call chain
 
-**Test Quality agent** (`ring-default-ring-test-reviewer`) must additionally verify:
+**Test Quality agent** (`ring:test-reviewer`) must additionally verify:
 - Test effectiveness: do tests verify BEHAVIOR or just mock internals? Flag tests where assertions only check mock.Called() without verifying output/state
 - False positive risk: could these tests pass while the feature is actually broken?
 - Test coupling: are tests coupled to implementation details (private fields, internal struct layout)?
@@ -3732,13 +3732,13 @@ that dispatch review droids MUST include the applicable checklists in agent prom
 - Error scenario completeness: each error return path has a corresponding test?
 - Boundary values: min, max, zero, empty, nil, negative tested where applicable?
 
-**Nil/Null Safety agent** (`ring-default-ring-nil-safety-reviewer`) must additionally verify:
+**Nil/Null Safety agent** (`ring:nil-safety-reviewer`) must additionally verify:
 - Resource cleanup: nil checks before Close/Release calls
 - Channel safety: sends to nil/closed channels
 - Map safety: reads/writes to nil maps
 - Slice safety: index bounds after filtering/transforming
 
-**Ripple Effects agent** (`ring-default-ring-consequences-reviewer`) must additionally verify:
+**Ripple Effects agent** (`ring:consequences-reviewer`) must additionally verify:
 - Values duplicated between files that should be a shared constant
 - Imports follow the project's layer architecture (no circular deps, no backwards imports)
 - New code follows the same patterns as existing code in the same domain
@@ -3748,26 +3748,26 @@ that dispatch review droids MUST include the applicable checklists in agent prom
 - Shared state: new global/package-level state that could cause issues across modules?
 - Event/message contracts: changes to event payloads affect downstream consumers?
 
-**Dead Code agent** (`ring-default-ring-dead-code-reviewer`) must additionally verify:
+**Dead Code agent** (`ring:dead-code-reviewer`) must additionally verify:
 - Dead code: unused imports, unreachable branches, commented-out code
 - Zombie test infrastructure: test helpers, fixtures, mocks no longer used by any test
 - Feature flags: stale feature flag checks for flags that were already fully rolled out
 - Deprecated paths: code paths behind deprecated API versions with no remaining consumers
 
-**Spec Compliance / QA agent** (`ring-dev-team-qa-analyst`) must additionally verify:
+**Spec Compliance / QA agent** (`ring:qa-analyst`) must additionally verify:
 - Testability assessment: is the code structured for testability? (dependency injection, interfaces)
 - Operational readiness: can ops monitor, debug, and rollback this in production?
 - Acceptance criteria coverage: each AC has both success AND failure test scenarios
 - Cross-cutting scenarios: concurrent modifications, large datasets, special characters, timezone handling
 
-**Frontend specialist** (`ring-dev-team-frontend-engineer`) must additionally verify:
+**Frontend specialist** (`ring:frontend-engineer`) must additionally verify:
 - UX completeness: loading states, empty states, error states all handled
 - Accessibility: keyboard navigation, screen reader support, ARIA labels, color contrast
 - Responsive behavior: works across viewport sizes (mobile, tablet, desktop)
 - i18n readiness: no hardcoded user-facing strings, date/number formatting locale-aware
 - Performance: no unnecessary re-renders, large lists virtualized, images optimized
 
-**Backend specialist** (`ring-dev-team-backend-engineer-golang` or `ring-dev-team-backend-engineer-typescript`) must additionally verify:
+**Backend specialist** (`ring:backend-engineer-golang` or `ring:backend-engineer-typescript`) must additionally verify:
 - Language idiomaticity: follows official style guide conventions
 - Graceful shutdown: SIGTERM handling, in-flight request draining
 - Connection pool sizing: appropriate for expected load

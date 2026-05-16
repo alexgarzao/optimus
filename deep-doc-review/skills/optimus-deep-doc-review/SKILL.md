@@ -87,15 +87,15 @@ Each agent receives file paths and can navigate the project autonomously.
 **Ring droids are REQUIRED** — verify ring droids — see AGENTS.md Protocol: Ring Droid Requirement Check. If the core review droids are not installed, **STOP** and inform the user:
 ```
 Required ring droids are not installed. Install them before running this skill:
-  - ring-tw-team-docs-reviewer
-  - ring-default-business-logic-reviewer
-  - ring-default-code-reviewer
+  - ring:docs-reviewer
+  - ring:business-logic-reviewer
+  - ring:code-reviewer
 ```
 
 **Droids to dispatch:**
-1. `ring-tw-team-docs-reviewer` — documentation quality, structure, completeness, voice, tone, accuracy
-2. `ring-default-business-logic-reviewer` — business rules consistency across docs, spec traceability, data integrity definitions, edge case coverage
-3. `ring-default-code-reviewer` — technical accuracy, architectural consistency, implementability, feasibility of described patterns
+1. `ring:docs-reviewer` — documentation quality, structure, completeness, voice, tone, accuracy
+2. `ring:business-logic-reviewer` — business rules consistency across docs, spec traceability, data integrity definitions, edge case coverage
+3. `ring:code-reviewer` — technical accuracy, architectural consistency, implementability, feasibility of described patterns
 
 **Dispatch at least 2 agents in parallel:**
 

@@ -84,7 +84,7 @@ Create findings for coverage issues (aligned with AGENTS.md Protocol: Coverage M
 
 ### Step 2.4: Test Scenario Gap Analysis
 
-Dispatch a test gap analyzer via `Task` tool. Use `ring-default-ring-test-reviewer` or `ring-dev-team-qa-analyst`.
+Dispatch a test gap analyzer via `Task` tool. Use `ring:test-reviewer` or `ring:qa-analyst`.
 
 The agent receives file paths and can navigate the codebase autonomously.
 

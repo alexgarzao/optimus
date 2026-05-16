@@ -81,10 +81,10 @@ section says "(none — this is the first subtask)").
 
 | Stack | Ring Droid |
 |-------|-----------|
-| Go | `ring-dev-team-backend-engineer-golang` |
-| TypeScript/Node.js | `ring-dev-team-backend-engineer-typescript` |
-| React/Next.js | `ring-dev-team-frontend-engineer` |
-| Tests only | `ring-dev-team-qa-analyst` |
+| Go | `ring:backend-engineer-golang` |
+| TypeScript/Node.js | `ring:backend-engineer-typescript` |
+| React/Next.js | `ring:frontend-engineer` |
+| Tests only | `ring:qa-analyst` |
 
 **2. The droid prompt MUST include:**
 - The subtask file content (full implementation steps + code examples from Ring pre-dev)
@@ -171,14 +171,14 @@ After ALL subtasks are complete:
    "Integration tests failing. Fix or defer to check?"
 
 4. **Dispatch code review and spec compliance droids** in parallel via `Task` tool:
-   - `ring-default-code-reviewer`
-   - `ring-default-business-logic-reviewer`
-   - `ring-default-security-reviewer`
-   - `ring-default-ring-test-reviewer`
-   - `ring-default-ring-nil-safety-reviewer`
-   - `ring-default-ring-consequences-reviewer`
-   - `ring-default-ring-dead-code-reviewer`
-   - `ring-dev-team-qa-analyst`
+   - `ring:code-reviewer`
+   - `ring:business-logic-reviewer`
+   - `ring:security-reviewer`
+   - `ring:test-reviewer`
+   - `ring:nil-safety-reviewer`
+   - `ring:consequences-reviewer`
+   - `ring:dead-code-reviewer`
+   - `ring:qa-analyst`
 
    Each droid receives all files changed by this task + project rules + task spec.
    Include per-droid quality checklists — see AGENTS.md Protocol: Per-Droid Quality Checklists.
@@ -200,7 +200,7 @@ After ALL subtasks are complete:
        git inspection (`git log`, `git blame`, `git diff`) when needed.
    ```
 
-   **Spec Compliance agent** (`ring-dev-team-qa-analyst`) must additionally (beyond the protocol):
+   **Spec Compliance agent** (`ring:qa-analyst`) must additionally (beyond the protocol):
    1. List every acceptance criterion from the Ring source (via `TaskSpec` column) and mark PASS/FAIL/PARTIAL
    2. List every test ID and verify a corresponding test exists
    3. If the task has API endpoints, verify request/response format matches API contracts
