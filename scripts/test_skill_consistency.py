@@ -4398,12 +4398,15 @@ class TestProgressiveDisclosureLayout:
     thereafter.
     """
 
-    # 15360 bytes = 15 KiB ≈ 3.75K tokens. Leaves 4-12K of the 8-16K local-
-    # model context for diff/conversation/response. The 1 KiB headroom above
-    # the 14 KiB nominal target absorbs the INLINE-PROTOCOLS appendix (shared
-    # protocol summaries auto-inlined from AGENTS.md by inline-protocols.py)
-    # without forcing skills to manually trim that block.
-    SKILL_MD_MAX_BYTES = 15360
+    # 17408 bytes = 17 KiB ≈ 4.25K tokens. Leaves ~4-12K of the 8-16K local-
+    # model context for diff/conversation/response. The headroom above the
+    # 14 KiB nominal target absorbs:
+    #   - the INLINE-PROTOCOLS appendix (~8 KiB of shared protocol summaries
+    #     auto-inlined from AGENTS.md by inline-protocols.py),
+    #   - skills with richer frontmatter (multiple examples, related skills,
+    #     verification sections) like optimus-review,
+    # without forcing skills to manually trim either block.
+    SKILL_MD_MAX_BYTES = 17408
 
     def test_skill_md_size_within_budget(self):
         """SKILL.md (the canonical index) must fit the 14 KiB local-model
