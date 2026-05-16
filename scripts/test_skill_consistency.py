@@ -2889,9 +2889,9 @@ class TestDoneRobustness:
     def test_done_classifies_remote_delete_failures(self):
         """done/SKILL.md must distinguish network/protection/already-deleted
         on `git push origin --delete` failure."""
-        path = REPO_ROOT / "done" / "skills" / "optimus-done" / "SKILL.md"
-        content = path.read_text()
-        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        # Layout-aware: progressive-disclosure done keeps the cleanup body
+        # in phases/04-cleanup.md.
+        body = _read_skill("done").split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
         # At minimum the body must mention these failure-cause keywords
         # near a `git push origin --delete` block.
         assert "remote ref does not exist" in body or "already deleted" in body, (
@@ -2905,9 +2905,9 @@ class TestDoneRobustness:
     def test_done_uses_deterministic_default_branch(self):
         """done/SKILL.md must use show-ref --verify (or symbolic-ref) for
         default branch resolution — NOT 'git branch --list main master | head -1'."""
-        path = REPO_ROOT / "done" / "skills" / "optimus-done" / "SKILL.md"
-        content = path.read_text()
-        body = content.split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
+        # Layout-aware: progressive-disclosure done keeps the cleanup body
+        # in phases/04-cleanup.md.
+        body = _read_skill("done").split("<!-- INLINE-PROTOCOLS:START -->", 1)[0]
         forbidden = "git branch --list main master | head"
         assert forbidden not in body, (
             f"done body contains non-deterministic default-branch resolution: {forbidden!r}"
