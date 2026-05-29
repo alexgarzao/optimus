@@ -1833,7 +1833,7 @@ fi
      esac
      # Flatten branch name: every `/` becomes `-` so the worktree dir is flat
      # (e.g., feat/t-007-... → feat-t-007-...). See Protocol: Worktree Location.
-     FLAT_BRANCH="${BRANCH_NAME//\//\-}"
+     FLAT_BRANCH="${BRANCH_NAME//\//-}"
      WORKTREE_DIR="${MAIN_WORKTREE}/.worktrees/${FLAT_BRANCH}"
 
      if ! git worktree add "$WORKTREE_DIR" "<branch-name>"; then
@@ -3178,9 +3178,9 @@ Optimus creates linked git worktrees during the task lifecycle:
 - `/optimus-resume` creates a worktree on recovery if branch exists but worktree is missing (Step 3.3).
 - Protocol: Workspace Auto-Navigation (see Reusable Protocols) creates a worktree as a fallback when an Optimus skill is invoked from the default branch and the task's worktree is missing.
 
-**Canonical path:** `${MAIN_WORKTREE}/.worktrees/<flat-branch-name>` — gitignored (auto-injected by `Protocol: Initialize .optimus Directory` and `Protocol: Session State`), project-rooted, and resolved against the main worktree (path correct even when invoked from a linked worktree, per Protocol: Resolve Main Worktree Path). Where `<flat-branch-name>` = branch with each `/` replaced by `-` (POSIX bash: `${BRANCH_NAME//\//\-}`).
+**Canonical path:** `${MAIN_WORKTREE}/.worktrees/<flat-branch-name>` — gitignored (auto-injected by `Protocol: Initialize .optimus Directory` and `Protocol: Session State`), project-rooted, and resolved against the main worktree (path correct even when invoked from a linked worktree, per Protocol: Resolve Main Worktree Path). Where `<flat-branch-name>` = branch with each `/` replaced by `-` (POSIX bash: `${BRANCH_NAME//\//-}`).
 
-**Note on branch names with `/`:** Branch names contain `/` (see `Protocol: Branch Name Derivation`), but the worktree directory name is FLATTENED — every `/` is replaced by `-`. Example: branch `feat/t-007-user-auth` lands at `<repo>/.worktrees/feat-t-007-user-auth/`. The translation rule is a single bash parameter expansion: `${BRANCH_NAME//\//\-}`. Multi-slash branches translate every slash (`feat/sub/x` → `feat-sub-x`). The branch name itself is unchanged in `git`. List worktrees with `ls .worktrees/` (one entry per worktree, no nested dirs) or `find .worktrees/ -mindepth 1 -maxdepth 1 -type d`.
+**Note on branch names with `/`:** Branch names contain `/` (see `Protocol: Branch Name Derivation`), but the worktree directory name is FLATTENED — every `/` is replaced by `-`. Example: branch `feat/t-007-user-auth` lands at `<repo>/.worktrees/feat-t-007-user-auth/`. The translation rule is a single bash parameter expansion: `${BRANCH_NAME//\//-}` (NOTE: do **not** backslash-escape the replacement `-` — both bash and zsh write a literal `\` into the result, producing `chore\-t-...` on disk). Multi-slash branches translate every slash (`feat/sub/x` → `feat-sub-x`). The branch name itself is unchanged in `git`. List worktrees with `ls .worktrees/` (one entry per worktree, no nested dirs) or `find .worktrees/ -mindepth 1 -maxdepth 1 -type d`.
 
 **Why nested under the project repo:**
 
