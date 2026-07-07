@@ -59,7 +59,7 @@ Read `optimus-tasks.md` and extract the markdown table. Expected columns:
 
 **Classification rules (apply in order):**
 
-1. **state.json entry exists** → use its value. **This is the single source of truth for task status.** Every status classification (DONE, Pendente, Active, Blocked, Cancelled) MUST use the value from state.json when an entry exists.
+1. **state.json entry exists** → use its value. **This is the single source of truth for task status.** The canonical state.json status values are `DONE`, `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, and `Cancelado`. Dashboard labels (Active, Blocked, Cancelled) are derived from these — never the reverse.
 2. **No state.json entry** → `Pendente`. Do NOT consult the task spec's `**Status:**` line — it is documentary only and may be stale (e.g., reopened tasks have their state.json entry removed by the reopen protocol but the spec still says `Done`).
 3. **No spec file** (TaskSpec column is `-`) → `Pendente`.
 
