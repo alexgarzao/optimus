@@ -58,6 +58,27 @@ Read `optimus-tasks.md` and extract the markdown table. Expected columns:
 **Status and Branch** are read from `.optimus/state.json` — see AGENTS.md Protocol: State Management.
 Tasks with no entry in state.json are `Pendente`.
 
+**Authoritative source hierarchy (highest to lowest precedence):**
+
+1. **`.optimus/state.json`** — written by optimus tools during the plan → build → review → done
+   lifecycle. **This is the single source of truth for task status.** Every status
+   classification (DONE, Pendente, Active, Blocked, Cancelled) MUST use the value from
+   state.json when present.
+2. **Task spec file `**Status:**` line** — may be stale (manually written, not auto-updated
+   after /optimus:done). Use ONLY as a fallback when the task has NO entry in state.json.
+3. **Board row inference** — last resort for tasks without a spec file (TaskSpec column is `-`).
+   Such tasks are implicitly `Pendente`.
+
+**Reconciliation step:** For each task, compare the state.json status with the task spec's
+`**Status:**` line (when a spec exists). If they differ:
+- Use the **state.json value** for classification.
+- Record the discrepancy as a warning in the dashboard output, e.g.:
+  `⚠ T-XXX: state.json=DONE but task_XXX.md says Pendente (spec is stale)`
+
+**CRITICAL rule:** state.json WINS over task spec. Never trust a task spec's status line
+when state.json has an entry for that task. The task spec status is documentary; state.json
+is operational truth.
+
 ### Step 1.2.1: Parse Versions Table
 
 Read the `## Versions` section and extract the versions table. Expected columns:

@@ -71,6 +71,13 @@ Check the first line for `<!-- optimus:tasks-v1 -->`. If missing, warn but attem
 1. Parse the `## Versions` table (Version, Status, Description)
 2. Parse the tasks table (ID, Title, Tipo, Depends, Priority, Version, Estimate, TaskSpec)
 3. Read status and branch for each task from `.optimus/state.json` — see AGENTS.md Protocol: State Management. Tasks with no entry are `Pendente`.
+
+	   **Authoritative source hierarchy (highest to lowest precedence):**
+	   1. `.optimus/state.json` — written by optimus tools during plan/build/review/done lifecycle. **This is the single source of truth.**
+	   2. Task spec file `**Status:**` line — may be stale; use ONLY when task has no entry in state.json.
+	   3. Board row inference — last resort for tasks without spec files.
+
+	   **CRITICAL:** When state.json says `DONE` but the task spec says `Pendente` (or vice versa), state.json WINS. The task spec is stale. Flag the discrepancy in the warnings section but use the state.json value for classification.
 4. Identify the `Ativa` version
 
 ---
