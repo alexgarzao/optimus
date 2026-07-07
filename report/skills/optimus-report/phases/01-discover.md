@@ -56,28 +56,20 @@ Read `optimus-tasks.md` and extract the markdown table. Expected columns:
 | TaskSpec | Path to Ring pre-dev task spec (optional — `-` if not linked) |
 
 **Status and Branch** are read from `.optimus/state.json` — see AGENTS.md Protocol: State Management.
-Tasks with no entry in state.json are `Pendente`.
 
-**Authoritative source hierarchy (highest to lowest precedence):**
+**Classification rules (apply in order):**
 
-1. **`.optimus/state.json`** — written by optimus tools during the plan → build → review → done
-   lifecycle. **This is the single source of truth for task status.** Every status
-   classification (DONE, Pendente, Active, Blocked, Cancelled) MUST use the value from
-   state.json when present.
-2. **Task spec file `**Status:**` line** — may be stale (manually written, not auto-updated
-   after /optimus:done). Use ONLY as a fallback when the task has NO entry in state.json.
-3. **Board row inference** — last resort for tasks without a spec file (TaskSpec column is `-`).
-   Such tasks are implicitly `Pendente`.
+1. **state.json entry exists** → use its value. **This is the single source of truth for task status.** Every status classification (DONE, Pendente, Active, Blocked, Cancelled) MUST use the value from state.json when an entry exists.
+2. **No state.json entry** → `Pendente`. Do NOT consult the task spec's `**Status:**` line — it is documentary only and may be stale (e.g., reopened tasks have their state.json entry removed by the reopen protocol but the spec still says `Done`).
+3. **No spec file** (TaskSpec column is `-`) → `Pendente`.
 
-**Reconciliation step:** For each task, compare the state.json status with the task spec's
-`**Status:**` line (when a spec exists). If they differ:
-- Use the **state.json value** for classification.
-- Record the discrepancy as a warning in the dashboard output, e.g.:
-  `⚠ T-XXX: state.json=DONE but task_XXX.md says Pendente (spec is stale)`
+**Reconciliation (informational only — does not affect classification):**
+After classifying all tasks, compare each task's state.json status against its spec's `**Status:**` line (when a spec exists). Use case-insensitive comparison; strip trailing annotations after the first word (e.g., `Pendente (v1.0 — Refactoring)` → `PENDENTE`). If they differ, emit a warning in the dashboard output:
+```
+⚠ T-XXX: state.json=DONE but task_XXX.md says Pendente (spec is stale)
+```
 
-**CRITICAL rule:** state.json WINS over task spec. Never trust a task spec's status line
-when state.json has an entry for that task. The task spec status is documentary; state.json
-is operational truth.
+**CRITICAL rule:** state.json WINS over task spec. Never trust a task spec's status line for classification when state.json has an entry for that task. The task spec status is documentary; state.json is operational truth.
 
 ### Step 1.2.1: Parse Versions Table
 
