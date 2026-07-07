@@ -56,7 +56,20 @@ Read `optimus-tasks.md` and extract the markdown table. Expected columns:
 | TaskSpec | Path to Ring pre-dev task spec (optional — `-` if not linked) |
 
 **Status and Branch** are read from `.optimus/state.json` — see AGENTS.md Protocol: State Management.
-Tasks with no entry in state.json are `Pendente`.
+
+**Classification rules (apply in order):**
+
+1. **state.json entry exists** → use its value. **This is the single source of truth for task status.** The canonical state.json status values are `DONE`, `Pendente`, `Validando Spec`, `Em Andamento`, `Validando Impl`, and `Cancelado`. Dashboard labels (Active, Blocked, Cancelled) are derived from these — never the reverse.
+2. **No state.json entry** → `Pendente`. Do NOT consult the task spec's `**Status:**` line — it is documentary only and may be stale (e.g., reopened tasks have their state.json entry removed by the reopen protocol but the spec still says `Done`).
+3. **No spec file** (TaskSpec column is `-`) → `Pendente`.
+
+**Reconciliation (informational only — does not affect classification):**
+After classifying all tasks, compare each task's state.json status against its spec's `**Status:**` line (when a spec exists). Use case-insensitive comparison; strip trailing annotations after the first word (e.g., `Pendente (v1.0 — Refactoring)` → `PENDENTE`). If they differ, emit a warning in the dashboard output:
+```
+⚠ T-XXX: state.json=DONE but task_XXX.md says Pendente (spec is stale)
+```
+
+**CRITICAL rule:** state.json WINS over task spec. Never trust a task spec's status line for classification when state.json has an entry for that task. The task spec status is documentary; state.json is operational truth.
 
 ### Step 1.2.1: Parse Versions Table
 
