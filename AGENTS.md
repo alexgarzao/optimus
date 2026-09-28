@@ -1957,7 +1957,7 @@ Skills reference this as: "Resolve default branch — see AGENTS.md Protocol: De
 
 <!-- inline-mode: omit -->
 
-**Summary:** Single source of truth for review-droid roster discovery. Discovers installed `~/.factory/droids/ring-*.md` (or all `*.md` if `INCLUDE_NON_RING=true`), applies permanent exclusion list (codebase-explorer, write-plan, review-slicer, devops/ui/sre engineers, finance/finops/ops/pm/pmm/pmo/tw teams — none are code reviewers), then description-based relevance filter (Core: `code review|security|testing|safety|reviewer|audit`; Stack: language-specific only if project uses it; Domain: technology-specific only if relevant). Plus deny-list filter (`architecture|design|planning|process|workflow|strategy` excluded even if matched). Returns categorized roster (Ring Core / Ring Stack / Ring Domain / Non-Ring) or `MIN_NOT_MET` if `code-reviewer` AND `security-reviewer` aren't both present. See full filter cascade in AGENTS.md.
+**Summary:** Single source of truth for review-droid roster discovery. Discovers installed ring droids — `~/.factory/droids/ring-*.md` (Droid/Factory install) and Ring symlinks under `~/.claude/agents/` (Claude Code install) — or all `*.md` of both dirs if `INCLUDE_NON_RING=true`, applies permanent exclusion list (codebase-explorer, write-plan, review-slicer, devops/ui/sre engineers, finance/finops/ops/pm/pmm/pmo/tw teams — none are code reviewers), then description-based relevance filter (Core: `code review|security|testing|safety|reviewer|audit`; Stack: language-specific only if project uses it; Domain: technology-specific only if relevant). Plus deny-list filter (`architecture|design|planning|process|workflow|strategy` excluded even if matched). Returns categorized roster (Ring Core / Ring Stack / Ring Domain / Non-Ring) or `MIN_NOT_MET` if `code-reviewer` AND `security-reviewer` aren't both present. See full filter cascade in AGENTS.md.
 
 **Referenced by:** deep-review, pr-check
 
@@ -1970,22 +1970,38 @@ and render their own confirmation UX.
 **Inputs:**
 
 - `INCLUDE_NON_RING` (env var or caller flag, default `false`). When `false`, only
-  `ring-*.md` agents are considered. When `true`, every `*.md` agent under
-  `~/.factory/droids/` is considered, subject to the exclusion list and relevance
-  filter below.
+  ring agents are considered: `~/.factory/droids/ring-*.md` plus symlinks under
+  `~/.claude/agents/` that resolve into a Ring install tree (`*/ring/*` — e.g.
+  `~/.local/share/ring/` or `.../marketplaces/ring/`). When `true`, every `*.md`
+  agent under both directories is considered, subject to the exclusion list and
+  relevance filter below.
 
 **Discovery glob:**
 
 ```bash
+# Ring droids are distributed by the Ring installer (ring-install.sh) into
+# ~/.factory/droids/ (Factory/Droid target) or ~/.claude/agents/ (Claude Code
+# target, per-file symlinks into the Ring repo).
+ring_agents_claude() {
+  for f in ~/.claude/agents/*.md; do
+    [ -L "$f" ] || continue
+    readlink -f "$f" | grep -q '/ring/' && echo "$f"
+  done
+}
 if [ "${INCLUDE_NON_RING:-false}" = "true" ]; then
   ls ~/.factory/droids/*.md 2>/dev/null
+  ls ~/.claude/agents/*.md 2>/dev/null
 else
   ls ~/.factory/droids/ring-*.md 2>/dev/null
+  ring_agents_claude
 fi
 ```
 
 For each candidate, read the `description` field from the YAML frontmatter — relevance
-classification depends on it.
+classification depends on it. Droid IDs are derived from filenames: `ring-*.md` and
+Ring symlinks under `~/.claude/agents/` map to `ring:<basename>` (e.g.
+`~/.claude/agents/code-reviewer.md` → `ring:code-reviewer`); any other entry keeps
+its basename as a non-ring ID.
 
 **Permanent exclusion list** (never dispatch for code review, regardless of
 `INCLUDE_NON_RING`):
